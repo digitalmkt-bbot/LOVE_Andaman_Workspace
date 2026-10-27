@@ -53433,6 +53433,7 @@ function bkV2RenderTopbar(){
       ` : ''}
       <div class="bkv2-topspacer"></div>
       <div class="bkv2-meta2">${bkV2TopbarMeta()}</div>
+      <button class="bkv2-newbtn2" onclick="bkImpStart()" title="นำเข้าไฟล์ Excel รายชื่อลูกค้าจากเอเยนต์ (เช่น Tour Customer List) · กรอกฟอร์มให้ทีละใบ" style="background:#fff;color:#16265C;border:1px solid #CBD2E0;margin-right:6px">&#11014; Import Excel</button>   <!-- §bkImp -->
       <button class="bkv2-newbtn2" onclick="bkV2NewBooking()">+ New booking <span class="bkv2-kbd2">C</span></button>
     </div>
   `;
@@ -58981,6 +58982,262 @@ function bkV2SetMonth(m){
   const on = strip && strip.querySelector(`[data-mon="${m}"]`);
   if(on && on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'center'});
 }
+/* ══ §bkImp (2026-10-27) · owner "จะ import ตัวนี้เข้า แล้วจะเป็นบุคกิ้งบายบุคกิ้งแบบที่ User ทำก่อนหน้านี้ไหม"
+   ไฟล์จากเอเยนต์ (Similan Island Exclusive · ระบบ Pegas "Tour Customer List") · เขาส่งแบบนี้ทุกครั้ง
+   ตัดสินใจกับเจ้าของ: Adl/Chd/Baby ตามที่เอเยนต์ส่งมา · Agent กับโปรแกรมให้ user เลือก · เก็บแค่ชื่อให้ครบ (ไม่เก็บพาสปอร์ต/วันเกิด)
+   วิธีทำ: 1 ตั๋ว = 1 บุคกิ้ง · ไม่สร้างใบเองเงียบ ๆ · เปิดฟอร์ม New booking ตัวเดิมแล้วกรอกให้ทีละใบ
+     user ตรวจแล้วกด Save ปกติ → ผ่านกติกาเดิมทุกข้อ (เรท · ที่นั่งเต็ม · seat lock · ใบซ้ำ · โรงแรมสะกดใกล้กัน)
+     บันทึกแล้วเปิดใบถัดไปให้เอง · ตั๋วที่มี voucher นี้ในระบบแล้วข้ามให้
+   อ่านหัวตารางจากข้อความ ('Ticket No' 'Name' 'Adl' …) ไม่ยึดตำแหน่งคอลัมน์ · ไฟล์ merge ช่องแล้วคอลัมน์เลื่อนได้
+   ตารางที่สอง (รายคน) ใช้แค่ชื่อ + ประเทศ (สัญชาติเป็นช่องบังคับของระบบ) */
+var _bkImp=null;
+function _bkImpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _bkImpNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' '); }
+function _bkImpNameKey(s){ return String(s||'').replace(/İ/g,'I').replace(/ı/g,'i').replace(/^\s*(mr|mrs|ms|miss|mstr|chd|inf|baby)\.?\s+/i,'').toUpperCase().replace(/[^A-ZЀ-ӿ ]/g,' ').replace(/\s+/g,' ').trim(); }
+function _bkImpType(nm){ var m=String(nm||'').trim().match(/^(chd|inf|baby)\b/i); return m?(/chd/i.test(m[1])?'CHD':'INF'):'AD'; }
+function _bkImpYMD(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='number' && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*864e5)); return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  var t=String(v).trim(), m;
+  if((m=t.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1]+'-'+m[2]+'-'+m[3];
+  if((m=t.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/))) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  var MO={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  if((m=t.match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/)) && MO[m[2].toLowerCase()]) return m[3]+'-'+String(MO[m[2].toLowerCase()]).padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return '';
+}
+var BKIMP_COUNTRY={RUSSIA:'RU','RUSSIAN FEDERATION':'RU',BELARUS:'BY',UKRAINE:'UA',KAZAKHSTAN:'KZ',UZBEKISTAN:'UZ',ARMENIA:'AM',GEORGIA:'GE',AZERBAIJAN:'AZ',KYRGYZSTAN:'KG',MOLDOVA:'MD',ISRAEL:'IL',TURKEY:'TR',THAILAND:'TH',CHINA:'CN',INDIA:'IN'};
+function _bkImpNat(country){
+  var c=String(country||'').trim().toUpperCase(); if(!c) return '';
+  if(BKIMP_COUNTRY[c]) return BKIMP_COUNTRY[c];
+  if(/^[A-Z]{2}$/.test(c)) return c;
+  var L=(typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[];
+  var hit=L.find(function(n){ var nm=String(n.name||'').toUpperCase(); return nm===c || (c.length>=4 && nm.indexOf(c.slice(0,4))===0); });
+  return hit?hit.code:'';
+}
+/* อ่านไฟล์ · คืน {tour, date, tickets:[{ticket,seller,names[],ad,chd,inf,trf,hotel,room,phone}], remarks[], tot:{ad,chd,inf}|null, people:{ticket:[{key,name,country}]}} */
+function bkImpParse(wb){
+  var ws=wb.Sheets[wb.SheetNames[0]];
+  var R=XLSX.utils.sheet_to_json(ws,{header:1, raw:true, defval:null, blankrows:false});
+  var T=function(v){ return v==null?'':String(v).trim(); };
+  var findCol=function(row, rx){ for(var i=0;i<row.length;i++){ if(rx.test(T(row[i]))) return i; } return -1; };
+  var nextVal=function(row, i){ for(var j=i+1;j<row.length;j++){ if(row[j]!=null && T(row[j])!=='') return row[j]; } return null; };
+  var out={tour:'', date:'', tickets:[], remarks:[], tot:null, people:{}};
+  var h1=-1, h2=-1;
+  R.forEach(function(row, ri){
+    if(!row) return;
+    var it=findCol(row,/^(tur|tour)\s*:?$/i); if(it>=0 && !out.tour) out.tour=T(nextVal(row,it));
+    var idt=findCol(row,/^date\s*:?$/i); if(idt>=0 && !out.date) out.date=_bkImpYMD(nextVal(row,idt));
+    if(h1<0 && findCol(row,/^ticket\s*no/i)>=0 && findCol(row,/^adl/i)>=0) h1=ri;
+    if(h2<0 && findCol(row,/^ticket\s*no/i)>=0 && (findCol(row,/^passport/i)>=0 || findCol(row,/^country/i)>=0)) h2=ri;
+  });
+  if(h1<0) return {err:'ไม่พบหัวตาราง (ต้องมีคอลัมน์ "Ticket No" และ "Adl")'};
+  var H=R[h1], C={seller:findCol(H,/^seller/i), ticket:findCol(H,/^ticket\s*no/i), name:findCol(H,/^name/i), ad:findCol(H,/^adl/i), chd:findCol(H,/^chd/i),
+    inf:findCol(H,/^(baby|inf)/i), trf:findCol(H,/^trf/i), hotel:findCol(H,/^hotel/i), room:findCol(H,/^room/i)};
+  var num=function(v){ var n=parseInt(v,10); return isFinite(n)?n:0; };
+  /* ช่องที่ merge ไว้ทำให้ข้อมูลเลื่อนจากหัวคอลัมน์ได้ (เช่น Room หัวอยู่ช่อง 28 ข้อมูลอยู่ 29)
+     อ่านค่าแรกที่ไม่ว่าง ตั้งแต่หัวคอลัมน์นั้นจนถึงหัวคอลัมน์ถัดไป */
+  var heads=[]; H.forEach(function(v,i){ if(T(v)) heads.push(i); });
+  var cell=function(row, c){ if(c<0) return null; var end=row.length; for(var k=0;k<heads.length;k++){ if(heads[k]>c){ end=heads[k]; break; } }
+    for(var j=c;j<end;j++){ if(row[j]!=null && T(row[j])!=='') return row[j]; } return null; };
+  var ended=false;
+  for(var ri=h1+1; ri<R.length; ri++){
+    var row=R[ri]||[]; if(h2>=0 && ri>=h2) break;
+    var flat=row.map(T).filter(Boolean).join(' ');
+    if(ended && !/tour total|overall total/i.test(flat)) continue;   /* หลังยอดรวม = หัวของตารางที่สอง ไม่ใช่หมายเหตุ */
+    if(/tour total|overall total/i.test(flat)){
+      ended=true;   /* ยอดท้ายตาราง · ตัวเลขอยู่หน้าป้าย Adult / Child / Baby */
+      var nx=R[ri+1]||[], tt={}; var lastN=null;
+      nx.forEach(function(v){ var t=T(v); if(t==='') return; if(/^\d+$/.test(t)){ lastN=+t; return; } if(/^adult/i.test(t)) tt.ad=lastN; else if(/^child/i.test(t)) tt.chd=lastN; else if(/^baby|^inf/i.test(t)) tt.inf=lastN; lastN=null; });
+      if(tt.ad!=null && !out.tot) out.tot={ad:tt.ad||0, chd:tt.chd||0, inf:tt.inf||0};
+      continue;
+    }
+    var tk=T(cell(row,C.ticket));
+    if(tk && /\d/.test(tk)){
+      var room=T(cell(row,C.room)), phone='';
+      if(/^\+?\d[\d\s-]{6,}$/.test(room)){ phone=room.replace(/\s|-/g,''); room=''; }   /* เบอร์โทรที่หลุดมาอยู่ช่อง Room */
+      out.tickets.push({ticket:tk, seller:T(cell(row,C.seller)), names:T(cell(row,C.name)).split(',').map(function(x){ return x.replace(/\s+/g,' ').trim(); }).filter(Boolean),
+        ad:num(row[C.ad]), chd:C.chd>=0?num(row[C.chd]):0, inf:C.inf>=0?num(row[C.inf]):0, trf:T(cell(row,C.trf)), hotel:T(cell(row,C.hotel)), room:room, phone:phone});
+    } else if(flat && !/^(sayfa|reporter)/i.test(flat)){ out.remarks.push(flat); }
+  }
+  if(h2>=0){
+    var H2=R[h2], c2={ticket:findCol(H2,/^ticket\s*no/i), name:findCol(H2,/^name/i), country:findCol(H2,/^country/i)};
+    for(var rj=h2+1; rj<R.length; rj++){
+      var r2=R[rj]||[], t2=T(r2[c2.ticket]); if(!t2 || !/\d/.test(t2)) continue;
+      (out.people[t2]=out.people[t2]||[]).push({key:_bkImpNameKey(r2[c2.name]), name:T(r2[c2.name]), country:c2.country>=0?T(r2[c2.country]):''});
+    }
+  }
+  return out;
+}
+/* โรงแรม → ชื่อที่ระบบใช้ + พื้นที่รับ · ดูจากใบเก่าที่เคยรับโรงแรมนี้ (พื้นที่ที่ใช้บ่อยที่สุด) */
+function bkImpHotelIndex(){
+  var idx={};
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(!b||!b.hotelName||!b.pickupAreaId) return;
+    var a=(typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null; if(a && (a.zone==='NoTransfer'||a.zone==='NT')) return;
+    var k=bkV2HotelKey(b.hotelName); if(!k) return;
+    var e=idx[k]||(idx[k]={name:b.hotelName, areas:{}}); e.areas[b.pickupAreaId]=(e.areas[b.pickupAreaId]||0)+1;
+  });
+  return idx;
+}
+function bkImpHotel(name){
+  var s=String(name||'').trim(); if(!s) return {name:'', areaId:null};
+  var I=_bkImp&&_bkImp.hix||(_bkImp&&(_bkImp.hix=bkImpHotelIndex()))||{};
+  var pick=function(e){ var best=null, n=0; Object.keys(e.areas).forEach(function(a){ if(e.areas[a]>n){ n=e.areas[a]; best=a; } }); return best; };
+  var e=I[bkV2HotelKey(s)];
+  if(!e && typeof bkV2HotelNear==='function'){ var nr=bkV2HotelNear(s, 0.86); if(nr) e=I[bkV2HotelKey(nr.name)]; }
+  if(e) return {name:e.name, areaId:pick(e), known:true};
+  return {name:(typeof bkV2CanonicalHotel==='function')?bkV2CanonicalHotel(s):s, areaId:null, known:false};
+}
+function bkImpExists(tk){
+  var v=_bkImpNorm(tk); if(!v) return null;
+  return (SB_BOOKINGS||[]).find(function(b){ return b && !['cancelled','rejected','cancelled_weather'].includes(b.status) && _bkImpNorm(b.voucherRef)===v; })||null;
+}
+function bkImpPrefs(){ try{ return JSON.parse(localStorage.getItem('bkimp_pref')||'{}')||{}; }catch(_){ return {}; } }
+function bkImpPrefSave(){ try{ if(!_bkImp) return; var P=bkImpPrefs(); P[_bkImpNorm(_bkImp.tour)||'_']={agentId:_bkImp.agentId||'', routeId:_bkImp.routeId||''}; localStorage.setItem('bkimp_pref', JSON.stringify(P)); }catch(_){} }
+function bkImpStart(){
+  if(typeof bkLimProg==='function' && bkLimProg()) return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  if(typeof XLSX==='undefined'){ alert('Excel reader is not loaded yet. Please reload the page and try again.'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls';
+  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(e){
+      var P; try{ P=bkImpParse(XLSX.read(new Uint8Array(e.target.result),{type:'array'})); }catch(err){ alert('Cannot read this file: '+(err&&err.message||err)); return; }
+      if(P.err){ alert(P.err); return; }
+      if(!P.tickets.length){ alert('No tickets found in this file.'); return; }
+      var pref=bkImpPrefs()[_bkImpNorm(P.tour)||'_']||{};
+      _bkImp={file:f.name, tour:P.tour, date:P.date, tickets:P.tickets, remarks:P.remarks, tot:P.tot, people:P.people,
+              agentId:pref.agentId||'', routeId:pref.routeId||'', cur:-1, skip:{}, active:false, hix:null};
+      bkImpRender();
+    };
+    rd.readAsArrayBuffer(f);
+  };
+  inp.click();
+}
+function bkImpClose(){ var o=document.getElementById('bkimp-ov'); if(o) o.remove(); }
+function bkImpSet(k, v){ if(!_bkImp) return; _bkImp[k]=v; bkImpPrefSave(); bkImpRender(); }
+function bkImpRender(){
+  var D=_bkImp; if(!D) return; var e=_bkImpEsc;
+  var sum=function(k){ return D.tickets.reduce(function(s,t){ return s+(t[k]||0); },0); };
+  var ad=sum('ad'), chd=sum('chd'), inf=sum('inf'), totOk=!D.tot || (D.tot.ad===ad && D.tot.chd===chd && D.tot.inf===inf);
+  var mon=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], dp=String(D.date||'').split('-'), dLbl=dp.length===3?(+dp[2]+' '+mon[+dp[1]]+' '+dp[0]):'(no date)';
+  var ags=(SB_AGENTS||[]).filter(function(a){ return a && a.active!==false; }).sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+  var ag=D.agentId?sbGetAgent(D.agentId):null;
+  var allow=null; if(ag){ var pp=(Array.isArray(ag.programPeriods)&&ag.programPeriods.length)?ag.programPeriods.map(function(x){ return x.routeId; }):(Array.isArray(ag.programs)&&ag.programs.length?ag.programs:null); if(pp) allow={}; (pp||[]).forEach(function(r){ allow[r]=1; }); }
+  var rts=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false; }).slice().sort(function(a,b){ return (allow?((allow[b.id]?1:0)-(allow[a.id]?1:0)):0) || String(a.name||'').localeCompare(String(b.name||'')); });
+  var closed=''; if(D.routeId && D.date){ try{ if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(D.routeId, D.date)) closed='โปรแกรมนี้ไม่ออกวันที่ '+dLbl+' · เลือกโปรแกรมอื่น หรือเปิดวันใน Boat Operation ก่อน'; }catch(_){} }
+  var nNew=0, nHave=0;
+  var rows=D.tickets.map(function(t,i){
+    var ex=bkImpExists(t.ticket), H=bkImpHotel(t.hotel), st;
+    if(ex){ nHave++; st='<span style="background:#E1F5EA;color:#136C3A;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap">&#10003; in system</span>'; }
+    else if(D.skip[i]) st='<span style="background:#F1F5F9;color:#64748B;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">skipped</span>';
+    else { nNew++; st='<span style="background:#FBF1DF;color:#7A4300;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">to create</span>'; }
+    var lead=t.names.filter(function(n){ return _bkImpType(n)==='AD'; })[0]||t.names[0]||'';
+    var nCh=t.names.filter(function(n){ return _bkImpType(n)==='CHD'; }).length, nTot=t.ad+t.chd+t.inf;
+    var warn=(t.names.length!==nTot)?('ชื่อ '+t.names.length+' คน แต่ยอด '+nTot):((nCh!==t.chd)?('ชื่อเด็ก (Chd) '+nCh+' แต่ยอด CHD '+t.chd+' · ใช้ยอดตามไฟล์'):'');
+    var aN=H.areaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(H.areaId)||{}).name||H.areaId):'';
+    return '<tr style="border-bottom:1px solid #F0F1F4'+(ex?';opacity:.6':'')+'"><td style="padding:6px 8px;font-family:\'DM Mono\',monospace">'+e(t.ticket)+'</td>'
+      +'<td style="padding:6px 8px"><b>'+e(lead)+'</b>'+(t.names.length>1?(' <span style="color:#8A8F9C">+'+(t.names.length-1)+'</span>'):'')+(warn?('<div style="font-size:10.5px;color:#B45309">⚠ '+e(warn)+'</div>'):'')+'</td>'
+      +'<td style="padding:6px 8px;text-align:center;font-family:\'DM Mono\',monospace">'+t.ad+' / '+t.chd+' / '+t.inf+'</td>'
+      +'<td style="padding:6px 8px">'+e(H.name||'—')+(t.room?(' <span style="color:#8A8F9C">· '+e(t.room)+'</span>'):'')+(t.phone?(' <span style="color:#185FA5" title="เบอร์ที่อยู่ในช่อง Room · จะลงช่องเบอร์">☎ '+e(t.phone)+'</span>'):'')
+        +'<div style="font-size:10.5px;color:'+(aN?'#0F6E56':'#B45309')+'">'+(aN?('&rarr; '+e(aN)):'ยังไม่รู้พื้นที่รับ · เลือกในฟอร์ม')+'</div></td>'
+      +'<td style="padding:6px 8px">'+st+(!ex?(' <button onclick="bkImpSkip('+i+')" style="border:0;background:none;color:#8A8F9C;font-size:11px;text-decoration:underline;cursor:pointer;font-family:inherit">'+(D.skip[i]?'undo':'skip')+'</button>'):'')+'</td></tr>';
+  }).join('');
+  var sel='height:34px;border:1.5px solid #D5DAE5;border-radius:9px;padding:0 10px;font-family:inherit;font-size:13px;background:#fff;min-width:0;width:100%';
+  var ready=D.agentId && D.routeId && D.date && !closed && nNew>0;
+  var h='<div style="width:980px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.4);overflow:hidden;color:#0F1B3D">'
+    +'<div style="padding:14px 18px;border-bottom:1px solid #E6E8EE;display:flex;align-items:flex-start;gap:10px"><div><div style="font-size:10.5px;font-weight:800;letter-spacing:.1em;color:#185FA5">IMPORT FROM EXCEL</div>'
+      +'<div style="font-size:16px;font-weight:800;margin-top:2px">'+e(D.tour||'(no tour name)')+' · '+e(dLbl)+'</div>'
+      +'<div style="font-size:11.5px;color:#6B7489;margin-top:2px">'+e(D.file)+' · '+D.tickets.length+' tickets · '+ad+' AD · '+chd+' CHD · '+inf+' INF'
+        +(D.tot?(totOk?' <span style="color:#0F6E56;font-weight:700">· ✓ matches file total</span>':(' <span style="color:#A32D2D;font-weight:700">· ✗ file total says '+D.tot.ad+'/'+D.tot.chd+'/'+D.tot.inf+'</span>')):'')+'</div></div>'
+      +'<button onclick="bkImpClose()" style="margin-left:auto;border:0;background:none;font-size:20px;cursor:pointer;color:#8A8F9C">&times;</button></div>'
+    +'<div style="padding:12px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Agent<select onchange="bkImpSet(\'agentId\',this.value)" style="'+sel+';margin-top:4px"><option value="">— choose agent —</option>'
+        +ags.map(function(a){ return '<option value="'+e(a.id)+'"'+(a.id===D.agentId?' selected':'')+'>'+e((a.code?a.code+' · ':'')+a.name)+'</option>'; }).join('')+'</select></label>'
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Program'+(allow?' <span style="font-weight:600;color:#0F6E56">· in this agent\'s contract listed first</span>':'')+'<select onchange="bkImpSet(\'routeId\',this.value)" style="'+sel+';margin-top:4px"><option value="">— choose program —</option>'
+        +rts.map(function(r){ return '<option value="'+e(r.id)+'"'+(r.id===D.routeId?' selected':'')+'>'+e((allow&&allow[r.id]?'★ ':'')+r.name)+'</option>'; }).join('')+'</select></label>'
+    +'</div>'
+    +(closed?('<div style="margin:0 18px 8px;background:#FBE3E0;color:#A32D2D;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:700">'+e(closed)+'</div>'):'')
+    +(D.remarks.length?('<div style="margin:0 18px 8px;background:#FFFBEB;border:1px solid #F3E2B3;border-radius:9px;padding:7px 11px;font-size:12px;color:#7A4300"><b>Notes in file:</b> '+D.remarks.map(e).join(' · ')+' <span style="color:#8A8F9C">(added to the notes of those tickets)</span></div>'):'')
+    +'<div style="margin:0 18px;border:1px solid #E6E8EE;border-radius:12px;max-height:46vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#F6F7FA;position:sticky;top:0">'
+      +['Ticket','Lead / names','AD / CHD / INF','Hotel → pickup area','Status'].map(function(x){ return '<th style="text-align:left;padding:7px 8px;font-size:10.5px;letter-spacing:.06em;color:#6B7489;text-transform:uppercase">'+x+'</th>'; }).join('')
+    +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="padding:12px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:12px;color:#6B7489">'+nNew+' to create · '+nHave+' already in system · each opens in the New booking form, check it and press Save as usual</span>'
+      +'<span style="flex:1"></span><button onclick="bkImpClose()" style="height:34px;border:1px solid #D5DAE5;border-radius:9px;background:#fff;font-family:inherit;font-weight:700;padding:0 14px;cursor:pointer">Cancel</button>'
+      +'<button '+(ready?'':'disabled ')+'onclick="bkImpGo()" style="height:34px;border:0;border-radius:9px;background:'+(ready?'#16265C':'#B9BFCC')+';color:#fff;font-family:inherit;font-weight:700;padding:0 16px;cursor:'+(ready?'pointer':'default')+'">Start · fill one by one &rarr;</button></div>'
+    +'</div>';
+  var o=document.getElementById('bkimp-ov');
+  if(!o){ o=document.createElement('div'); o.id='bkimp-ov'; o.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.5);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+    o.addEventListener('click',function(ev){ if(ev.target===o) bkImpClose(); }); document.body.appendChild(o); }
+  o.innerHTML=h;
+}
+function bkImpSkip(i){ if(!_bkImp) return; if(_bkImp.skip[i]) delete _bkImp.skip[i]; else _bkImp.skip[i]=1; bkImpRender(); bkImpBar(); }
+function bkImpGo(){ if(!_bkImp) return; _bkImp.active=true; _bkImp.cur=-1; bkImpClose(); bkImpNext(); }
+function bkImpPending(){ var D=_bkImp; if(!D) return []; var L=[]; D.tickets.forEach(function(t,i){ if(!D.skip[i] && !bkImpExists(t.ticket)) L.push(i); }); return L; }
+function bkImpNext(){
+  var D=_bkImp; if(!D||!D.active) return;
+  var L=bkImpPending(), i=L.filter(function(x){ return x>D.cur; })[0]; if(i==null) i=L[0];
+  if(i==null){ bkImpFinish(); return; }
+  bkImpOpen(i);
+}
+function bkImpFinish(){
+  var D=_bkImp; if(!D) return; D.active=false;
+  var n=D.tickets.filter(function(t){ return !!bkImpExists(t.ticket); }).length, sk=Object.keys(D.skip).length;
+  var b=document.getElementById('bkimp-bar'); if(b) b.remove();
+  if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'Import finished', id:D.tour||'', status:n+' / '+D.tickets.length+' IN SYSTEM', sub:sk?(sk+' ticket(s) skipped'):''});
+}
+function bkImpStop(){ if(!_bkImp) return; _bkImp.active=false; var b=document.getElementById('bkimp-bar'); if(b) b.remove(); }
+function bkImpOpen(i){
+  var D=_bkImp; if(!D) return; var t=D.tickets[i]; if(!t) return;
+  if(_bkV2.newBooking && !confirm('A booking form is already open. Discard it and open ticket '+t.ticket+'?')) return;
+  _bkV2.newBooking=null; _bkV2.editingId=null;
+  bkV2NewBooking(); var d=_bkV2.newBooking; if(!d) return;
+  D.cur=i;
+  var names=t.names.slice(), people=D.people[t.ticket]||[];
+  var natOf=function(nm){ var k=_bkImpNameKey(nm), p=people.find(function(x){ return x.key===k; }); return p?_bkImpNat(p.country):''; };
+  var cnt={}; people.forEach(function(p){ var c=_bkImpNat(p.country); if(c) cnt[c]=(cnt[c]||0)+1; });
+  var nat0=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; })[0]||'';
+  var adN=names.filter(function(n){ return _bkImpType(n)==='AD'; }), chN=names.filter(function(n){ return _bkImpType(n)==='CHD'; }), inN=names.filter(function(n){ return _bkImpType(n)==='INF'; });
+  var lead=adN.length?adN.shift():(chN.length?chN.shift():(inN.shift()||''));
+  d.agentId=D.agentId; bkV2ApplyAgentRules(sbGetAgent(D.agentId));
+  d.voucherRef=t.ticket;
+  d.leadPax=lead;
+  d.leadNationality=natOf(lead)||nat0||((typeof bkV2GuessNationality==='function')?(bkV2GuessNationality(lead)||''):'');
+  if(t.phone) d.leadPhone=t.phone;
+  var H=bkImpHotel(t.hotel); d.hotelName=H.name||''; d.roomNumber=t.room||'';
+  if(/^(RU|BY|UA|KZ|UZ|KG|AM|AZ|GE|MD)$/.test(d.leadNationality)) d.guides=Object.assign({english:false,russian:false,chinese:false,otherLang:''}, d.guides||{}, {russian:true});
+  var notes=D.remarks.filter(function(r){ return r.indexOf(t.ticket)>=0; });
+  d.notes=notes.join(' · ');
+  var tr=d.trips[0]; tr.routeId=D.routeId; tr.date=D.date;
+  var th=(d.leadNationality==='TH');
+  tr.pax[th?'ad_th':'ad_fr']=t.ad; tr.pax[th?'chd_th':'chd_fr']=t.chd; tr.pax[th?'inf_th':'inf_fr']=t.inf;
+  if(typeof bkV2SyncPassengers==='function') bkV2SyncPassengers();
+  var q={AD:adN, CHD:chN, INF:inN};
+  (d.passengers||[]).forEach(function(p){ var L=q[p.type]||q.AD; var nm=L.length?L.shift():''; if(!nm){ var any=adN.length?adN:(chN.length?chN:inN); nm=any.length?any.shift():''; }
+    if(nm){ p.name=nm; p.nationality=natOf(nm)||d.leadNationality||''; } });
+  d._imp={ticket:t.ticket, file:D.file};
+  if(H.areaId) bkV2SetPickupArea(H.areaId); else bkV2Render();
+  bkImpBar();
+  try{ window.scrollTo(0,0); }catch(_){}
+}
+function bkImpBar(){
+  var D=_bkImp; var b=document.getElementById('bkimp-bar');
+  if(!D||!D.active){ if(b) b.remove(); return; }
+  var L=bkImpPending(), t=D.tickets[D.cur]||{}, done=D.tickets.filter(function(x){ return !!bkImpExists(x.ticket); }).length;
+  if(!b){ b=document.createElement('div'); b.id='bkimp-bar'; b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:8500;background:#16265C;color:#fff;border-radius:14px;box-shadow:0 12px 34px rgba(2,10,30,.35);padding:9px 12px;display:flex;align-items:center;gap:10px;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;font-size:12.5px;max-width:calc(100vw - 32px);flex-wrap:wrap'; document.body.appendChild(b); }
+  var btn=function(lbl,fn,pri){ return '<button onclick="'+fn+'" style="height:28px;border-radius:8px;border:1px solid '+(pri?'#fff':'rgba(255,255,255,.35)')+';background:'+(pri?'#fff':'transparent')+';color:'+(pri?'#16265C':'#fff')+';font-family:inherit;font-size:12px;font-weight:700;padding:0 10px;cursor:pointer;white-space:nowrap">'+lbl+'</button>'; };
+  b.innerHTML='<b style="white-space:nowrap">&#11014; Import · '+_bkImpEsc(D.tour||'')+'</b>'
+    +'<span style="opacity:.85;white-space:nowrap">ticket <b>'+_bkImpEsc(t.ticket||'—')+'</b> · '+done+'/'+D.tickets.length+' in system · '+L.length+' left</span>'
+    +(_bkV2.newBooking?'':btn('Open this ticket again','bkImpOpen('+D.cur+')',1))
+    +btn('Skip this ticket','bkImpSkipCur()')+btn('List','bkImpRender()')+btn('Stop','bkImpStop()');
+}
+function bkImpSkipCur(){ var D=_bkImp; if(!D) return; D.skip[D.cur]=1; if(_bkV2.newBooking){ _bkV2.newBooking=null; _bkV2.editingId=null; bkV2Render(); } bkImpNext(); bkImpBar(); }
+function bkImpAfterSave(bk){
+  var D=_bkImp; if(!D||!D.active||!bk) return;
+  var t=D.tickets[D.cur]; if(!t || _bkImpNorm(bk.voucherRef)!==_bkImpNorm(t.ticket)) { bkImpBar(); return; }
+  setTimeout(function(){ if(_bkImp && _bkImp.active && !_bkV2.newBooking) bkImpNext(); else bkImpBar(); }, 700);
+}
 // P2 · New Booking form handlers
 function bkV2NewBooking(){
   if(bkLimProg()) return;   /* §bkLim */
@@ -60895,6 +61152,7 @@ function _bkV2DoCloseNewBooking(){
   _bkV2.editingId = null;
   if(editingId){ _bkV2.detailId = editingId; }
   bkV2Render();
+  try{ if(typeof bkImpBar==='function') bkImpBar(); }catch(_e){}   /* §bkImp */
 }
 // Logged-in user's display name (for Submitted/Confirmed by auto-fill) · '' when no login (localhost)
 function bkV2LoginUser(){ return (window.LA_ME && (window.LA_ME.name||window.LA_ME.username)) || ''; }
@@ -63148,6 +63406,7 @@ function bkV2CommitBooking(status){
     laSaveToast({kind:_k, title:(wasEditing?'อัปเดต booking แล้ว':'บันทึก booking แล้ว'), id:newBk.id, status:_st,
       sub: tripsModified ? `🚤 ล็อกเหมาลำ · ${_n} ลำ` : ''});
   }
+  try{ if(typeof bkImpAfterSave==='function') bkImpAfterSave(newBk); }catch(_e){}   /* §bkImp · ใบนำเข้า → เปิดใบถัดไป */
 }
 
 // ── Save-confirmation toast (card style · replaces native alert) ──
