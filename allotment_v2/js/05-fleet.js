@@ -10356,10 +10356,11 @@ function flEqChoose(id){
 function flEqLinkPair(gbId,engId){ if(flEqLinkGb(gbId,engId,{})) _flEqDone(); }
 function flEqSkipPair(gbId,engId){ _flEqSkip[gbId+'|'+engId]=1; flRenderEquip(); }
 function flEqQuickLink(gbId,engId){ if(!flEqLinkGb(gbId,engId,{})) return; if(typeof flSave==='function') flSave(); if(typeof flRenderAsset==='function') flRenderAsset(); }
-function flEqOpenPick(kind,engId){ _flEqPick={kind:kind,engId:engId}; _flEqF={brand:true,shaft:'',all:false}; flRenderEquip(); }
+var _flEqQ='', _flEqLastKey='';   /* §eqSteady */
+function flEqOpenPick(kind,engId){ _flEqPick={kind:kind,engId:engId}; _flEqF={brand:true,shaft:'',all:false}; _flEqQ=''; flRenderEquip(); }
 function flEqClosePick(){ _flEqPick=null; flRenderEquip(); }
 function flEqSetF(k,v){ _flEqF[k]=v; flRenderEquip(); }
-function flEqFilterQ(v){ const q=String(v||'').toLowerCase(); document.querySelectorAll('#fl-eq-pick-list [data-q]').forEach(d=>{ d.style.display=(!q||d.getAttribute('data-q').indexOf(q)>=0)?'':'none'; }); }
+function flEqFilterQ(v){ _flEqQ=String(v||''); const q=String(v||'').toLowerCase(); document.querySelectorAll('#fl-eq-pick-list [data-q]').forEach(d=>{ d.style.display=(!q||d.getAttribute('data-q').indexOf(q)>=0)?'':'none'; }); }
 function flEquipOpen(boatId){ _flEquipBoat=boatId||_flEquipBoat; _flSwap=null; _flEqPick=null; flRenderEquip(); if(typeof openModal==='function') openModal('fl-modal-equip'); }
 function flEquipOpenPick(boatId,kind,engId){ flEquipOpen(boatId); flEqOpenPick(kind,engId); }
 function flEquipSetBoat(id){ _flEquipBoat=id; _flSwap=null; _flEqPick=null; flRenderEquip(); }
@@ -10422,6 +10423,15 @@ function flRenderEquip(){
 #fl-equip-modal-body .eq-gh{font-size:11px;font-weight:700;color:#5E6577;letter-spacing:.04em;margin:12px 0 6px}
 #fl-equip-modal-body .eq-chip{height:30px;padding:0 11px;border-radius:999px;border:1px solid #D7DBE2;background:#fff;color:#0F1B3D;font:inherit;font-size:12px;cursor:pointer}
 #fl-equip-modal-body .eq-chip.on{background:#0F1B3D;border-color:#0F1B3D;color:#fff;font-weight:600}
+/* §eqSteady · owner "ทำให้หน้าต่างมันปกติหน่อย พอกดเพิ่มกดลด มันยุบ มันเด้ง"
+   เดิม: ความสูงหน้าต่างตามเนื้อหา (เปิดแผงเลือก = สูงขึ้น · ปิด = หด · หน้าต่างกลางจอเลยกระโดด)
+   ตารางกว้างแคบตามว่ามีแผงเลือกไหม · วาดใหม่ทั้งก้อนแล้วเลื่อนกลับขึ้นบนสุด
+   ตอนนี้: สูงคงที่ · ตาราง + ช่องด้านขวา 400px มีตลอด (ไม่ได้เลือกอะไร = ช่องคำแนะนำ) · จำตำแหน่งเลื่อน + คำค้น */
+#fl-modal-equip .modal{height:min(880px,92vh)}
+#fl-equip-modal-body{flex:1 1 auto;min-height:0}
+#fl-equip-modal-body .eq-lay{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:12px;align-items:start}
+#fl-equip-modal-body .eq-side{position:sticky;top:0;min-width:0}
+@media (max-width:980px){#fl-equip-modal-body .eq-lay{grid-template-columns:1fr}#fl-equip-modal-body .eq-side{position:static}}
 </style>`;
   const pill=st=>{ st=st||'ready'; const c=st==='fixing'?['#FAEEDA','#854F0B']:st==='spare'?['#F1EFE8','#555']:(st==='broken'||st==='damaged')?['#FCEBEB','#A32D2D']:['#E1F5EE','#0F6E56']; return `<span class="eq-pill" style="background:${c[0]};color:${c[1]}">${E(st)}</span>`; };
   const slot=(kind,obj,e,meta,disTxt)=>{
@@ -10483,22 +10493,31 @@ function flRenderEquip(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${locSel}<button type="button" class="eq-btn" onclick="flEqTakeOut('${kind}','${e.id}')">ถอดออกอย่างเดียว</button></div>
         ${kind==='gb'&&_flEqPropOf(cur.id)?`<label style="font-size:12px;color:#5E6577;display:flex;gap:6px;align-items:center"><input type="checkbox" id="fl-eq-moveprop" checked> ย้ายใบจักร ${E(_flEqPropOf(cur.id).serial)} ไปใส่เกียร์ใหม่ด้วย</label>`:''}
         ${kind==='eng'?`<div style="font-size:11.5px;color:#6B7280">เกียร์และใบจักรอยู่ที่ตำแหน่งเดิม แล้วเกาะเครื่องใหม่ · ถ้าเลือกเครื่องที่ติดเรืออื่น = สลับเครื่องกัน</div>`:''}</div>`:'';
-    picker=`<div style="flex:0 0 400px;max-width:100%;background:#fff;border:1px solid #E3E7EE;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;align-self:flex-start">
+    picker=`<div class="eq-side" style="background:#fff;border:1px solid #E3E7EE;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:14px 16px 10px;border-bottom:1px solid #EEF1F5;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;flex:1">${cur?'เปลี่ยน':'ใส่'}${noun} · ${E(flPosLabel(e.pos))}</b><button type="button" class="eq-btn" aria-label="ปิด" onclick="flEqClosePick()">✕</button></div>
         <div style="font-size:12px;color:#5E6577">${E(boat.name)} · ${e.virt?('ตำแหน่งว่าง · มีเกียร์ '+E(e.waitGb?e.waitGb.serial:'')+' รออยู่'):('เครื่อง <span style="font-family:\'DM Mono\',monospace;color:#0F1B3D">'+E(e.serial)+'</span>')}${e.brand?(' · '+E(e.brand)):''}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}<input type="text" placeholder="ค้นหา serial…" aria-label="ค้นหา serial" oninput="flEqFilterQ(this.value)" style="flex:1;min-width:110px;height:30px;border:1px solid #D7DBE2;border-radius:8px;padding:0 9px;font:inherit;font-size:12px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}<input id="fl-eq-q" type="text" value="${E(_flEqQ)}" placeholder="ค้นหา serial…" aria-label="ค้นหา serial" oninput="flEqFilterQ(this.value)" style="flex:1;min-width:110px;height:30px;border:1px solid #D7DBE2;border-radius:8px;padding:0 9px;font:inherit;font-size:12px"></div>
       </div>
       <div id="fl-eq-pick-list" style="padding:0 16px 10px;max-height:46vh;overflow:auto">${list}${busy?`<button type="button" onclick="flEqSetF('all',${!_flEqF.all})" style="border:none;background:none;color:#1683C7;font:inherit;font-size:12px;font-weight:600;padding:8px 0;cursor:pointer">${_flEqF.all?'ซ่อนตัวที่ติดอยู่ที่อื่น / ซ่อมอยู่':('+ แสดงตัวที่ติดอยู่ที่อื่น / ซ่อมอยู่ ('+busy+')')}</button>`:''}</div>
       ${foot}</div>`;
   }
   const opts=boats.map(b=>{ const n=_flEqBoatIssues(b.id); return `<option value="${E(b.id)}" ${b.id===bid?'selected':''}>${E(b.name)}${n?(' · ต้องผูก '+n):''}</option>`; }).join('');
+  const idle=`<div class="eq-side" style="border:1.5px dashed #D5DBE5;border-radius:14px;padding:26px 18px;color:#6B7280;font-size:12.5px;line-height:1.7;background:#FAFBFC;min-height:240px;display:flex;align-items:center;justify-content:center;text-align:center"><div>กดช่องในตาราง<br>เพื่อใส่ · เปลี่ยน · ถอด<div style="font-size:11.5px;color:#9AA1AE;margin-top:4px">รายการให้เลือกจะขึ้นตรงนี้</div></div></div>`;
+  /* §eqSteady · จำตำแหน่งเลื่อนก่อนวาดใหม่ */
+  const _key=pk?(pk.kind+'|'+pk.engId):'', _sc=mount.scrollTop, _pl=document.getElementById('fl-eq-pick-list'), _pls=(_pl&&_flEqLastKey===_key)?_pl.scrollTop:0;
+  const _ae=document.activeElement, _qFocus=!!(_ae&&_ae.id==='fl-eq-q'), _qPos=_qFocus?_ae.selectionStart:0;
   mount.innerHTML=`${css}<div class="eq">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap"><b style="font-size:20px">${E(boat.name||'')}</b><span style="font-size:12.5px;color:#5E6577">${E(pierLbl)}${engs.length?(' · '+engs.length+' เครื่อง'):''}</span><span style="flex:1"></span><label style="font-size:12px;color:#5E6577;display:flex;gap:6px;align-items:center">เรือ <select onchange="flEquipSetBoat(this.value)" style="height:34px;border:1px solid #D7DBE2;border-radius:8px;padding:0 10px;font:inherit;font-size:12.5px;background:#fff;cursor:pointer">${opts}</select></label></div>
     ${sug}
-    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1 1 520px;min-width:0">${table}${looseHtml}
-      <div style="font-size:11.5px;color:#6B7280;margin-top:10px">กดช่องว่างเพื่อใส่ · กดช่องที่มีของเพื่อเปลี่ยนหรือถอด</div></div>${picker}</div>
+    <div class="eq-lay"><div style="min-width:0">${table}${looseHtml}
+      <div style="font-size:11.5px;color:#6B7280;margin-top:10px">กดช่องว่างเพื่อใส่ · กดช่องที่มีของเพื่อเปลี่ยนหรือถอด</div></div>${picker||idle}</div>
   </div>`;
+  mount.scrollTop=_sc;
+  if(pk && _flEqQ) flEqFilterQ(_flEqQ);
+  const _pl2=document.getElementById('fl-eq-pick-list'); if(_pl2) _pl2.scrollTop=_pls;
+  if(_qFocus){ const q=document.getElementById('fl-eq-q'); if(q){ q.focus(); try{ q.setSelectionRange(_qPos,_qPos); }catch(_e){} } }
+  _flEqLastKey=_key;
 }
 function flRenderAsset(){
   /* §gbName · ของที่ซ่อมตอนโหลด (ลำตามเครื่อง · ชื่อเกียร์) บันทึกขึ้นเซิร์ฟเวอร์ตอนคนที่แก้ Fleet ได้เปิดหน้านี้ครั้งแรก */
