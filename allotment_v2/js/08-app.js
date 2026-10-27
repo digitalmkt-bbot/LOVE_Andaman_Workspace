@@ -66477,6 +66477,11 @@ function poBal(itemId){
       case 'ship_lost':     b.onship-=q; b.gone+=q; break;
       case 'ship_writeoff': b.onship-=q; b.gone+=q; break;
       case 'ship_repair':   b.onship-=q; b.repair+=q; break;
+      /* §poXfer · โยกไปท่าอื่น · ออกจากพร้อมใช้ทันที (ระหว่างทางไม่ใช่ของท่านี้แล้ว) · ยกเลิกก่อนปลายทางรับ = คืนเข้า
+         ปลายทางรับไม่ครบ = ส่วนที่ขาดนับเป็นหายสะสมของท่าต้นทาง */
+      case 'xfer_out':      b.ready-=q; break;
+      case 'xfer_back':     b.ready+=q; break;
+      case 'xfer_short':    b.gone+=q; break;
     }
   });
   if(b.gone<0) b.gone=0;
@@ -71778,8 +71783,10 @@ function renderPierOffice(pier){
     +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง'
       +'<span style="flex:1"></span>'
       +(ro?'':('<button class="po-btn" onclick="poRecvOpen()" title="ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย · ลงได้หลายรายการในใบเดียว">&#65291; รับของเข้า</button>'
-        +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'))
+        +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'
+        +'<button class="po-btn" onclick="poXferOpen()" title="ส่งของจากคลังพร้อมใช้ไปท่าอื่น · ท่าปลายทางกดรับแล้วจึงเข้าสต็อกที่นั่น">&#8644; โยกไปท่าอื่น</button>'))   /* §poXfer */
       +'</div>'
+    +poXferBlock(ro)   /* §poXfer · ของโอนเข้ารอรับ / กำลังส่ง */
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
     /* §poShip3 · กอง 3 ของประจำเรือ · มีหน้าที่ของตัวเองบนหน้าหลัก */
     +'<div class="po-sec"><span class="n">3</span> ของประจำเรือ · กองที่อยู่บนเรือ'
@@ -72115,6 +72122,7 @@ function poStockTable(items, ro){
               /* §poRecv · ปรับยอดแยกเป็นสองปุ่มตามขั้นตอนจริง · รับของเข้า กับ นับสต็อก */
               +'<button class="po-go" onclick="poRecvOpen(\''+it.id+'\')" title="รับของเข้า · ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย"'+(ro?' disabled':'')+'>รับเข้า</button>'
               +'<button class="po-go" onclick="poCountOpen(\''+it.id+'\')" title="นับสต็อก · ใส่จำนวนที่นับได้จริง ระบบคิดส่วนต่างให้"'+(ro?' disabled':'')+'>นับ</button>'
+              +((b.ready>0)?('<button class="po-go" onclick="poXferOpen(\''+it.id+'\')" title="โยกไปท่าอื่น"'+(ro?' disabled':'')+'>โยก</button>'):'')   /* §poXfer */
             +'</span></span></div>'; }).join('')
       +'</div>';
   }).join('');
@@ -73276,6 +73284,175 @@ function poRecvSave(itemId){
   poPersist(); poModalClose(); renderPierOffice();
   return true;
 }
+/* ══ §poXfer (2026-10-27) · owner "Phuket · เบิก-คืนอุปกรณ์ · ขอเพิ่มที่สามารถโยกไปให้สาขาอื่นได้ด้วย"
+   (เลือก: ปลายทางกดรับก่อน · ปลายทางไม่มีรายการ = สร้างให้อัตโนมัติ)
+   ต้นทาง   โยกจากคลังพร้อมใช้ → 'xfer_out' from 'to|<ท่าปลายทาง>' · หักพร้อมใช้ทันที · ขึ้นแถบ "กำลังส่ง"
+            ยกเลิกได้ก่อนปลายทางรับ → 'xfer_back' from 'xfer|<id ใบโยก>' · คืนเข้าพร้อมใช้
+   ปลายทาง  แถบ "ของโอนเข้ารอรับ" · ใส่จำนวนที่ได้จริง
+            ได้   → 'receive' ที่ท่าปลายทาง from 'transfer|<id>' (ป้ายเดิม "โอนจากท่าอื่น" · poBal นับเหมือนรับเข้า)
+            ขาด  → เลือก "รอของที่เหลือ" หรือ "ปิดใบ ที่เหลือหาย" · ปิดใบ = 'xfer_short' ที่ท่าต้นทาง (หายสะสมของต้นทาง)
+            ปลายทางยังไม่มีรายการ (ประเภท+ชื่อเดียวกัน) → สร้างรายการให้ ยอดตั้งต้น 0
+   ไม่แตะ DB · ใช้คอลัมน์เดิมของ pier_moves (type · frombucket · note) */
+function poPierObj(k){ return PO_PIERS.filter(function(p){ return p.k===k; })[0]||{k:k,n:k||'—',t:k||''}; }
+function poRecvSrcLbl(m){ var f=String((m&&m.from)||''); return PO_RECV_SRC[f.split('|')[0]]||''; }
+function poXferRef(m){ var f=String((m&&m.from)||''), i=f.indexOf('|'); if(i<0) return null; var k=f.slice(0,i); return (k==='transfer'||k==='xfer')?f.slice(i+1):null; }
+function poXferList(){
+  var outs=[], byId={};
+  (PIER_MOVES||[]).forEach(function(m){ if(!m||m.type!=='xfer_out') return;
+    var o={m:m, id:m.id, src:m.pier, dst:String(m.from||'').replace(/^to\|/,''), sent:poNum(m.qty), got:0, short:0, back:0};
+    outs.push(o); byId[m.id]=o; });
+  (PIER_MOVES||[]).forEach(function(m){ var r=poXferRef(m); if(!r||!byId[r]) return; var o=byId[r], q=poNum(m.qty);
+    if(m.type==='receive') o.got+=q; else if(m.type==='xfer_short') o.short+=q; else if(m.type==='xfer_back') o.back+=q; });
+  outs.forEach(function(o){ o.left=Math.max(0, o.sent-o.got-o.short-o.back); });
+  return outs;
+}
+function poXferPendIn(pier){ return poXferList().filter(function(o){ return o.dst===pier && o.left>0; }); }
+function poXferPendOut(pier){ return poXferList().filter(function(o){ return o.src===pier && o.left>0; }); }
+function poXferLbl(o){ var it=poItem(o.m.itemId); return it?it.label:o.m.itemId; }
+function poXferUnit(o){ var it=poItem(o.m.itemId); return ((it&&PO_KIND[it.kind])||{u:'ชิ้น'}).u; }
+function poXferOpen(itemId){
+  if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
+  var list=poRecvItems(itemId).filter(function(it){ return poBal(it.id).ready>0; });
+  if(!list.length){ alert('No ready stock to transfer.'); return; }
+  var others=PO_PIERS.filter(function(p){ return p.k!==_poPier; });
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ส่งจากคลังพร้อมใช้ของ<b>'+poE(poPierName())+'</b> · หักออกทันที · '
+      +'เข้าสต็อกท่าปลายทางเมื่อปลายทางกดรับ'+(list.length>1?' · ใส่จำนวนเฉพาะรายการที่โยก':'')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">ไปท่า<br><select id="porxto" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;font-family:inherit">'
+        +'<option value="">— เลือกท่าปลายทาง —</option>'
+        +others.map(function(x){ return '<option value="'+poE(x.k)+'">'+poE(x.n+' · '+x.t)+'</option>'; }).join('')
+      +'</select></label>'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">วันที่ส่ง<br><input id="porxd" type="date" value="'+poE(_poDate)+'" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label>'
+    +'</div>'
+    +poRecvRows(list, function(it,K){ var b=poBal(it.id);
+      return '<span style="flex:1;font-weight:700;font-size:12.5px">'+poE(it.label)+'</span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">พร้อมใช้ '+b.ready+' '+poE(K.u)+'</span>'
+        +poIn('porx_'+it.id, list.length===1?'':'', '≤ '+b.ready, 82); })
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin:12px 0 4px">หมายเหตุ · ส่งทางไหน / ใครถือไป</div>'
+    +'<input id="porxn" placeholder="เช่น ฝากรถตู้รอบบ่าย · คุณเอ ถือไป" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;box-sizing:border-box;font-family:inherit">'
+    +'<div id="porxerr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('โยกไปท่าอื่น · '+poE(list.length===1?list[0].label:poPierName()), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกโยก',"poXferSave('"+poE(itemId||'')+"')",1), 620);
+}
+function poXferSave(itemId){
+  if(!poGuard()) return;
+  var list=poRecvItems(itemId), dst=poV('porxto'), d=poV('porxd')||_poDate, note=String(poV('porxn')||'').trim();
+  var err=function(t){ var e=document.getElementById('porxerr'); if(e) e.innerHTML=t; return false; };
+  if(!dst) return err('เลือกท่าปลายทาง');
+  if(dst===_poPier) return err('ท่าปลายทางต้องไม่ใช่ท่าเดียวกัน');
+  var lines=[], bad=[], over=[];
+  list.forEach(function(it){
+    var raw=String(poV('porx_'+it.id)||'').trim(); if(!raw) return;
+    var q=poNum(raw), r=poBal(it.id).ready;
+    if(!(q>0) || !/^\d+$/.test(raw)){ bad.push(it.label); return; }
+    if(q>r){ over.push(it.label+' (พร้อมใช้ '+r+')'); return; }
+    lines.push({it:it, q:q});
+  });
+  if(bad.length) return err('จำนวนต้องเป็นเลขเต็มมากกว่า 0 · '+poE(bad.join(', ')));
+  if(over.length) return err('เกินยอดพร้อมใช้ · '+poE(over.join(', ')));
+  if(!lines.length) return err('ใส่จำนวนที่โยกอย่างน้อย 1 รายการ');
+  var D=poPierObj(dst);
+  lines.forEach(function(x){
+    poAdd({date:d, pier:_poPier, itemId:x.it.id, boatId:'', type:'xfer_out', qty:x.q, from:'to|'+dst, note:'โยกไป '+D.n+(note?(' · '+note):'')});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
+}
+/* ปลายทาง · หารายการประเภท+ชื่อเดียวกัน · ไม่มีก็สร้างให้ (ยอดตั้งต้น 0 · บัญชีมาจากใบรับ) */
+function poXferDstItem(srcIt, dst){
+  var nm=String((srcIt&&srcIt.label)||'').trim().toLowerCase();
+  var c=(PIER_ITEMS||[]).filter(function(i){ return i.pier===dst && i.kind===srcIt.kind && String(i.label||'').trim().toLowerCase()===nm; });
+  var hit=c.filter(function(i){ return i.active!==false; })[0]||c[0];
+  if(hit){ if(hit.active===false) hit.active=true; return hit; }
+  var it={id:poUid('pi_'), pier:dst, kind:srcIt.kind, label:srcIt.label, total:0, active:true, note:'สร้างจากการโยกของจาก '+poPierObj(srcIt.pier).n};
+  PIER_ITEMS.push(it); return it;
+}
+function poXferRecvOpen(){
+  if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
+  var L=poXferPendIn(_poPier); if(!L.length) return;
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ใส่จำนวนที่ได้รับจริง · ช่องที่เว้นว่าง = ยังไม่รับ · '
+      +'ถ้าได้ไม่ครบ เลือกว่าจะรอของที่เหลือ หรือปิดใบ (ที่เหลือนับเป็นของหายของท่าต้นทาง)</div>'
+    +'<div style="max-height:52vh;overflow:auto;padding-right:4px">'+L.map(function(o){
+      var S=poPierObj(o.src);
+      return '<div style="'+poRowCss()+';flex-wrap:wrap">'
+        +'<span style="flex:1;min-width:180px"><b style="font-size:12.5px">'+poE(poXferLbl(o))+'</b>'
+          +'<span style="display:block;font-size:10.5px;color:#94A3B8">จาก '+poE(S.n)+' · ส่ง '+poE(o.m.date||'')+(o.m.by?(' · '+poE(o.m.by)):'')
+          +(o.got?(' · รับแล้ว '+o.got):'')+(String(o.m.note||'').replace(/^โยกไป [^·]+(· )?/,'')?(' · '+poE(String(o.m.note||'').replace(/^โยกไป [^·]+(· )?/,''))):'')+'</span></span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">ค้างรับ <b style="color:#0F172A">'+o.left+'</b> '+poE(poXferUnit(o))+'</span>'
+        +poIn('porr_'+o.id, String(o.left), 'ได้จริง', 76)
+        +'<select id="porrs_'+o.id+'" title="ถ้าได้ไม่ครบ" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 7px;font:600 11.5px inherit;font-family:inherit">'
+          +'<option value="wait">ไม่ครบ → รอของที่เหลือ</option><option value="short">ไม่ครบ → ปิดใบ (ที่เหลือหาย)</option></select>'
+        +'</div>'; }).join('')+'</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap"><label style="font-size:11px;font-weight:700;color:#475569">วันที่รับ <input id="porrd" type="date" value="'+poE(_poDate)+'" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label>'
+      +'<input id="porrn" placeholder="หมายเหตุ (ไม่บังคับ) เช่น กล่องเปียก 2 คู่" style="flex:1;min-width:200px;border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;font-family:inherit"></div>'
+    +'<div id="porrerr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('รับของโอนเข้า · '+poE(poPierName()), body, poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกรับ','poXferRecvSave()',1), 720);
+}
+function poXferRecvSave(){
+  if(!poGuard()) return;
+  var L=poXferPendIn(_poPier), d=poV('porrd')||_poDate, note=String(poV('porrn')||'').trim();
+  var err=function(t){ var e=document.getElementById('porrerr'); if(e) e.innerHTML=t; return false; };
+  var rows=[], bad=[];
+  L.forEach(function(o){
+    var raw=String(poV('porr_'+o.id)||'').trim(); if(raw==='') return;
+    var q=poNum(raw);
+    if(!/^\d+$/.test(raw) || q>o.left){ bad.push(poXferLbl(o)+' (ค้างรับ '+o.left+')'); return; }
+    rows.push({o:o, q:q, mode:poV('porrs_'+o.id)||'wait'});
+  });
+  if(bad.length) return err('จำนวนต้องเป็นเลขเต็ม 0 ถึงยอดค้างรับ · '+poE(bad.join(', ')));
+  var act=rows.filter(function(x){ return x.q>0 || (x.q<x.o.left && x.mode==='short'); });
+  if(!act.length) return err('ใส่จำนวนที่ได้รับอย่างน้อย 1 รายการ');
+  var me=poPierObj(_poPier);
+  act.forEach(function(x){
+    var o=x.o, S=poPierObj(o.src), srcIt=poItem(o.m.itemId)||{kind:'',label:o.m.itemId,pier:o.src};
+    if(x.q>0){ var dIt=poXferDstItem(srcIt, _poPier);
+      poAdd({date:d, pier:_poPier, itemId:dIt.id, boatId:'', type:'receive', qty:x.q, from:'transfer|'+o.id, note:'รับโอนจาก '+S.n+(note?(' · '+note):'')}); }
+    if(x.q<o.left && x.mode==='short')
+      poAdd({date:d, pier:o.src, itemId:o.m.itemId, boatId:'', type:'xfer_short', qty:o.left-x.q, from:'xfer|'+o.id,
+             note:me.n+' รับไม่ครบ · ส่ง '+o.sent+' ได้ '+(o.got+x.q)+(note?(' · '+note):'')});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
+}
+function poXferCancel(id){
+  if(!poGuard()) return;
+  var o=poXferList().filter(function(x){ return x.id===id; })[0]; if(!o||o.left<=0||o.src!==_poPier) return;
+  if(!confirm('Cancel this transfer?\n'+o.left+' x '+poXferLbl(o)+' go back to ready stock here.\n(Anything the other pier already received stays there.)')) return;
+  poAdd({date:_poDate, pier:o.src, itemId:o.m.itemId, boatId:'', type:'xfer_back', qty:o.left, from:'xfer|'+o.id, note:'ยกเลิกโยกไป '+poPierObj(o.dst).n});
+  poPersist(); renderPierOffice();
+}
+function poXferBlock(ro){
+  var inn=poXferPendIn(_poPier), out=poXferPendOut(_poPier); if(!inn.length && !out.length) return '';
+  var chip=function(t,bg,fg){ return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';color:'+fg+';border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:700;white-space:nowrap">'+t+'</span>'; };
+  var h='';
+  if(inn.length){
+    var fromN={}; inn.forEach(function(o){ fromN[poPierObj(o.src).n]=1; });
+    h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:9px 12px;margin:0 0 8px">'
+      +'<b style="color:#047857;font-size:12.5px;white-space:nowrap">&#128230; ของโอนเข้ารอรับ · '+inn.length+' รายการ</b>'
+      +'<span style="font-size:11.5px;color:#047857">จาก '+poE(Object.keys(fromN).join(', '))+'</span>'
+      +inn.slice(0,8).map(function(o){ return chip(poE(poXferLbl(o))+' × '+o.left, '#fff', '#065F46'); }).join('')
+      +(inn.length>8?('<span style="font-size:11px;color:#047857">+'+(inn.length-8)+'</span>'):'')
+      +'<span style="flex:1"></span>'
+      +(ro?'':'<button class="po-btn" onclick="poXferRecvOpen()" style="background:#047857;color:#fff;border-color:#047857">&#10003; รับของ</button>')
+      +'</div>';
+  }
+  if(out.length){
+    h+='<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:9px 12px;margin:0 0 8px">'
+      +'<b style="color:#4338CA;font-size:12.5px">&#8644; กำลังส่งไปท่าอื่น · รอปลายทางกดรับ · '+out.length+' รายการ</b>'
+      +out.map(function(o){
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0;border-top:1px solid #E0E7FF;margin-top:5px;font-size:12px">'
+          +'<b>'+poE(poXferLbl(o))+'</b><span>× '+o.left+' '+poE(poXferUnit(o))+(o.got?(' <span style="color:#6366F1">(รับแล้ว '+o.got+'/'+o.sent+')</span>'):'')+'</span>'
+          +'<span style="color:#4338CA">&#8594; '+poE(poPierObj(o.dst).n)+'</span>'
+          +'<span style="color:#7C8091;font-size:11px">ส่ง '+poE(o.m.date||'')+(o.m.by?(' · '+poE(o.m.by)):'')+'</span>'
+          +'<span style="flex:1"></span>'
+          +(ro?'':('<button class="po-go" onclick="poXferCancel(\''+poE(o.id)+'\')" title="ยกเลิก · คืนของที่ยังไม่ถูกรับเข้าพร้อมใช้">ยกเลิกโยก</button>'))
+          +'</div>'; }).join('')
+      +'</div>';
+  }
+  return h;
+}
 function poCountOpen(itemId){
   if(!poCanEdit()) return;
   if(!poWhoGuard()) return;   /* §poWho */
@@ -73373,7 +73550,8 @@ function T_LDG(t){
   var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
          onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
          adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
-         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
   return M[t]||t;
 }
 function poMoveEditSave(id){
@@ -73720,9 +73898,9 @@ function poLaundrySave(isOut){
 var _poLdgF='all';
 var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
                loss:['lost','writeoff','repair','ship_lost','ship_writeoff','ship_repair'], ship:['assign','unassign','ship_lost','ship_writeoff','ship_repair'],
-               adj:['count','adjust','onboard','fixed'] };
+               adj:['count','adjust','onboard','fixed'], xfer:['xfer_out','xfer_back','xfer_short'] };   /* §poXfer */
 var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
-                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด' };
+                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด', xfer:'โยกระหว่างท่า' };   /* §poXfer */
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
 
 /* ══ §poWho (2026-10-09) · ผู้บันทึก ═══════════════════════════════════════════════════════════
@@ -73922,14 +74100,16 @@ function poLedgerOpen(){
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
          laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
          assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
-         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
           laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
           assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490'],
           receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9'],
-          ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309']};
+          ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309'],
+          xfer_out:['#EEF2FF','#4338CA'],xfer_back:['#F1F5F9','#475569'],xfer_short:['#FEF2F2','#B91C1C']};   /* §poXfer */
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -74080,7 +74260,7 @@ function poLedgerOpen(){
       return '<tr><td style="white-space:nowrap">'+poE(m.date)+'</td><td>'+poE(it?it.label:m.itemId)+'</td>'
         +'<td><span style="display:inline-block;background:'+tc[0]+';color:'+tc[1]
           +';border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'
-          +poE(T[m.type]||m.type)+(m.type==='receive'&&PO_RECV_SRC[m.from]?(' · '+poE(PO_RECV_SRC[m.from])):'')+'</span>'
+          +poE(T[m.type]||m.type)+(m.type==='receive'&&poRecvSrcLbl(m)?(' · '+poE(poRecvSrcLbl(m))):'')+((m.type==='xfer_out')?(' → '+poE(poPierObj(String(m.from||'').replace(/^to\|/,'')).n)):'')+'</span>'
           +(m.fine?(' <span style="color:#B4560A;font-weight:700;font-size:11px">ค่าปรับ '+poBaht(m.fine)+'</span>'):'')+'</td>'
         +'<td style="text-align:center;font-weight:700'+(q<0?';color:#B91C1C':'')+'">'+q+'</td>'
         +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td>'
