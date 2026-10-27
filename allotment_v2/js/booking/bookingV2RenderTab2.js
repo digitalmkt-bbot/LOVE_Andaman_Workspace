@@ -38,6 +38,7 @@ function bookingV2RenderTab2(){
       (bk.trips||[]).forEach(t=>{
         if(_srv && Array.isArray(_srv.ovn_holds)) return;   /* §opsByTripExtras · the server lists the held nights (ovn_holds) · rows are added after this loop */
         if(!t || t.bookingMode!=='charter' || t.ovn!=='return') return;
+        if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t)) return;   /* §ovnBoatBack4 · เรือกลับท่า · วันระหว่างกลางไม่มีแถว */
         { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
         if(t.date===date || !t.ovnReturnDate || t.ovnReturnDate<=t.date) return;
         if(date<=t.date || date>=t.ovnReturnDate) return;
@@ -69,7 +70,8 @@ function bookingV2RenderTab2(){
       ovnHoldRow:{from:x.h.from, to:x.h.to, day:x.h.day, days:x.h.days, pax:x.h.island_pax}});
   });
   // ── Filters: pier + program family (+ optional route from calendar drill) ──
-  const pierF = _bkV2T2Pier || 'all';
+  const pierF = ((typeof laMyPier==='function') && laMyPier()) || _bkV2T2Pier || 'all';   /* §pierScope · ผูกกับท่า = ล็อกตัวกรองท่า */
+  if(typeof laPierScoped==='function' && laPierScoped()){ for(let _i=rows.length-1;_i>=0;_i--){ if(!laRouteIdOk(rows[_i].routeId)) rows.splice(_i,1); } }   /* §pierScope2 · ยอดรวมทั้งวันของคนท่า = เฉพาะท่าตัวเอง */
   const famF = _bkV2T2Family || '';
   const routeF = _bkV2.filterRoute;
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
@@ -239,7 +241,7 @@ function bookingV2RenderTab2(){
   const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
 
   // ── Filter bar (pier segmented + program dropdown) · original ──
-  const pierBtn = (val,lbl)=>`<button class="${pierF===val?'on':''}" onclick="bookingV2Tab2SetPier('${val}')">${lbl}</button>`;
+  const pierBtn = (val,lbl)=>((typeof laPierScoped==='function')&&laPierScoped()) ? '' : `<button class="${pierF===val?'on':''}" onclick="bookingV2Tab2SetPier('${val}')">${lbl}</button>`;   /* §pierScope */
   const filterBar = `
     <div class="t2-filterbar">
       <div class="t2-seg">${pierBtn('all','All')}${pierBtn('tublamu','Tub Lamu')}${pierBtn('panwa','Visit Panwa')}${pierBtn('ranong','Ranong')}</div>
@@ -316,14 +318,15 @@ function bookingV2RenderTab2(){
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
-    const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly); if(!dts.length) return;
+    const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly && ((typeof laRouteIdOk!=='function')||laRouteIdOk(t.routeId))); if(!dts.length) return;   /* §pierScope2 */
     const pax=dts.reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
     // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
-    const hasBoat=_bkV2CityTourOnly || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
+    const _tcxPt=(typeof tcxPtOf==='function')?tcxPtOf(b,date):null;   /* §tcxPartner · ไปกับเรือ Partner */
+    const hasBoat=_bkV2CityTourOnly || !!_tcxPt || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
     if(!hasBoat){ _unBoatN++; _unBoatPax+=pax; _unBoatR[_lbl]=(_unBoatR[_lbl]||0)+pax; }
     const zone=(dts[0].zone||b.pickupZone||'NoTransfer');
-    if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT'){
+    if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT' && !(_tcxPt && _tcxPt.van==='partner')){
       const ops=b.ops||{};
       const vanOk = ops.vanId || (Array.isArray(ops.vanSplits)&&ops.vanSplits.length&&ops.vanSplits.every(s=>s.vanId || (typeof bookingV2SplitIsSelf==='function' && bookingV2SplitIsSelf(s))));   /* §splitOwn · คนที่มาเองไม่ต้องรอรถ */
       if(!vanOk){ _unVanN++; _unVanPax+=pax; _unVanR[_lbl]=(_unVanR[_lbl]||0)+pax; }
@@ -374,7 +377,7 @@ function bookingV2RenderTab2(){
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
       if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
       // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
-      const _dts=(b.trips||[]).filter(t=>(t.date||'')===date); if(!_dts.length) return;
+      const _dts=(b.trips||[]).filter(t=>(t.date||'')===date && ((typeof laRouteIdOk!=='function')||laRouteIdOk(t.routeId))); if(!_dts.length) return;   /* §pierScope2 */
       if(!_dts.some(t=>(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly)) return;
       const s=ckSummary(b,date); if(!s) return;
       const _o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -524,7 +527,7 @@ function bookingV2RenderTab2(){
   }).join('');
 
   /* ══ กรอบซ้าย · โปรแกรมวันนี้ ════════════════════════════════════════════ */
-  const _btPierBtn = (v,l)=>`<button class="bt-seg-b${pierF===v?' on':''}" onclick="bookingV2Tab2SetPier('${v}')">${l}</button>`;
+  const _btPierBtn = (v,l)=>((typeof laPierScoped==='function')&&laPierScoped()) ? '' : `<button class="bt-seg-b${pierF===v?' on':''}" onclick="bookingV2Tab2SetPier('${v}')">${l}</button>`;   /* §pierScope */
   const _btProgBody = _famList.map(a=>{
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
@@ -1335,7 +1338,9 @@ function bookingV2RenderTab2(){
         const _ri = (typeof bookingV2RetInfo==='function')?bookingV2RetInfo(bk,date):{sep:false};
         const _ovTrip=(bk.trips||[]).find(x=>x.date===date&&x.routeId===r.routeId);
         let _ovSB='';
-        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
+        if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=bkOvnBoatBack(_ovTrip)
+          ? `<span style="display:inline-block;font-size:10px;font-weight:700;color:#0B5A43;background:#DDF1EA;border-radius:8px;padding:3px 10px;white-space:nowrap" title="ส่ง ${esc(_ovTrip.date||'')} · เรือกลับท่าวันเดียวกัน · ไปรับ ${esc(_ovTrip.ovnReturnDate||'')}">&#8644; ส่ง ${esc(String(_ovTrip.date||'').slice(8))}&middot;รับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`   /* §ovnBoatBack */
+          : `<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
         const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
                  (จัดรถกลับแล้ว · กลับคันเดิม · ลูกค้ากลับเอง) ย้ายไปเป็นป้ายลอยใต้ชื่อโรงแรมในช่อง Pickup (_rtFt ด้านล่าง)
                  ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */

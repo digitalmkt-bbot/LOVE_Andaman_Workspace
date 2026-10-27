@@ -8,7 +8,7 @@ function bookingV2RenderLocks(){
   // §cityTourView · Seat Locks tab is per-page: marine page (flag off) excludes land-route locks ·
   //   land page (flag on) shows only land-route locks. Filtered here (display only) — does not
   //   touch bookingV2LocksOnDate/bookingV2LockPoolHold etc., which stay global for Boat Op/availability.
-  const _lkOk = rid => (typeof laIsLandRoute!=='function') || (laIsLandRoute(rid)===_bkV2CityTourOnly);
+  const _lkOk = rid => ((typeof laIsLandRoute!=='function') || (laIsLandRoute(rid)===_bkV2CityTourOnly)) && ((typeof laRouteIdOk!=='function') || laRouteIdOk(rid));   /* §pierScope */
 
   // ── ยอดรวม ──
   /* §bkLock · ยอดรวมของหน้านี้เป็นเรื่องของ "ที่นั่ง" · ใบชนิดเรือทั้งลำนับแยก

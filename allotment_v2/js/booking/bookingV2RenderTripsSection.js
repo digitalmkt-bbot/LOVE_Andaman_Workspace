@@ -125,29 +125,34 @@ function bookingV2RenderTripsSection(){
     if(isCharter && t.routeId && t.date && typeof getAssignedBoatsForRouteDate === 'function'){
       const assigned = getAssignedBoatsForRouteDate(t.routeId, t.date);
       const charterRatesByType = rt.charterRates?.[t.routeId] || {};
+      /* §chPickOwn · ลำที่ใบนี้เหมาอยู่เองไม่ใช่ "ALREADY CHARTERED" · ต้องเลือกได้ (และสลับไปลำอื่นได้) ตอนแก้ใบ */
+      const _ownBk = (typeof _bkV2!=='undefined' && _bkV2.editingId) ? _bkV2.editingId : (d && d.id) || null;
+      const _ownBoat = (typeof _bkV2!=='undefined' && _bkV2.editingId) ? (t.charterBoatId||null) : null;
       const opts = assigned.map(a => {
         const bt = (a.boat?.type || '').toLowerCase();
         const hasCharterRate = !!charterRatesByType[bt];
-        const alreadyChartered = !!a.charterBookingId;
+        const alreadyChartered = !!a.charterBookingId && a.charterBookingId!==_ownBk && a.boatId!==_ownBoat;   /* §chPickOwn */
         // seats currently booked on this boat (cannot derive per-boat directly · check route+date seatsConsumed > 0)
         const hasSeats = (typeof getSeatsConsumed === 'function') && getSeatsConsumed(t.routeId, t.date) > 0;
         let label = `${a.boat.name} · ${a.boat.cap} cap · ${a.boat.type}`;
         let disabled = false;
         let note = '';
         if(alreadyChartered){ note = ' · ALREADY CHARTERED'; disabled = true; }
+        else if(a.boatId===_ownBoat){ note = ' · current'; }   /* §chPickOwn */
         /* §chManualNoRate · ไม่มีเรทเหมา ≠ เลือกไม่ได้ · ยังเหมาได้ด้วยราคาที่ตกลงกันเอง (กล่องแดงข้างล่างให้กรอก) */
         else if(!hasCharterRate){ note = ' · no charter rate · enter agreed price'; }
         else if(hasSeats){ note = ' · has existing seat bookings (will need confirm)'; }
         return `<option value="${a.boatId}" ${t.charterBoatId===a.boatId?'selected':''} ${disabled?'disabled':''}>${escapeHTML(label+note)}</option>`;
       }).join('');
       const noBoats = assigned.length === 0;
-      const noAvailable = assigned.length > 0 && !assigned.some(a => !a.charterBookingId && charterRatesByType[(a.boat?.type||'').toLowerCase()]);
+      /* §chPickOwn · ไม่มีเรทเหมาไม่ใช่เหตุให้เลือกไม่ได้ (§chManualNoRate) · เหลือแค่ "ทุกลำถูกใบอื่นเหมาไปแล้ว" */
+      const noAvailable = assigned.length > 0 && !assigned.some(a => !(a.charterBookingId && a.charterBookingId!==_ownBk && a.boatId!==_ownBoat));
       charterPickerHtml = `
         <div class="bkv2-nb-row" style="margin-top:8px">
           <div class="bkv2-nb-field" style="grid-column:1/-1">
             <label class="bkv2-nb-label">Charter boat <em style="font-weight:500;color:#b4b2a9;font-style:normal">· pick from boats assigned in Boat Operation</em></label>
             ${noBoats ? `<div style="padding:8px 11px;background:#FFF6E5;border:1px dashed #EAD9B0;color:#633806;font-size:11px;border-radius:var(--r-sm)">No boat assigned for this route+date yet · go to Boat Operation to assign first</div>` :
-              noAvailable ? `<div style="padding:8px 11px;background:#FDE7E7;border:1px solid #F5B7B7;color:#a32d2d;font-size:11px;border-radius:var(--r-sm)">All assigned boats are chartered or have no charter rate set</div>` :
+              noAvailable ? `<div style="padding:8px 11px;background:#FDE7E7;border:1px solid #F5B7B7;color:#a32d2d;font-size:11px;border-radius:var(--r-sm)">All assigned boats are already chartered by other bookings · assign another boat in Boat Operation first</div>` :
               `<select class="bkv2-nb-input" onchange="bookingV2SetTripCharterBoat(${idx}, this.value || null)">
                 <option value="">&mdash; pick a boat &mdash;</option>
                 ${opts}
@@ -260,6 +265,7 @@ function bookingV2RenderTripsSection(){
           <div style="font-size:12px;color:${t.ovn==='return'?'#5B289A':'#9A5B00'};margin-bottom:8px">${t.ovn==='return'?'🌙 OVN · ขากลับค้างคืน · กันที่นั่งวันกลับ + จัดรถกลับ · ขึ้นเรือท่าเกาะ':'🌙 OVN o/w · ค้างคืน · ลูกค้ากลับเอง (one-way) · ไม่กันที่นั่งกลับ ไม่จัดรถ'}</div>
           <div style="display:grid;grid-template-columns:${t.ovn==='return'?'1fr 1fr':'1fr'};gap:8px;align-items:end">
             ${t.ovn==='return'?`<div><label class="bkv2-nb-label" style="color:#5B289A">วันกลับ (OVN) *</label>${t.date?`<input class="bkv2-nb-input" type="date" min="${escapeHTML(t.date)}" value="${escapeHTML(t.ovnReturnDate||'')}" onchange="bookingV2SetTripField(${idx},'ovnReturnDate',this.value)" style="width:100%;box-sizing:border-box">`:`<div class="bkv2-nb-input" style="width:100%;box-sizing:border-box;color:#b4b2a9;background:#f3f1ec;cursor:not-allowed;font-size:11px;display:flex;align-items:center">&#9888; เลือก DATE (วันไป) ก่อน</div>`}</div>`:''}
+            ${(t.ovn==='return' && t.bookingMode==='charter')?`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:12px;color:#5B289A"><input type="checkbox" id="bkv2-ovnbb-${idx}" ${t.ovnBoatBack?'checked':''} onchange="bookingV2SetTripField(${idx},'ovnBoatBack',this.checked?1:0)"><label for="bkv2-ovnbb-${idx}" style="cursor:pointer"><b>เรือกลับท่าวันเดียวกัน</b> · ส่งแล้วกลับ ไปรับอีกวัน (ไม่กันเรือวันระหว่างกลาง · ราคาเหมารวมไป-กลับ)</label></div>`:''}   <!-- §ovnBoatBack -->
             <div><label class="bkv2-nb-label" style="color:#854F0B">ค่าค้างคืน (Extra) &#3647;</label><input class="bkv2-nb-input" type="number" min="0" value="${Number(t.ovnCharge)||0}" onchange="bookingV2SetTripField(${idx},'ovnCharge',this.value)" placeholder="0" style="width:100%;box-sizing:border-box;text-align:right;font-variant-numeric:tabular-nums"></div>
           </div>
         </div>`:''}

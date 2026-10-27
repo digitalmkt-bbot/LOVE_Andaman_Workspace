@@ -13,6 +13,7 @@ function bookingV2RenderStats(){
     x.bookings.forEach(id => mBkSet.add(id));
   });
   SB_BOOKINGS.forEach(bk => {
+    if(typeof laBkOk==='function' && !laBkOk(bk)) return;   /* §pierScope */
     // §cityTourView · marine page (flag off) excludes land bookings · land page (flag on) excludes marine
     if(typeof laIsLandRoute==='function'){
       const _isLandBk = bk.schemaVer===2

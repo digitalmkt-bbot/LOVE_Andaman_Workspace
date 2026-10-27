@@ -5,7 +5,7 @@ function bookingV2WeatherPanel(routeId,date){
   const nd=new Date(date+'T00:00'); nd.setDate(nd.getDate()+1); const next=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(nd):date;
   const list=bookingV2WeatherEventBookings(routeId,date);
   if(!list.length){ acctModal('<div style="padding:20px;font-size:13px">No bookings on this trip <div style="margin-top:14px;text-align:right"><button onclick="acctModalClose();bookingV2Render()" style="background:var(--fd-coral);color:#fff;border:none;font-family:inherit;font-size:12px;padding:8px 16px;border-radius:9px;cursor:pointer">Close</button></div></div>'); return; }
-  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
+  const outLbl={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved',partner:'Sent to partner'};
   const nAwait=list.filter(b=>b.weatherResolve.status==='awaiting').length;
   const nNotif=list.filter(b=>b.weatherResolve.status==='notified').length;
   const nDone=list.filter(b=>b.weatherResolve.status==='resolved').length;

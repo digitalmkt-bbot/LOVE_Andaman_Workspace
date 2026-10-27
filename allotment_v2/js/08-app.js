@@ -2723,6 +2723,11 @@ window._laReloadData=function(pre){
     if(Array.isArray(d.fleet_projects)) FL_PROJECTS=d.fleet_projects;
     if(Array.isArray(d.fleet_safety)) FL_SAFETY=d.fleet_safety;
     if(Array.isArray(d.fleet_consumable_logs)) FL_CONSUMABLE_LOGS=d.fleet_consumable_logs;
+    /* §batReload (2026-10-26) · owner "User แจ้งว่าไม่บันทึก รีเฟรชหาย" (แบตเตอรี่)
+       เดิมไม่มีบรรทัดนี้ · พอคนอื่นเซฟอะไรก็ตาม เครื่องนี้ดึงก้อนใหม่แต่ FL_BATTERIES ยังเป็นชุดเก่า
+       แล้วพอเครื่องนี้กดบันทึกงาน Fleet อะไรก็ได้ flSave() เขียนชุดเก่าทับ → diff กลายเป็นลบ/ย้อนแบตที่อีกคนเพิ่งบันทึก
+       Railway log 26/10: Pier.Mgr กับ Admin.Pier สลับกัน put 1 + del 31 / put 33 หลายรอบ */
+    if(Array.isArray(d.fleet_batteries)) FL_BATTERIES=d.fleet_batteries;
     if(d.fleet_daily) FL_DAILY=d.fleet_daily;
     if(d.fleet_drlock) FL_DR_LOCK=d.fleet_drlock;
     if(d.fleet_fuelprice) FL_FUEL_PRICE=d.fleet_fuelprice;
@@ -6730,6 +6735,8 @@ function baSetDate(delta){ const d=new Date(_baDate+'T12:00:00'); d.setDate(d.ge
    เรือเลยอ่านว่า "ว่าง" ทั้งที่ยังจอดอยู่ที่เกาะ · จ่ายงานอื่นทับได้เงียบ ๆ
    ช่วงวันอ่านออกจาก trip ขาไปอยู่แล้ว (t.date → t.ovnReturnDate)
    จึงไม่ต้องเพิ่มคอลัมน์ ไม่ต้อง migration และใบที่บันทึกไว้แล้วได้ผลทันที */
+/* §ovnBoatBack3 · อ่านธง "เรือกลับท่าวันเดียวกัน" · ในฟอร์ม = t.ovnBoatBack · ที่บันทึกแล้ว = ovnOf==='boatback' (คอลัมน์ text เดิมของ sb_bookings__trips) */
+function bkOvnBoatBack(t){ return !!(t && t.ovn==='return' && !t.ovnLeg && (t.ovnBoatBack || t.ovnOf==='boatback')); }
 function bkOvnHoldMap(date){
   const m=new Map();
   if(!date) return m;
@@ -6737,6 +6744,7 @@ function bkOvnHoldMap(date){
     if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
     (b.trips||[]).forEach(t=>{
       if(!t || t.bookingMode!=='charter' || t.ovn!=='return')return;
+      if(bkOvnBoatBack(t)) return;   /* §ovnBoatBack · เรือกลับท่าวันเดียวกัน · ไม่กันวันระหว่างกลาง */
       const from=t.date||'', to=t.ovnReturnDate||'';
       if(!from || !to || to<=from)return;          /* ไป-กลับวันเดียวกัน = ไม่มีวันค้าง */
       if(date<from || date>to)return;
@@ -6761,7 +6769,7 @@ function bkOvnHoldMapMemo(date){
    เพดาน 60 วัน · กันวันกลับที่พิมพ์ผิด (เช่น 2027) สร้างช่องเป็นพันช่อง */
 function bkOvnSpanDates(t){
   if(!t || !t.date) return [];
-  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return') ? (t.ovnReturnDate||'') : '';
+  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return' && !bkOvnBoatBack(t)) ? (t.ovnReturnDate||'') : '';   /* §ovnBoatBack */
   if(!to || to<=from) return [from];
   var out=[], d=new Date(from+'T12:00:00'), e=new Date(to+'T12:00:00'), n=0;
   while(d<=e && n<60){ out.push(bookingV2LocalYMD? bookingV2LocalYMD(d) : d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); n++; }
@@ -6833,6 +6841,8 @@ function bkOvnHealSpans(){
     (b.trips||[]).forEach(function(t){
       if(!t || t.bookingMode!=='charter' || !t.charterBoatId) return;
       var days=bkOvnSpanDates(t);
+      /* §ovnBoatBack4 · เรือกลับท่าวันเดียวกัน · เรือใช้แค่วันไปกับวันรับ · วันระหว่างกลางที่เคยถูกจองไว้ต้องถูกคืน (§ovnFree ข้างล่าง) */
+      if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t) && t.ovnReturnDate && t.ovnReturnDate>t.date) days=[t.date, t.ovnReturnDate];
       if(days.length<2) return;                       /* ไม่ใช่ใบค้างเกาะ ไม่ต้องยุ่ง */
       /* §ovnRet · ใบเก่า · ขากลับยังเป็น seat อยู่ · ทำให้ใบเหมาแตกเป็นสองสถานะ
          ขาไปอยู่กลุ่มเหมา ขากลับไปโผล่ในกลุ่มที่นั่งของเรือรอบปกติ · ปรับให้ตรงกัน */
@@ -6890,6 +6900,12 @@ function bkOvnHealSpans(){
         if(!op0 || op0.charterBookingId!==b.id) return;
         /* ยังมี trip ของใบนี้อยู่วันนั้นจริงไหม · ถ้ามี แปลว่าเป็นวันที่ตั้งใจ ไม่ใช่เศษ */
         if((b.trips||[]).some(function(x){ return x && x.date===ds && x.charterBoatId===t.charterBoatId; })) return;
+        /* §ovnBoatBack5 · เรือกลับท่า · วันระหว่างกลางที่ไม่มีใครนั่งลำนี้ = ลบออก ไม่ใช่ค้างเป็นรอบปกติ 0 คน */
+        if(typeof bkOvnBoatBack==='function' && bkOvnBoatBack(t)){
+          var _used=SB_BOOKINGS.some(function(x){ if(!x || x===b || ['cancelled','rejected','cancelled_weather'].indexOf(x.status)>=0) return false;
+            var ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(x,ds):[]; return ids.indexOf(t.charterBoatId)>=0; });
+          if(!_used){ delete TRIPS[ds][t.charterBoatId]; fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:'เอาเรือออก · เรือกลับท่าวันเดียวกัน'}); return; }
+        }
         delete op0.charterBookingId;
         op0.type='normal';
         fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:'คืนเรือ · หลุดออกจากช่วงแล้ว'});
@@ -10581,7 +10597,12 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored, grp){
       const _dTag = _dOwn.own
         ? `<div style="margin-top:3px"><span style="display:inline-block;background:#EDE7FB;color:#5B289A;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#9986; แยกส่ง${x.sWho?(' · '+e(x.sWho)):''}</span></div>`
         : '';
-      const dropCell = _ovnDrop ? _ovnDrop : (dropoff
+      /* §tcxPartner · รอบยกเลิก · รถเราส่งลูกค้าไปจุดของ Partner */
+      const _ptR=(!isRet && typeof tcxPtOf==='function')?tcxPtOf(b, t.date||date):null;
+      const _ptDrop=(_ptR && _ptR.van!=='partner')
+        ? `<div style="font-weight:800;font-size:12px;line-height:1.35;color:#0F6E56">&#8594; ${e(_ptR.drop||'จุดของ Partner')}${_ptR.time?(' · '+e(_ptR.time)):''}</div><div style="color:#0F6E56;font-size:11px;line-height:1.35">ส่งต่อ Partner · ${e(_ptR.name||'')}</div>`
+        : null;
+      const dropCell = _ovnDrop ? _ovnDrop : _ptDrop ? _ptDrop : (dropoff
         ? (isRet ? (`<b>${e(dropoff)}</b>`+_retTag+_dTag) : (((!isRet&&_sepDrop)?'<b style="color:#9A5B00">&#8617; กลับ:</b> ':'')+e(dropoff)+_dTag))
         : (isRet ? '<span style="color:#888">—</span>' : '<span style="color:#5a6b80">&#8594; ท่าเรือ</span>'));
       // soft highlight for rows that are "extra" so they're not forgotten:
@@ -12976,7 +12997,7 @@ function pcBuildViews(){
   };
   pcRowsArr().forEach(function(x){
     if(!x || !x.id || !x.pier || !x.date) return;
-    var D = day(x.pier, x.date), r = { id:x.id, amt:Math.round(+x.amt || 0) };
+    var D = day(x.pier, x.date), r = { id:x.id, amt:pcAmt(x.amt) };   /* §pcDec2 */
     pcPut(r, 'txt', x.txt); pcPut(r, 'at', x.at); pcPut(r, 'by', x.by);
     pcPut(r, 'ts', x.ts);   pcPut(r, 'src', x.src);
     pcPut(r, 'claim', x.claim);   /* §pcClm */
@@ -12985,14 +13006,14 @@ function pcBuildViews(){
   pcLtArr().forEach(function(x){
     if(!x || !x.pier || !x.date || !x.bid) return;
     var C = {};
-    PC_LT_F.forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    PC_LT_F.forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : pcNf(f, x[f])); });
     pcPut(C, 'note', x.note); pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts);
     day(x.pier, x.date).lt[x.bid] = C;
   });
   pcPkArr().forEach(function(x){
     if(!x || !x.pier || !x.date || !x.bid) return;
     var C = {};
-    PC_PK.concat(['amt','dock']).forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : Math.round(+x[f] || 0)); });
+    PC_PK.concat(['amt','dock']).forEach(function(f){ pcPut(C, f, (x[f] == null) ? null : pcNf(f, x[f])); });
     pcPut(C, 'by', x.by); pcPut(C, 'ts', x.ts); pcPut(C, 'src', x.src);
     day(x.pier, x.date).pk[x.bid] = C;
   });
@@ -13039,7 +13060,7 @@ function pcFlatten(V){
         (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
           if(!r || !r.id) return;
           R[r.id] = { id:String(r.id), pier:p, date:ds, kind:kind, txt:String(r.txt || ''),
-                      amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                      amt:pcAmt(r.amt), at:String(r.at || ''), by:String(r.by || ''),
                       ts:String(r.ts || ''), src:String(r.src || '') };
           if(r.claim != null) R[r.id].claim = String(r.claim);   /* §pcClm */
         });
@@ -13048,14 +13069,14 @@ function pcFlatten(V){
         var C = D.lt[bid] || {}, id = pcCellId(p, ds, bid);
         var o = { id:id, pier:p, date:ds, bid:String(bid), note:String(C.note || ''),
                   by:String(C.by || ''), ts:String(C.ts || '') };
-        PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
         L[id] = o;
       });
       Object.keys(D.pk || {}).forEach(function(bid){
         var C = D.pk[bid] || {}, id = pcCellId(p, ds, bid);
         var o = { id:id, pier:p, date:ds, bid:String(bid), by:String(C.by || ''),
                   ts:String(C.ts || ''), src:String(C.src || '') };
-        PC_PK.concat(['amt','dock']).forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        PC_PK.concat(['amt','dock']).forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
         K[id] = o;
       });
     });
@@ -13144,7 +13165,7 @@ function pcRowsFromPier(pier, P){
       (Array.isArray(D[kind]) ? D[kind] : []).forEach(function(r){
         if(!r || !r.id || have[r.id]) return;
         R.push({ id:String(r.id), pier:pier, date:ds, kind:kind, txt:String(r.txt || ''),
-                 amt:Math.round(+r.amt || 0), at:String(r.at || ''), by:String(r.by || ''),
+                 amt:pcAmt(r.amt), at:String(r.at || ''), by:String(r.by || ''),
                  ts:String(r.ts || ''), src:String(r.src || '') });
         have[r.id] = 1; n++;
       });
@@ -13153,7 +13174,7 @@ function pcRowsFromPier(pier, P){
       var id = pcCellId(pier, ds, bid); if(haveL[id]) return;
       var C = D.lt[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
         note:String(C.note || ''), by:String(C.by || ''), ts:String(C.ts || '') };
-      PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+      PC_LT_F.forEach(function(f){ o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
       L.push(o); haveL[id] = 1; n++;
     });
     Object.keys(D.pk || {}).forEach(function(bid){
@@ -13161,7 +13182,7 @@ function pcRowsFromPier(pier, P){
       var C = D.pk[bid] || {}, o = { id:id, pier:pier, date:ds, bid:String(bid),
         by:String(C.by || ''), ts:String(C.ts || ''), src:String(C.src || '') };
       PC_PK.concat(['amt','dock']).forEach(function(f){
-        o[f] = (C[f] == null || C[f] === '') ? null : Math.round(+C[f] || 0); });
+        o[f] = (C[f] == null || C[f] === '') ? null : pcNf(f, C[f]); });
       K.push(o); haveK[id] = 1; n++;
     });
   });
@@ -13202,6 +13223,13 @@ function pcRowsAudit(){
 }
 /* §pcDec · เงินมีทศนิยมได้ 2 ตำแหน่ง (สตางค์) · จำนวนเต็มยังโชว์เหมือนเดิม ไม่ต่อ .00 */
 function pcC(x){ return Math.round((+x||0)*100)/100; }
+/* ══ §pcDec2 (2026-10-26) · owner "ตรวจสอบ Petty cash ใส่ทศนิยม แล้วไม่บันทึก ต้องสามารถใส่ได้"
+   §pcDec ให้ช่องกรอกรับสตางค์แล้ว แต่ทางเก็บลงแถว (pcFlatten / pcBuildViews / pcRowsFromPier) ยังปัด Math.round
+   และคอลัมน์ในฐานข้อมูล amt / dock เป็น bigint (server ปัดอีกชั้น) · 12.50 จึงกลับมาเป็น 13 หลังรีเฟรช · 0.40 กลายเป็น 0
+   ตอนนี้: เงิน (amt · dock) เก็บ 2 ตำแหน่ง · จำนวนคน (n nj nc · ad_th … foc_fr) ยังเป็นจำนวนเต็ม
+   ฐานข้อมูล: db/migrations/040_po_cash_decimal.sql เปลี่ยน amt/dock เป็น double precision + model/field_mapping ══ */
+function pcAmt(x){ return pcC(x); }
+function pcNf(f, x){ return (f === 'amt' || f === 'dock') ? pcC(x) : Math.round(+x || 0); }
 function pcNum(v){ return Math.max(0, pcC(parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')))); }
 function pcMoney(n){ return '฿'+pcN(n); }
 function pcN(n){ return pcC(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
@@ -13248,8 +13276,32 @@ function bkFocThInfer(b,t){
   return Math.max(0, foc-Math.max(0, fr-frPrice));
 }
 /* bkNatTH ที่รู้จักใบจอง · ใช้กับ FOC ของ B2C ที่ไม่มีแยกสัญชาติ · ที่เหลือเหมือน bkNatTH */
+/* ══ §natLead (2026-10-26) · owner ส่งใบ LOV-1840040 (Similan Catamaran 26 ต.ค. · หัวกรุ๊ป Denmark · 2 ผญ 2 เด็ก · ลค CXL)
+   "อันเดิมใส่สัญชาติมาผิด พอแล้วแก้ รูป 2 ยังไม่เปลี่ยน" · แก้ในหน้า Booking ของเรา
+   ใบ B2C ที่หัวกรุ๊ปเป็นไทย ไม่มีแยกสัญชาติ → b2c-map วางทั้งกลุ่มลงแถวราคา TH (paxAllThai)
+   แก้หัวกรุ๊ปเป็น DEN แค่เปลี่ยน leadNationality · แถวราคา ad_th/chd_th ยังอยู่ · หน้าตั๋วอุทยาน (และแถวยกเลิก) จึงยังนับเป็นไทย
+   กติกา: ใบที่ไม่มี nat (ไม่มีใครนับคนไทยไว้เอง) + หัวกรุ๊ประบุสัญชาติที่ไม่ใช่ไทย
+   → คนไทยจริง = จำนวนผู้เดินทางที่ระบุ TH ไว้ในรายชื่อ (ไม่เกินแถวราคา TH) · ที่เหลือเป็นต่างชาติ
+   ไล่หักจาก ผญ → เด็ก → INF → FOC · ทิศเดียว (ไทย → ต่างชาติ) = คิดสูงไว้ก่อน ตามกติกาของหน้าค่าอุทยาน
+   backup 22 ต.ค.: ใบแถว TH + หัวกรุ๊ปต่างชาติ มี 5 ใบ · ทุกใบมีคู่ที่ระบุ TH ครบเท่าแถว TH → ไม่เปลี่ยน
+   nat ที่คนกรอกเอง (bkNatHas) ชนะเสมอ ══ */
+function bkNatLeadCap(b,t){
+  if(!b || !t || bkNatHas(t)) return null;
+  var lead=String(b.leadNationality||'').trim().toUpperCase();
+  if(!lead || lead==='TH') return null;
+  var K=['ad','chd','inf','foc'], thP=0;
+  K.forEach(function(k){ thP+=bkNatTH(t,k); });
+  if(!thP) return null;
+  var named=0;
+  (b.passengers||[]).forEach(function(q){ if(q && String(q.nationality||'').trim().toUpperCase()==='TH') named++; });
+  if(named>=thP) return null;
+  var left=named, o={};
+  K.forEach(function(k){ var v=Math.min(bkNatTH(t,k), left); o[k]=v; left-=v; });
+  return o;
+}
 function bkNatTHb(b,t,k){
   if(k==='foc'){ var v=bkFocThInfer(b,t); if(v!=null) return v; }
+  var C=bkNatLeadCap(b,t); if(C) return C[k];   /* §natLead */
   return bkNatTH(t,k);
 }
 function bkNatTH(t,k){
@@ -13286,7 +13338,7 @@ function pcPax(date,bid,pier){
     if(!real) return;                       /* ทั้งใบไม่ได้ไป · ไม่ต้องซื้อตั๋วให้ */
     var ratio=booked?(real/booked):0;
     exact+=real;
-    if(bkNatHas(t)) anyNat=true;
+    if(bkNatHas(t) || bkNatLeadCap(b,t)) anyNat=true;   /* §natLead · ชุดสัญชาติจริงต่างจากแถวราคา */
     /* §pkLostType (2026-10-04) · หักคนที่ไม่ได้ไป "ตามประเภทที่หน้าท่าบันทึกไว้" ก่อน
        ผู้ใช้แจ้ง "ยอดคนไทยผิด ไม่มี INF" · Hermetis 4 ต.ค. ใบ ผญ ไทย 2 · เด็กไทย 2 · INF ไทย 1
        หน้าท่ายกเลิก INF 1 คน (paxBreak ระบุชัดว่าเป็น INF) ขึ้นเรือจริง 4
@@ -16850,6 +16902,7 @@ function renderCheckinAll(){
   // §landCk · if(document.getElementById('landcheckin-host')) renderLandCheckin();
 }
 function pckSetPier(p){
+  if(typeof laPierScoped==='function' && laPierScoped()) return;   /* §pierScope */
   _pckPier=(_pckPier===p)?null:p;
   _pckFam=null; _pckRoute=null;            /* ท่าเปลี่ยน โปรแกรมที่เลือกไว้อาจไม่อยู่ท่านี้แล้ว */
   renderPierCheckin();
@@ -16879,6 +16932,7 @@ function pckPierBar(date){
   });
   var ks=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
   if(ks.length<2) return '';               /* มีท่าเดียวก็ไม่ต้องมีปุ่มให้กด */
+  if(typeof laPierScoped==='function' && laPierScoped()) return '';   /* §pierScope · ผูกท่าแล้วไม่มีปุ่มสลับ */
   var b=function(k,lbl,n){
     return '<button class="pkh-pb'+((_pckPier===k)?' on':'')+'" onclick="pckSetPier('
       +(k?('\''+k+'\''):'null')+')" title="'+ckEsc(lbl)+'">'+ckEsc(lbl)+'<b>'+n+'</b></button>'; };
@@ -21695,6 +21749,7 @@ function pckScrollRestore(host){
 }
 function renderPierCheckin(){
   var host=pckHostEl(); if(!host) return;   /* §landCk */
+  if(typeof laMyPier==='function' && laMyPier()) _pckPier=laMyPier();   /* §pierScope · ล็อกท่า */
   var e=ckEsc, date=_pckDate;
   if(typeof bookingV2CharterBoatHeal==='function'){ try{ bookingV2CharterBoatHeal(date); }catch(_){} }
   /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
@@ -21713,6 +21768,7 @@ function renderPierCheckin(){
       _sx=true;
     }
     var t=ckTripOn(b,date); if(!t) return;
+    if(typeof tcxPtOf==='function' && tcxPtOf(b,date)) return;   /* §tcxPartner · ขึ้นเรือ Partner ไม่ใช่ท่าเรา */
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     /* §landCk · เส้นทางบกกับเส้นทางเรืออยู่คนละหน้า · ตัดกันตรงนี้จุดเดียว
        หน้าท่าเห็นเฉพาะทริปเรือ · หน้ารถเห็นเฉพาะ City Tour / Transfer
@@ -22185,6 +22241,7 @@ function tsRows(date){
       //   ทั้งที่ผลสุดท้ายที่ท่าเรืออาจเป็น "มาครบ" (มาเองที่ท่า / หน้าท่ายืนยันว่ามาแล้ว)
       issue:(noShow>0 || _lostTot>0 || !!_decNow), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow,
       ovnBack:_ovnB,
+      pt:(typeof tcxPtOf==='function')?tcxPtOf(b,date):null,   /* §tcxPartner */
       ovnOut:((_ovnB && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'')
     });
   });
@@ -26157,10 +26214,10 @@ function tsV6Head(H, money){
   var WN=function(n){ return n?('<span class="wn" title="'+n+' ใบมีเรื่องค้างก่อนปิดวัน">!</span>'):''; };
   /* ── แถวชิป · ท่าเรือ › เส้นทาง ── */
   var totPax=0; H.pOrder.forEach(function(p){ totPax+=H.pMap[p].pax; });
-  var rail='<span class="h4-fl">ท่าเรือ</span>'
+  var rail=((typeof laPierScoped==='function')&&laPierScoped()) ? ('<span class="h4-fl">ท่าเรือ</span><button class="h4-c on" disabled>'+e(laPierName(laMyPier()))+'<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i></button>') : '<span class="h4-fl">ท่าเรือ</span>'
     +'<button class="h4-c'+(_tsPier?'':' on')+'" data-tspier="" onclick="tsPickPier(\'\')">ทุกท่าเรือ'
       +(_tsPier?'':('<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i>'))+'</button>';
-  H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;
+  if(!((typeof laPierScoped==='function')&&laPierScoped())) H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;   /* §pierScope */
     rail+='<button class="h4-c'+(on?' on':'')+(P.n?'':' zero')+'" data-tspier="'+q(p)+'" onclick="tsPickPier(\''+q(p)+'\')">'+e(tsPierName(p))
       /* เลือกท่าแล้ว ท่าอื่นย่อเหลือชื่อ · ให้ชิปเส้นทางพอดีแถวเดียว */
       +((_tsPier&&!on)?'':('<i>'+nr+' เส้นทาง &middot; '+P.n+' ใบ &middot; '+P.pax+' คน</i>'))+WN(P.w)+'</button>'; });
@@ -26740,6 +26797,7 @@ function renderTravelSum(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var e=ckEsc, date=_tsDate, money=function(n){ return '฿'+Number(n||0).toLocaleString('en-US'); };
   var everything=tsRows(date);
+  if(typeof laMyPier==='function' && laMyPier()){ everything=everything.filter(function(r){ return laRouteIdOk(r.routeId); }); _tsPier=''; }   /* §pierScope · เห็นเฉพาะท่าตัวเอง · ไม่ต้องใช้ตัวกรองท่าอีก */
   // §tsRoute · รายชื่อเส้นทางคิดจากทั้งวันเสมอ (ไม่งั้นเลือกแล้วปุ่มอื่นหาย)
   // §tsRefFollowVat · แต่ "จำนวน" บนปุ่มนับจากชุดที่กรองภาษีแล้ว ให้ตรงกับเนื้อเอกสาร
   var rMap={}, rOrder=[];
@@ -27285,10 +27343,10 @@ function renderTravelSum(){
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
       +'<td class="ts-aocol">'+_aoH+'</td>'
       +'<td>'+((veh?('<span class="ts-chip n'+(noVan?' ts-nb':'')+'"'+(noVan?' title="ไม่ได้ขึ้นรถ"':'')
-              +'>&#128656; '+e(veh.name||r.van)+'</span>'):(r.cxlRow?'':'<span class="ts-chip p">มาเอง</span>'))
+              +'>&#128656; '+e(veh.name||r.van)+'</span>'):(r.cxlRow?'':((r.pt&&r.pt.van==='partner')?'<span class="ts-chip p" title="Partner รับลูกค้าเอง">Partner รับ</span>':'<span class="ts-chip p">มาเอง</span>')))
          +(boat?('<span class="ts-chip g'+(noBoat?' ts-nb':'')+'"'+(noBoat?' title="ไม่ได้ขึ้นเรือ"':'')
               +'>&#128676; '+e(boat.name||r.boat)+'</span>')
-              :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
+              :(r.cxlRow?'':(r.pt?('<span class="ts-chip g" style="background:#E4F3EC;color:#0F6E56;font-weight:800" title="รอบยกเลิก · ส่งต่อ Partner · ฿'+Math.round(+r.pt.cost||0).toLocaleString()+'">&rarr; '+e(r.pt.name||'Partner')+'</span>'):'<span class="ts-chip r">ยังไม่จัดเรือ</span>')))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       /* §tsManMv · เงินย้ายไปกับวันใหม่แล้ว · โชว์ซ้ำที่นี่จะอ่านเป็นยอดของวันนี้ */
       /* ══ §tsSreq3 · คำขอพิเศษเป็นคอลัมน์ของตัวเอง · วางหน้า Pay ═══════════
@@ -29591,6 +29649,13 @@ function pxCSS(){ return ''
  +'#trippl-host .pxfam .ft{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:6px}#trippl-host .pxfam .ft b{color:#5B3CC4;font-size:13px}'
  +'#trippl-host .pxzero{margin:6px 0 2px;background:#FFF8EA;border:1px solid #F6DFB3;border-radius:10px;padding:7px 10px;font-size:11px;color:#7A4B00}#trippl-host .pxzero b{color:#A15C00}'
  +'#trippl-host .kfam{border-top:1px dashed #E9D5FF;margin-top:8px;padding-top:7px}'
+ +'#trippl-host .pxfamtg{display:inline-flex;align-items:center;margin-left:8px;padding:2px 10px;border-radius:999px;border:1px solid #DDD6FE;background:#fff;color:#6D28D9;font-size:10.5px;font-weight:600;cursor:pointer;white-space:nowrap;vertical-align:middle}'
+ +'#trippl-host .pxfamtg:hover{background:#F5F3FF}'
+ +'#trippl-host .pxfamagh{cursor:pointer;color:#6D28D9!important}'
+ +'#trippl-host .pxfamagbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;border:1px solid #ECEDF2;border-radius:12px;background:#FAFAFC;cursor:pointer;font-size:12px;color:#64748B}'
+ +'#trippl-host .pxfamagbar:hover{background:#F5F3FF;border-color:#DDD6FE}#trippl-host .pxfamagbar>b{color:#6D28D9;font-size:12.5px}'
+ +'#trippl-host .pxfamagbar .tp b{color:#6D28D9}#trippl-host .pxfamagbar .sh{margin-left:auto;color:#6D28D9;font-weight:600}'
+ +'#trippl-host .pxfammini{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;font-size:12px;color:#64748B}#trippl-host .pxfammini .pxfamtg{margin-left:auto}'
  +'#trippl-host .fpl{border:1px solid #ECEDF2;border-radius:12px;overflow:hidden}'
  +'#trippl-host .fpl .fl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #F1F2F6}'
  +'#trippl-host .fpl .fl b{font-size:13.5px;color:#0F172A}#trippl-host .fpl .fl small{display:block;font-size:11px;color:#94A3B8;margin-top:2px}'
@@ -29831,6 +29896,11 @@ function pxCSS(){ return ''
  +'#trippl-host .g2 > .eg{display:flex;flex-direction:column}'
  +'#trippl-host .g2 > .eg > .hint:last-child{margin-top:auto}'
  +'#trippl-host .g3{display:grid;grid-template-columns:1.35fr 1fr;gap:12px;align-items:start}'
+ /* §pxEqH */
+ +'#trippl-host .g3.eqh{align-items:stretch}#trippl-host .eg.dbd{display:flex;flex-direction:column}'
+ +'#trippl-host .dbx{position:relative;flex:1 1 auto;min-height:360px}'
+ +'#trippl-host .dbx>.twrap{position:absolute;inset:0;display:flex;flex-direction:column}'
+ +'#trippl-host .dbx .tscroll.cap{max-height:none;flex:1 1 auto;min-height:0}'
  +'#trippl-host .mst{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}'
  +'#trippl-host .mst .b{flex:1;min-width:150px;background:#F8FAFC;border:1px solid var(--pl);'
    +'border-radius:10px;padding:8px 12px}'
@@ -29965,7 +30035,8 @@ function pxCSS(){ return ''
    +'color:var(--pf);font-size:13px;background:#fff}'
  +'#trippl-host .busy{text-align:center;padding:40px;color:var(--pf);font-size:13px}'
  +'@media(max-width:1180px){#trippl-host .pk4,#trippl-host .ins{grid-template-columns:repeat(2,1fr)}'
-   +'#trippl-host .g2,#trippl-host .g3{grid-template-columns:1fr}}'
+   +'#trippl-host .g2,#trippl-host .g3{grid-template-columns:1fr}'
+   +'#trippl-host .dbx{min-height:0}#trippl-host .dbx>.twrap{position:static}#trippl-host .dbx .tscroll.cap{max-height:430px}}'
  +'@media(max-width:640px){#trippl-host .pk4,#trippl-host .ins{grid-template-columns:1fr}'
    +'#trippl-host .dgrid{grid-auto-columns:86vw}}'
  +'@media(max-width:1280px){#trippl-host .dgrid{grid-auto-columns:360px}}';
@@ -30061,10 +30132,25 @@ function pxAnRange(v){ _px.an=+v||47; renderTripPL(); }
 
 /* ── การ์ดรายละเอียดหนึ่งลำ · คืนเป็น "เซลล์ของกริด" 6 + n หมวด + 1 ใบ ──
    ห้ามห่อด้วย div ใบเดียว · กริดต้องเห็นทุกบล็อกเป็นลูกโดยตรงถึงจะจัดแถวให้ตรงกันได้ */
+/* ══ §pxFamHide (2026-10-25) · owner "ให้สามารถซ่อนได้" · ซ่อน/แสดง รายละเอียด FAM (คอลัมน์ · กล่อง · ป้าย)
+   ซ่อนแค่การแสดงผล · ตัวเลข Net ไม่เปลี่ยน (ค่า FAM ยังอยู่ในต้นทุนเสมอ) · เหลือแถบเล็กหนึ่งบรรทัดไว้กดเปิด
+   จำแยกตามเครื่องผู้ดู (localStorage) · ป้ายเตือนใบราคา ฿0 ไม่ซ่อน เพราะเป็นเรื่องข้อมูลผิด ไม่ใช่ FAM ══ */
+function pxFamHidden(){ if(_px.famHide==null){ try{ _px.famHide=(localStorage.getItem('la_px_famhide')==='1'); }catch(_){ _px.famHide=false; } } return !!_px.famHide; }
+function pxFamTog(){ _px.famHide=!pxFamHidden(); try{ localStorage.setItem('la_px_famhide', _px.famHide?'1':'0'); }catch(_){ } renderTripPL(); }
+function pxFamTogBtn(lbl){ var h=pxFamHidden();
+  return '<span class="pxfamtg" onclick="event.stopPropagation();pxFamTog()" title="'+(h?'Show the FAM / FOC breakdown':'Hide the FAM / FOC breakdown · Net does not change')+'">'
+    +(h?'▸ Show FAM':'▾ Hide FAM')+(lbl?(' · '+lbl):'')+'</span>'; }
+function pxFamAgOpen(){ if(_px.famAgO==null){ try{ _px.famAgO=(localStorage.getItem('la_px_famag')==='1'); }catch(_){ _px.famAgO=false; } } return !!_px.famAgO; }
+function pxFamAgTog(){ _px.famAgO=!pxFamAgOpen(); try{ localStorage.setItem('la_px_famag', _px.famAgO?'1':'0'); }catch(_){ } renderTripPL(); }
+function pxFamMini(T){
+  return '<div class="eg mb pxfammini"><span class="pill pu">FAM</span>'
+    +'<span>FAM trips <b class="n" style="color:#6D28D9">−'+pxN(T.famCost)+'</b> · '+T.famTrips+' trip'+(T.famTrips===1?'':'s')+' · '+T.famPax+' pax · already inside Net</span>'
+    +pxFamTogBtn('')+'</div>';
+}
 /* ══ §pxFam · กล่อง FAM ในการ์ดเรือ (Daily) · อยู่ในแถวเดียวกับรายชื่อเอเจนต์ หัวข้อของแต่ละลำจึงยังตรงกัน ══ */
 function pxFamBox(t, e){
   var F=t.fam||{}, h='';
-  if(F.pax>0 && !t.noSail){
+  if(F.pax>0 && !t.noSail && !pxFamHidden()){
     h+='<div class="pxfam"><div class="fh"><b>FAM / FOC \u00b7 free bookings</b><span class="pill pu">'+F.pax+' pax</span></div>'
       +(F.list||[]).map(function(x){ return '<div class="fr"><span>'+e(x.name)+' <u>'+(x.staff?'Staff':'FAM / FOC')+' \u00b7 '+x.pax+' pax</u></span>'
         +'<u>'+(x.full?('tickets '+pxN(x.full)):'\u2014')+'</u></div>'; }).join('')
@@ -30264,8 +30350,8 @@ function pxDaily(e){
   /* §pxFam */
   var tFam=0, tFamPax=0, tZero=0;
   SAIL.forEach(function(t){ var F=t.fam||{}; tFam+=(F.cost||0); tFamPax+=(F.pax||0); tZero+=(F.zero||[]).length; });
-  var tSale=tP+tFam;
-  var famK=tFamPax?('<div class="kft kfam"><span>Sales <b class="n" style="color:'+(tSale<0?'#BE123C':'#047857')+'">'+(tSale<0?'\u2212':'+')+pxN(Math.abs(tSale))+'</b></span>'
+  var tSale=tP+tFam, fShow=(tFamPax>0 && !pxFamHidden());   /* §pxFamHide */
+  var famK=fShow?('<div class="kft kfam"><span>Sales <b class="n" style="color:'+(tSale<0?'#BE123C':'#047857')+'">'+(tSale<0?'\u2212':'+')+pxN(Math.abs(tSale))+'</b></span>'
     +'<span class="pill pu" title="FAM / FOC groups ride free · their cost is already inside Net · Sales + FAM = Net">FAM '+tFamPax+' pax \u00b7 \u2212'+pxN(tFam)+'</span></div>'):'';
   var per=tPax?Math.round(tP/tPax):0;
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
@@ -30325,10 +30411,10 @@ function pxDaily(e){
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
-      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +'<small>'+e(t.route.name||'—')+(t.plan?'':' · no cost plan')+'</small></div></div></td>'
       +'<td class="c"><span class="tm n">'+e(t.dep||'--:--')+'</span></td>'
-      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
+      +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
       +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
         +(t.noSail?('<span class="nsx">ถ้าออกจริง '+pxN(t.wouldCost)+'</span>')
@@ -30339,7 +30425,7 @@ function pxDaily(e){
         +(loss?'−':'+')+pxN(Math.abs(t.profit))+'</span>'
         +'<div class="per '+(loss?'negp':'pos')+' n">'+(loss?'−':'+')
         +pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / pax'+(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'))
-      +(tFamPax?(t.noSail?'<td><span class="num mut">\u2014</span></td><td><span class="num mut">\u2014</span></td>'
+      +(fShow?(t.noSail?'<td><span class="num mut">\u2014</span></td><td><span class="num mut">\u2014</span></td>'
         :pxFamCells(t.saleProfit!=null?t.saleProfit:t.profit, (t.fam&&t.fam.cost)||0, (t.fam&&t.fam.pax)?(t.fam.pax+' pax'+(t.fam.all?' · whole trip':'')):'')):'')
       +'<td><div class="bars"><i style="width:'+Math.min(100,ratio).toFixed(0)+'%;background:'+bc+'"></i></div>'
         +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
@@ -30356,7 +30442,7 @@ function pxDaily(e){
       +(tP<0?'−':'+')+pxN(Math.abs(tP))+'</span>'
       +'<div class="per '+(tP<0?'negp':'pos')+' n">'+(per<0?'−':'+')+pxN(Math.abs(per))+' / pax'
       +(tR?(' · '+Math.round(tP/tR*100)+'%'):'')+'</div></td>'
-    +(tFamPax?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
+    +(fShow?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
     +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:#4F46E5"></i></div>'
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
 
@@ -30371,6 +30457,7 @@ function pxDaily(e){
     +'<div class="eg"><div class="phd"><div><h2>Boat summary '
       +'<span class="pill pu">'+D.length+' boat'+(D.length===1?'':'s')+' scheduled</span>'
       +(nNo?('<span class="pill ns">'+nNo+' did not sail</span>'):'')
+      +(tFamPax?pxFamTogBtn(fShow?'':('FAM '+tFamPax+' pax \u00b7 \u2212'+pxN(tFam))):'')   /* §pxFamHide */
       +'<span class="rt" style="font-size:10.5px;font-weight:400;color:#94A3B8" title="'
       +e('Which route each boat ran, how many pax it carried, what came in, what went out, what is left · Live from bookings + the cost formula mapped to that route')
       +'">· click a row to jump to that boat</span></h2></div>'
@@ -30378,9 +30465,9 @@ function pxDaily(e){
       +'<span><i style="background:#10B981"></i>Healthy &lt;70%</span>'
       +'<span><i style="background:#F59E0B"></i>Watch 70–95%</span>'
       +'<span><i style="background:#E11D48"></i>Loss &gt;100%</span></div></div>'
-    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(tFamPax?920:760)+'px">'
+    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(fShow?920:760)+'px">'
     +'<thead><tr><th class="l">Boat · Route</th><th class="c">Dep</th><th class="c">Pax</th>'
-    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'+(tFamPax?'<th title="Sales + FAM = Net">of which Sales</th><th title="Cost of FAM / FOC groups · already inside Net">of which FAM</th>':'')
+    +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'+(fShow?'<th title="Sales + FAM = Net">of which Sales</th><th title="Cost of FAM / FOC groups · already inside Net">of which FAM</th>':'')
     +'<th class="c">Cost ratio / Break-even</th></tr></thead><tbody>'
     +sumRows+totRow+'</tbody></table></div></div></div>'
     +'<div class="dwrap"><div class="dbar"><div><h2>Boat detail '
@@ -30601,7 +30688,7 @@ function pxFamMonth(T, FAG, mLbl, e){
       +'<td class="c"><span class="num n">'+g.trips+'</span></td><td class="c"><span class="num n">'+g.pax+'</span></td>'
       +'<td><span class="num n">'+(g.full?pxN(g.full):'\u2014')+'</span></td>'
       +'<td><span class="num n" style="color:#6D28D9">\u2212'+pxN(g.cost)+'</span></td></tr>'; }).join('');
-  return '<div class="eg mb pxfamm"><div class="phd"><div><h2>Sales vs FAM trips <span class="pill pu">'+e(mLbl)+'</span></h2>'
+  return '<div class="eg mb pxfamm"><div class="phd"><div><h2>Sales vs FAM trips <span class="pill pu">'+e(mLbl)+'</span>'+pxFamTogBtn('')+'</h2>'
     +'<p>FAM / inspection groups ride free but cost real money \u00b7 shown as their own line so the sales result is visible \u00b7 Sales + FAM = Net profit</p></div></div>'
     +'<div class="fpl">'
       +'<div class="fl"><div><b>Sales trips</b><small>'+(T.trips-T.famTrips)+' trips without FAM + paid seats on '+T.famTrips+' FAM trips \u00b7 '
@@ -30612,9 +30699,16 @@ function pxFamMonth(T, FAG, mLbl, e){
       +'<div class="fl tt"><div><b>Net profit</b><small>actual \u00b7 same as above</small></div>'
         +'<span class="n" style="color:'+(T.profit<0?'#BE123C':'#047857')+'">'+sg(T.profit)+' \u0e3f</span></div>'
     +'</div>'
-    +(rows?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
-      +'<thead><tr><th class="l">FAM by agent</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table></div></div>'):'')
+    /* §pxFamAgFold (2026-10-25) · owner ส่งภาพตาราง FAM by agent ยาวทั้งหน้า "หมายถึงตรงนี้ ให้ยุบได้"
+       ตั้งต้นยุบ · เหลือแถบเดียว: จำนวน agent + 3 อันดับแรก · กดแถบ/หัวตารางเพื่อกาง-ยุบ · จำไว้ต่อเครื่อง */
+    +(rows?(pxFamAgOpen()
+      ?('<div class="twrap" style="margin-top:12px"><div class="tscroll"><table class="sum" style="min-width:520px">'
+        +'<thead><tr><th class="l pxfamagh" onclick="pxFamAgTog()" title="Fold this table">\u25be FAM by agent \u00b7 '+L.length+'</th><th class="c">Trips</th><th class="c">Pax</th><th>Ticket value</th><th>Cost</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table></div></div>')
+      :('<div class="pxfamagbar" onclick="pxFamAgTog()" title="Show the FAM by agent table">'
+        +'<b>\u25b8 FAM by agent</b><span class="pill pu">'+L.length+' agent'+(L.length===1?'':'s')+'</span>'
+        +'<span class="tp">'+L.slice(0,3).map(function(g){ return e(g.name)+' <b class="n">\u2212'+pxN(g.cost)+'</b>'; }).join(' \u00b7 ')
+        +(L.length>3?(' \u00b7 +'+(L.length-3)+' more'):'')+'</span><span class="sh">Show all \u203a</span></div>')):'')
     +(T.zeroN?('<div class="pxzero" style="margin-top:10px"><b>\u26a0 '+T.zeroN+' booking'+(T.zeroN===1?'':'s')+' at \u0e3f0</b> not marked FOC this month \u00b7 not counted as FAM \u00b7 open those days to check the price</div>'):'')
     +'</div>';
 }
@@ -30632,7 +30726,7 @@ function pxMonth(e){
   A.forEach(function(x){ T.famCost+=x.famCost||0; T.famPax+=x.famPax||0; T.famTrips+=x.famTrips||0; T.saleLoss+=x.saleLoss||0; T.zeroN+=x.zeroN||0;
     Object.keys(x.famAg||{}).forEach(function(k){ var s=x.famAg[k], G=FAG[k]||(FAG[k]={ name:s.name, staff:s.staff, trips:0, pax:0, full:0, cost:0 });
       G.trips+=Object.keys(s.trips||{}).length; G.pax+=s.pax; G.full+=s.full; G.cost+=s.cost; }); });
-  var hasF=T.famPax>0;
+  var famAny=T.famPax>0, hasF=famAny && !pxFamHidden();   /* §pxFamHide */
 
   /* เดือนก่อน ช่วงวันเดียวกัน · เทียบกันได้จริง ไม่ใช่ทั้งเดือนเทียบครึ่งเดือน */
   var py=+ym.slice(0,4), pm=+ym.slice(5,7)-1, pd=new Date(py,pm-1,1);
@@ -30729,7 +30823,7 @@ function pxMonth(e){
     if(!x.trips) return '';
     var W=pxDW(x.date), loss=x.profit<0, mg=x.rev?Math.round(x.profit/x.rev*100):0;
     return '<tr class="br'+(loss?' loss':'')+'" onclick="pxGoDay(\''+e(x.date)+'\')">'
-      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b>'+(x.famPax?(' <span class="pill pu" title="'+e('FAM / FOC '+x.famPax+' pax · cost '+pxN(x.famCost)+' ฿ (already inside Net)')+'">FAM '+x.famPax+'</span>'):'')+'</td>'
+      +'<td class="l"><b style="font-size:12.5px'+(W.we?';color:#BE123C':'')+'">'+e(W.txt)+'</b>'+((hasF&&x.famPax)?(' <span class="pill pu" title="'+e('FAM / FOC '+x.famPax+' pax · cost '+pxN(x.famCost)+' ฿ (already inside Net)')+'">FAM '+x.famPax+'</span>'):'')+'</td>'
       +'<td class="c"><span class="num n">'+x.trips+'</span></td>'
       +'<td class="c"><span class="num n">'+x.pax+'</span></td>'
       +'<td><span class="num n">'+pxN(x.rev)+'</span></td>'
@@ -30740,7 +30834,7 @@ function pxMonth(e){
   }).join('');
 
   var rentIdle=pxRentIdleHtml(e, pxRentIdle(days), T.profit);   /* §rentIdle */
-  var famHtml=hasF?pxFamMonth(T, FAG, mLbl, e):'';   /* §pxFam */
+  var famHtml=famAny?(hasF?pxFamMonth(T, FAG, mLbl, e):pxFamMini(T)):'';   /* §pxFam */
 
   return hero+kpi+famHtml+rentIdle
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
@@ -30762,9 +30856,11 @@ function pxMonth(e){
       +'<div class="b"><small>Cost ratio</small><b class="n">'+pct+'%</b>'
         +'<u class="n">'+pxN(T.cost/Math.max(1,T.pax))+' ฿/pax on '+pxN(T.rev/Math.max(1,T.pax))+'</u></div>'
     +'</div></div>'
-    +'<div class="g3"><div class="eg"><div class="phd"><div><h2>Day by day</h2>'
+    /* §pxEqH (2026-10-25) · owner "ปรับให้เท่ากันหน่อย" · การ์ด Day by day สูงเท่าการ์ด By route
+       ตารางรายวันวางแบบ absolute ในกล่อง จึงไม่ดันความสูงแถว · แถวสูงตามการ์ดเส้นทาง แล้วตารางรายวันเลื่อนในกรอบนั้น */
+    +'<div class="g3 eqh"><div class="eg dbd"><div class="phd"><div><h2>Day by day</h2>'
       +'<p>Click a row to open that day in the Daily tab</p></div></div>'
-      +'<div class="twrap"><div class="tscroll cap"><table class="sum" style="min-width:620px">'
+      +'<div class="dbx"><div class="twrap"><div class="tscroll cap"><table class="sum" style="min-width:620px">'
       +'<thead><tr><th class="l">Date</th><th class="c">Trips</th><th class="c">Pax</th>'
       +'<th>Revenue</th><th>Cost</th><th>Net</th><th class="c">Margin</th></tr></thead><tbody>'
       +dayRows
@@ -30776,7 +30872,7 @@ function pxMonth(e){
       +(T.profit<0?'−':'+')+pxN(Math.abs(T.profit))+'</span></td>'
       +'<td class="c"><span class="pill '+(T.profit<0?'ro':'em')+'">'
       +(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td></tr>'
-      +'</tbody></table></div></div></div>'
+      +'</tbody></table></div></div></div></div>'
     +'<div class="eg"><div class="phd"><div><h2>By route this month</h2>'
       +'<p>Where the month\'s profit actually came from</p></div></div>'
       +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(hasF?560:400)+'px">'
@@ -35027,6 +35123,175 @@ function tcxSnapFlush(){
   catch(e){ console.warn('[tripCxl] snapshot save failed', e); }
   _tcxSnapPend=null;
 }
+/* ══ §tcxPartner (2026-10-26) · owner "เคสนี้จะเป็นการเพิ่มการส่งต่อให้ ซัพพลายเออร์บริษัท Partner ซึ่งทางบริษัทก็ยังทำเก็บเงินกับ เอเจนปกติ"
+   รอบที่ยกเลิก → ส่งลูกค้าไปกับบริษัท Partner · ใบจองยัง Confirmed · Invoice เอเยนต์เดิมไม่แตะ · ยอดขายยังนับ
+   ผล  → weatherResolve.outcome='partner' (คอลัมน์เดิมของ sb_bookings · ไม่แตะ DB)
+   รายละเอียด → blob key trip_cxl_partner (JSON string) { bkId:{ev:'rid|ds', name, ppx, pax, cost, van:'ours'|'partner', drop, time, ref, by, at} }
+   ไม่นับคนบนเรือเรา: ล้างเรือ/เช็คอินหน้าท่า · ไม่ขึ้นหน้าเช็คอินท่า / เตรียมอาหาร · ไม่นับ "ยังไม่จัดเรือ"
+   รถเลือกรายใบ: ours = งานรถเดิม ปลายทางเป็นจุดของ Partner · partner = ล้างรถออกจากงานรถเรา
+   ต้นทุน = ราคา/หัว × pax → Executive Board (11-exec-board cxDay) · ชื่อ Partner ที่เคยใช้อ่านจาก key เดียวกัน (ไม่มีหน้าตั้งค่า) */
+var _tcxPtMemo={raw:undefined,o:{},t:0};
+function tcxPtAll(){
+  const now=Date.now(); if(_tcxPtMemo.raw!==undefined && now-_tcxPtMemo.t<1000) return _tcxPtMemo.o;   /* laBlob() อ่าน localStorage ทั้งก้อน · อย่าเรียกถี่ */
+  try{ const raw=laBlob().trip_cxl_partner;
+    if(raw!==_tcxPtMemo.raw){ let o={}; if(typeof raw==='string'&&raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') o=p; } _tcxPtMemo.o=o; _tcxPtMemo.raw=raw; }
+    _tcxPtMemo.t=now; return _tcxPtMemo.o;
+  }catch(_){ return _tcxPtMemo.o||{}; }
+}
+function tcxPtOf(b, ds){
+  if(!b||!b.weatherResolve||b.weatherResolve.outcome!=='partner'||b.weatherResolve.status!=='resolved') return null;   /* เช็คถูก ๆ ก่อน · ใบทั่วไปไม่แตะ blob */
+  if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return null;
+  const p=tcxPtAll()[b.id]; if(!p) return null;
+  if(ds && String(p.ev||'').split('|')[1]!==ds) return null;
+  return p;
+}
+function tcxPtSave(map){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return false;
+  const all=Object.assign({}, tcxPtAll()); Object.keys(map).forEach(k=>{ if(map[k]==null) delete all[k]; else all[k]=map[k]; });
+  const raw=JSON.stringify(all); const d=laBlob(); d.trip_cxl_partner=raw; laBlobSave();
+  _tcxPtMemo={raw:raw,o:all,t:Date.now()}; return true;
+}
+function tcxPtNames(){
+  const all=tcxPtAll(), m={};
+  Object.keys(all).forEach(k=>{ const p=all[k]; if(!p||!p.name) return; const n=String(p.name).trim(), key=n.toLowerCase(); if(!n) return;
+    const x=m[key]||(m[key]={name:n,n:0,last:'',ppx:0}); x.n++; if(String(p.at||'')>=x.last){ x.last=String(p.at||''); x.ppx=+p.ppx||0; x.name=n; } });
+  return Object.keys(m).map(k=>m[k]).sort((a,b)=>b.last.localeCompare(a.last));
+}
+function tcxPtRev(b, rid, ds){ return (b.trips||[]).filter(t=>t.routeId===rid&&t.date===ds).reduce((s,t)=>s+((typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0),0); }
+function tcxPtInit(ids){ const v={}; (ids||[]).forEach(id=>{ v[id]='ours'; }); return {name:'', ppx:'', drop:'', time:'', ref:'', van:v}; }
+function tcxPtEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function tcxPtBulkSeg(D){
+  return '<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+    +[['move','Move program'],['partner','→ Send to partner']].map(o=>'<button onclick="tcxDlgSet(\'out\',\''+o[0]+'\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;background:'+(D.out===o[0]?(o[0]==='partner'?'#0F6E56':'#16265C'):'transparent')+';color:'+(D.out===o[0]?'#fff':'#3E4658')+'">'+o[1]+'</button>').join('')+'</div>';
+}
+function tcxPtMoney(rev, pax, ppx){
+  const f=n=>'฿'+Math.round(+n||0).toLocaleString(), has=String(ppx)!=='' && +ppx>=0, cost=has?(+ppx||0)*pax:0, left=rev-cost;
+  const box=(k,v,sub,bg,bd,col)=>'<div style="border:1px solid '+bd+';border-radius:11px;padding:8px 11px;background:'+bg+'"><div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#8A8F9C;text-transform:uppercase">'+k+'</div><div style="font-family:\'DM Mono\',monospace;font-size:19px;font-weight:700;color:'+col+'">'+v+'</div><div style="font-size:10.5px;color:#6B7489">'+sub+'</div></div>';
+  return box('Agent pays (unchanged)', f(rev), 'existing invoice · not touched', '#FAFBFD','#E6E8EE','#0F1B3D')
+    + box('Pay partner', has?f(cost):'—', has?((+ppx||0).toLocaleString()+' × '+pax+' pax'):'enter price / head', '#FAFBFD','#E6E8EE','#A32D2D')
+    + box('Left', has?f(left):'—', has&&rev>0?(Math.round(left/rev*100)+'% before van cost'):'', '#F1F9F5','#BFE3D0', left<0?'#A32D2D':'#0F6E56');
+}
+function tcxPtMsg(D, L){
+  const P=D.pt, dd=String(D.ds||'').split('-'), ds=dd.length===3?(dd[2]+'/'+dd[1]+'/'+dd[0]):D.ds, lines=[];
+  lines.push('Guests for partner · '+tcxRName(D.rid)+' · '+ds);
+  L.forEach(b=>{
+    const t=(b.trips||[]).find(x=>x.routeId===D.rid&&x.date===D.ds)||{}, P2=t.pax||{}, O=(typeof bkOpsRead==='function')?(bkOpsRead(b,D.ds)||{}):{};
+    const pt=(typeof bookingV2PaxTot==='function')?k=>bookingV2PaxTot(P2,k):()=>0, ad=pt('ad'), chd=pt('chd'), inf=pt('inf');
+    const paxTxt=[ad?ad+' AD':'',chd?chd+' CHD':'',inf?inf+' INF':''].filter(Boolean).join(' ')||(tcxPaxOf(b,D.rid,D.ds)+' pax');
+    const hotel=b.hotelName||b.pickup||'', pk=O.pickupTimeFinal||t.pickupTime||'';
+    lines.push('');
+    lines.push((b.voucherRef||b.code||b.id)+' · '+(b.leadPax||'—')+' · '+paxTxt);
+    if((P.van[b.id]||'ours')==='ours') lines.push('Our van: '+(hotel||'—')+(pk?' '+pk:'')+' → '+(P.drop||'(drop-off point)')+(P.time?' by '+P.time:''));
+    else lines.push('Partner picks up: '+(hotel||'—')+(pk?' '+pk:'')+((b.roomNo||b.room)?(' · room '+(b.roomNo||b.room)):''));
+    const sm=b.specialMeals||{}, al=(Array.isArray(sm.allergyList)?sm.allergyList.map(x=>x&&x.name).filter(Boolean):[]).concat(sm.allergies?[String(sm.allergies)]:[]);
+    if(al.length) lines.push('⚠ Allergy: '+al.join(', '));
+  });
+  if(String(P.ppx)!==''){ const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0); lines.push(''); lines.push('Price '+(+P.ppx||0).toLocaleString()+'/head × '+pax+' = '+((+P.ppx||0)*pax).toLocaleString()+' THB · bill to Love Andaman'); }
+  return lines.join('\n');
+}
+function tcxPtBody(D, L){
+  const esc=tcxPtEsc, P=D.pt, names=tcxPtNames();
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0), rev=L.reduce((s,b)=>s+tcxPtRev(b,D.rid,D.ds),0);
+  const inp='height:34px;border:1.5px solid #D5DAE5;border-radius:9px;padding:0 10px;font-family:inherit;font-size:13px;width:100%;box-sizing:border-box;background:#fff;color:#0F1B3D';
+  const lab='font-size:11px;font-weight:700;color:#6B7489;margin-bottom:4px';
+  const anyOurs=L.some(b=>(P.van[b.id]||'ours')==='ours');
+  let h='<datalist id="tcxp-names">'+names.map(n=>'<option value="'+esc(n.name)+'">'+(n.ppx?('฿'+n.ppx.toLocaleString()+'/head · used '+n.n+'×'):('used '+n.n+'×'))+'</option>').join('')+'</datalist>'
+    +'<div style="display:grid;grid-template-columns:1.4fr .7fr .45fr;gap:10px">'
+    +'<div><div style="'+lab+'">Partner company</div><input id="tcxp-name" list="tcxp-names" value="'+esc(P.name)+'" placeholder="Type or pick a partner" oninput="tcxPtSet(\'name\',this.value)" onchange="tcxPtPickName(this.value)" autocomplete="off" style="'+inp+'"></div>'
+    +'<div><div style="'+lab+'">Partner price / head (฿)</div><input id="tcxp-ppx" type="number" min="0" step="1" value="'+esc(P.ppx)+'" oninput="tcxPtSet(\'ppx\',this.value)" style="'+inp+';font-family:\'DM Mono\',monospace"></div>'
+    +'<div><div style="'+lab+'">Pax</div><div style="'+inp+';display:flex;align-items:center;background:#F6F7FA;font-family:\'DM Mono\',monospace">'+pax+'</div></div></div>'
+    +'<div style="margin-top:8px"><div style="'+lab+'">Partner ref / contact (optional)</div><input value="'+esc(P.ref)+'" oninput="tcxPtSet(\'ref\',this.value)" placeholder="confirmation no. · contact · phone" style="'+inp+'"></div>'
+    +'<div id="tcxp-money" data-rev="'+rev+'" data-pax="'+pax+'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">'+tcxPtMoney(rev,pax,P.ppx)+'</div>'
+    +'<div style="'+lab+';margin-top:14px">Transfer · choose per booking</div>'
+    +'<div style="border:1px solid #E6E8EE;border-radius:11px;overflow:hidden;max-height:210px;overflow-y:auto">'+L.map(b=>{
+        const v=P.van[b.id]||'ours', p=tcxPaxOf(b,D.rid,D.ds);
+        const btn=(k,t)=>'<button onclick="tcxPtVan(\''+esc(b.id)+'\',\''+k+'\')" style="border:0;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(v===k?'#fff':'transparent')+';color:'+(v===k?'#0F6E56':'#6B7489')+';box-shadow:'+(v===k?'0 1px 2px rgba(0,0,0,.12)':'none')+'">'+t+'</button>';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #F0F1F4;font-size:12.5px"><b>'+esc(b.voucherRef||b.code||b.id)+'</b><span style="color:#6B7489;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(b.hotelName||b.pickup||'no pickup')+' · '+p+' pax</span>'
+          +'<span style="margin-left:auto;flex:none;display:inline-flex;gap:2px;padding:3px;background:#F2F4F8;border-radius:9px">'+btn('ours','We transfer')+btn('partner','Partner picks up')+'</span></div>'; }).join('')+'</div>'
+    +(anyOurs?('<div style="display:grid;grid-template-columns:1.4fr .6fr;gap:8px;margin-top:8px"><div><div style="'+lab+'">Drop-off point (our van)</div><input value="'+esc(P.drop)+'" oninput="tcxPtSet(\'drop\',this.value)" placeholder="e.g. Rassada Pier" style="'+inp+'"></div>'
+      +'<div><div style="'+lab+'">Arrive by</div><input type="time" value="'+esc(P.time)+'" oninput="tcxPtSet(\'time\',this.value)" style="'+inp+'"></div></div>'):'')
+    +'<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><div style="'+lab+';margin:0">Message for the partner</div><button onclick="tcxPtCopy(this)" style="height:24px;border:1px solid #D5DAE5;border-radius:7px;background:#fff;font-family:inherit;font-size:11px;font-weight:700;padding:0 9px;cursor:pointer">⧉ Copy</button></div>'
+    +'<textarea id="tcxp-msg" readonly style="width:100%;box-sizing:border-box;height:112px;margin-top:4px;border:1px solid #E6E8EE;border-radius:9px;background:#FAFBFC;font-family:\'DM Mono\',monospace;font-size:11.5px;padding:8px 10px;color:#3B4A66;resize:vertical">'+esc(tcxPtMsg(D,L))+'</textarea>'
+    +'<div style="font-size:11px;color:#8A8F9C;margin-top:6px">Booking stays confirmed · agent invoice unchanged · not counted on our boat · partner cost goes to Executive Board</div>';
+  return h;
+}
+function _tcxPtL(){ const D=_tcxD; return D?D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean):[]; }
+function tcxPtSet(k, v){
+  const D=_tcxD; if(!D||!D.pt) return; D.pt[k]=v;
+  if(k==='ppx'){ const m=document.getElementById('tcxp-money'); if(m) m.innerHTML=tcxPtMoney(+m.getAttribute('data-rev')||0, +m.getAttribute('data-pax')||0, v); }
+  const ta=document.getElementById('tcxp-msg'); if(ta) ta.value=tcxPtMsg(D,_tcxPtL());
+}
+function tcxPtPickName(v){
+  const D=_tcxD; if(!D||!D.pt) return; D.pt.name=v;
+  const n=tcxPtNames().find(x=>x.name.toLowerCase()===String(v||'').trim().toLowerCase());
+  if(n){ D.pt.name=n.name; const el=document.getElementById('tcxp-name'); if(el) el.value=n.name;
+    if(String(D.pt.ppx)===''&&n.ppx){ const p=document.getElementById('tcxp-ppx'); if(p) p.value=n.ppx; tcxPtSet('ppx', String(n.ppx)); return; } }
+  tcxPtSet('name', D.pt.name);
+}
+function tcxPtVan(id, k){ const D=_tcxD; if(!D||!D.pt) return; D.pt.van[id]=k; tcxDlgRender(); }
+function tcxPtCopy(btn){
+  const ta=document.getElementById('tcxp-msg'); if(!ta) return; const txt=ta.value;
+  const ok=()=>{ if(btn){ const o=btn.textContent; btn.textContent='✓ Copied'; setTimeout(()=>{ btn.textContent=o; },1400); } };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,()=>{ ta.select(); document.execCommand('copy'); ok(); }); return; } }catch(_){}
+  try{ ta.select(); document.execCommand('copy'); ok(); }catch(_){}
+}
+function tcxPtApply(D, L){
+  const P=D.pt||{}, name=String(P.name||'').trim();
+  if(!name){ alert('Enter the partner company.'); return; }
+  if(String(P.ppx).trim()===''||!(+P.ppx>=0)){ alert('Enter the partner price per head (0 if there is no charge).'); return; }
+  const ppx=+P.ppx||0;
+  L=L.filter(b=>b.weatherResolve && b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===D.rid&&t.date===D.ds));
+  if(!L.length){ alert('Nothing left to send on this trip.'); return; }
+  const pax=L.reduce((s,b)=>s+tcxPaxOf(b,D.rid,D.ds),0);
+  if(L.length>1 && !confirm('Send '+L.length+' booking(s) · '+pax+' guest(s) to '+name+'?\nPrice '+ppx.toLocaleString()+'/head · total '+(ppx*pax).toLocaleString()+' THB.')) return;
+  const map={}, at=new Date().toISOString(), by=laBy();
+  L.forEach(b=>{
+    const p=tcxPaxOf(b,D.rid,D.ds), v=(P.van&&P.van[b.id])||'ours';
+    if(v==='partner'){ if(typeof bkOpsClear==='function') bkOpsClear(b, D.ds); }
+    else if(typeof bkOpsFor==='function'){ const o=bkOpsFor(b, D.ds); o.boatId=null; if(o.boatSplits) delete o.boatSplits; delete o.pierCheckin; }
+    const wr=b.weatherResolve; if(wr.status==='awaiting') wr.notifiedAt=at;
+    wr.status='resolved'; wr.outcome='partner'; wr.resolvedAt=at; wr.by=by;
+    map[b.id]={ev:D.rid+'|'+D.ds, name:name, ppx:ppx, pax:p, cost:ppx*p, van:v, drop:v==='ours'?String(P.drop||'').trim():'', time:v==='ours'?String(P.time||''):'', ref:String(P.ref||'').trim(), by:by, at:at};
+    bookingV2AddHistory(b,'weather','Sent to partner '+name+' · '+tcxRName(D.rid)+' ('+D.ds+') · '+p+' pax × ฿'+ppx.toLocaleString()+' = ฿'+(ppx*p).toLocaleString()
+      +' · '+(v==='ours'?('our van → '+(String(P.drop||'').trim()||'partner pier')+(P.time?' by '+P.time:'')):'partner picks up')+(P.ref?(' · ref '+String(P.ref).trim()):'')+' · agent invoice unchanged','Partner');
+  });
+  tcxPtSave(map);
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  acctModalClose(); _tcxD=null;
+  if(typeof bookingV2Render==='function') bookingV2Render();
+}
+function tcxPtUndo(bkId){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!b||!b.weatherResolve) return;
+  const p=tcxPtAll()[bkId]||{};
+  if(!confirm('Undo "sent to partner" for '+(b.voucherRef||b.code||b.id)+'?\nIt goes back to awaiting a decision. Boat/van assignments are not restored.')) return;
+  b.weatherResolve.status='notified'; b.weatherResolve.outcome=null; b.weatherResolve.resolvedAt=null;
+  tcxPtSave({[bkId]:null});
+  bookingV2AddHistory(b,'weather','Undo sent to partner'+(p.name?(' ('+p.name+')'):''),'Partner');
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  if(typeof bookingV2Render==='function') bookingV2Render();
+}
+function tcxPtCell(bk){
+  const esc=tcxPtEsc, p=tcxPtAll()[bk.id]||{};
+  return '<div style="display:flex;flex-direction:column;gap:2px;min-width:128px">'
+    +'<span style="font-size:10px;color:#0F6E56;font-weight:800;white-space:nowrap">&rarr; '+esc(p.name||'Partner')+'</span>'
+    +'<span style="font-size:9.5px;color:#3E4658;white-space:nowrap">'+(p.cost!=null?('฿'+Math.round(+p.cost||0).toLocaleString()+' · '):'')+(p.van==='partner'?'partner picks up':('our van'+(p.drop?(' → '+esc(p.drop)):'')+(p.time?(' '+esc(p.time)):'')))+'</span>'
+    +'<button onclick="event.stopPropagation();tcxPtUndo(\''+esc(bk.id)+'\')" style="align-self:flex-start;background:none;border:0;padding:0;font-family:inherit;font-size:9.5px;color:#8A8F9C;text-decoration:underline;cursor:pointer">undo</button></div>';
+}
+function tcxPtHistNote(rows){
+  const keys={}; (rows||[]).forEach(x=>{ keys[x.k]=1; });
+  const all=tcxPtAll(); let pax=0, cost=0, n=0;
+  Object.keys(all).forEach(id=>{ const p=all[id]; if(!p||!keys[p.ev]) return; const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!tcxPtOf(b)) return; n++; pax+=+p.pax||0; cost+=+p.cost||0; });
+  return n?(' · '+pax+' to partner (฿'+Math.round(cost).toLocaleString()+')'):'';
+}
+/* Executive Board · รายได้+ต้นทุนของใบที่ส่ง Partner ในวันนั้น (ไม่มีเรือเรา จึงไม่อยู่ใน pxDay) */
+window.tcxPtDay=function(ds){
+  const all=tcxPtAll(), out=[];
+  Object.keys(all).forEach(id=>{ const p=all[id]; if(!p) return; const ev=String(p.ev||'').split('|'); if(ev[1]!==ds) return;
+    const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!tcxPtOf(b,ds)) return;
+    out.push({rid:ev[0], rev:tcxPtRev(b,ev[0],ds), cost:+p.cost||0, pax:+p.pax||0, name:p.name||''}); });
+  return out;
+};
 /* คุ้มทุน · ตัวเดียวกับ Trip P&L / Executive Board (pxTrip ต่อลำ · รวมทุกลำของโปรแกรมวันนั้น) */
 var _tcxBeMemo=null;
 function tcxBE(rid, ds){
@@ -35130,14 +35395,16 @@ function tcxDlgOpen(bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!bk.weatherResolve) return;
   const p=String(bk.weatherResolve.event||'').split('|');
   _tcxD={ids:[bkId], rid:p[0], ds:p[1], out:(tcxReason(p[0],p[1])==='minpax'?'move':'reschedule'), toDs:p[1], rsDs:'', all:false, nr:'', bulk:false};
+  _tcxD.pt=tcxPtInit(_tcxD.ids);   /* §tcxPartner */
   try{ const nd=new Date(p[1]+'T12:00:00'); nd.setDate(nd.getDate()+1); _tcxD.rsDs=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(nd):p[1]; }catch(_){ _tcxD.rsDs=p[1]; }
   tcxDlgRender();
 }
-function tcxDlgBulk(rid, ds){
+function tcxDlgBulk(rid, ds, out){
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   const L=bookingV2WeatherEventBookings(rid,ds).filter(b=>b.weatherResolve.status!=='resolved' && (b.trips||[]).some(t=>t.routeId===rid&&t.date===ds));
   if(!L.length) return;
-  _tcxD={ids:L.map(b=>b.id), rid:rid, ds:ds, out:'move', toDs:ds, rsDs:ds, all:false, nr:'', bulk:true};
+  _tcxD={ids:L.map(b=>b.id), rid:rid, ds:ds, out:(out==='partner'?'partner':'move'), toDs:ds, rsDs:ds, all:false, nr:'', bulk:true};
+  _tcxD.pt=tcxPtInit(_tcxD.ids);   /* §tcxPartner */
   tcxDlgRender();
 }
 function tcxDlgSet(k,v){ if(!_tcxD) return; _tcxD[k]=v; if(k==='toDs'||k==='all') _tcxD.nr=''; tcxDlgRender(); }
@@ -35150,9 +35417,9 @@ function tcxDlgRender(){
   const pierNm=p=>{ try{ return (typeof laPierName==='function'&&laPierName(p))||p||'—'; }catch(_){ return p||'—'; } };
   let paid=0; if(!D.bulk && L[0]){ const inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(L[0].id):null; paid=inv?acctInvoicePaid(inv):0; }
   const ag=b=>(typeof sbGetAgent==='function'&&b.agentId)?((sbGetAgent(b.agentId)||{}).name||'B2C'):'B2C';
-  const title = D.bulk ? ('Move all '+L.length+' booking'+(L.length===1?'':'s')+' · '+pax+' pax') : (esc(L[0].voucherRef||L[0].code||L[0].id)+' · '+esc(ag(L[0]))+' · '+pax+' pax');
-  const seg = D.bulk ? '' : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
-    + [['move','Move program'],['reschedule','Reschedule'],['refund','Refund'],['credit','Credit'],['cancel','Cancel']].map(o=>{
+  const title = D.bulk ? ((D.out==='partner'?'Send to partner · ':'Move all ')+L.length+' booking'+(L.length===1?'':'s')+' · '+pax+' pax') : (esc(L[0].voucherRef||L[0].code||L[0].id)+' · '+esc(ag(L[0]))+' · '+pax+' pax');
+  const seg = D.bulk ? tcxPtBulkSeg(D) : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+    + [['move','Move program'],['reschedule','Reschedule'],['partner','→ Send to partner'],['refund','Refund'],['credit','Credit'],['cancel','Cancel']].map(o=>{
         const dis=(o[0]==='credit'&&!(paid>0));
         return '<button '+(dis?'disabled ':'')+'onclick="tcxDlgSet(\'out\',\''+o[0]+'\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:'+(dis?'default':'pointer')+';background:'+(D.out===o[0]?'#16265C':'transparent')+';color:'+(D.out===o[0]?'#fff':(dis?'#B9BFCC':'#3E4658'))+'">'+o[1]+'</button>'; }).join('') + '</div>');
   let body='';
@@ -35175,6 +35442,8 @@ function tcxDlgRender(){
             +'<span style="font-size:11.5px;font-weight:700;border-radius:8px;padding:2px 8px;background:'+(short?'#FBE3E0':'#E1F5EA')+';color:'+(short?'#A32D2D':'#136C3A')+'">free '+t.free+'</span></label>'; }).join('')
         : '<div style="padding:18px;text-align:center;color:#8A8F9C;font-size:12.5px">No program with a boat on '+esc(D.toDs)+(D.all?'':' at this pier')+'. Try another date or All piers.</div>')
       +'</div><div style="font-size:11px;color:#8A8F9C;margin-top:6px">Price stays the same · boat/van of the cancelled trip are cleared · pickup time is read again for the new program</div>';
+  } else if(D.out==='partner'){
+    body=tcxPtBody(D, L);   /* §tcxPartner */
   } else if(D.out==='reschedule'){
     body='<label style="font-size:11px;font-weight:700;color:#6B7489">New date (same program) <input type="date" value="'+esc(D.rsDs)+'" onchange="_tcxD.rsDs=this.value" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>';
   } else {
@@ -35185,12 +35454,13 @@ function tcxDlgRender(){
     +'<div style="font-size:15px;font-weight:700;color:#0F1B3D;margin-top:2px">'+title+'</div></div><button onclick="acctModalClose();_tcxD=null" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--fd-ink-soft)">&times;</button></div>'
     +'<div style="padding:14px 18px;width:620px;max-width:100%;box-sizing:border-box">'+seg+body+hid
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button onclick="acctModalClose();_tcxD=null" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">Back</button>'
-    +'<button onclick="tcxDlgApply()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply'+(D.bulk?(' to '+L.length):'')+'</button></div></div>');
+    +'<button onclick="tcxDlgApply()" style="background:'+(D.out==='partner'?'#0F6E56':'#A32D2D')+';color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply'+(D.bulk?(' to '+L.length):'')+'</button></div></div>');
 }
 function tcxDlgApply(){
   const D=_tcxD; if(!D) return;
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
   const L=D.ids.map(id=>(SB_BOOKINGS||[]).find(x=>x.id===id)).filter(Boolean);
+  if(D.out==='partner'){ tcxPtApply(D, L); return; }   /* §tcxPartner */
   if(D.out==='move'){
     if(!D.nr){ alert('Pick the program to move to.'); return; }
     if(D.bulk){
@@ -35226,6 +35496,7 @@ function tcxByTripBanner(rid, ds){
     + '<div style="font-size:11px;color:'+R.fg+';opacity:.85;margin-top:1px">'+(note?esc(note)+' · ':'')+(snapTxt?snapTxt+' · ':'')+'resolve booking by booking</div></div>'
     + (open.length?('<span style="font-size:11px;font-weight:700;background:#FBF1DF;color:#7A4300;border-radius:8px;padding:3px 8px">To resolve '+open.length+' / '+L.length+'</span>'):'')
     + bulk
+    + (open.length?('<button onclick="event.stopPropagation();tcxDlgBulk(\''+rid+'\',\''+ds+'\',\'partner\')" style="background:#fff;border:1px solid #0F6E56;color:#0F6E56;font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap">&rarr; Send to partner…</button>'):'')   /* §tcxPartner */
     + '<button onclick="event.stopPropagation();bookingV2WeatherPanel(\''+rid+'\',\''+ds+'\')" style="background:'+R.fg+';color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>';
 }
 /* ตาราง Boat Operation · ช่องที่ยกเลิกรอบ */
@@ -35286,7 +35557,7 @@ function tcxHistSet(k,v){ _tcxH[k]=v||''; tcxHistRender(); }
 function tcxHistFiltered(){ return tcxHistRows().filter(x=>(!_tcxH.mon||String(x.ds).slice(0,7)===_tcxH.mon)&&(!_tcxH.r||x.reason===_tcxH.r)&&(!_tcxH.p||x.pier===_tcxH.p)); }
 function tcxHistRender(){
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const L=tcxHistFiltered(), OL={reschedule:'rescheduled',move:'moved',refund:'refunded',credit:'credit',cancel:'cancelled',open:'to resolve',resolved:'resolved'};
+  const L=tcxHistFiltered(), OL={reschedule:'rescheduled',move:'moved',partner:'to partner',refund:'refunded',credit:'credit',cancel:'cancelled',open:'to resolve',resolved:'resolved'};
   const sum=(f)=>L.filter(f).reduce((s,x)=>s+((x.S&&x.S.pax)||0),0);
   const byR={}; L.forEach(x=>{ byR[x.reason]=(byR[x.reason]||0)+1; });
   const mp=L.filter(x=>x.reason==='minpax'), mpMoved=mp.reduce((s,x)=>s+(x.oc.move||0),0), mpN=mp.reduce((s,x)=>s+x.n,0);
@@ -35312,7 +35583,7 @@ function tcxHistRender(){
     +'<button onclick="tcxHistCsv()" style="margin-left:auto;height:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-family:inherit;font-weight:700;font-size:12.5px;padding:0 12px;cursor:pointer">Export CSV</button>'
     +'<button onclick="tcxHistClose()" style="height:32px;width:32px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-size:16px;cursor:pointer">&times;</button></div>'
     +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 18px">'
-    + kp('Cancelled trips', L.length, sum(()=>true)+' pax affected')
+    + kp('Cancelled trips', L.length, sum(()=>true)+' pax affected'+tcxPtHistNote(L))
     + kp('Below break-even', byR.minpax||0, sum(x=>x.reason==='minpax')+' pax · moved '+mpMoved+' of '+mpN+' booking(s)', '#CFC6F2')
     + kp('Weather · boat · other', (byR.weather||0)+(byR.boat||0)+(byR.other||0), 'weather '+(byR.weather||0)+' · boat '+(byR.boat||0)+' · other '+(byR.other||0))
     + '<div style="border-radius:12px;padding:10px 13px;border:1px solid #E6E8EE;background:#fff"><div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;color:#5F5F58;text-transform:uppercase">Most often below break-even</div><div style="font-weight:800;margin-top:6px">'+(top?esc(top):'—')+'</div><div style="font-size:11px;color:#6B7489">'+(top?(freq[top]+' time(s)'):'')+'</div></div></div>'
@@ -46409,6 +46680,293 @@ function _btOtherSection(date, rows, rids){
    ซ่อนด้วย CSS (body.la-bkprog) + กันทางลัดใน JS: สลับแท็บ · New booking (ปุ่ม/คีย์ลัด C) · เปิดใบจอง
    ⚠ เป็นการซ่อนหน้าจอ ไม่ใช่สิทธิ์ข้อมูล · ข้อมูลทั้งชุดยังโหลดมาที่เครื่องเหมือนผู้ใช้อื่น */
 function bkLimProg(){ try{ return typeof window.laLimited==='function' && window.laLimited('lim-bkprog'); }catch(_){ return false; } }
+/* ══ §bkImp (2026-10-27) · owner "จะ import ตัวนี้เข้า แล้วจะเป็นบุคกิ้งบายบุคกิ้งแบบที่ User ทำก่อนหน้านี้ไหม"
+   ไฟล์จากเอเยนต์ (Similan Island Exclusive · ระบบ Pegas "Tour Customer List") · เขาส่งแบบนี้ทุกครั้ง
+   ตัดสินใจกับเจ้าของ: Adl/Chd/Baby ตามที่เอเยนต์ส่งมา · Agent กับโปรแกรมให้ user เลือก · เก็บแค่ชื่อให้ครบ (ไม่เก็บพาสปอร์ต/วันเกิด)
+   วิธีทำ: 1 ตั๋ว = 1 บุคกิ้ง · ไม่สร้างใบเองเงียบ ๆ · เปิดฟอร์ม New booking ตัวเดิมแล้วกรอกให้ทีละใบ
+     user ตรวจแล้วกด Save ปกติ → ผ่านกติกาเดิมทุกข้อ (เรท · ที่นั่งเต็ม · seat lock · ใบซ้ำ · โรงแรมสะกดใกล้กัน)
+     บันทึกแล้วเปิดใบถัดไปให้เอง · ตั๋วที่มี voucher นี้ในระบบแล้วข้ามให้
+   อ่านหัวตารางจากข้อความ ('Ticket No' 'Name' 'Adl' …) ไม่ยึดตำแหน่งคอลัมน์ · ไฟล์ merge ช่องแล้วคอลัมน์เลื่อนได้
+   ตารางที่สอง (รายคน) ใช้แค่ชื่อ + ประเทศ (สัญชาติเป็นช่องบังคับของระบบ) */
+var _bkImp=null;
+function _bkImpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _bkImpNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' '); }
+function _bkImpNameKey(s){ return String(s||'').replace(/İ/g,'I').replace(/ı/g,'i').replace(/^\s*(mr|mrs|ms|miss|mstr|chd|inf|baby)\.?\s+/i,'').toUpperCase().replace(/[^A-ZЀ-ӿ ]/g,' ').replace(/\s+/g,' ').trim(); }
+function _bkImpType(nm){ var m=String(nm||'').trim().match(/^(chd|inf|baby)\b/i); return m?(/chd/i.test(m[1])?'CHD':'INF'):'AD'; }
+function _bkImpYMD(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='number' && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*864e5)); return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  var t=String(v).trim(), m;
+  if((m=t.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1]+'-'+m[2]+'-'+m[3];
+  if((m=t.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/))) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  var MO={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  if((m=t.match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/)) && MO[m[2].toLowerCase()]) return m[3]+'-'+String(MO[m[2].toLowerCase()]).padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return '';
+}
+var BKIMP_COUNTRY={RUSSIA:'RU','RUSSIAN FEDERATION':'RU',BELARUS:'BY',UKRAINE:'UA',KAZAKHSTAN:'KZ',UZBEKISTAN:'UZ',ARMENIA:'AM',GEORGIA:'GE',AZERBAIJAN:'AZ',KYRGYZSTAN:'KG',MOLDOVA:'MD',ISRAEL:'IL',TURKEY:'TR',THAILAND:'TH',CHINA:'CN',INDIA:'IN'};
+function _bkImpNat(country){
+  var c=String(country||'').trim().toUpperCase(); if(!c) return '';
+  if(BKIMP_COUNTRY[c]) return BKIMP_COUNTRY[c];
+  if(/^[A-Z]{2}$/.test(c)) return c;
+  var L=(typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[];
+  var hit=L.find(function(n){ var nm=String(n.name||'').toUpperCase(); return nm===c || (c.length>=4 && nm.indexOf(c.slice(0,4))===0); });
+  return hit?hit.code:'';
+}
+/* อ่านไฟล์ · คืน {tour, date, tickets:[{ticket,seller,names[],ad,chd,inf,trf,hotel,room,phone}], remarks[], tot:{ad,chd,inf}|null, people:{ticket:[{key,name,country}]}} */
+function bkImpParse(wb){
+  var ws=wb.Sheets[wb.SheetNames[0]];
+  var R=XLSX.utils.sheet_to_json(ws,{header:1, raw:true, defval:null, blankrows:false});
+  var T=function(v){ return v==null?'':String(v).trim(); };
+  var findCol=function(row, rx){ for(var i=0;i<row.length;i++){ if(rx.test(T(row[i]))) return i; } return -1; };
+  var nextVal=function(row, i){ for(var j=i+1;j<row.length;j++){ if(row[j]!=null && T(row[j])!=='') return row[j]; } return null; };
+  var out={tour:'', date:'', tickets:[], remarks:[], tot:null, people:{}};
+  var h1=-1, h2=-1;
+  R.forEach(function(row, ri){
+    if(!row) return;
+    var it=findCol(row,/^(tur|tour)\s*:?$/i); if(it>=0 && !out.tour) out.tour=T(nextVal(row,it));
+    var idt=findCol(row,/^date\s*:?$/i); if(idt>=0 && !out.date) out.date=_bkImpYMD(nextVal(row,idt));
+    if(h1<0 && findCol(row,/^ticket\s*no/i)>=0 && findCol(row,/^adl/i)>=0) h1=ri;
+    if(h2<0 && findCol(row,/^ticket\s*no/i)>=0 && (findCol(row,/^passport/i)>=0 || findCol(row,/^country/i)>=0)) h2=ri;
+  });
+  if(h1<0) return {err:'ไม่พบหัวตาราง (ต้องมีคอลัมน์ "Ticket No" และ "Adl")'};
+  var H=R[h1], C={seller:findCol(H,/^seller/i), ticket:findCol(H,/^ticket\s*no/i), name:findCol(H,/^name/i), ad:findCol(H,/^adl/i), chd:findCol(H,/^chd/i),
+    inf:findCol(H,/^(baby|inf)/i), trf:findCol(H,/^trf/i), hotel:findCol(H,/^hotel/i), room:findCol(H,/^room/i)};
+  var num=function(v){ var n=parseInt(v,10); return isFinite(n)?n:0; };
+  /* ช่องที่ merge ไว้ทำให้ข้อมูลเลื่อนจากหัวคอลัมน์ได้ (เช่น Room หัวอยู่ช่อง 28 ข้อมูลอยู่ 29)
+     อ่านค่าแรกที่ไม่ว่าง ตั้งแต่หัวคอลัมน์นั้นจนถึงหัวคอลัมน์ถัดไป */
+  var heads=[]; H.forEach(function(v,i){ if(T(v)) heads.push(i); });
+  var cell=function(row, c){ if(c<0) return null; var end=row.length; for(var k=0;k<heads.length;k++){ if(heads[k]>c){ end=heads[k]; break; } }
+    for(var j=c;j<end;j++){ if(row[j]!=null && T(row[j])!=='') return row[j]; } return null; };
+  var ended=false;
+  for(var ri=h1+1; ri<R.length; ri++){
+    var row=R[ri]||[]; if(h2>=0 && ri>=h2) break;
+    var flat=row.map(T).filter(Boolean).join(' ');
+    if(ended && !/tour total|overall total/i.test(flat)) continue;   /* หลังยอดรวม = หัวของตารางที่สอง ไม่ใช่หมายเหตุ */
+    if(/tour total|overall total/i.test(flat)){
+      ended=true;   /* ยอดท้ายตาราง · ตัวเลขอยู่หน้าป้าย Adult / Child / Baby */
+      var nx=R[ri+1]||[], tt={}; var lastN=null;
+      nx.forEach(function(v){ var t=T(v); if(t==='') return; if(/^\d+$/.test(t)){ lastN=+t; return; } if(/^adult/i.test(t)) tt.ad=lastN; else if(/^child/i.test(t)) tt.chd=lastN; else if(/^baby|^inf/i.test(t)) tt.inf=lastN; lastN=null; });
+      if(tt.ad!=null && !out.tot) out.tot={ad:tt.ad||0, chd:tt.chd||0, inf:tt.inf||0};
+      continue;
+    }
+    var tk=T(cell(row,C.ticket));
+    if(tk && /\d/.test(tk)){
+      var room=T(cell(row,C.room)), phone='';
+      if(/^\+?\d[\d\s-]{6,}$/.test(room)){ phone=room.replace(/\s|-/g,''); room=''; }   /* เบอร์โทรที่หลุดมาอยู่ช่อง Room */
+      out.tickets.push({ticket:tk, seller:T(cell(row,C.seller)), names:T(cell(row,C.name)).split(',').map(function(x){ return x.replace(/\s+/g,' ').trim(); }).filter(Boolean),
+        ad:num(row[C.ad]), chd:C.chd>=0?num(row[C.chd]):0, inf:C.inf>=0?num(row[C.inf]):0, trf:T(cell(row,C.trf)), hotel:T(cell(row,C.hotel)), room:room, phone:phone});
+    } else if(flat && !/^(sayfa|reporter)/i.test(flat)){ out.remarks.push(flat); }
+  }
+  if(h2>=0){
+    var H2=R[h2], c2={ticket:findCol(H2,/^ticket\s*no/i), name:findCol(H2,/^name/i), country:findCol(H2,/^country/i)};
+    for(var rj=h2+1; rj<R.length; rj++){
+      var r2=R[rj]||[], t2=T(r2[c2.ticket]); if(!t2 || !/\d/.test(t2)) continue;
+      (out.people[t2]=out.people[t2]||[]).push({key:_bkImpNameKey(r2[c2.name]), name:T(r2[c2.name]), country:c2.country>=0?T(r2[c2.country]):''});
+    }
+  }
+  return out;
+}
+/* โรงแรม → ชื่อที่ระบบใช้ + พื้นที่รับ · ดูจากใบเก่าที่เคยรับโรงแรมนี้ (พื้นที่ที่ใช้บ่อยที่สุด) */
+function bkImpHotelIndex(){
+  var idx={};
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(!b||!b.hotelName||!b.pickupAreaId) return;
+    var a=(typeof bookingV2GetArea==='function')?bookingV2GetArea(b.pickupAreaId):null; if(a && (a.zone==='NoTransfer'||a.zone==='NT')) return;
+    var k=bookingV2HotelKey(b.hotelName); if(!k) return;
+    var e=idx[k]||(idx[k]={name:b.hotelName, areas:{}}); e.areas[b.pickupAreaId]=(e.areas[b.pickupAreaId]||0)+1;
+  });
+  return idx;
+}
+function bkImpHotel(name){
+  var s=String(name||'').trim(); if(!s) return {name:'', areaId:null};
+  var I=_bkImp&&_bkImp.hix||(_bkImp&&(_bkImp.hix=bkImpHotelIndex()))||{};
+  var pick=function(e){ var best=null, n=0; Object.keys(e.areas).forEach(function(a){ if(e.areas[a]>n){ n=e.areas[a]; best=a; } }); return best; };
+  var e=I[bookingV2HotelKey(s)];
+  if(!e && typeof bookingV2HotelNear==='function'){ var nr=bookingV2HotelNear(s, 0.86); if(nr) e=I[bookingV2HotelKey(nr.name)]; }
+  if(e) return {name:e.name, areaId:pick(e), known:true};
+  return {name:(typeof bookingV2CanonicalHotel==='function')?bookingV2CanonicalHotel(s):s, areaId:null, known:false};
+}
+function bkImpExists(tk){
+  var v=_bkImpNorm(tk); if(!v) return null;
+  return (SB_BOOKINGS||[]).find(function(b){ return b && !['cancelled','rejected','cancelled_weather'].includes(b.status) && _bkImpNorm(b.voucherRef)===v; })||null;
+}
+function bkImpPrefs(){ try{ return JSON.parse(localStorage.getItem('bkimp_pref')||'{}')||{}; }catch(_){ return {}; } }
+function bkImpPrefSave(){ try{ if(!_bkImp) return; var P=bkImpPrefs(); P[_bkImpNorm(_bkImp.tour)||'_']={agentId:_bkImp.agentId||'', routeId:_bkImp.routeId||''}; localStorage.setItem('bkimp_pref', JSON.stringify(P)); }catch(_){} }
+function bkImpStart(){
+  if(typeof bkLimProg==='function' && bkLimProg()) return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  if(typeof XLSX==='undefined'){ alert('Excel reader is not loaded yet. Please reload the page and try again.'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls';
+  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(e){
+      var P; try{ P=bkImpParse(XLSX.read(new Uint8Array(e.target.result),{type:'array'})); }catch(err){ alert('Cannot read this file: '+(err&&err.message||err)); return; }
+      if(P.err){ alert(P.err); return; }
+      if(!P.tickets.length){ alert('No tickets found in this file.'); return; }
+      var pref=bkImpPrefs()[_bkImpNorm(P.tour)||'_']||{};
+      _bkImp={file:f.name, tour:P.tour, date:P.date, tickets:P.tickets, remarks:P.remarks, tot:P.tot, people:P.people,
+              agentId:pref.agentId||'', routeId:pref.routeId||'', cur:-1, skip:{}, active:false, hix:null};
+      bkImpRender();
+    };
+    rd.readAsArrayBuffer(f);
+  };
+  inp.click();
+}
+function bkImpClose(){ var o=document.getElementById('bkimp-ov'); if(o) o.remove(); }
+function bkImpSet(k, v){ if(!_bkImp) return; _bkImp[k]=v; bkImpPrefSave(); bkImpRender(); }
+function bkImpRender(){
+  var D=_bkImp; if(!D) return; var e=_bkImpEsc;
+  var sum=function(k){ return D.tickets.reduce(function(s,t){ return s+(t[k]||0); },0); };
+  var ad=sum('ad'), chd=sum('chd'), inf=sum('inf'), totOk=!D.tot || (D.tot.ad===ad && D.tot.chd===chd && D.tot.inf===inf);
+  var mon=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], dp=String(D.date||'').split('-'), dLbl=dp.length===3?(+dp[2]+' '+mon[+dp[1]]+' '+dp[0]):'(no date)';
+  var ags=(SB_AGENTS||[]).filter(function(a){ return a && a.active!==false; }).sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+  var ag=D.agentId?sbGetAgent(D.agentId):null;
+  var allow=null; if(ag){ var pp=(Array.isArray(ag.programPeriods)&&ag.programPeriods.length)?ag.programPeriods.map(function(x){ return x.routeId; }):(Array.isArray(ag.programs)&&ag.programs.length?ag.programs:null); if(pp) allow={}; (pp||[]).forEach(function(r){ allow[r]=1; }); }
+  var rts=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false && bkImpIsBoat(r); }).slice()   /* §bkImp2 · เฉพาะโปรแกรมเรือ */.sort(function(a,b){ return (allow?((allow[b.id]?1:0)-(allow[a.id]?1:0)):0) || String(a.name||'').localeCompare(String(b.name||'')); });
+  var closed=''; if(D.routeId && D.date){ try{ if(typeof bookingV2IsRouteOpenOn==='function' && !bookingV2IsRouteOpenOn(D.routeId, D.date)) closed='โปรแกรมนี้ไม่ออกวันที่ '+dLbl+' · เลือกโปรแกรมอื่น หรือเปิดวันใน Boat Operation ก่อน'; }catch(_){} }
+  var nNew=0, nHave=0;
+  var rows=D.tickets.map(function(t,i){
+    var ex=bkImpExists(t.ticket), H=bkImpHotel(t.hotel), st;
+    if(ex){ nHave++; st='<span style="background:#E1F5EA;color:#136C3A;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap">&#10003; in system</span>'; }
+    else if(D.skip[i]) st='<span style="background:#F1F5F9;color:#64748B;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">skipped</span>';
+    else { nNew++; st='<span style="background:#FBF1DF;color:#7A4300;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">to create</span>'; }
+    var lead=t.names.filter(function(n){ return _bkImpType(n)==='AD'; })[0]||t.names[0]||'';
+    var nCh=t.names.filter(function(n){ return _bkImpType(n)==='CHD'; }).length, nTot=t.ad+t.chd+t.inf;
+    var warn=(t.names.length!==nTot)?('ชื่อ '+t.names.length+' คน แต่ยอด '+nTot):((nCh!==t.chd)?('ชื่อเด็ก (Chd) '+nCh+' แต่ยอด CHD '+t.chd+' · ใช้ยอดตามไฟล์'):'');
+    var aN=H.areaId&&typeof bookingV2GetArea==='function'?((bookingV2GetArea(H.areaId)||{}).name||H.areaId):'';
+    return '<tr style="border-bottom:1px solid #F0F1F4'+(ex?';opacity:.6':'')+'"><td style="padding:6px 8px;font-family:\'DM Mono\',monospace">'+e(t.ticket)+'</td>'
+      +'<td style="padding:6px 8px"><b>'+e(lead)+'</b>'+(t.names.length>1?(' <span style="color:#8A8F9C">+'+(t.names.length-1)+'</span>'):'')+(warn?('<div style="font-size:10.5px;color:#B45309">⚠ '+e(warn)+'</div>'):'')+'</td>'
+      +'<td style="padding:6px 8px;text-align:center;font-family:\'DM Mono\',monospace">'+t.ad+' / '+t.chd+' / '+t.inf+'</td>'
+      +'<td style="padding:6px 8px">'+e(H.name||'—')+(t.room?(' <span style="color:#8A8F9C">· '+e(t.room)+'</span>'):'')+(t.phone?(' <span style="color:#185FA5" title="เบอร์ที่อยู่ในช่อง Room · จะลงช่องเบอร์">☎ '+e(t.phone)+'</span>'):'')
+        +'<div style="font-size:10.5px;color:'+(aN?'#0F6E56':'#B45309')+'">'+(aN?('&rarr; '+e(aN)):'ยังไม่รู้พื้นที่รับ · เลือกในฟอร์ม')+'</div></td>'
+      +'<td style="padding:6px 8px">'+st+(!ex?(' <button onclick="bkImpSkip('+i+')" style="border:0;background:none;color:#8A8F9C;font-size:11px;text-decoration:underline;cursor:pointer;font-family:inherit">'+(D.skip[i]?'undo':'skip')+'</button>'):'')+'</td></tr>';
+  }).join('');
+  var sel='height:34px;border:1.5px solid #D5DAE5;border-radius:9px;padding:0 10px;font-family:inherit;font-size:13px;background:#fff;min-width:0;width:100%';
+  var ready=D.agentId && D.routeId && D.date && !closed && nNew>0;
+  var h='<div style="width:980px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,10,30,.4);overflow:hidden;color:#0F1B3D">'
+    +'<div style="padding:14px 18px;border-bottom:1px solid #E6E8EE;display:flex;align-items:flex-start;gap:10px"><div><div style="font-size:10.5px;font-weight:800;letter-spacing:.1em;color:#185FA5">IMPORT FROM EXCEL</div>'
+      +'<div style="font-size:16px;font-weight:800;margin-top:2px">'+e(D.tour||'(no tour name)')+' · '+e(dLbl)+'</div>'
+      +'<div style="font-size:11.5px;color:#6B7489;margin-top:2px">'+e(D.file)+' · '+D.tickets.length+' tickets · '+ad+' AD · '+chd+' CHD · '+inf+' INF'
+        +(D.tot?(totOk?' <span style="color:#0F6E56;font-weight:700">· ✓ matches file total</span>':(' <span style="color:#A32D2D;font-weight:700">· ✗ file total says '+D.tot.ad+'/'+D.tot.chd+'/'+D.tot.inf+'</span>')):'')+'</div></div>'
+      +'<button onclick="bkImpClose()" style="margin-left:auto;border:0;background:none;font-size:20px;cursor:pointer;color:#8A8F9C">&times;</button></div>'
+    +'<div style="padding:12px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      /* §bkImp2 · owner "โปรแกรม Agent พิมพ์ชื่อได้ · โปรแกรม กรองแต่โปรแกรมเรือ" · ช่องพิมพ์ + รายการให้เลือก (datalist) */
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Agent · type to search<input id="bkimp-ag" list="bkimp-ag-l" autocomplete="off" value="'+e(D.agentQ!=null?D.agentQ:(ag?bkImpAgLbl(ag):''))+'" placeholder="type code or name" onchange="bkImpPick(\'agent\',this.value)" style="'+sel+';margin-top:4px">'
+        +'<datalist id="bkimp-ag-l">'+ags.map(function(a){ return '<option value="'+e(bkImpAgLbl(a))+'"></option>'; }).join('')+'</datalist>'
+        +((D.agentQ&&!D.agentId)?'<span style="display:block;color:#A32D2D;font-weight:700;margin-top:3px">No agent matches "'+e(D.agentQ)+'"</span>':'')+'</label>'
+      +'<label style="font-size:11px;font-weight:700;color:#6B7489">Program · boat programs only'+(allow?' <span style="font-weight:600;color:#0F6E56">· ★ = in this agent\'s contract</span>':'')
+        +'<input id="bkimp-rt" list="bkimp-rt-l" autocomplete="off" value="'+e(D.routeQ!=null?D.routeQ:(D.routeId?bkImpRtLbl((ROUTES||[]).find(function(r){ return r.id===D.routeId; })||{name:D.routeId},allow):''))+'" placeholder="type program name" onchange="bkImpPick(\'route\',this.value)" style="'+sel+';margin-top:4px">'
+        +'<datalist id="bkimp-rt-l">'+rts.map(function(r){ return '<option value="'+e(bkImpRtLbl(r,allow))+'"></option>'; }).join('')+'</datalist>'
+        +((D.routeQ&&!D.routeId)?'<span style="display:block;color:#A32D2D;font-weight:700;margin-top:3px">No boat program matches "'+e(D.routeQ)+'"</span>':'')+'</label>'
+    +'</div>'
+    +(closed?('<div style="margin:0 18px 8px;background:#FBE3E0;color:#A32D2D;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:700">'+e(closed)+'</div>'):'')
+    +(D.remarks.length?('<div style="margin:0 18px 8px;background:#FFFBEB;border:1px solid #F3E2B3;border-radius:9px;padding:7px 11px;font-size:12px;color:#7A4300"><b>Notes in file:</b> '+D.remarks.map(e).join(' · ')+' <span style="color:#8A8F9C">(added to the notes of those tickets)</span></div>'):'')
+    +'<div style="margin:0 18px;border:1px solid #E6E8EE;border-radius:12px;max-height:46vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#F6F7FA;position:sticky;top:0">'
+      +['Ticket','Lead / names','AD / CHD / INF','Hotel → pickup area','Status'].map(function(x){ return '<th style="text-align:left;padding:7px 8px;font-size:10.5px;letter-spacing:.06em;color:#6B7489;text-transform:uppercase">'+x+'</th>'; }).join('')
+    +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="padding:12px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:12px;color:#6B7489">'+nNew+' to create · '+nHave+' already in system · each opens in the New booking form, check it and press Save as usual</span>'
+      +'<span style="flex:1"></span><button onclick="bkImpClose()" style="height:34px;border:1px solid #D5DAE5;border-radius:9px;background:#fff;font-family:inherit;font-weight:700;padding:0 14px;cursor:pointer">Cancel</button>'
+      +'<button '+(ready?'':'disabled ')+'onclick="bkImpGo()" style="height:34px;border:0;border-radius:9px;background:'+(ready?'#16265C':'#B9BFCC')+';color:#fff;font-family:inherit;font-weight:700;padding:0 16px;cursor:'+(ready?'pointer':'default')+'">Start · fill one by one &rarr;</button></div>'
+    +'</div>';
+  var o=document.getElementById('bkimp-ov');
+  if(!o){ o=document.createElement('div'); o.id='bkimp-ov'; o.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.5);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif';
+    o.addEventListener('click',function(ev){ if(ev.target===o) bkImpClose(); }); document.body.appendChild(o); }
+  o.innerHTML=h;
+}
+function bkImpIsBoat(r){
+  if(!r) return false;
+  try{ if(typeof laIsLandRoute==='function' && laIsLandRoute(r.id)) return false; }catch(_){}
+  return !!r.pier && r.pier!=='other';
+}
+function bkImpAgLbl(a){ return (a.code?a.code+' · ':'')+(a.name||a.id); }
+function bkImpRtLbl(r, allow){ return (allow&&allow[r.id]?'★ ':'')+(r.name||r.id); }
+/* พิมพ์แล้วออกจากช่อง / เลือกจากรายการ → หาให้ตรง · ชื่อเต็มก่อน แล้วโค้ด/ชื่อ แล้วคำที่มีอยู่ในชื่อ (ต้องเจอตัวเดียว) */
+function bkImpPick(kind, val){
+  var D=_bkImp; if(!D) return; var q=String(val||'').replace(/^★\s*/,'').trim(), n=q.toLowerCase();
+  var find=function(list, lbl, keys){
+    if(!n) return null;
+    var x=list.filter(function(o){ return lbl(o).replace(/^★\s*/,'').toLowerCase()===n; }); if(x.length===1) return x[0];
+    x=list.filter(function(o){ return keys(o).some(function(k){ return String(k||'').toLowerCase()===n; }); }); if(x.length===1) return x[0];
+    x=list.filter(function(o){ return lbl(o).toLowerCase().indexOf(n)>=0; }); return x.length===1?x[0]:null;
+  };
+  if(kind==='agent'){
+    var A=(SB_AGENTS||[]).filter(function(a){ return a && a.active!==false; });
+    var a=find(A, bkImpAgLbl, function(o){ return [o.code,o.name]; });
+    D.agentId=a?a.id:''; D.agentQ=a?null:(q||null);
+  } else {
+    var R=(typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){ return r && r.active!==false && bkImpIsBoat(r); });
+    var r=find(R, function(o){ return o.name||o.id; }, function(o){ return [o.name,o.id]; });
+    D.routeId=r?r.id:''; D.routeQ=r?null:(q||null);
+  }
+  bkImpPrefSave(); bkImpRender();
+}
+function bkImpSkip(i){ if(!_bkImp) return; if(_bkImp.skip[i]) delete _bkImp.skip[i]; else _bkImp.skip[i]=1; bkImpRender(); bkImpBar(); }
+function bkImpGo(){ if(!_bkImp) return; _bkImp.active=true; _bkImp.cur=-1; bkImpClose(); bkImpNext(); }
+function bkImpPending(){ var D=_bkImp; if(!D) return []; var L=[]; D.tickets.forEach(function(t,i){ if(!D.skip[i] && !bkImpExists(t.ticket)) L.push(i); }); return L; }
+function bkImpNext(){
+  var D=_bkImp; if(!D||!D.active) return;
+  var L=bkImpPending(), i=L.filter(function(x){ return x>D.cur; })[0]; if(i==null) i=L[0];
+  if(i==null){ bkImpFinish(); return; }
+  bkImpOpen(i);
+}
+function bkImpFinish(){
+  var D=_bkImp; if(!D) return; D.active=false;
+  var n=D.tickets.filter(function(t){ return !!bkImpExists(t.ticket); }).length, sk=Object.keys(D.skip).length;
+  var b=document.getElementById('bkimp-bar'); if(b) b.remove();
+  if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'Import finished', id:D.tour||'', status:n+' / '+D.tickets.length+' IN SYSTEM', sub:sk?(sk+' ticket(s) skipped'):''});
+}
+function bkImpStop(){ if(!_bkImp) return; _bkImp.active=false; var b=document.getElementById('bkimp-bar'); if(b) b.remove(); }
+function bkImpOpen(i){
+  var D=_bkImp; if(!D) return; var t=D.tickets[i]; if(!t) return;
+  if(_bkV2.newBooking && !confirm('A booking form is already open. Discard it and open ticket '+t.ticket+'?')) return;
+  _bkV2.newBooking=null; _bkV2.editingId=null;
+  bookingV2NewBooking(); var d=_bkV2.newBooking; if(!d) return;
+  D.cur=i;
+  var names=t.names.slice(), people=D.people[t.ticket]||[];
+  var natOf=function(nm){ var k=_bkImpNameKey(nm), p=people.find(function(x){ return x.key===k; }); return p?_bkImpNat(p.country):''; };
+  var cnt={}; people.forEach(function(p){ var c=_bkImpNat(p.country); if(c) cnt[c]=(cnt[c]||0)+1; });
+  var nat0=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; })[0]||'';
+  var adN=names.filter(function(n){ return _bkImpType(n)==='AD'; }), chN=names.filter(function(n){ return _bkImpType(n)==='CHD'; }), inN=names.filter(function(n){ return _bkImpType(n)==='INF'; });
+  var lead=adN.length?adN.shift():(chN.length?chN.shift():(inN.shift()||''));
+  d.agentId=D.agentId; bookingV2ApplyAgentRules(sbGetAgent(D.agentId));
+  d.voucherRef=t.ticket;
+  d.leadPax=lead;
+  d.leadNationality=natOf(lead)||nat0||((typeof bookingV2GuessNationality==='function')?(bookingV2GuessNationality(lead)||''):'');
+  if(t.phone) d.leadPhone=t.phone;
+  var H=bkImpHotel(t.hotel); d.hotelName=H.name||''; d.roomNumber=t.room||'';
+  if(/^(RU|BY|UA|KZ|UZ|KG|AM|AZ|GE|MD)$/.test(d.leadNationality)) d.guides=Object.assign({english:false,russian:false,chinese:false,otherLang:''}, d.guides||{}, {russian:true});
+  var notes=D.remarks.filter(function(r){ return r.indexOf(t.ticket)>=0; });
+  d.notes=notes.join(' · ');
+  var tr=d.trips[0]; tr.routeId=D.routeId; tr.date=D.date;
+  var th=(d.leadNationality==='TH');
+  tr.pax[th?'ad_th':'ad_fr']=t.ad; tr.pax[th?'chd_th':'chd_fr']=t.chd; tr.pax[th?'inf_th':'inf_fr']=t.inf;
+  if(typeof bookingV2SyncPassengers==='function') bookingV2SyncPassengers();
+  var q={AD:adN, CHD:chN, INF:inN};
+  (d.passengers||[]).forEach(function(p){ var L=q[p.type]||q.AD; var nm=L.length?L.shift():''; if(!nm){ var any=adN.length?adN:(chN.length?chN:inN); nm=any.length?any.shift():''; }
+    if(nm){ p.name=nm; p.nationality=natOf(nm)||d.leadNationality||''; } });
+  d._imp={ticket:t.ticket, file:D.file};
+  if(H.areaId) bookingV2SetPickupArea(H.areaId); else bookingV2Render();
+  bkImpBar();
+  try{ window.scrollTo(0,0); }catch(_){}
+}
+function bkImpBar(){
+  var D=_bkImp; var b=document.getElementById('bkimp-bar');
+  if(!D||!D.active){ if(b) b.remove(); return; }
+  var L=bkImpPending(), t=D.tickets[D.cur]||{}, done=D.tickets.filter(function(x){ return !!bkImpExists(x.ticket); }).length;
+  if(!b){ b=document.createElement('div'); b.id='bkimp-bar'; b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:8500;background:#16265C;color:#fff;border-radius:14px;box-shadow:0 12px 34px rgba(2,10,30,.35);padding:9px 12px;display:flex;align-items:center;gap:10px;font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;font-size:12.5px;max-width:calc(100vw - 32px);flex-wrap:wrap'; document.body.appendChild(b); }
+  var btn=function(lbl,fn,pri){ return '<button onclick="'+fn+'" style="height:28px;border-radius:8px;border:1px solid '+(pri?'#fff':'rgba(255,255,255,.35)')+';background:'+(pri?'#fff':'transparent')+';color:'+(pri?'#16265C':'#fff')+';font-family:inherit;font-size:12px;font-weight:700;padding:0 10px;cursor:pointer;white-space:nowrap">'+lbl+'</button>'; };
+  b.innerHTML='<b style="white-space:nowrap">&#11014; Import · '+_bkImpEsc(D.tour||'')+'</b>'
+    +'<span style="opacity:.85;white-space:nowrap">ticket <b>'+_bkImpEsc(t.ticket||'—')+'</b> · '+done+'/'+D.tickets.length+' in system · '+L.length+' left</span>'
+    +(_bkV2.newBooking?'':btn('Open this ticket again','bkImpOpen('+D.cur+')',1))
+    +btn('Skip this ticket','bkImpSkipCur()')+btn('List','bkImpRender()')+btn('Stop','bkImpStop()');
+}
+function bkImpSkipCur(){ var D=_bkImp; if(!D) return; D.skip[D.cur]=1; if(_bkV2.newBooking){ _bkV2.newBooking=null; _bkV2.editingId=null; bookingV2Render(); } bkImpNext(); bkImpBar(); }
+function bkImpAfterSave(bk){
+  var D=_bkImp; if(!D||!D.active||!bk) return;
+  var t=D.tickets[D.cur]; if(!t || _bkImpNorm(bk.voucherRef)!==_bkImpNorm(t.ticket)) { bkImpBar(); return; }
+  setTimeout(function(){ if(_bkImp && _bkImp.active && !_bkV2.newBooking) bkImpNext(); else bkImpBar(); }, 700);
+}
 // Nationality list (ISO-like 2-letter + name) · used by guess + dropdown
 const BKV2_NATIONALITIES = [
   {code:'TH', name:'Thai'},          {code:'CN', name:'Chinese'},
@@ -46646,6 +47204,7 @@ function _bkV2DoCloseNewBooking(){
   _bkV2.editingId = null;
   if(editingId){ _bkV2.detailId = editingId; }
   bookingV2Render();
+  try{ if(typeof bkImpBar==='function') bkImpBar(); }catch(_e){}   /* §bkImp */
 }
 function _bkV2IsMac(){ try{ const p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||''; return /mac|iphone|ipad|ipod/i.test(p); }catch(e){ return true; } }
 function _bkV2DownscaleImage(file,maxDim,cb){ try{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height; const sc=Math.min(1,maxDim/Math.max(w,h||1)); const cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc)); const c=document.createElement('canvas'); c.width=cw; c.height=ch; const _cx=c.getContext('2d'); try{_cx.imageSmoothingEnabled=true;_cx.imageSmoothingQuality='high';}catch(_){} _cx.drawImage(img,0,0,cw,ch); c.toBlob(b=>{ URL.revokeObjectURL(url); cb(b,'image/jpeg'); },'image/jpeg',0.92); }; img.onerror=()=>{ URL.revokeObjectURL(url); cb(null); }; img.src=url; }catch(e){ cb(null); } }
@@ -48232,6 +48791,115 @@ const BKV2_CANCEL_REASONS = [
   {code:'other',           en:'Other',                             th:'อื่นๆ (ระบุใน note)',           group:'other',    def:'none'}
 ];
 
+
+/* ══ §cxWhy (2026-10-27) · ใบที่ถูกยกเลิกแต่ไม่มีเหตุผล ต้องมีคนมาระบุ ═══════════════════════════════
+   ที่มา: owner ดูสรุปยกเลิก 1–27 ต.ค. "ยังมีอีก 84 คนที่ยกเลิกโดยไม่ได้ระบุเหตุผล ต้องบังคับให้ระบุ"
+   ปุ่มยกเลิกในแอปบังคับเลือกเหตุผลอยู่แล้ว (bookingV2CancelConfirm) · ใบที่หลุดเกือบทั้งหมดมาจาก B2C sync
+   (server.js relSyncB2C ตั้ง status='cancelled' เองเมื่อลูกค้ายกเลิก / ลบรายการที่ B2C) ตอนนั้นไม่มีคนเลือกเหตุผล
+   บังคับตอน sync ไม่ได้ (ไม่มีคนอยู่) → ให้ค้างบนหน้า Booking จนกว่าจะมีคนระบุ
+     · แถบแดงใต้แถบบนของหน้า Booking · นับใบที่ยังไม่มีเหตุผล (เดินทางไม่เก่ากว่า CXW_DAYS วัน) · กดแล้วเปิดรายการระบุทีละใบ
+     · หน้ารายละเอียดใบ · การ์ด "ยกเลิกแล้ว · ยังไม่ระบุเหตุผล" + ปุ่มระบุ
+   ระบุเหตุผลอย่างเดียว · ไม่แตะค่าปรับ ใบแจ้งหนี้ ที่นั่ง หรือล็อก (ยกเลิกไปแล้วตั้งแต่ตอน sync)
+   คอลัมน์ cancellation_* ไม่ได้เป็นของ B2C (B2C_OWN_BK) · sync รอบต่อไปจึงไม่ทับเหตุผลที่ระบุ */
+var CXW_DAYS=60;
+function cxwLastDate(b){ var d=''; (b&&b.trips||[]).forEach(function(t){ if(t&&t.date&&t.date>d) d=t.date; }); return d||(b&&b.travelDate)||''; }
+function cxwNeed(b){
+  if(!b || b.status!=='cancelled') return false;
+  return !(b.cancelCategory || (b.cancellation && b.cancellation.category));
+}
+function cxwIsB2C(b){ return /^b2c_/.test(String(b&&b.id||'')); }
+function cxwPax(b){ return (b.trips||[]).reduce(function(s,t){ return s+((typeof getTripPaxTotal==='function')?getTripPaxTotal(t):0); },0); }
+function cxwList(){
+  var t=new Date(); t.setDate(t.getDate()-CXW_DAYS); var from=bookingV2LocalYMD(t);
+  return (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(b){
+      if(!cxwNeed(b)) return false;
+      if(typeof laBkOk==='function' && !laBkOk(b)) return false;   /* §pierScope */
+      var d=cxwLastDate(b); return /^\d{4}-\d\d-\d\d$/.test(d) && d>=from; })
+    .sort(function(a,b){ var x=cxwLastDate(a), y=cxwLastDate(b); return x<y?-1:(x>y?1:0); });
+}
+/* เวลาที่ B2C ยกเลิก · อ่านจากประวัติที่ sync เขียนไว้ (§b2cChg) · ใบ B2C ไม่มี cancelledAt */
+function cxwWhen(b){
+  var at=b.cancelledAt||'';
+  (b.history||[]).forEach(function(h){ if(h && h.kind==='b2c' && /Cancelled/.test(String(h.text||'')) && h.at && String(h.at)>at) at=String(h.at); });
+  return at;
+}
+function cxwCanEdit(){
+  try{ if(typeof laCanEditArea!=='function') return true;
+    if(laCanEditArea('sales')||laCanEditArea('operations')||laCanEditArea('booking')) return true;
+    if(typeof laGuardEdit==='function') return laGuardEdit('sales');
+  }catch(_){ return true; }
+  return false;
+}
+function cxwE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cxwBanner(){
+  var L=cxwList(); if(!L.length) return '';
+  var px=L.reduce(function(s,b){ return s+cxwPax(b); },0), nb=L.filter(cxwIsB2C).length;
+  return '<div class="bkv2 cxw-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FDEEEC;border:1px solid #E89A92;border-radius:12px;padding:10px 14px;margin:8px 0">'
+    +'<span style="font-size:13px;font-weight:800;color:#A32D2D">'+L.length+' ใบ ('+px+' คน) ถูกยกเลิกแต่ยังไม่ระบุเหตุผล</span>'
+    +'<span style="font-size:12px;color:#8a3a30">'+(nb?(nb+' ใบยกเลิกจาก B2C · '):'')+'ต้องระบุให้ครบ รายงานยกเลิกจึงจะอ่านได้</span>'
+    +'<span style="flex:1"></span>'
+    +'<button onclick="cxwOpen()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer">ระบุเหตุผล</button></div>';
+}
+function cxwDetailCard(b){
+  return '<div class="bkv2-nb-card cxw-card" style="border-color:#E89A92;background:#FDEEEC">'
+    +'<div style="display:flex;align-items:center;gap:11px">'
+    +'<div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:800;color:#A32D2D">ยกเลิกแล้ว · ยังไม่ระบุเหตุผล</div>'
+    +'<div style="font-size:11.5px;color:#8a3a30;line-height:1.5;margin-top:1px">'+(cxwIsB2C(b)?'ยกเลิกจาก B2C (ลูกค้ายกเลิก หรือลบรายการที่ B2C)':'ยกเลิกโดยไม่มีเหตุผลในระบบ')+' · ต้องระบุเหตุผล</div></div>'
+    +'<button onclick="cxwOpen(\''+cxwE(b.id)+'\')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;flex-shrink:0">ระบุเหตุผล</button>'
+    +'</div></div>';
+}
+var _cxwOnly='';
+function cxwOpen(id){ _cxwOnly=id||''; acctModal(''); cxwRender(); }
+function cxwRender(){
+  var ov=document.getElementById('acct-modal'); if(!ov) return;
+  var L=_cxwOnly?(SB_BOOKINGS||[]).filter(function(b){ return b.id===_cxwOnly && cxwNeed(b); }):cxwList();
+  var R=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[];
+  var opts='<option value="">— เลือกเหตุผล —</option>'+R.map(function(r){ return '<option value="'+r.code+'">'+cxwE(r.th+' · '+r.en)+'</option>'; }).join('');
+  var rn=function(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r&&r.name)||rid||'—'; };
+  var rows=L.map(function(b,i){
+    var t0=(b.trips||[])[0]||{}, w=cxwWhen(b);
+    return '<div class="cxw-row" data-id="'+cxwE(b.id)+'" style="border-top:1px solid #F1E3E0;padding:12px 0;display:flex;flex-direction:column;gap:7px">'
+      +'<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:13px">'+cxwE(b.voucherRef||b.code||b.id)+'</b>'
+        +'<span style="font-size:12px;color:#555">'+cxwE(b.leadPax||'—')+'</span>'
+        +'<span style="font-size:11px;font-weight:700;color:'+(cxwIsB2C(b)?'#185FA5':'#7A4A00')+'">'+(cxwIsB2C(b)?'B2C':'ในระบบ')+'</span></div>'
+      +'<div style="font-size:11.5px;color:#666">เดินทาง '+cxwE(cxwLastDate(b))+' · '+cxwE(rn(t0.routeId))+' · '+cxwPax(b)+' คน'+(w?(' · ยกเลิก '+cxwE(String(w).slice(0,10))):'')+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<select id="cxw-c-'+i+'" onchange="cxwPick('+i+')" style="flex:1 1 220px;font-size:12px;font-family:inherit;border:1px solid #D8D4CA;border-radius:8px;padding:7px 8px">'+opts+'</select>'
+        +'<input id="cxw-n-'+i+'" placeholder="รายละเอียด (บังคับเมื่อเลือก อื่นๆ)" style="flex:1 1 200px;font-size:12px;font-family:inherit;border:1px solid #D8D4CA;border-radius:8px;padding:7px 8px">'
+        +'<button onclick="cxwSave(\''+cxwE(b.id)+'\','+i+')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer">บันทึก</button>'
+      +'</div></div>';
+  }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #EEE;display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div style="font-size:15px;font-weight:700;color:#A32D2D">ระบุเหตุผลการยกเลิก</div>'
+      +'<div style="font-size:11px;color:#777">'+(L.length?(L.length+' ใบ · ระบุเหตุผลอย่างเดียว ไม่เปลี่ยนค่าปรับหรือที่นั่ง'):'ครบแล้ว')+'</div></div>'
+      +'<button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:#777;cursor:pointer">✕</button></div>'
+    +'<div style="padding:4px 20px 16px">'+(rows||'<div style="padding:18px 0;font-size:13px;color:#047857;font-weight:700">ทุกใบระบุเหตุผลแล้ว</div>')+'</div></div>';
+  ov.onclick=function(e){ if(e.target===ov) acctModalClose(); };
+}
+function cxwPick(i){ var c=document.getElementById('cxw-c-'+i), n=document.getElementById('cxw-n-'+i); if(c&&n) n.style.borderColor=(c.value==='other')?'#A32D2D':'#D8D4CA'; }
+function cxwSave(id, i){
+  if(!cxwCanEdit()) return false;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===id; });
+  if(!b || !cxwNeed(b)){ cxwRender(); return false; }
+  var cat=(document.getElementById('cxw-c-'+i)||{}).value||'', note=String((document.getElementById('cxw-n-'+i)||{}).value||'').trim();
+  if(!cat){ alert('Please choose a cancellation reason.'); return false; }
+  if(cat==='other' && !note){ alert('Please add a note for "Other".'); return false; }
+  var R=(typeof BKV2_CANCEL_REASONS!=='undefined')?BKV2_CANCEL_REASONS:[], o=R.find(function(x){ return x.code===cat; });
+  var lbl=(typeof bookingV2CancelLabel==='function')?bookingV2CancelLabel(cat):(o?o.en:cat), reason=lbl+(note?(' · '+note):'');
+  var prev=b.cancellation||{};
+  b.cancellation=Object.assign({}, prev, { category:cat, categoryLabel:lbl, group:(o?o.group:''), note:note, reason:reason,
+    chargeType:prev.chargeType||'none', chargeAmount:prev.chargeAmount||0,
+    at:prev.at||cxwWhen(b)||'', by:prev.by||(cxwIsB2C(b)?'B2C':laBy()) });
+  b.cancelCategory=cat; b.cancelReason=reason;
+  if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'cancel','ระบุเหตุผลยกเลิก · '+reason,'Cancel');
+  if(typeof bookingV2PersistBookings==='function') bookingV2PersistBookings();
+  cxwRender();
+  try{ if(typeof bookingV2Render==='function') bookingV2Render(); }catch(_){}
+  return true;
+}
+
+
 // ── Partial cancellation · remove some pax, the rest still travel ──
 const BKV2_PAX_KEYS=[
   ['ad','Adult'],['ad_fr','Adult · FR'],['ad_th','Adult · TH'],
@@ -49620,6 +50288,11 @@ function poBal(itemId){
       case 'ship_lost':     b.onship-=q; b.gone+=q; break;
       case 'ship_writeoff': b.onship-=q; b.gone+=q; break;
       case 'ship_repair':   b.onship-=q; b.repair+=q; break;
+      /* §poXfer · โยกไปท่าอื่น · ออกจากพร้อมใช้ทันที (ระหว่างทางไม่ใช่ของท่านี้แล้ว) · ยกเลิกก่อนปลายทางรับ = คืนเข้า
+         ปลายทางรับไม่ครบ = ส่วนที่ขาดนับเป็นหายสะสมของท่าต้นทาง */
+      case 'xfer_out':      b.ready-=q; break;
+      case 'xfer_back':     b.ready+=q; break;
+      case 'xfer_short':    b.gone+=q; break;
     }
   });
   if(b.gone<0) b.gone=0;
@@ -54921,8 +55594,10 @@ function renderPierOffice(pier){
     +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง'
       +'<span style="flex:1"></span>'
       +(ro?'':('<button class="po-btn" onclick="poRecvOpen()" title="ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย · ลงได้หลายรายการในใบเดียว">&#65291; รับของเข้า</button>'
-        +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'))
+        +'<button class="po-btn" onclick="poCountOpen()" title="นับของในคลังทั้งท่า · ระบบเทียบกับบัญชีและบันทึกส่วนต่างพร้อมเหตุผล">&#9776; นับสต็อก</button>'
+        +'<button class="po-btn" onclick="poXferOpen()" title="ส่งของจากคลังพร้อมใช้ไปท่าอื่น · ท่าปลายทางกดรับแล้วจึงเข้าสต็อกที่นั่น">&#8644; โยกไปท่าอื่น</button>'))   /* §poXfer */
       +'</div>'
+    +poXferBlock(ro)   /* §poXfer · ของโอนเข้ารอรับ / กำลังส่ง */
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
     /* §poShip3 · กอง 3 ของประจำเรือ · มีหน้าที่ของตัวเองบนหน้าหลัก */
     +'<div class="po-sec"><span class="n">3</span> ของประจำเรือ · กองที่อยู่บนเรือ'
@@ -55258,6 +55933,7 @@ function poStockTable(items, ro){
               /* §poRecv · ปรับยอดแยกเป็นสองปุ่มตามขั้นตอนจริง · รับของเข้า กับ นับสต็อก */
               +'<button class="po-go" onclick="poRecvOpen(\''+it.id+'\')" title="รับของเข้า · ซื้อใหม่ / โอนจากท่าอื่น / ได้คืนของที่แจ้งหาย"'+(ro?' disabled':'')+'>รับเข้า</button>'
               +'<button class="po-go" onclick="poCountOpen(\''+it.id+'\')" title="นับสต็อก · ใส่จำนวนที่นับได้จริง ระบบคิดส่วนต่างให้"'+(ro?' disabled':'')+'>นับ</button>'
+              +((b.ready>0)?('<button class="po-go" onclick="poXferOpen(\''+it.id+'\')" title="โยกไปท่าอื่น"'+(ro?' disabled':'')+'>โยก</button>'):'')   /* §poXfer */
             +'</span></span></div>'; }).join('')
       +'</div>';
   }).join('');
@@ -56419,6 +57095,175 @@ function poRecvSave(itemId){
   poPersist(); poModalClose(); renderPierOffice();
   return true;
 }
+/* ══ §poXfer (2026-10-27) · owner "Phuket · เบิก-คืนอุปกรณ์ · ขอเพิ่มที่สามารถโยกไปให้สาขาอื่นได้ด้วย"
+   (เลือก: ปลายทางกดรับก่อน · ปลายทางไม่มีรายการ = สร้างให้อัตโนมัติ)
+   ต้นทาง   โยกจากคลังพร้อมใช้ → 'xfer_out' from 'to|<ท่าปลายทาง>' · หักพร้อมใช้ทันที · ขึ้นแถบ "กำลังส่ง"
+            ยกเลิกได้ก่อนปลายทางรับ → 'xfer_back' from 'xfer|<id ใบโยก>' · คืนเข้าพร้อมใช้
+   ปลายทาง  แถบ "ของโอนเข้ารอรับ" · ใส่จำนวนที่ได้จริง
+            ได้   → 'receive' ที่ท่าปลายทาง from 'transfer|<id>' (ป้ายเดิม "โอนจากท่าอื่น" · poBal นับเหมือนรับเข้า)
+            ขาด  → เลือก "รอของที่เหลือ" หรือ "ปิดใบ ที่เหลือหาย" · ปิดใบ = 'xfer_short' ที่ท่าต้นทาง (หายสะสมของต้นทาง)
+            ปลายทางยังไม่มีรายการ (ประเภท+ชื่อเดียวกัน) → สร้างรายการให้ ยอดตั้งต้น 0
+   ไม่แตะ DB · ใช้คอลัมน์เดิมของ pier_moves (type · frombucket · note) */
+function poPierObj(k){ return PO_PIERS.filter(function(p){ return p.k===k; })[0]||{k:k,n:k||'—',t:k||''}; }
+function poRecvSrcLbl(m){ var f=String((m&&m.from)||''); return PO_RECV_SRC[f.split('|')[0]]||''; }
+function poXferRef(m){ var f=String((m&&m.from)||''), i=f.indexOf('|'); if(i<0) return null; var k=f.slice(0,i); return (k==='transfer'||k==='xfer')?f.slice(i+1):null; }
+function poXferList(){
+  var outs=[], byId={};
+  (PIER_MOVES||[]).forEach(function(m){ if(!m||m.type!=='xfer_out') return;
+    var o={m:m, id:m.id, src:m.pier, dst:String(m.from||'').replace(/^to\|/,''), sent:poNum(m.qty), got:0, short:0, back:0};
+    outs.push(o); byId[m.id]=o; });
+  (PIER_MOVES||[]).forEach(function(m){ var r=poXferRef(m); if(!r||!byId[r]) return; var o=byId[r], q=poNum(m.qty);
+    if(m.type==='receive') o.got+=q; else if(m.type==='xfer_short') o.short+=q; else if(m.type==='xfer_back') o.back+=q; });
+  outs.forEach(function(o){ o.left=Math.max(0, o.sent-o.got-o.short-o.back); });
+  return outs;
+}
+function poXferPendIn(pier){ return poXferList().filter(function(o){ return o.dst===pier && o.left>0; }); }
+function poXferPendOut(pier){ return poXferList().filter(function(o){ return o.src===pier && o.left>0; }); }
+function poXferLbl(o){ var it=poItem(o.m.itemId); return it?it.label:o.m.itemId; }
+function poXferUnit(o){ var it=poItem(o.m.itemId); return ((it&&PO_KIND[it.kind])||{u:'ชิ้น'}).u; }
+function poXferOpen(itemId){
+  if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
+  var list=poRecvItems(itemId).filter(function(it){ return poBal(it.id).ready>0; });
+  if(!list.length){ alert('No ready stock to transfer.'); return; }
+  var others=PO_PIERS.filter(function(p){ return p.k!==_poPier; });
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ส่งจากคลังพร้อมใช้ของ<b>'+poE(poPierName())+'</b> · หักออกทันที · '
+      +'เข้าสต็อกท่าปลายทางเมื่อปลายทางกดรับ'+(list.length>1?' · ใส่จำนวนเฉพาะรายการที่โยก':'')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">ไปท่า<br><select id="porxto" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;font-family:inherit">'
+        +'<option value="">— เลือกท่าปลายทาง —</option>'
+        +others.map(function(x){ return '<option value="'+poE(x.k)+'">'+poE(x.n+' · '+x.t)+'</option>'; }).join('')
+      +'</select></label>'
+      +'<label style="font-size:11px;font-weight:700;color:#475569">วันที่ส่ง<br><input id="porxd" type="date" value="'+poE(_poDate)+'" style="margin-top:4px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label>'
+    +'</div>'
+    +poRecvRows(list, function(it,K){ var b=poBal(it.id);
+      return '<span style="flex:1;font-weight:700;font-size:12.5px">'+poE(it.label)+'</span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">พร้อมใช้ '+b.ready+' '+poE(K.u)+'</span>'
+        +poIn('porx_'+it.id, list.length===1?'':'', '≤ '+b.ready, 82); })
+    +'<div style="font-size:11px;font-weight:700;color:#475569;margin:12px 0 4px">หมายเหตุ · ส่งทางไหน / ใครถือไป</div>'
+    +'<input id="porxn" placeholder="เช่น ฝากรถตู้รอบบ่าย · คุณเอ ถือไป" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;box-sizing:border-box;font-family:inherit">'
+    +'<div id="porxerr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('โยกไปท่าอื่น · '+poE(list.length===1?list[0].label:poPierName()), body,
+    poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกโยก',"poXferSave('"+poE(itemId||'')+"')",1), 620);
+}
+function poXferSave(itemId){
+  if(!poGuard()) return;
+  var list=poRecvItems(itemId), dst=poV('porxto'), d=poV('porxd')||_poDate, note=String(poV('porxn')||'').trim();
+  var err=function(t){ var e=document.getElementById('porxerr'); if(e) e.innerHTML=t; return false; };
+  if(!dst) return err('เลือกท่าปลายทาง');
+  if(dst===_poPier) return err('ท่าปลายทางต้องไม่ใช่ท่าเดียวกัน');
+  var lines=[], bad=[], over=[];
+  list.forEach(function(it){
+    var raw=String(poV('porx_'+it.id)||'').trim(); if(!raw) return;
+    var q=poNum(raw), r=poBal(it.id).ready;
+    if(!(q>0) || !/^\d+$/.test(raw)){ bad.push(it.label); return; }
+    if(q>r){ over.push(it.label+' (พร้อมใช้ '+r+')'); return; }
+    lines.push({it:it, q:q});
+  });
+  if(bad.length) return err('จำนวนต้องเป็นเลขเต็มมากกว่า 0 · '+poE(bad.join(', ')));
+  if(over.length) return err('เกินยอดพร้อมใช้ · '+poE(over.join(', ')));
+  if(!lines.length) return err('ใส่จำนวนที่โยกอย่างน้อย 1 รายการ');
+  var D=poPierObj(dst);
+  lines.forEach(function(x){
+    poAdd({date:d, pier:_poPier, itemId:x.it.id, boatId:'', type:'xfer_out', qty:x.q, from:'to|'+dst, note:'โยกไป '+D.n+(note?(' · '+note):'')});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
+}
+/* ปลายทาง · หารายการประเภท+ชื่อเดียวกัน · ไม่มีก็สร้างให้ (ยอดตั้งต้น 0 · บัญชีมาจากใบรับ) */
+function poXferDstItem(srcIt, dst){
+  var nm=String((srcIt&&srcIt.label)||'').trim().toLowerCase();
+  var c=(PIER_ITEMS||[]).filter(function(i){ return i.pier===dst && i.kind===srcIt.kind && String(i.label||'').trim().toLowerCase()===nm; });
+  var hit=c.filter(function(i){ return i.active!==false; })[0]||c[0];
+  if(hit){ if(hit.active===false) hit.active=true; return hit; }
+  var it={id:poUid('pi_'), pier:dst, kind:srcIt.kind, label:srcIt.label, total:0, active:true, note:'สร้างจากการโยกของจาก '+poPierObj(srcIt.pier).n};
+  PIER_ITEMS.push(it); return it;
+}
+function poXferRecvOpen(){
+  if(!poCanEdit()) return;
+  if(!poWhoGuard()) return;   /* §poWho */
+  var L=poXferPendIn(_poPier); if(!L.length) return;
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ใส่จำนวนที่ได้รับจริง · ช่องที่เว้นว่าง = ยังไม่รับ · '
+      +'ถ้าได้ไม่ครบ เลือกว่าจะรอของที่เหลือ หรือปิดใบ (ที่เหลือนับเป็นของหายของท่าต้นทาง)</div>'
+    +'<div style="max-height:52vh;overflow:auto;padding-right:4px">'+L.map(function(o){
+      var S=poPierObj(o.src);
+      return '<div style="'+poRowCss()+';flex-wrap:wrap">'
+        +'<span style="flex:1;min-width:180px"><b style="font-size:12.5px">'+poE(poXferLbl(o))+'</b>'
+          +'<span style="display:block;font-size:10.5px;color:#94A3B8">จาก '+poE(S.n)+' · ส่ง '+poE(o.m.date||'')+(o.m.by?(' · '+poE(o.m.by)):'')
+          +(o.got?(' · รับแล้ว '+o.got):'')+(String(o.m.note||'').replace(/^โยกไป [^·]+(· )?/,'')?(' · '+poE(String(o.m.note||'').replace(/^โยกไป [^·]+(· )?/,''))):'')+'</span></span>'
+        +'<span style="font-size:11px;color:#7C8091;white-space:nowrap">ค้างรับ <b style="color:#0F172A">'+o.left+'</b> '+poE(poXferUnit(o))+'</span>'
+        +poIn('porr_'+o.id, String(o.left), 'ได้จริง', 76)
+        +'<select id="porrs_'+o.id+'" title="ถ้าได้ไม่ครบ" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 7px;font:600 11.5px inherit;font-family:inherit">'
+          +'<option value="wait">ไม่ครบ → รอของที่เหลือ</option><option value="short">ไม่ครบ → ปิดใบ (ที่เหลือหาย)</option></select>'
+        +'</div>'; }).join('')+'</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap"><label style="font-size:11px;font-weight:700;color:#475569">วันที่รับ <input id="porrd" type="date" value="'+poE(_poDate)+'" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:600 12.5px inherit;font-family:inherit"></label>'
+      +'<input id="porrn" placeholder="หมายเหตุ (ไม่บังคับ) เช่น กล่องเปียก 2 คู่" style="flex:1;min-width:200px;border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;font-family:inherit"></div>'
+    +'<div id="porrerr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px"></div>';
+  poModal('รับของโอนเข้า · '+poE(poPierName()), body, poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึกรับ','poXferRecvSave()',1), 720);
+}
+function poXferRecvSave(){
+  if(!poGuard()) return;
+  var L=poXferPendIn(_poPier), d=poV('porrd')||_poDate, note=String(poV('porrn')||'').trim();
+  var err=function(t){ var e=document.getElementById('porrerr'); if(e) e.innerHTML=t; return false; };
+  var rows=[], bad=[];
+  L.forEach(function(o){
+    var raw=String(poV('porr_'+o.id)||'').trim(); if(raw==='') return;
+    var q=poNum(raw);
+    if(!/^\d+$/.test(raw) || q>o.left){ bad.push(poXferLbl(o)+' (ค้างรับ '+o.left+')'); return; }
+    rows.push({o:o, q:q, mode:poV('porrs_'+o.id)||'wait'});
+  });
+  if(bad.length) return err('จำนวนต้องเป็นเลขเต็ม 0 ถึงยอดค้างรับ · '+poE(bad.join(', ')));
+  var act=rows.filter(function(x){ return x.q>0 || (x.q<x.o.left && x.mode==='short'); });
+  if(!act.length) return err('ใส่จำนวนที่ได้รับอย่างน้อย 1 รายการ');
+  var me=poPierObj(_poPier);
+  act.forEach(function(x){
+    var o=x.o, S=poPierObj(o.src), srcIt=poItem(o.m.itemId)||{kind:'',label:o.m.itemId,pier:o.src};
+    if(x.q>0){ var dIt=poXferDstItem(srcIt, _poPier);
+      poAdd({date:d, pier:_poPier, itemId:dIt.id, boatId:'', type:'receive', qty:x.q, from:'transfer|'+o.id, note:'รับโอนจาก '+S.n+(note?(' · '+note):'')}); }
+    if(x.q<o.left && x.mode==='short')
+      poAdd({date:d, pier:o.src, itemId:o.m.itemId, boatId:'', type:'xfer_short', qty:o.left-x.q, from:'xfer|'+o.id,
+             note:me.n+' รับไม่ครบ · ส่ง '+o.sent+' ได้ '+(o.got+x.q)+(note?(' · '+note):'')});
+  });
+  poPersist(); poModalClose(); renderPierOffice();
+  return true;
+}
+function poXferCancel(id){
+  if(!poGuard()) return;
+  var o=poXferList().filter(function(x){ return x.id===id; })[0]; if(!o||o.left<=0||o.src!==_poPier) return;
+  if(!confirm('Cancel this transfer?\n'+o.left+' x '+poXferLbl(o)+' go back to ready stock here.\n(Anything the other pier already received stays there.)')) return;
+  poAdd({date:_poDate, pier:o.src, itemId:o.m.itemId, boatId:'', type:'xfer_back', qty:o.left, from:'xfer|'+o.id, note:'ยกเลิกโยกไป '+poPierObj(o.dst).n});
+  poPersist(); renderPierOffice();
+}
+function poXferBlock(ro){
+  var inn=poXferPendIn(_poPier), out=poXferPendOut(_poPier); if(!inn.length && !out.length) return '';
+  var chip=function(t,bg,fg){ return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';color:'+fg+';border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:700;white-space:nowrap">'+t+'</span>'; };
+  var h='';
+  if(inn.length){
+    var fromN={}; inn.forEach(function(o){ fromN[poPierObj(o.src).n]=1; });
+    h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:9px 12px;margin:0 0 8px">'
+      +'<b style="color:#047857;font-size:12.5px;white-space:nowrap">&#128230; ของโอนเข้ารอรับ · '+inn.length+' รายการ</b>'
+      +'<span style="font-size:11.5px;color:#047857">จาก '+poE(Object.keys(fromN).join(', '))+'</span>'
+      +inn.slice(0,8).map(function(o){ return chip(poE(poXferLbl(o))+' × '+o.left, '#fff', '#065F46'); }).join('')
+      +(inn.length>8?('<span style="font-size:11px;color:#047857">+'+(inn.length-8)+'</span>'):'')
+      +'<span style="flex:1"></span>'
+      +(ro?'':'<button class="po-btn" onclick="poXferRecvOpen()" style="background:#047857;color:#fff;border-color:#047857">&#10003; รับของ</button>')
+      +'</div>';
+  }
+  if(out.length){
+    h+='<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:9px 12px;margin:0 0 8px">'
+      +'<b style="color:#4338CA;font-size:12.5px">&#8644; กำลังส่งไปท่าอื่น · รอปลายทางกดรับ · '+out.length+' รายการ</b>'
+      +out.map(function(o){
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0;border-top:1px solid #E0E7FF;margin-top:5px;font-size:12px">'
+          +'<b>'+poE(poXferLbl(o))+'</b><span>× '+o.left+' '+poE(poXferUnit(o))+(o.got?(' <span style="color:#6366F1">(รับแล้ว '+o.got+'/'+o.sent+')</span>'):'')+'</span>'
+          +'<span style="color:#4338CA">&#8594; '+poE(poPierObj(o.dst).n)+'</span>'
+          +'<span style="color:#7C8091;font-size:11px">ส่ง '+poE(o.m.date||'')+(o.m.by?(' · '+poE(o.m.by)):'')+'</span>'
+          +'<span style="flex:1"></span>'
+          +(ro?'':('<button class="po-go" onclick="poXferCancel(\''+poE(o.id)+'\')" title="ยกเลิก · คืนของที่ยังไม่ถูกรับเข้าพร้อมใช้">ยกเลิกโยก</button>'))
+          +'</div>'; }).join('')
+      +'</div>';
+  }
+  return h;
+}
 function poCountOpen(itemId){
   if(!poCanEdit()) return;
   if(!poWhoGuard()) return;   /* §poWho */
@@ -56516,7 +57361,8 @@ function T_LDG(t){
   var M={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',
          onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
          adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
-         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
   return M[t]||t;
 }
 function poMoveEditSave(id){
@@ -56553,24 +57399,55 @@ function poShipByBoat(itemId){
     .map(function(k){ return {bid:k, q:m[k]}; })
     .sort(function(a,b){ return b.q-a.q; });
 }
-/* ทั้งท่า · ลำไหนถือของอะไรอยู่บ้าง · ใช้ทั้งในกล่องสรุปและตอนตรวจของประจำลำ */
-function poShipAll(pier){
-  var m={};
+/* §poShipFollow (2026-10-27) · ของประจำเรือเดินตามเรือ ไม่ผูกกับท่าที่ลงของ
+   เจ้าของ: "ของที่อยู่บนเรือ ก็คืออยู่บนเรือเลย ไม่นับปนกับสต๊อคอื่นๆ"
+   เดิมแบ่งตามท่าที่ลงของ (m.pier) · Achilles รับหน้ากาก 70 จากทับละมุ แล้วย้ายไปพันวา 23–28 ต.ค. ตามตาราง
+   → หน้าพันวาไม่เห็นลำนี้ · หน้าทับละมุเห็นแต่ไปตรวจของจริงไม่ได้
+   ตอนนี้ · ของบนลำ = รวมทุกท่า · ลำขึ้นที่ท่าที่เรืออยู่ตามตารางย้ายท่าของวันที่ดู (getBoatCurrentPier)
+   ตัวเลขสต็อกคลังของแต่ละท่าไม่เปลี่ยน · ของบนเรือไม่เข้าคลังท่าที่เรือไปจอด
+   เรือเข้าอู่ / ไม่รู้ท่า → อยู่ที่ท่าที่เคลื่อนไหวของประจำเรือล่าสุด */
+function poShipMv(x){ return !!x && (x.type==='assign' || x.type==='unassign' || !!PO_SHIP_LOSS[x.type]); }
+function poShipKits(){ var m={};
   (PIER_MOVES||[]).forEach(function(x){
-    if(!x || x.pier!==pier) return;
-    if(x.type!=='assign' && x.type!=='unassign' && !PO_SHIP_LOSS[x.type]) return;   /* §poShip3 · ขาดจากการตรวจ หักออกจากลำนั้น */
+    if(!poShipMv(x)) return;   /* §poShip3 · ขาดจากการตรวจ หักออกจากลำนั้น */
     var q=poNum(x.qty)*(x.type==='assign'?1:-1), bo=x.boatId||'', id=x.itemId;
     (m[bo]=m[bo]||{})[id]=(m[bo][id]||0)+q;
   });
-  var out=[];
-  Object.keys(m).forEach(function(bo){
-    var its=Object.keys(m[bo]).filter(function(id){ return m[bo][id]>0; })
-      .map(function(id){ return {itemId:id, q:m[bo][id]}; })
+  return m;
+}
+function poPierShort(k){ var P=(PO_PIERS||[]).filter(function(x){ return x.k===k; })[0];
+  return P?String(P.t||P.n||k).split(' · ')[0]:String(k||'—'); }
+function poShipHere(bid, ds){
+  var b=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))?BOATS.filter(function(x){ return x&&x.id===bid; })[0]:null, p='';
+  try{ if(b && typeof getBoatCurrentPier==='function') p=getBoatCurrentPier(b, ds||_poDate)||''; }catch(_){ p=''; }
+  if(p && (PO_PIERS||[]).some(function(x){ return x.k===p; })) return p;
+  var d='', lp='';
+  (PIER_MOVES||[]).forEach(function(m){ if(poShipMv(m) && (m.boatId||'')===bid && String(m.date||'')>=d){ d=String(m.date||''); lp=m.pier||''; } });
+  return lp || (b&&b.pier) || '';
+}
+function poShipList(){ var K=poShipKits(), out=[];
+  Object.keys(K).forEach(function(bo){
+    var its=Object.keys(K[bo]).filter(function(id){ return K[bo][id]>0; })
+      .map(function(id){ var it=poItem(id); return {itemId:id, q:K[bo][id], pier:it?it.pier:''}; })
       .sort(function(a,b){ return b.q-a.q; });
     var tot=its.reduce(function(s2,x){ return s2+x.q; },0);
-    if(tot>0) out.push({bid:bo, tot:tot, items:its});
+    if(tot>0) out.push({bid:bo, tot:tot, items:its, here:poShipHere(bo)});
   });
   return out.sort(function(a,b){ return b.tot-a.tot; });
+}
+/* ทั้งท่า · ลำที่จอดท่านี้ (ตามตาราง) ถือของอะไรอยู่บ้าง · from = ของท่าอื่นที่ติดเรือมา {ท่า: ชิ้น} */
+function poShipAll(pier){
+  return poShipList().filter(function(x){ return x.here===pier; }).map(function(x){
+    var from={}; x.items.forEach(function(i){ if(i.pier && i.pier!==pier) from[i.pier]=(from[i.pier]||0)+i.q; });
+    return Object.assign({}, x, {from:from});
+  });
+}
+/* ลำที่ถือของของท่านี้ แต่ตอนนี้ไปจอดท่าอื่น · โชว์เป็นบรรทัดแจ้ง ไม่ใช่การ์ด (ตรวจได้ที่ท่าที่เรืออยู่) */
+function poShipAway(pier){
+  return poShipList().filter(function(x){ return x.here!==pier; }).map(function(x){
+    var q=x.items.filter(function(i){ return i.pier===pier; }).reduce(function(s2,i){ return s2+i.q; },0);
+    return {bid:x.bid, here:x.here, q:q};
+  }).filter(function(x){ return x.q>0; });
 }
 /* ══ §poShip3 (2026-10-08) · ของสามกอง · ตรวจ / เติม / ถอด ของประจำเรือรายลำ ══════════════════
    เจ้าของ: "ของมันเป็น 3 กอง · 1 กองที่อยู่ออฟฟิศ เป็นกองใหญ่ที่นับ เช็ค · 2 เบิก คืนรายวัน เบิกเช้า คืนเย็น
@@ -56584,20 +57461,25 @@ function poShipAll(pier){
    เติมได้เฉพาะจากกอง 1 (หักพร้อมใช้) · ถอดคืนเข้ากอง 1 ได้บางส่วน · ทุกบรรทัดผูกลำ ลงประวัติ */
 var PO_SHIP_LOSS={ ship_lost:'หาย', ship_writeoff:'เสีย · ตัดทิ้ง', ship_repair:'เสีย · ส่งซ่อม (ซ่อมได้)' };
 function poShipOn(bid){
-  var A=poShipAll(_poPier).filter(function(x){ return x.bid===bid; })[0], on={};
-  (A?A.items:[]).forEach(function(i){ on[i.itemId]=i.q; });
+  var K=poShipKits()[bid||'']||{}, on={};   /* §poShipFollow · ของบนลำรวมทุกท่า */
+  Object.keys(K).forEach(function(id){ if(K[id]>0) on[id]=K[id]; });
   return on;
 }
 function poShipLast(bid){
   var d='';
   (PIER_MOVES||[]).forEach(function(m){
-    if(m && m.pier===_poPier && m.boatId===bid && (m.type==='assign'||m.type==='unassign'||PO_SHIP_LOSS[m.type]) && String(m.date||'')>d) d=String(m.date||'');
+    if(poShipMv(m) && m.boatId===bid && String(m.date||'')>d)   /* §poShipFollow */ d=String(m.date||'');
   });
   return d;
 }
 function poShipSection(ro){
-  var A=poShipAll(_poPier);
-  if(!A.length) return '<div class="po-empty">ยังไม่มีของประจำเรือ · ยกของจากคลังขึ้นเรือด้วย "ลงของประจำเรือลำใหม่" หรือปุ่ม "ประจำเรือ" ที่แถวของ</div>';
+  var A=poShipAll(_poPier), W=poShipAway(_poPier);
+  /* §poShipFollow · ลำที่ถือของท่านี้แต่ไปจอดท่าอื่นตามตาราง */
+  var away=W.length?('<div class="po-shipaway" style="font-size:11.5px;color:#64748B;padding:0 14px 12px;line-height:1.6">'
+    +'<b style="color:#475569">ไปจอดท่าอื่นตามตาราง</b> · '
+    + W.map(function(x){ return poE(poLdgBoatNm(x.bid))+' → '+poE(poPierShort(x.here))+' (ของท่านี้ '+x.q+' ชิ้น)'; }).join(' · ')
+    +' · ตรวจของได้ที่ท่าที่เรืออยู่</div>'):'';
+  if(!A.length) return '<div class="po-empty">ยังไม่มีของประจำเรือ · ยกของจากคลังขึ้นเรือด้วย "ลงของประจำเรือลำใหม่" หรือปุ่ม "ประจำเรือ" ที่แถวของ</div>'+away;
   return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:14px">'
     + A.map(function(x){
         var last=poShipLast(x.bid);
@@ -56605,6 +57487,8 @@ function poShipSection(ro){
           +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
             +'<b style="font-size:13.5px;color:#0F172A">'+poE(poLdgBoatNm(x.bid))+'</b>'
             +'<span style="font:700 12px inherit;color:#0E7490;font-family:inherit">'+x.tot+' ชิ้น</span>'
+            + Object.keys(x.from||{}).map(function(k){   /* §poShipFollow */
+                return '<span class="po-shipfrom" title="ของคลัง'+poE(poPierShort(k))+' ติดเรือมา · ไม่นับรวมสต็อกท่านี้" style="font:700 10.5px inherit;font-family:inherit;color:#B45309;background:#FEF3C7;border-radius:999px;padding:1px 8px">ของ'+poE(poPierShort(k))+' '+x.from[k]+'</span>'; }).join('')
             +'<span style="flex:1"></span>'
             +(ro?'':'<button class="po-btn" onclick="poShipBoatOpen(\''+poE(x.bid)+'\')" title="ตรวจของบนเรือ · แจ้งของขาด · เติมจากคลัง · ถอดคืนคลัง">ตรวจ / เติม / ถอด</button>')
           +'</div>'
@@ -56617,7 +57501,7 @@ function poShipSection(ro){
           +(last?('<div style="font-size:10.5px;color:#94A3B8;margin-top:6px">เคลื่อนไหวล่าสุด '+poE(last)+'</div>'):'')
           +'</div>';
       }).join('')
-    +'</div>';
+    +'</div>'+away;
 }
 function poShipBoatPick(){
   if(!poCanEdit()) return;
@@ -56632,8 +57516,8 @@ function poShipBoatPick(){
 function poShipBoatOpen(bid){
   if(!poCanEdit() || !bid) return;
   if(!poWhoGuard()) return;   /* §poWho */
-  var on=poShipOn(bid), its=poItems(_poPier);
-  var has=its.filter(function(it){ return on[it.id]>0; }), rest=its.filter(function(it){ return !(on[it.id]>0); });
+  var on=poShipOn(bid), its=poItems(_poPier), fx=poShipForeign(on);   /* §poShipFollow */
+  var has=its.filter(function(it){ return on[it.id]>0; }).concat(fx), rest=its.filter(function(it){ return !(on[it.id]>0); });
   var inp=function(id,ph,w,extra){ return '<input id="'+id+'" inputmode="numeric" placeholder="'+ph+'" '+(extra||'')
     +' style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 7px;font:600 12px inherit;width:'+(w||58)+'px;font-family:inherit">'; };
   var head='<div style="display:grid;grid-template-columns:1fr 54px 74px 162px 86px 70px;gap:6px;align-items:center;font-size:10.5px;font-weight:700;color:#64748B;padding:0 0 6px;border-bottom:1px solid #E2E8F0">'
@@ -56649,8 +57533,10 @@ function poShipBoatOpen(bid){
         /* §poFine · หายจากของประจำเรือก็เรียกค่าปรับได้ (ลูกค้า/ไกด์ทำหาย) · ช่องโผล่เมื่อเลือก "หาย" */
         +'<input id="psf_'+it.id+'" inputmode="numeric" placeholder="ค่าปรับ ฿ (ถ้าเรียกเก็บ)" title="ค่าปรับ (บาท) · ใส่เมื่อเรียกเก็บได้ · เว้นว่างถ้าไม่มี" style="display:none;flex:1 0 100%;border:1px solid #F0C36D;background:#FFFBEB;border-radius:8px;padding:4px 7px;font:600 11px inherit;font-family:inherit;width:100%;box-sizing:border-box">'
         +'</span>'
-      +'<span>'+inp('psa_'+it.id,'+',50)+'<i style="display:block;font-style:normal;font-size:10px;color:#94A3B8">คลัง '+Math.max(0,b.ready)+'</i></span>'
-      +inp('psb_'+it.id,'−',50)
+      +(it.pier!==_poPier   /* §poShipFollow · ของท่าอื่นที่ติดเรือมา · ตรวจได้ แต่เติม/ถอดคืนเข้าคลังท่านี้ไม่ได้ */
+        ?('<span class="psfx" style="grid-column:span 2;font-size:10.5px;color:#B45309;line-height:1.35">ของคลัง'+poE(poPierShort(it.pier))+'<br>ถอดคืนที่'+poE(poPierShort(it.pier))+'</span>')
+        :('<span>'+inp('psa_'+it.id,'+',50)+'<i style="display:block;font-style:normal;font-size:10px;color:#94A3B8">คลัง '+Math.max(0,b.ready)+'</i></span>'
+          +inp('psb_'+it.id,'−',50)))
       +'</div>'; };
   var rowAdd=function(it){ var b=poBal(it.id);
     return '<div class="psrow" data-id="'+poE(it.id)+'" style="display:grid;grid-template-columns:1fr 86px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #F8FAFC">'
@@ -56668,6 +57554,12 @@ function poShipBoatOpen(bid){
     +'<div id="pserr" style="color:#B91C1C;font-size:12px;font-weight:700;margin-top:8px;line-height:1.5"></div>';
   poModal('ของประจำเรือ · '+poE(poLdgBoatNm(bid)), body,
     poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poShipBoatSave('"+poE(bid)+"')",1), 760);
+}
+/* §poShipFollow · ของบนลำที่เป็นของท่าอื่น (เรือย้ายท่ามา) */
+function poShipForeign(on){
+  return Object.keys(on||{}).filter(function(id){ return on[id]>0; }).map(poItem)
+    .filter(function(it){ return it && it.pier!==_poPier; })
+    .sort(function(a,b){ return String(a.label).localeCompare(String(b.label)); });
 }
 function poShipBoatDiff(bid, id){
   var el=document.getElementById('psd_'+id), sel=document.getElementById('psr_'+id); if(!el) return;
@@ -56689,8 +57581,8 @@ function poShipBoatSave(bid){
   var err=function(t){ var e=document.getElementById('pserr'); if(e) e.innerHTML=t; return false; };
   var on=poShipOn(bid), note=String(poV('psn')||'').trim(), errs=[], lines=[];
   var num=function(raw,lbl,what){ if(raw==='') return 0; if(!/^\d+$/.test(raw)){ errs.push(poE(lbl)+': '+what+'ต้องเป็นจำนวนเต็ม'); return 0; } return +raw; };
-  poItems(_poPier).forEach(function(it){
-    var id=it.id, has=on[id]||0, b=poBal(id), L=it.label;
+  poItems(_poPier).concat(poShipForeign(on)).forEach(function(it){   /* §poShipFollow */
+    var id=it.id, has=on[id]||0, b=poBal(id), L=it.label, fx=(it.pier!==_poPier);
     var cRaw=String(poV('psc_'+id)||'').trim(), short=0, c=null;
     if(cRaw!==''){
       c=num(cRaw,L,'จำนวนนับ');
@@ -56704,14 +57596,16 @@ function poShipBoatSave(bid){
     if(back>has-short) errs.push(poE(L)+': ถอดคืนได้ไม่เกิน '+(has-short));
     var fine=0;   /* §poFine */
     if(short>0 && why==='ship_lost'){ var fRaw=String(poV('psf_'+id)||'').trim(); if(fRaw!==''){ if(!/^\d+$/.test(fRaw)) errs.push(poE(L)+': ค่าปรับต้องเป็นตัวเลข'); else fine=+fRaw; } }
-    if(short||add||back) lines.push({id:id, has:has, c:c, short:short, why:why, add:add, back:back, fine:fine});
+    if(fx){ add=0; back=0; }
+    if(short||add||back) lines.push({id:id, has:has, c:c, short:short, why:why, add:add, back:back, fine:fine, pier:it.pier, fx:fx});
   });
   if(lines.some(function(l){ return l.short>0; }) && !note) errs.push('มีของขาด · ใส่รายละเอียดว่าขาด/หายเพราะอะไร');
   if(errs.length) return err(errs.join('<br>'));
   if(!lines.length) return err('ยังไม่มีอะไรให้บันทึก · ถ้านับแล้วครบทุกรายการ ไม่ต้องบันทึก');
   lines.forEach(function(l){
-    if(l.short){ var mv={date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:l.why, qty:l.short,
-                       note:note+' · นับบนเรือได้ '+l.c+' (ระบบ '+l.has+')'};
+    /* §poShipFollow · ของท่าอื่นที่ขาด ลงบัญชีท่าเจ้าของ (ยอดหายสะสมอยู่ที่นั่น) · บอกไว้ว่าตรวจที่ท่าไหน */
+    if(l.short){ var mv={date:_poDate, pier:(l.fx?l.pier:_poPier), itemId:l.id, boatId:bid, type:l.why, qty:l.short,
+                       note:note+' · นับบนเรือได้ '+l.c+' (ระบบ '+l.has+')'+(l.fx?(' · ตรวจที่'+poPierShort(_poPier)):'')};
       if(l.why==='ship_lost' && l.fine>0){ mv.fine=l.fine; mv.finePaid=false; }   /* §poFine */
       poAdd(mv); }
     if(l.add)   poAdd({date:_poDate, pier:_poPier, itemId:l.id, boatId:bid, type:'assign', qty:l.add,
@@ -56863,9 +57757,9 @@ function poLaundrySave(isOut){
 var _poLdgF='all';
 var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
                loss:['lost','writeoff','repair','ship_lost','ship_writeoff','ship_repair'], ship:['assign','unassign','ship_lost','ship_writeoff','ship_repair'],
-               adj:['count','adjust','onboard','fixed'] };
+               adj:['count','adjust','onboard','fixed'], xfer:['xfer_out','xfer_back','xfer_short'] };   /* §poXfer */
 var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
-                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด' };
+                loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด', xfer:'โยกระหว่างท่า' };   /* §poXfer */
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
 
 /* ══ §poWho (2026-10-09) · ผู้บันทึก ═══════════════════════════════════════════════════════════
@@ -57065,14 +57959,16 @@ function poLedgerOpen(){
   var T={issue:'เบิก',['return']:'คืน',repair:'เสีย·ซ่อมได้',writeoff:'ตัดทิ้ง',lost:'หาย·ลค',onboard:'ค้างบนเรือ',
          laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
          assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
-         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)'};
+         ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
           laundry_out:['#FFFBEB','#92400E'],laundry_in:['#FFFBEB','#92400E'],
           assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490'],
           receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9'],
-          ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309']};
+          ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309'],
+          xfer_out:['#EEF2FF','#4338CA'],xfer_back:['#F1F5F9','#475569'],xfer_short:['#FEF2F2','#B91C1C']};   /* §poXfer */
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,
@@ -57224,7 +58120,7 @@ function poLedgerOpen(){
       return '<tr><td style="white-space:nowrap">'+poE(m.date)+'</td><td>'+poE(it?it.label:m.itemId)+'</td>'
         +'<td><span style="display:inline-block;background:'+tc[0]+';color:'+tc[1]
           +';border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'
-          +poE(T[m.type]||m.type)+(m.type==='receive'&&PO_RECV_SRC[m.from]?(' · '+poE(PO_RECV_SRC[m.from])):'')+'</span>'
+          +poE(T[m.type]||m.type)+(m.type==='receive'&&poRecvSrcLbl(m)?(' · '+poE(poRecvSrcLbl(m))):'')+((m.type==='xfer_out')?(' → '+poE(poPierObj(String(m.from||'').replace(/^to\|/,'')).n)):'')+'</span>'
           +(m.fine?(' <span style="color:#B4560A;font-weight:700;font-size:11px">ค่าปรับ '+poBaht(m.fine)+'</span>'):'')+'</td>'
         +'<td style="text-align:center;font-weight:700'+(q<0?';color:#B91C1C':'')+'">'+q+'</td>'
         +'<td>'+poE(bo?(bo.name||m.boatId):(m.boatId||'—'))+'</td>'
@@ -63213,6 +64109,7 @@ function ppRows(){
     (b.trips||[]).forEach(function(t){
       var d=(t&&t.date)||''; if(!d || d<from || d>to) return;
       var rid=t.routeId||'';
+      if(typeof tcxPtOf==='function' && tcxPtOf(b,d)) return;   /* §tcxPartner · ไม่กินบนเรือเรา */
       var rt=(typeof getRoute==='function')?getRoute(rid):null;
       var O=(typeof bkOpsRead==='function')?(bkOpsRead(b,d)||{}):(b.ops||{});
       var px=t.pax||{};

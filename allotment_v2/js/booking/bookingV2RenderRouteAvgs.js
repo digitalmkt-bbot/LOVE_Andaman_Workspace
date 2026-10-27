@@ -22,6 +22,7 @@ function bookingV2RenderRouteAvgs(){
   SB_BOOKINGS.forEach(bk => {
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
+        if(typeof laRouteIdOk==='function' && !laRouteIdOk(t.routeId)) return;   /* §pierScope */
         if(t.date && t.date.startsWith(ym)){
           if(!bkPerRoute[t.routeId]) bkPerRoute[t.routeId] = new Set();
           bkPerRoute[t.routeId].add(bk.id);

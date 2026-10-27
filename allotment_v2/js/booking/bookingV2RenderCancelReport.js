@@ -20,7 +20,7 @@ function bookingV2RenderCancelReport(){
     }).catch(function(e){ _bkV2CancelLoad.state='failed'; console.warn('[ops] cancel report did not load',e); if(_bkV2.tab==='cancel') bookingV2Render(); }); }
   }
   if(range && _bkV2CancelLoad.state!=='ready') return `<div class="bkv2" style="padding:18px">${period}${_bkV2CancelLoad.state==='failed' ? 'Cancellation report could not load. Reopen this tab to retry.' : 'Loading cancellation report…'}</div>`;
-  const all=(SB_BOOKINGS||[]).filter(_ctLandBk).filter(b=>!range || (b.trips||[]).some(t=>t.date>=range.from && t.date<=range.to));
+  const all=(SB_BOOKINGS||[]).filter(_ctLandBk).filter(b=>(typeof laBkOk!=='function')||laBkOk(b)).filter(b=>!range || (b.trips||[]).some(t=>t.date>=range.from && t.date<=range.to));
   const cancelled=all.filter(b=>b.status==='cancelled'||b.status==='cancelled_weather');
   const partials=[]; all.forEach(b=>(b.partialCancels||[]).filter(pc=>!range || (pc.date>=range.from && pc.date<=range.to)).forEach(pc=>partials.push({b,pc})));  // partial-cancel events
   const denom=all.filter(b=>b.status!=='rejected' && b.status!=='draft').length || 1;  // confirmed+completed+cancelled

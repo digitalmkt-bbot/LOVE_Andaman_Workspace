@@ -861,13 +861,19 @@
         });
       });
     }
+    /* §tcxPartner · ใบที่รอบยกเลิกแล้วส่งต่อ Partner · รายได้ยังเป็นของเรา (Invoice เอเยนต์เดิม) · ต้นทุน = ราคา Partner */
+    try{ if(typeof window.tcxPtDay==='function') window.tcxPtDay(ds).forEach(function(x){
+      v.rev+=x.rev; v.cost+=x.cost; v.profit+=x.rev-x.cost; v.pax+=x.pax;
+      var g='Partner'; v.g[g]=(v.g[g]||0)+x.cost;
+      var r=(typeof getRoute==='function')?getRoute(x.rid):null, RR=v.routes[x.rid]||(v.routes[x.rid]={rid:x.rid, name:(r&&r.name)||x.rid, color:(r&&r.color)||'#8b909c', n:0, pax:0, rev:0, cost:0});
+      RR.pax+=x.pax; RR.rev+=x.rev; RR.cost+=x.cost; }); }catch(_){}
     _cx[ds]={st:st, at:now, v:v};
     return v;
   }
   function cxRange(from,to){
     var o={rev:0,cost:0,profit:0,pax:0,trips:0,real:0,est:0,g:{},routes:{},loss:0,days:0,byDay:{}};
     for(var ds=from; ds<=to; ds=addDays(ds,1)){
-      var d=cxDay(ds); o.byDay[ds]=d; if(!d.trips) continue; o.days++;
+      var d=cxDay(ds); o.byDay[ds]=d; if(!d.trips && !d.rev) continue; o.days++;   /* §tcxPartner · วันที่มีแต่ใบส่ง Partner */
       o.rev+=d.rev; o.cost+=d.cost; o.profit+=d.profit; o.pax+=d.pax; o.trips+=d.trips; o.real+=d.real; o.est+=d.est; o.loss+=d.loss;
       Object.keys(d.g).forEach(function(g){ o.g[g]=(o.g[g]||0)+d.g[g]; });
       Object.keys(d.routes).forEach(function(k){ var R=d.routes[k], O=o.routes[k]||(o.routes[k]={rid:R.rid,name:R.name,color:R.color,n:0,pax:0,rev:0,cost:0}); O.n+=R.n; O.pax+=R.pax; O.rev+=R.rev; O.cost+=R.cost; });
