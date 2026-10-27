@@ -58,7 +58,6 @@
   function arr(name){ var a = window[name]; if(!Array.isArray(a)){ a = window[name] = []; } return a; }
   function num(v){ return v === '' || v == null || !isFinite(+v) ? null : +v; }
   function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
-  function ymd(d){ return typeof window.poYMD === 'function' ? window.poYMD(d) : d.toISOString().slice(0, 10); }
   function guarded(fn){ try{ return fn(); }catch(_){ return undefined; } }
 
   /* ── what is fresh · a render asks, the answer is cached, the screen is drawn again ── */
@@ -474,7 +473,7 @@
     commit: function(){}
   });
   P.afterLoad(function(){
-    var cyc = cycleKey(O.today());   // O.today(): the same date as ymd(new Date()), and the one a test can fix
+    var cyc = cycleKey(O.today());
     var rules = O.get('/v1/pier-office/pay-rules').then(function(a){
       pay.rules = rulesMap(a.rules);
       if(!a.defaulted) cfg().payRules = clone(pay.rules);
