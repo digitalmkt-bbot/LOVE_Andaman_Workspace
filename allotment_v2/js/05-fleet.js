@@ -4784,7 +4784,8 @@ function flLoad(){
   FL_INVENTORY=d.fleet_inventory||[];FL_MEMOS=d.fleet_memos||[];
   FL_CONSUMABLE_LOGS=Array.isArray(d.fleet_consumable_logs)?d.fleet_consumable_logs:[];
   FL_BATTERIES=Array.isArray(d.fleet_batteries)?d.fleet_batteries:[];   /* §flBat */
-  try{ if(typeof flGbBoatHeal==='function'){ var _gbh=flGbBoatHeal(); if(_gbh) console.log('[gbBoat] gearbox boat follows engine · fixed '+_gbh); } }catch(_e){}   /* §gbBoat · แก้ในหน่วยความจำ · บันทึกไปกับการเซฟ Fleet ครั้งถัดไป */
+  try{ if(typeof flGbBoatHeal==='function'){ var _gbh=flGbBoatHeal(); if(_gbh){ console.log('[gbBoat] gearbox boat follows engine · fixed '+_gbh); window._flHealPending=true; } } }catch(_e){}
+  try{ if(typeof flGbNameFix==='function' && flGbNameFix()) window._flHealPending=true; }catch(_e){}   /* §gbName */   /* §gbBoat · แก้ในหน่วยความจำ · บันทึกไปกับการเซฟ Fleet ครั้งถัดไป */
   // Back-fill NEW seed inventory items missing from already-seeded storage.
   // FL_DEFAULT_INVENTORY only seeds when the array is empty, so items appended to the
   // default list later (e.g. the HO-IV26004083 batch) never reach users whose localStorage
@@ -10166,6 +10167,28 @@ function flEquipCancelSwap(){ _flSwap=null; flRenderEquip(); }
 /* §gbBoat (2026-10-27) · owner "บัคไหม" (ROM-250D-XD-C ผูกเครื่อง Std ของ Romeo แต่ขึ้น 'ไม่ได้อยู่บนเรือ และไม่ได้ระบุว่าเก็บไว้ที่ไหน'
    และไม่อยู่ในรายการเกียร์ของ Romeo) · เกียร์ที่ผูกเครื่อง = อยู่ลำเดียวกับเครื่องเสมอ
    engIds: ซ่อมเฉพาะเกียร์ของเครื่องเหล่านี้ · ไม่ส่ง = ทั้งหมด (ตอนโหลด) · คืนจำนวนที่แก้ */
+/* §gbName (2026-10-27) · owner "ตอนนี้ชื่อซ้ำ ต้องแก้ชื่อที่ถูกเปลี่ยนกลับเป็นชื่อเดิมก่อน แล้วหลังจากเปลี่ยนค่อยสลับตามความเป็นจริง"
+   เกียร์ของ Irena 2 ลูกถูกเอาไปใส่ Artemis (Quick Swap INC-056 · INC-057) แล้วถูกแก้ชื่อเป็นชื่อของ Artemis
+   → ชื่อซ้ำกับเกียร์ตัวจริงของ Artemis (g5 · g6 ที่ซ่อมเสร็จ) · Irena เหลือ 2 ลูก
+   แก้แค่ชื่อ (และรุ่นของ g13 ที่ถูกแก้เป็น 250D) กลับเป็นของเดิม · ไม่ย้ายลำ/เครื่อง · การสลับตามจริงให้คนหน้างานทำต่อ
+   ทำเฉพาะตอนข้อมูลยังเป็นค่าที่ผิดอยู่ (เทียบ id + ชื่อปัจจุบัน) · แก้แล้วไม่ทำซ้ำ · มีบันทึกในประวัติของเกียร์ */
+var FL_GB_NAME_FIX=[
+  {id:'g13', from:'ART-250D-XCD-P',   to:'IRE-250A-XCD-P',   model:['BF250D XCD Gearbox','BF250A XCD Gearbox'], why:'INC-056'},
+  {id:'g14', from:'ART-250D-XXCD-CP', to:'IRE-250A-XXCD-CP', model:null, why:'INC-057'}
+];
+function flGbNameFix(){
+  var n=0;
+  FL_GB_NAME_FIX.forEach(function(f){
+    var g=(FL_GEARBOXES||[]).find(function(x){ return x && x.id===f.id; }); if(!g || g.serial!==f.from) return;
+    if((FL_GEARBOXES||[]).some(function(x){ return x && x.id!==g.id && x.serial===f.to; })) return;   /* ชื่อเดิมถูกใช้ไปแล้ว · ไม่ชน */
+    var was=g.serial, wasM=g.model; g.serial=f.to; if(f.model && g.model===f.model[0]) g.model=f.model[1];
+    if(!g.log) g.log=[]; g.log.push({date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'rename', by:'System',
+      desc:'แก้ชื่อกลับเป็นชื่อเดิม '+was+' → '+f.to+(wasM!==g.model?(' · รุ่น '+wasM+' → '+g.model):'')+' · ชื่อนี้ตอนใส่แทนใน '+f.why+' · ชื่อเดิมซ้ำกับเกียร์ของ Artemis'});
+    n++;
+  });
+  if(n) console.log('[gbName] restored '+n+' gearbox name(s)');
+  return n;
+}
 function flGbBoatHeal(engIds){
   var n=0, set=engIds?{}:null; if(set) engIds.forEach(function(x){ set[x]=1; });
   (FL_GEARBOXES||[]).forEach(function(g){
@@ -10478,6 +10501,8 @@ function flRenderEquip(){
   </div>`;
 }
 function flRenderAsset(){
+  /* §gbName · ของที่ซ่อมตอนโหลด (ลำตามเครื่อง · ชื่อเกียร์) บันทึกขึ้นเซิร์ฟเวอร์ตอนคนที่แก้ Fleet ได้เปิดหน้านี้ครั้งแรก */
+  if(window._flHealPending && typeof flSave==='function' && (typeof window.laCanEditArea!=='function' || window.laCanEditArea('fleet'))){ window._flHealPending=false; try{ flSave(); }catch(_e){} }
   if(typeof faShell==='function' && !(typeof FA_NEW!=='undefined' && FA_NEW[flAssetTab])){ try{ faShell({badges:{docs:faDocAlertCount()}}); }catch(e){ try{ console.error('[asset2] shell', e); }catch(_){ } } }   // §asset2
   if(flAssetTab==='overview')flRenderOverview();
   else if(flAssetTab==='boats')flRenderBoatList();
