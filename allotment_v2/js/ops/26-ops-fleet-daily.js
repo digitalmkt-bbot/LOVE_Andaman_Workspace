@@ -1569,5 +1569,9 @@
     toSafetyReplaceBody: toSafetyReplaceBody
   };
 
-  if(enabled()) loadAll(false).catch(function(){});
+  /* §bootLater · after the first draw: projects, safety, the Daily Fleet Log (Calendar, Boat Operation and Trip P&L read them) */
+  if(enabled()){
+    if(O.later) O.later('fleet daily', function(){ return loadAll(false); }, 4);
+    else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
+  }
 })();

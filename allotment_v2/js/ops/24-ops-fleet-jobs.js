@@ -1623,5 +1623,9 @@
     toJobCloseBody: toJobCloseBody
   };
 
-  if(enabled()) loadAll(false).catch(function(){});
+  /* §bootLater · after the first draw: the Dashboard's open-jobs figures read FL_MAINT, so jobs come early in the queue */
+  if(enabled()){
+    if(O.later) O.later('fleet jobs', function(){ return loadAll(false); }, 2);
+    else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
+  }
 })();

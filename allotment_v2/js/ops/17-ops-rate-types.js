@@ -336,9 +336,13 @@
     window.rtDeleteRT = function(id){
       if(!O.enabled()) return originals.rtDeleteRT.apply(this, arguments);
       if(!canWrite()){ failNotReady(); return; }
-      if(!confirm('Delete this rate type? The server will refuse if it is in use.')) return;
+      /* legacy rtDeleteRT: agents on it are unbound (the server does it); one that priced bookings is still refused */
+      var agents = (typeof SB_AGENTS !== 'undefined' && Array.isArray(SB_AGENTS)) ? SB_AGENTS : [];
+      var used = agents.filter(function(a){ return a && a.rateTypeId === id; }).length;
+      if(!confirm(used ? 'This rate type is used by ' + used + ' agent' + (used === 1 ? '' : 's') + '. Deleting it unbinds them. Delete?' : 'Delete this rate type?')) return;
       return O.queue(function(){ return O.del('/v1/rate-types/' + encodeURIComponent(id)); }).then(function(){
         if(typeof SB_RATE_TYPES !== 'undefined') SB_RATE_TYPES = SB_RATE_TYPES.filter(function(x){ return x.id !== id; });
+        agents.forEach(function(a){ if(a && a.rateTypeId === id) a.rateTypeId = null; });
         if(typeof rtModalClose === 'function') rtModalClose();
         try{ _rtSelected = null; }catch(_){ }
         try{ if(typeof rtRenderCards === 'function') rtRenderCards(); if(typeof rtRenderDetail === 'function') rtRenderDetail(null); }catch(_){ }

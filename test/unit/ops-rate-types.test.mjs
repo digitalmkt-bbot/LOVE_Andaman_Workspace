@@ -65,3 +65,34 @@ test('a foreigner-only rate type is "fr" on the screen and "foreign" on the serv
   assert.equal(c.toCreateBody({ ...d, nationalityScope: 'thai' }).nationality_scope, 'thai');
   assert.equal(c.toCreateBody({ ...d, nationalityScope: 'both' }).nationality_scope, 'both');
 });
+
+test('deleting a rate type agents use says how many it unbinds, and clears them on the screen (legacy rtDeleteRT)', async () => {
+  const calls = [], asked = [];
+  const ctx = {
+    console, Number, JSON, Date, Promise,
+    SB_RATE_TYPES: [],
+    SB_AGENTS: [{ id: 'ag1', rateTypeId: 'rt-a' }, { id: 'ag2', rateTypeId: 'rt-a' }, { id: 'ag3', rateTypeId: 'rt-b' }],
+    confirm: (msg) => { asked.push(msg); return true; },
+    rtDeleteRT: () => { throw new Error('legacy delete must not run in ops mode'); },
+    laOps: {
+      enabled: () => true,
+      get: async () => ({ rate_types: [] }),
+      del: async (path) => { calls.push(path); },
+      queue: (fn) => fn(), wrote: () => {}, fail: (t, e) => { throw e; },
+    },
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(SOURCE, ctx);
+  await ctx.laOps.rateTypes.ready();
+  ctx.SB_RATE_TYPES.push({ id: 'rt-a' }, { id: 'rt-b' });
+
+  await ctx.rtDeleteRT('rt-a');
+  assert.equal(asked[0], 'This rate type is used by 2 agents. Deleting it unbinds them. Delete?');
+  assert.deepEqual(calls, ['/v1/rate-types/rt-a']);
+  assert.deepEqual(ctx.SB_AGENTS.map((a) => a.rateTypeId), [null, null, 'rt-b'], 'its agents are unbound, the others keep theirs');
+  assert.deepEqual(ctx.SB_RATE_TYPES.map((r) => r.id), ['rt-b']);
+
+  ctx.SB_AGENTS = [];
+  await ctx.rtDeleteRT('rt-b');
+  assert.equal(asked[1], 'Delete this rate type?', 'an unused one gets the plain question');
+});

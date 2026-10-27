@@ -1018,5 +1018,9 @@
     toRefundPayoutBody: toRefundPayoutBody
   };
 
-  if(enabled()) loadAll(false).catch(function(){});
+  /* §bootLater · after the first draw, before the fleet: booking screens read invoices and payments (pay chip, restore) */
+  if(enabled()){
+    if(O.later) O.later('money', function(){ return loadAll(false); }, 1);
+    else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
+  }
 })();
