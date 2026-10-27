@@ -36,11 +36,25 @@
     };
   }
 
+  var selfNav = false;   // our own redraw, not a person opening a screen
   function redraw(){
     if(O.busy()) return;
     var el = document.querySelector('.nav-item.active[data-view]');
+    selfNav = true;
     try{ if(el && typeof window.nav === 'function') window.nav(el); }catch(_){}
+    finally{ selfNav = false; }
   }
+
+  /* §bootLater · a screen opened while the background loads are still queued may read their data
+     (fleet, money): run what is left at once; the redraw when they are in fills the screen. */
+  (function(){
+    var orig = window.nav;
+    if(typeof orig !== 'function' || !O.later) return;
+    window.nav = function(){
+      if(O.state.loaded && !selfNav && !O.later.done()) O.later.now();
+      return orig.apply(this, arguments);
+    };
+  })();
 
   var t0 = Date.now();
   Promise.resolve()
@@ -78,5 +92,14 @@
       // Render has been requested; remove the gate on the next frame so users
       // never see a half-built app after a successful login.
       requestAnimationFrame(function(){ try{ if(window.laOpsBootScreen) window.laOpsBootScreen.hide(); }catch(_){} });
+      // §bootLater · now the rest (money, fleet), two at a time, then draw the screen once more with it
+      if(O.later){
+        var tl = Date.now();
+        O.later.whenDone(function(){
+          try{ console.log('[ops] background loads in ' + (Date.now() - tl) + 'ms · ' + O.later.names().join(', ')); }catch(_){}
+          redraw();
+        });
+        O.later.start();
+      }
     });
 })();

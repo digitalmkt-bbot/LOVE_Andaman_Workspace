@@ -1041,5 +1041,9 @@
     toMemoBody: toMemoBody
   };
 
-  if(enabled()) loadAll(false).catch(function(){});
+  /* §bootLater · after the first draw: the Dashboard's memo figures read FL_MEMOS */
+  if(enabled()){
+    if(O.later) O.later('fleet stock', function(){ return loadAll(false); }, 3);
+    else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
+  }
 })();
