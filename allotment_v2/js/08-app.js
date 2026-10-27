@@ -51670,7 +51670,7 @@ function bkV2Render(){
       host.innerHTML = `<div class="bkv2">${bkV2RenderNewBooking()}</div>`;
       return;
     }
-    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bkV2RenderTopbar()}</div>${(typeof cxwBanner==='function'?cxwBanner():'')}<div class="bkv2 bkv2-bodycard">${bkV2RenderTabBody()}</div>${bkV2RenderLockModal()}${(typeof bkV2LockOverlays==='function'?bkV2LockOverlays():'')}`;
+    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bkV2RenderTopbar()}</div>${(typeof cxwBanner==='function' && _bkV2.tab==='cancel'?cxwBanner():'')}<div class="bkv2 bkv2-bodycard">${bkV2RenderTabBody()}</div>${bkV2RenderLockModal()}${(typeof bkV2LockOverlays==='function'?bkV2LockOverlays():'')}`;
     // Stack the sticky headers below the (sticky) day header · set LITERAL px offsets (no calc-in-custom-prop, which can fail to resolve)
     requestAnimationFrame(()=>{ try{
       const vb=document.getElementById('view-booking'); if(!vb) return;
@@ -53416,7 +53416,7 @@ function bkV2RenderTopbar(){
         <button class="bkv2-utab ${tab==='all'?'on':''}" onclick="bkV2SwitchTab('all')">All bookings</button>
         <button class="bkv2-utab ${tab==='locks'?'on':''}" onclick="bkV2SwitchTab('locks')">Seat Locks</button>
         ${(function(){ const n=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length; return `<button class="bkv2-utab ${tab==='approvals'?'on':''}" onclick="bkV2SwitchTab('approvals')" style="${n>0?'color:#A32D2D':''}">${laT('รออนุมัติ')}${n>0?` <span style="background:#A32D2D;color:#fff;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${n}</span>`:''}</button>`; })()}
-        <button class="bkv2-utab ${tab==='cancel'?'on':''}" onclick="bkV2SwitchTab('cancel')">Cancellations</button>
+        <button class="bkv2-utab ${tab==='cancel'?'on':''}" onclick="bkV2SwitchTab('cancel')">Cancellations${(typeof cxwTabBadge==='function')?cxwTabBadge():''}</button>
       </div>
       ${tab==='cal' ? `
         <span class="bkv2-topdiv"></span>
@@ -64471,6 +64471,10 @@ function cxwCanEdit(){
   return false;
 }
 function cxwE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* §cxwTab (2026-10-27) · owner "เอาไปวางไว้ตรงที่อื่นได้ไหม" (แถบแดงเต็มกว้างบนทุกแท็บของ Booking)
+   เลือก: ย้ายแถบเต็มไปอยู่ในแท็บ Cancellations · แท็บอื่นเหลือตัวเลขแดงบนปุ่มแท็บ Cancellations */
+function cxwTabBadge(){ var n=0; try{ n=cxwList().length; }catch(_){ n=0; } if(!n) return '';
+  return ' <span title="'+n+' ใบถูกยกเลิกแต่ยังไม่ระบุเหตุผล" style="display:inline-block;background:#A32D2D;color:#fff;border-radius:99px;padding:0 6px;font-size:10.5px;font-weight:800;line-height:16px;margin-left:4px;vertical-align:1px">'+n+'</span>'; }
 function cxwBanner(){
   var L=cxwList(); if(!L.length) return '';
   var px=L.reduce(function(s,b){ return s+cxwPax(b); },0), nb=L.filter(cxwIsB2C).length;
