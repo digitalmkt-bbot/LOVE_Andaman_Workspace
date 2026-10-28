@@ -12595,6 +12595,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       /* §landCk · ชิปโปรแกรมกับยอดหัวหน้าต้องตรงกับหน้าที่เปิดอยู่ · เฉพาะหน้าเช็คอินท่า/City tour
          หน้าเช็คอินรถ (kind='van') ไม่แตะ — รถรับส่งมีทั้งสองฝั่ง ทั้งหน้านั้นจึงต้องเห็นครบ */
       if(kind==='pier' && typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
+      if(kind==='pier' && typeof ckTripWx==='function' && ckTripWx(t.routeId,date)) return;   /* §pckCxlTrip · ทริปยกเลิกไม่เข้ายอดหน้าท่า */
       var p=t.pax||{};
       // §check-in · ทุกตัวเลขบนการ์ด = "เดินทางจริง" · หักคนที่ No-show / CXL ออกรายประเภท
       var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
@@ -16949,6 +16950,11 @@ function pckProgToggle(fid){
 /* ── ตัวเลขของแต่ละโปรแกรม / แต่ละ variant ในวันนั้น ────────────────────────
    เดินรายการ booking รอบเดียว · ตัวเลขทุกตัวเป็น "เดินทางจริง" หักคนที่ไม่มาแล้ว
    เหมือนที่การ์ดโปรแกรมของเดิมทำ (ckRoutePills) เพื่อให้สองที่ไม่ขัดกัน */
+/* §pckCxlTrip (2026-10-28) · owner (หน้าเช็คอินหน้าท่า · Early 05.30 ตี CXL แล้วยังขึ้น 58 pax + "ยังไม่จัดเรือ 19 booking")
+   ทริปที่ตี CXL จากแท็บ Cancellations (SB_WEATHER_CLOSURES) · ใบจองยังสถานะปกติจนกว่าจะเคลียร์
+   หน้าท่าไม่ต้องรอรับคนของทริปนั้น และไม่ต้องจัดเรือ → ตัดออกจากแถว/ยอด แล้วบอกเป็นชิปเทา "ทริปยกเลิก" แทน */
+function ckTripWx(rid,date){ return !!rid && (typeof bookingV2IsWeatherClosed==='function') && bookingV2IsWeatherClosed(rid,date); }
+function ckTripWxLbl(rid,date){ var k=(typeof tcxReason==='function')?tcxReason(rid,date):'weather'; var R=(typeof TCX_R!=='undefined'&&TCX_R[k])||{}; return 'ยกเลิก'+(R.th?(' · '+R.th):''); }
 function pckProgData(date){
   var P=function(pax,k){ return (typeof bookingV2PaxTot==='function')?bookingV2PaxTot(pax||{},k):0; };
   var fam={}, order=[];
@@ -16963,6 +16969,11 @@ function pckProgData(date){
       if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
       var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(t.routeId):null;
       if(!f) return;
+      if(ckTripWx(t.routeId,date)){   /* §pckCxlTrip · ทริปยกเลิก · ให้มีแถว variant ไว้บอก แต่ไม่นับคน/ใบ */
+        var Aw=fam[f.id]; if(!Aw){ Aw=fam[f.id]={f:f, v:{}, vord:[], pax:0, booked:0, arr:0, clr:0, brd:0, due:0, rows:0}; order.push(f.id); }
+        var Vw=Aw.v[t.routeId]; if(!Vw){ Vw=Aw.v[t.routeId]=newV(); Aw.vord.push(t.routeId); }
+        var _pw=t.pax||{}; Vw.wx=1; Vw.cxlPax=(Vw.cxlPax||0)+P(_pw,'ad')+P(_pw,'chd')+P(_pw,'inf')+P(_pw,'foc');
+        return; }
       var p=t.pax||{};
       var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
       var g=function(k){ var v=P(p,k); if(!L||L.total<=0) return v;
@@ -17061,7 +17072,7 @@ function pckProgList(date){
     var op=!!_pckProgOpen[A.f.id] || !!famOn;
     var st=pckProgStatus(A), bar=A.pax?Math.round(A.brd*100/A.pax):0;
     var live=A.vord.filter(function(rid){
-      return (typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date); }).length;
+      return !(A.v[rid]&&A.v[rid].wx) && ((typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date)); }).length;   /* §pckCxlTrip */
     /* §pckHead5 · พื้นหลังเป็นสีของโปรแกรมนั้น · กวาดตาหาโปรแกรมด้วยสีได้เหมือนที่ทำกับเอเจนซี่
        ที่เลือกอยู่เข้มขึ้นหนึ่งขั้น + มีแถบสีด้านซ้าย จะได้ยังแยกออกว่ากำลังกรองอันไหน */
     var _col=A.f.color||'#8b909c';
@@ -17085,6 +17096,11 @@ function pckProgList(date){
         var V=A.v[rid], lbl=pckVarLbl(A.f, rid), dep=pckDepOf(rid)||'';
         var open=(typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date);
         var _vbg=pckTint(_col,.965);
+        if(V.wx) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ทริปถูกยกเลิก · ไม่นับคน · ไม่ต้องรอรับ">'
+          +'<span class="pgv-nm">'+e(lbl)+'</span>'
+          +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
+          +(V.cxlPax?('<span class="pgv-px ck-mono" style="color:#A32D2D;text-decoration:line-through">'+V.cxlPax+' pax</span>'):'')
+          +'<span class="pgv-off" style="background:#FBE4E0;color:#A32D2D">'+e(ckTripWxLbl(rid,date))+'</span></div>';   /* §pckCxlTrip */
         if(!open) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ไม่ออกวันนี้">'
           +'<span class="pgv-nm">'+e(lbl)+'</span>'
           +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
@@ -21758,6 +21774,7 @@ function renderPierCheckin(){
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
+  var _pckWxN=0, _pckWxPax=0;   /* §pckCxlTrip */
   var _pckSx=0;
   (SB_BOOKINGS||[]).forEach(function(b){
     /* §strandPck · ยกเลิกแล้วแต่จัดเรือ/จัดรถไว้แล้ว ต้องคาไว้ในกลุ่มเดิม
@@ -21775,6 +21792,7 @@ function renderPierCheckin(){
        คนหน้าท่าไม่มีหน้าที่กับทัวร์ในเมือง และทัวร์ในเมืองก็ไม่มีเรือให้ขึ้น */
     if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
     if(_pckPier && pckPierOf(t.routeId)!==_pckPier) return;   /* §pckHead3 · กรองตามท่า */
+    if(ckTripWx(t.routeId,date)){ if(!_sx){ _pckWxN++; _pckWxPax+=ckBookedPax(t); } return; }   /* §pckCxlTrip · ไม่ต้องรอรับ · ไม่ต้องจัดเรือ */
     if(_pckRoute){ if(t.routeId!==_pckRoute) return; }
     else if(_pckFam){ var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(t.routeId):null; if(!f||f.id!==_pckFam) return; }
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -22081,6 +22099,7 @@ function renderPierCheckin(){
   // §perProgramme · ถึงท่า / เคลียร์ / ขึ้นเรือ อยู่ใต้การ์ดของแต่ละโปรแกรมและแต่ละลำแล้ว
   // (แต่ละโปรแกรมออกคนละเวลา ยอดรวมทั้งวันตอบไม่ได้ว่าลำที่กำลังจะออกพร้อมหรือยัง)
   var kpi='<span style="background:#F1EFE8;color:#5F5E5A">ทั้งท่า '+all.length+' booking · รอรับ '+tExpect+' pax</span>'
+        +(_pckWxN?('<span style="background:#F1EFE8;color:#6b6a63;cursor:pointer" onclick="nav(document.querySelector(\'[data-view=booking]\'));if(typeof bookingV2SwitchTab===\'function\')bookingV2SwitchTab(\'cancel\')" title="ทริปที่ตี CXL · ไม่ต้องรอรับ · ไม่นับในยอด · กดไปแท็บ Cancellations">&#10006; ทริปยกเลิก '+_pckWxN+' booking · '+_pckWxPax+' pax</span>'):'')
         +(ovnAll.length?('<span style="background:#EDE7FB;color:#5B289A" title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · ไม่ต้องเช็คอินที่ท่า และไม่มีเงินต้องเก็บ">&#8617; รับกลับจากเกาะ '+pckAgg(ovnAll).pax+' pax</span>'):'')
         +(tDue>0?'<span style="background:#FBF0DD;color:#7A4A00">ค้างเก็บทั้งวัน &#3647;'+Math.round(tDue).toLocaleString()+'</span>':'')
         +(tGot>0?'<span style="background:#DCF4E8;color:#0F6E56">เก็บแล้ว &#3647;'+Math.round(tGot).toLocaleString()+'</span>':'')
@@ -28600,7 +28619,49 @@ function ctRentBlank(){
   return { on:1, mode:'lump', amt:0, seat:0, days:30, off:2, trips:1, vat:0, note:'',
            from:'', to:'',                    /* §rentSpan · ช่วงสัญญา · ว่าง = ไม่จำกัด */
            fuelMul:100,                       /* §boatFuel · % เทียบสูตรกลาง · 100 = เท่ากัน */
-           ex:{ dep:1, cap:1, crew:1 } };
+           ex:{ dep:1, cap:1, crew:1 },
+           day:ctRentDayBlank() };
+}
+/* ══ §rentDay (2026-10-28) · เหมารายวัน ═══════════════════════════════════════════
+   owner: "LKC66 เช่ารายเดือนตั้งแต่ 15 เป็นต้นไป ก่อนหน้านั้นเป็นรายวัน รายวันลำละ 38,000
+           ราคารายวันเป็น ราคาเรือ + น้ำมัน + กัปตัน เด็กเรือ แล้ว"
+   ลำเดียวกันมีได้สองดีล: สัญญารายเดือน (ช่วง from–to ข้างบน) และเหมารายวันนอกช่วงนั้น
+   รายวันเป็นเลขต่อวันที่ออกเรือ ไม่ต้องหาร · และมักรวมน้ำมัน/กัปตัน/เด็กเรือมาแล้ว
+   จึงมี ex ของตัวเอง (ตั้งต้นตัดน้ำมันด้วย ต่างจากรายเดือนที่ผู้เช่าจ่ายน้ำมันเอง)
+   ลำดับการเลือกต่อวัน: รายเดือนถ้าวันนั้นอยู่ในสัญญาและมีค่าเช่า → ไม่งั้นรายวันถ้าเปิดและอยู่ในช่วง → ไม่งั้นเรือบริษัท */
+var CT_RENT_DAY_EX = [
+  { id:'fuel', l:'น้ำมันเรือ',   why:'ราคารายวันรวมน้ำมันแล้ว' },
+  { id:'cap',  l:'กัปตัน',       why:'เจ้าของเรือจัดให้' },
+  { id:'crew', l:'เด็กเรือ',     why:'เจ้าของเรือจัดให้' },
+  { id:'dep',  l:'ค่าเสื่อมเรือ', why:'เรือไม่ใช่ของเรา' },
+  { id:'pier', l:'ค่าเรือเทียบท่า', why:'ถ้าเจ้าของเรือจ่ายค่าเทียบท่าเอง' }
+];
+function ctRentDayBlank(){ return { on:0, amt:0, vat:0, from:'', to:'', ex:{ fuel:1, cap:1, crew:1, dep:1 }, rt:{} }; }
+/* §rentRoute · ราคารายวันต่างกันตามเส้นทาง (สิมิลันไกลกว่าพีพี เจ้าของเรือคิดคนละราคา)
+   day.rt[routeId] = ค่าเหมา/วันของเส้นทางนั้น · ไม่มี = ใช้ day.amt (ราคาตั้งต้น) · ทั้งคู่ 0 = วันนั้นไม่มีดีล */
+function ctRentDayAmt(D, routeId){
+  var rt = (D && D.rt) || {};
+  if(routeId && +rt[routeId] > 0) return +rt[routeId];
+  return +((D && D.amt) || 0);
+}
+function ctRentDayOf(boatId, ymd, routeId){
+  var R = ctRentRaw(boatId); if(!R || !R.on) return null;
+  var D = R.day; if(!D || !D.on) return null;
+  var amt = ctRentDayAmt(D, routeId); if(!(amt > 0)) return null;
+  if(ymd){ if(D.from && ymd < D.from) return null; if(D.to && ymd > D.to) return null; }
+  var b = (typeof getBoat === 'function') ? (getBoat(boatId) || {}) : {};
+  var ex = D.ex || { fuel:1, cap:1, crew:1, dep:1 };
+  var rtName = ''; try{ var ro = routeId && getRoute(routeId); rtName = (ro && ro.name) || ''; }catch(_){ }
+  return { boatId:boatId, name:b.name || boatId, mode:'day', day:1, amt:amt, perTrip:amt, perDay:amt,
+           byRoute:!!(routeId && D.rt && +D.rt[routeId] > 0), routeName:rtName,
+           trips:1, vat:!!D.vat, from:D.from || '', to:D.to || '', ex:ex,
+           inc:CT_RENT_DAY_EX.filter(function(e){ return ex[e.id]; }).map(function(e){ return e.l; }) };
+}
+/* ดีลที่ใช้กับ "ลำนี้ วันนี้ เส้นทางนี้" · null = คิดแบบเรือบริษัท */
+function ctRentFor(boatId, ymd, routeId){
+  var RN = ctRentOf(boatId);
+  if(RN && ctRentActiveOn(RN, ymd) && RN.perTrip > 0) return RN;
+  return ctRentDayOf(boatId, ymd, routeId);
 }
 /* ══ §ctRentCache · ทำไมต้องมีแคชตรงนี้ ═══════════════════════════════════════════════════════
    วัดจริงที่หน้าแผนคำนวณ · 8 แผน · ปักเรือเช่าไว้ · วาดหนึ่งรอบ = 113ms
@@ -28679,7 +28740,16 @@ function ctRentSet(boatId, k, v){
   /* §rentZero · ระเบียนใหม่ที่เกิดจากการแก้ช่องอื่น (เช่น % น้ำมันของเรือบริษัท) ต้องไม่กลายเป็นเรือเช่าเอง
      ctRentBlank() ตั้ง on:1 ไว้ · เป็นเรือเช่าได้ทางเดียวคือมีคนติ๊ก "เป็นเรือเช่า" */
   if(!R){ R = ctRentBlank(); if(k !== 'on') R.on = 0; }
-  if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
+  if(k.indexOf('day.') === 0){                                   /* §rentDay */
+    R.day = R.day || ctRentDayBlank(); var dk = k.slice(4);
+    if(dk.indexOf('ex.') === 0){ R.day.ex = R.day.ex || {}; R.day.ex[dk.slice(3)] = v ? 1 : 0; }
+    else if(dk.indexOf('rt.') === 0){ R.day.rt = R.day.rt || {}; var _rid = dk.slice(3), _a = (v === '') ? 0 : (+v || 0);   /* §rentRoute */
+      if(_a > 0) R.day.rt[_rid] = _a; else delete R.day.rt[_rid]; }
+    else if(dk === 'from' || dk === 'to') R.day[dk] = v;
+    else if(dk === 'on' || dk === 'vat') R.day[dk] = v ? 1 : 0;
+    else R.day[dk] = (v === '') ? 0 : (+v || 0);
+  }
+  else if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
   else if(k === 'mode' || k === 'note' || k === 'from' || k === 'to') R[k] = v;   /* §rentSpan */
   else if(k === 'on' || k === 'vat') R[k] = v ? 1 : 0;
   else R[k] = (v === '') ? 0 : (+v || 0);
@@ -28883,13 +28953,51 @@ function ctOdRev(pl, tpl, ctx){
   });
   return r;
 }
+/* ══ §pxWhy (2026-10-28) · owner "อันนี้เพิ่มให้ได้ไหมว่า ผลรวมอันนี้ คือ จำนวนเท่าไหร่ คูณกับอะไร · เช่นค่าน้ำมัน กี่ลิตร คูณกับ กี่บาท"
+   คำอธิบายของแต่ละส่วนประกอบ · ตรรกะเดียวกับ ctPartAmt ทุกกิ่ง (แก้ที่หนึ่งต้องแก้อีกที่)
+   สร้างเฉพาะตอน ctx.wantWhy (Trip P&L) · หน้าคุ้มทุนเรียก ctCalc หลายร้อยรอบ ไม่ต้องเสียเวลาประกอบข้อความ */
+function _ctWn(n){ n=+n||0; return (Math.round(n*100)/100).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function _ctWb(n){ return '฿'+_ctWn(n); }
+function ctPartWhy(p, ctx){
+  if(!p) return '';
+  if(p.k === 'fix'){
+    var q = (ctx.eng === '4EN' && p.q4 != null) ? p.q4 : p.q;
+    var u = (ctx.eng === '4EN' && p.u4 != null) ? p.u4 : p.u;
+    var bt = (p.per === 'boat' && (+ctx.boats || 1) > 1) ? (' × '+(+ctx.boats || 1)+' ลำ') : '';
+    if(p.fuel) return _ctWn(q)+' ลิตร × '+_ctWb(ctx.fuel)+'/ลิตร'+bt;
+    return _ctWn(q)+' × '+_ctWb(u)+bt;
+  }
+  if(p.k === 'var'){
+    if(p.fuel) return _ctWn(p.q)+' ลิตร/คน × '+_ctWn(ctx.pax)+' คน × '+_ctWb(ctx.fuel)+'/ลิตร';
+    var u = +p.u || 0;
+    var uTH   = (p.uTH   != null && p.uTH   !== '') ? (+p.uTH   || 0) : u;
+    var uCh   = (p.uCh   != null && p.uCh   !== '') ? (+p.uCh   || 0) : u;
+    var uChTH = (p.uChTH != null && p.uChTH !== '') ? (+p.uChTH || 0)
+                : ((p.uCh != null && p.uCh !== '') ? uCh : uTH);
+    var S = ctPaxSplit(ctx);
+    var parts = [[S.adFR,u,'ผู้ใหญ่ต่างชาติ'],[S.adTH,uTH,'ผู้ใหญ่ไทย'],[S.chFR,uCh,'เด็กต่างชาติ'],[S.chTH,uChTH,'เด็กไทย']].filter(function(x){ return x[0] > 0; });
+    if(!parts.length) return '0 คน';
+    var same = parts.every(function(x){ return x[1] === parts[0][1]; });
+    if(same) return _ctWn(parts.reduce(function(a,x){ return a + x[0]; }, 0))+' คน × '+_ctWb(parts[0][1]);
+    return parts.map(function(x){ return x[2]+' '+_ctWn(x[0])+' × '+_ctWb(x[1]); }).join(' + ');
+  }
+  if(p.k === 'step'){
+    if(p.mode === 'over'){
+      var on = (+ctx.pax || 0) > (+p.over || 0);
+      return on ? ('เกิน '+_ctWn(p.over)+' คน → '+_ctWn(+p.add || 1)+' × '+_ctWb(p.u)) : ('ไม่เกิน '+_ctWn(p.over)+' คน → 0');
+    }
+    var ev = Math.max(1, +p.every || 1), n = Math.max(+p.min || 0, Math.ceil((+ctx.pax || 0) / ev));
+    return _ctWn(ctx.pax)+' คน ÷ ทุก '+_ctWn(ev)+' คน = '+n+(((+p.min||0) > Math.ceil((+ctx.pax||0)/ev))?(' (ขั้นต่ำ '+_ctWn(p.min)+')'):'')+' × '+_ctWb(p.u);
+  }
+  return '';
+}
 function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
   /* §boatRent · ดูจาก "ลำที่วิ่ง" ไม่ใช่จากแผน · หน้าแผนส่งลำที่ปักไว้ · P&L ส่งลำที่ออกวันนั้น
      ลำบริษัทวิ่งเส้นทางเดียวกัน = ไม่มีค่าเช่า แต่มีกัปตัน/เด็กเรือ/ค่าเสื่อม ตามปกติ */
-  var RN = ctRentOf(ctx && ctx.boatId);
-  /* §rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก */
-  if(RN && !ctRentActiveOn(RN, ctx && ctx.date)) RN = null;
+  /* §rentDay · รายเดือนถ้าวันนั้นอยู่ในสัญญา → ไม่งั้นเหมารายวันถ้ามี → ไม่งั้นเรือบริษัท
+     (§rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก) */
+  var RN = ctRentFor(ctx && ctx.boatId, ctx && ctx.date, ctx && ctx.routeId);   /* §rentRoute */
   /* §rentZero (2026-10-04) · ติ๊กเป็นเรือเช่าแต่ยังไม่ได้ใส่ค่าเช่า = ยังคิดแบบเรือบริษัทไปก่อน
      ผู้ใช้ถาม "ทำไมเรือเช่า Break even ถูกกว่าเรือของตัวเอง" · Aluminous1 (เรือบริษัท) มีระเบียน
      on:1 · ค่าเช่า 0 · ของเดิมตัดค่าเสื่อม กัปตัน เด็กเรือ ออกทั้งที่ไม่มีค่าเช่ามาแทน
@@ -28909,11 +29017,11 @@ function ctCalc(pl, ctx, tpl){
     if(RN && RN.ex[ln.id]) return;                        // §boatRent · เจ้าของเรือรับผิดชอบ ไม่ใช่เรา
     if(ctGrpCfg(pl, g).off) return;                       // §category · ปิดทั้งหมวด
     var L = ctEffLine(ln, pl); if(L.off) return;
-    var amt = 0, fx = 0, vr = 0;
+    var amt = 0, fx = 0, vr = 0, W = (ctx && ctx.wantWhy) ? [] : null;   /* §pxWhy */
     if(ln.od){
       /* §ctOd · ราคาต่อหน่วย × จำนวนที่สั่ง · ไม่เกี่ยวกับจำนวนหัวบนเรือ */
       var _q = ctOdQty(pl, ln, ctx);
-      L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; });
+      L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; if(W && a) W.push(_ctWn(_q)+' × '+_ctWb(p.u)); });
     } else {
       L.parts.forEach(function(p){
         var a = ctPartAmt(p, ctx);
@@ -28921,6 +29029,7 @@ function ctCalc(pl, ctx, tpl){
            ก็ติ๊ก fuel ที่ส่วนประกอบเหมือนกัน จะได้ไม่ต้องกลับมาแก้ชื่อ id ที่นี่อีก */
         if(p.fuel && FM !== 1) a *= FM;
         amt += a; if(p.k === 'var') vr += a; else fx += a;
+        if(W && a){ var _w = ctPartWhy(p, ctx); if(_w) W.push(_w + ((p.fuel && FM !== 1) ? (' × '+_ctWn(FM)+' (ตัวคูณน้ำมันของลำ)') : '')); }   /* §pxWhy */
       });
     }
     var m = ctGrpMul(pl, g);                              // §category · ปรับ ±% ทั้งหมวด
@@ -28929,7 +29038,9 @@ function ctCalc(pl, ctx, tpl){
     out.gross += amt; out.vin += v;
     out.fixNet += fx - (L.vat ? fx * R : 0);
     out.varNet += vr - (L.vat ? vr * R : 0);
-    out.rows.push({ id:L.id, g:L.g, l:L.l, vat:L.vat, amt:amt, vatAmt:v, net:amt - v, fix:fx, varr:vr });
+    var why = '';
+    if(W && W.length){ why = W.join(' + ') + (W.length > 1 ? (' = '+ctB(amt / (m || 1))) : '') + (m !== 1 ? (' × '+_ctWn(m*100)+'% (ปรับทั้งหมวด) = '+ctB(amt)) : '') + (L.vat ? ((W.length > 1 || m !== 1 ? '' : (' = '+ctB(amt))) + ' · หัก VAT ซื้อ → '+ctB(amt - v)) : ''); }   /* §pxWhy */
+    out.rows.push({ id:L.id, g:L.g, l:L.l, vat:L.vat, amt:amt, vatAmt:v, net:amt - v, fix:fx, varr:vr, why:why });
   });
   /* §boatRent · แถวสังเคราะห์ · ตั้งใจไม่ใส่ไว้ในสูตรกลาง
      ค่าเช่าเป็นตัวเลขตามสัญญาของเรือลำหนึ่ง ไม่ใช่ค่าที่แต่ละเส้นทางจะมาประมาณเอง
@@ -28937,7 +29048,7 @@ function ctCalc(pl, ctx, tpl){
   if(RN && RN.perTrip > 0){
     var ra = RN.perTrip, rv = RN.vat ? ra * R : 0;
     out.gross += ra; out.vin += rv; out.fixNet += ra - rv;
-    out.rows.push({ id:'rent', g:'ค่าเช่าเรือ', l:'ค่าเช่าเรือ · ' + RN.name,
+    out.rows.push({ id:'rent', g:'ค่าเช่าเรือ', l:'ค่าเช่าเรือ · ' + RN.name + (RN.day ? ' · เหมารายวัน' : ''),
                     vat:RN.vat, amt:ra, vatAmt:rv, net:ra - rv, fix:ra, varr:0 });
   }
   out.net = out.gross - out.vin;
@@ -28954,6 +29065,7 @@ function ctCtxAt(pl, n){
   var th = Math.min(Math.max(0, +pl.paxTH || 0), n), ch = ctChdAt(pl, n);
   return { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0,
            boatId:(pl.boatId || ''),                      /* §boatRent · ลำที่ปักไว้กับแผนนี้ */
+           routeId:(pl.famId || ''),                      /* §rentRoute */
            ownCalc:(pl.rentOff ? 1 : 0),                   /* §rentOffPlan */
            date:(pl._asOf || ''),                          /* §rentSpan · ว่าง = ไม่เช็คช่วงสัญญา */
            pax:n, paxTH:th, paxFR:Math.max(0, n - th), paxCh:ch };
@@ -29313,11 +29425,12 @@ function pxTrip(date, bid){
   /* §pxOd · จำนวนที่ลูกค้าสั่งจริงของลำนี้ · ป้อนเข้าสูตรแทนจำนวนที่คาดไว้ในแผน */
   var LT=(typeof pxLongtail==='function')?pxLongtail(date,bid):{chtr:0,join:0};
   var ctx={ eng:((+boat.engineCount||3)>=4?'4EN':'3EN'), boats:1, fuel:fuelPr,
-            boatId:bid, date:date,            /* §boatRent · ลำที่ออกจริง · §rentSpan · วันที่เทียบช่วงสัญญา */
+            boatId:bid, date:date, routeId:rid,   /* §boatRent · ลำที่ออกจริง · §rentSpan · วันที่เทียบช่วงสัญญา · §rentRoute · ราคารายวันตามเส้นทาง */
             odQty:{ ltj:LT.join, ltc:LT.chtr },
             pax:PX.tot, paxTH:PX.th, paxFR:PX.fr,
             /* §ctChd · ทารกนับรวมกับเด็ก · ไม่มีทางที่ทารกจะกินเท่าผู้ใหญ่ */
-            paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)) };
+            paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)),
+            wantWhy:1 };   /* §pxWhy */
   var C=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx, T):{rows:[],net:0};
 
   /* ของจริงทับค่าประมาณเป็นรายบรรทัด */
@@ -29372,14 +29485,16 @@ function pxTrip(date, bid){
     var est=r.net;                                   /* สูตรคิดเป็นยอดหลังหัก VAT ซื้อแล้ว */
     var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
     var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
-    var why = a ? a.why : '';
+    var why = a ? a.why : (r.why || '');   /* §pxWhy · ไม่มีของจริง = บอกสูตร (จำนวน × ราคา) */
     /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
     if(r.id==='fuel' && real==null){
       if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
       else if(FP.src==='sib' || FP.src==='back' || FP.src==='plan') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
     }
     /* §boatRent · ค่าเช่าเป็นเลขตามสัญญา ไม่ใช่ค่าประมาณจากสูตร ป้ายจึงเป็น "ของจริง" */
-    if(r.id==='rent' && real==null && C.rent){
+    if(r.id==='rent' && real==null && C.rent && C.rent.day){   /* §rentDay */
+      src='r'; why='เหมารายวัน '+ctB(C.rent.amt)+'/วัน'+(C.rent.byRoute?(' (ราคาเส้นทาง '+C.rent.routeName+')'):' (ราคาตั้งต้นของลำ)')+(C.rent.inc&&C.rent.inc.length?(' · รวม '+C.rent.inc.join(' · ')+' แล้ว'):''); }
+    else if(r.id==='rent' && real==null && C.rent){
       src='r';
       why=ctB(C.rent.amt)+'/'+C.rent.days+' วัน · หยุด '+C.rent.off+' → วิ่ง '+C.rent.runDays+' วัน'
          +' = '+ctB(C.rent.perDay)+'/วัน'+(C.rent.trips>1?(' ÷ '+C.rent.trips+' รอบ'):'');
@@ -32015,6 +32130,128 @@ function ctIcon(k, sz, sw){ return '<svg viewBox="0 0 24 24" fill="none" stroke=
   + '" stroke-linecap="round" stroke-linejoin="round" style="width:' + (sz || 16) + 'px;height:' + (sz || 16) + 'px;flex:none">' + (CT_ICON[k] || '') + '</svg>'; }
 
 function ctSetTab(t){ _ct.tab = t; ctRender(); }
+/* ══ §rentTab (2026-10-28) · แท็บ "เรือเช่า" · ดีลของทุกลำในที่เดียว ═══════════════════════
+   owner: "ลำอื่น ๆ ทำยังไง" · เดิมตั้งค่าเช่าได้ทางเดียวคือปักลำนั้นไว้กับแผนสักแผน
+   LKC77 / LKC33 / BMP ไม่ได้ปักกับแผนไหน จึงไม่มีที่ให้ใส่ดีล และ P&L คิดเป็นเรือบริษัทตลอด
+   แท็บนี้ลิสต์ทุกลำที่ ownership==='charter' (และลำที่ติ๊กเป็นเรือเช่าไว้แล้ว) · แก้ตรงนี้ = ระเบียนเดียวกับที่การ์ดในแผนใช้ */
+function ctRentPick(bid){ _ct.rb = bid; ctRender(); }
+function ctRentTabHtml(){
+  var BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){
+    return b && !b.retired && (b.ownership === 'charter' || (ctRentRaw(b.id) && ctRentRaw(b.id).on)); })
+    .sort(function(a, z){ return String(a.name).localeCompare(String(z.name)); });
+  /* วันที่จัดเรือของแต่ละลำ · แยกตามเส้นทาง · ไว้เห็นว่าลำไหน/เส้นทางไหนยังไม่มีดีลครอบ */
+  var runs = {};
+  try{ Object.keys(TRIPS || {}).forEach(function(d){ Object.keys(TRIPS[d] || {}).forEach(function(bid){
+    var op = TRIPS[d][bid]; if(!op || !op.route) return;
+    var r = runs[bid] = runs[bid] || { n:0, first:d, last:d, noDeal:0, rt:{} };
+    r.n++; if(d < r.first) r.first = d; if(d > r.last) r.last = d;
+    var x = r.rt[op.route] = r.rt[op.route] || { n:0, noDeal:0, first:d, last:d };
+    x.n++; if(d < x.first) x.first = d; if(d > x.last) x.last = d;
+    if(!ctRentFor(bid, d, op.route)){ r.noDeal++; x.noDeal++; } }); }); }catch(_){ }
+  if(!_ct.rb || !BL.some(function(b){ return b.id === _ct.rb; })){
+    var f = BL.filter(function(b){ return runs[b.id]; })[0] || BL[0]; _ct.rb = f ? f.id : '';
+  }
+  var dealTxt = function(b){
+    var rr = ctRentRaw(b.id), on = !!(rr && rr.on); if(!on) return '';
+    var RN = ctRentOf(b.id), DY = (rr.day || {});
+    var parts = [];
+    if(RN && RN.perTrip > 0) parts.push('รายเดือน ' + ctB(RN.amt));
+    if(DY.on && (+DY.amt > 0 || Object.keys(DY.rt || {}).length)) parts.push('รายวัน' + (+DY.amt > 0 ? (' ' + ctB(+DY.amt)) : '') + (Object.keys(DY.rt || {}).length ? (' · ' + Object.keys(DY.rt).length + ' เส้นทาง') : ''));
+    return parts.join(' · ') || 'ติ๊กแล้ว · ยังไม่ใส่ราคา';
+  };
+  var list = BL.map(function(b){
+    var ru = runs[b.id], on = !!(ctRentRaw(b.id) && ctRentRaw(b.id).on), sel = b.id === _ct.rb;
+    return '<button type="button" class="ct-rbi' + (sel ? ' on' : '') + '" onclick="ctRentPick(\'' + ctE(b.id) + '\')">'
+      + '<span class="ct-rbi-n"><b>' + ctE(b.name) + '</b><span class="ct-u">' + (+b.cap || 0) + ' ที่นั่ง · ' + ctE(b.type || '') + '</span></span>'
+      + '<span class="ct-rbi-s">' + (on ? ('<span style="color:#0F6E56">' + ctE(dealTxt(b)) + '</span>') : '<span class="ct-u">ยังไม่ตั้ง</span>')
+      + (ru ? ('<span class="ct-u">' + ru.n + ' วัน' + (ru.noDeal ? (' · <b style="color:#A32D2D">' + ru.noDeal + ' ไม่มีดีล</b>') : '') + '</span>') : '<span class="ct-u">ไม่เคยจัดเรือ</span>') + '</span></button>';
+  }).join('');
+  var b = BL.filter(function(x){ return x.id === _ct.rb; })[0];
+  var detail = b ? ctRentCard(b, runs[b.id]) : '<div class="ct-hint">เลือกเรือทางซ้าย</div>';
+  return '<style>'
+    + '#view-costing .ct-rwrap{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;align-items:start;padding:14px}'
+    + '#view-costing .ct-rbl{display:flex;flex-direction:column;gap:6px;position:sticky;top:0}'
+    + '#view-costing .ct-rbi{display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid #E3E7EE;background:#fff;border-radius:11px;padding:10px 12px;font:inherit;cursor:pointer;color:inherit}'
+    + '#view-costing .ct-rbi:hover{border-color:#1683C7}'
+    + '#view-costing .ct-rbi.on{border:2px solid #1683C7;background:#F2F8FD}'
+    + '#view-costing .ct-rbi-n{display:flex;justify-content:space-between;align-items:baseline;gap:8px}'
+    + '#view-costing .ct-rbi-n b{font-size:13.5px}'
+    + '#view-costing .ct-rbi-s{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;flex-wrap:wrap}'
+    + '#view-costing .ct-rtt{width:100%;border-collapse:collapse;font-size:12px}'
+    + '#view-costing .ct-rtt th{font-weight:600;color:#64748B;text-align:left;padding:4px 8px;border-bottom:1px solid #E3E7EE}'
+    + '#view-costing .ct-rtt td{padding:5px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle}'
+    + '@media (max-width:1100px){#view-costing .ct-rwrap{grid-template-columns:1fr}#view-costing .ct-rbl{position:static}}'
+    + '</style>'
+    + '<div class="ct-sheet" style="padding:0"><div class="ct-hint" style="padding:12px 14px 0">'
+    + '<b>เรือเช่า / เรือร่วม</b> · ดีลเป็นของ<b>ลำ</b> · P&amp;L รายทริปเลือกให้เองทีละวัน: อยู่ในสัญญารายเดือน → ค่าเช่ารายเดือน/ทริป · นอกนั้นถ้ามีดีลรายวัน → ค่าเหมา/วันของ<b>เส้นทางนั้น</b> (ไม่ตั้งรายเส้นทาง = ราคาตั้งต้นของลำ) · ไม่มีทั้งคู่ → คิดแบบเรือบริษัท</div>'
+    + '<div class="ct-rwrap"><div class="ct-rbl">' + (list || '<div class="ct-hint">ยังไม่มีเรือที่ตั้ง ownership = เรือเช่า/เรือร่วม ในทะเบียนเรือ</div>') + '</div>'
+    + '<div>' + detail + '</div></div></div>';
+}
+function ctRentCard(b, ru){
+  var bid = b.id, rr = ctRentRaw(bid) || ctRentBlank(), on = !!(ctRentRaw(bid) && rr.on);
+  var RN = ctRentOf(bid), DY = rr.day || ctRentDayBlank();
+  var S = function(k, v, w, ph){ return '<input class="ct-in" data-fk="rt.' + bid + '.' + k + '" value="' + ((v == null || v === 0) && ph != null ? '' : ctE(v))
+    + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)" style="width:' + (w || 84) + 'px">'; };
+  var D = function(k, v){ return '<input type="date" class="ct-in" style="width:150px" data-fk="rt.' + bid + '.' + k + '" value="' + ctE(v || '') + '" onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)">'; };
+  var C = function(k, v, lbl, ttl){ return '<label class="ct-rchk"' + (ttl ? (' title="' + ctE(ttl) + '"') : '') + '><input type="checkbox"' + (v ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.checked?1:0)"> ' + lbl + '</label>'; };
+  var status = !on ? '<span class="ct-u">ยังไม่ติ๊กเป็นเรือเช่า · P&amp;L คิดแบบเรือบริษัท (กัปตัน เด็กเรือ ค่าเสื่อม น้ำมันตามสูตร)</span>'
+    : ((RN && RN.perTrip > 0 ? ('<b style="color:#B45309">รายเดือน ' + ctB(RN.amt) + '/งวด = ' + ctB(RN.perTrip) + '/ทริป' + (RN.from || RN.to ? (' · ' + (RN.from || '…') + ' → ' + (RN.to || '…')) : ' · ไม่จำกัดช่วง') + '</b>') : '<span class="ct-u">ไม่มีค่าเช่ารายเดือน</span>')
+      + ' &nbsp;·&nbsp; ' + (DY.on && (+DY.amt > 0 || Object.keys(DY.rt || {}).length) ? ('<b style="color:#0F6E56">รายวัน' + (+DY.amt > 0 ? (' ' + ctB(+DY.amt) + '/วัน') : '') + (DY.from || DY.to ? (' · ' + (DY.from || '…') + ' → ' + (DY.to || '…')) : ' · ทุกวันนอกสัญญารายเดือน') + '</b>') : '<span class="ct-u">ไม่มีดีลรายวัน</span>'));
+  var runTxt = ru ? ('<span class="ct-u">จัดเรือไว้ ' + ru.n + ' วัน (' + ru.first + ' → ' + ru.last + ')' + (ru.noDeal ? (' · <b style="color:#A32D2D">' + ru.noDeal + ' วันไม่มีดีลครอบ → คิดแบบเรือบริษัท</b>') : ' · ทุกวันมีดีลครอบ') + '</span>') : '<span class="ct-u">ยังไม่เคยจัดลงตาราง</span>';
+  var head = '<div class="ct-cath"><span>' + ctIcon('anchor', 15) + '<b>' + ctE(b.name) + '</b><span class="ct-u" style="margin-left:8px">' + (+b.cap || 0) + ' ที่นั่ง · ' + ctE(b.type || '') + (b.ownership === 'charter' ? ' · เรือเช่า/เรือร่วม' : '') + '</span></span>'
+    + '<label class="ct-rchk big"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'on\',this.checked?1:0)"> <b>เป็นเรือเช่า</b></label></div>';
+  var body = '<div class="ct-rentbody"><div class="ct-rrow">' + status + '</div><div class="ct-rrow">' + runTxt + '</div>';
+  if(on){
+    var md = rr.mode || 'lump', seats = +b.cap || 0;
+    body += '<div class="ct-rsec"><div class="ct-rsech">สัญญารายเดือน (ต่องวด) · ผู้เช่าจ่ายน้ำมันเอง · กัปตัน เด็กเรือ ค่าเสื่อม ตัดออกตามที่ติ๊กข้างล่าง · ราคาเดียวทุกเส้นทาง</div>'
+      + '<div class="ct-rrow">'
+      + '<label class="ct-rchk"><input type="radio" name="rtm' + bid + '"' + (md === 'lump' ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'lump\')"> เหมาทั้งลำ</label>'
+      + '<label class="ct-rchk"><input type="radio" name="rtm' + bid + '"' + (md === 'seat' ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'seat\')"> ต่อที่นั่ง × ' + seats + '</label>'
+      + (md === 'seat' ? ('<label class="ct-f"><span>ค่าเช่า/ที่นั่ง/งวด</span>' + S('seat', rr.seat, 96) + '</label>') : ('<label class="ct-f"><span>ค่าเช่า/งวด (บาท)</span>' + S('amt', rr.amt, 110) + '</label>'))
+      + '<label class="ct-f"><span>วันในงวด</span>' + S('days', rr.days, 64, 30) + '</label>'
+      + '<label class="ct-f"><span>วันหยุดตามตกลง</span>' + S('off', rr.off, 64, 0) + '</label>'
+      + '<label class="ct-f"><span>รอบต่อวัน</span>' + S('trips', rr.trips, 64, 1) + '</label>'
+      + '<label class="ct-f"><span>สัญญาเริ่ม</span>' + D('from', rr.from) + '</label>'
+      + '<label class="ct-f"><span>สัญญาจบ</span>' + D('to', rr.to) + '</label>'
+      + '<span style="align-self:end;padding-bottom:8px">' + C('vat', rr.vat, 'มี VAT ขอคืนได้') + '</span>'
+      + '</div><div class="ct-rrow"><span class="ct-u" style="align-self:center">เจ้าของเรือรับผิดชอบ (รายเดือน):</span>'
+      + CT_RENT_EX.map(function(e){ return C('ex.' + e.id, (rr.ex || {})[e.id], ctE(e.l), e.why); }).join('')
+      + '<label class="ct-f" style="margin-left:auto"><span>น้ำมันเทียบสูตรกลาง %</span>' + S('fuelMul', (rr.fuelMul == null || rr.fuelMul === '') ? 100 : rr.fuelMul, 64, 100) + '</label>'
+      + '</div></div>';
+    /* §rentRoute · ตารางราคารายวันต่อเส้นทาง · เส้นทางที่ลำนี้เคย/จะวิ่ง + เส้นทางที่ตั้งราคาไว้ + เพิ่มเองได้ */
+    var rtRows = '';
+    if(DY.on){
+      var RT = (DY.rt || {}), ids = {};
+      Object.keys((ru && ru.rt) || {}).forEach(function(r){ ids[r] = 1; });
+      Object.keys(RT).forEach(function(r){ ids[r] = 1; });
+      var all = (typeof ROUTES !== 'undefined' ? ROUTES : []).filter(function(r){ return r && !r.retired; });
+      var opts = all.filter(function(r){ return !ids[r.id]; }).map(function(r){ return '<option value="' + ctE(r.id) + '">' + ctE(r.name) + '</option>'; }).join('');
+      rtRows = '<table class="ct-rtt"><tr><th>เส้นทาง</th><th>ค่าเหมา/วัน</th><th>ใช้อยู่</th><th>วันที่จัดเรือ</th></tr>'
+        + Object.keys(ids).map(function(rid){
+            var ro = (typeof getRoute === 'function') ? getRoute(rid) : null, x = ru && ru.rt && ru.rt[rid];
+            var amt = +RT[rid] || 0, eff = ctRentDayAmt(DY, rid);
+            return '<tr><td><b>' + ctE((ro && ro.name) || rid) + '</b>' + (ro && ro.pier ? ('<span class="ct-u"> · ' + ctE(ro.pier) + '</span>') : '') + '</td>'
+              + '<td>' + S('day.rt.' + rid, amt, 100, '= ตั้งต้น') + '</td>'
+              + '<td>' + (eff > 0 ? ('<b>' + ctB(eff) + '</b>' + (amt > 0 ? '' : ' <span class="ct-u">(ตั้งต้น)</span>')) : '<b style="color:#A32D2D">ไม่มีราคา → เรือบริษัท</b>') + '</td>'
+              + '<td class="ct-u">' + (x ? (x.n + ' วัน · ' + x.first + ' → ' + x.last + (x.noDeal ? (' · <b style="color:#A32D2D">' + x.noDeal + ' ไม่มีดีล</b>') : '')) : '—') + '</td></tr>';
+          }).join('')
+        + '</table>'
+        + (opts ? ('<div class="ct-rrow" style="margin-top:6px"><label class="ct-f"><span>เพิ่มเส้นทางที่ราคาต่างจากตั้งต้น</span><select class="ct-in" onchange="if(this.value){ctRentSet(\'' + bid + '\',\'day.rt.\'+this.value,\'1\');}" style="width:260px"><option value="">— เลือกเส้นทาง —</option>' + opts + '</select></label><span class="ct-u" style="align-self:end;padding-bottom:9px">เพิ่มแล้วไปพิมพ์ราคาในตาราง · ลบ = ล้างช่องให้ว่าง</span></div>') : '');
+    }
+    body += '<div class="ct-rsec" data-rentday="1"><div class="ct-rsech">เหมารายวัน · ใช้กับวันที่ออกเรือนอกสัญญารายเดือน (หรือลำที่เช่าเป็นรายวันอย่างเดียว) · ราคาต่างกันได้ตามเส้นทาง</div>'
+      + '<div class="ct-rrow">' + C('day.on', DY.on, '<b>มีดีลเหมารายวัน</b>')
+      + (DY.on ? ('<label class="ct-f"><span>ราคาตั้งต้น/วัน (เส้นทางที่ไม่ได้ตั้งแยก)</span>' + S('day.amt', DY.amt, 110) + '</label>'
+        + '<label class="ct-f"><span>ตั้งแต่</span>' + D('day.from', DY.from) + '</label>'
+        + '<label class="ct-f"><span>ถึง</span>' + D('day.to', DY.to) + '</label>'
+        + '<span style="align-self:end;padding-bottom:8px">' + C('day.vat', DY.vat, 'มี VAT ขอคืนได้') + '</span>') : '')
+      + '</div>'
+      + (DY.on ? ('<div class="ct-rrow"><span class="ct-u" style="align-self:center">ราคารายวันรวมมาแล้ว (ตัดออกจากต้นทุนเรา):</span>'
+        + CT_RENT_DAY_EX.map(function(e){ return C('day.ex.' + e.id, (DY.ex || {})[e.id], ctE(e.l), e.why); }).join('') + '</div>' + rtRows) : '')
+      + '</div>';
+  }
+  body += '</div>';
+  return '<div class="ct-card ct-catcard ct-rent" style="margin:0">' + head + body + '</div>';
+}
 // §staticTabs · แถบแท็บอยู่นอกส่วนที่ re-render · เดิมแท็บถูกลบทิ้งกลางคลิก ทำให้ "กดหัวข้อไม่ลง"
 function ctPaintTabs(){
   var bar = document.getElementById('ct-tabs'); if(!bar) return;
@@ -32077,6 +32314,7 @@ function ctRender(){
                  : (_ct.tab === 'ovr') ? ctOvrHtml()
                  : (_ct.tab === 'real') ? ctRealHtml()      /* §plCost */
                  : (_ct.tab === 'match') ? ctMatchHtml()    /* §ctMatch */
+                 : (_ct.tab === 'rent') ? ctRentTabHtml()   /* §rentTab */
                  : ctPlanHtml();
   var restore = function(){
     var s2 = host.querySelector('.ct-sheet');
@@ -32846,13 +33084,41 @@ function ctPlanHtml(){
         + 'นอกช่วงนี้ลำนี้คิดแบบเรือบริษัทตามปกติ</span>'
       + '</div>';
 
+    /* §rentDay · เหมารายวัน · ใช้กับวันที่อยู่นอกสัญญารายเดือน (หรือลำที่เช่าเป็นรายวันอย่างเดียว) */
+    var DY = rr.day || ctRentDayBlank();
+    var DS = function(k, v, w, ph){
+      return '<input class="ct-in" data-fk="rn.' + bid + '.day.' + k + '" value="' + ((v == null || v === 0) && ph != null ? '' : ctE(v))
+        + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'day.' + k + '\',this.value)"'
+        + ' style="width:' + (w || 84) + 'px">'; };
+    body += '<div class="ct-rsec" data-rentday="1"><div class="ct-rsech">เหมารายวัน · ใช้กับวันที่ไม่อยู่ในสัญญารายเดือนข้างบน (หรือลำที่เช่าเป็นรายวันอย่างเดียว)</div>'
+      + '<div class="ct-rrow">'
+      + '<label class="ct-rchk"><input type="checkbox"' + (DY.on ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'day.on\',this.checked?1:0)"> <b>มีดีลเหมารายวัน</b></label>'
+      + (DY.on ? ('<label class="ct-f"><span>ค่าเหมา/วัน (บาท)</span>' + DS('amt', DY.amt, 110) + '</label>'
+        + '<label class="ct-f"><span>ตั้งแต่</span><input type="date" class="ct-in" style="width:150px" data-fk="rn.' + bid + '.day.from" value="' + ctE(DY.from || '') + '"'
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.from\',this.value)"></label>'
+        + '<label class="ct-f"><span>ถึง</span><input type="date" class="ct-in" style="width:150px" data-fk="rn.' + bid + '.day.to" value="' + ctE(DY.to || '') + '"'
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.to\',this.value)"></label>'
+        + '<label class="ct-rchk" style="align-self:end;padding-bottom:8px"><input type="checkbox"' + (DY.vat ? ' checked' : '')
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.vat\',this.checked?1:0)"> มี VAT ขอคืนได้</label>') : '')
+      + '</div>'
+      + (DY.on ? ('<div class="ct-rrow"><span class="ct-u" style="align-self:center">ราคารายวันรวมอะไรมาแล้วบ้าง · ติ๊กไว้ = ตัดบรรทัดนั้นออกจากต้นทุนของเรา</span>'
+        + CT_RENT_DAY_EX.map(function(e){
+            return '<label class="ct-rchk" title="' + ctE(e.why) + '"><input type="checkbox"'
+              + ((DY.ex || {})[e.id] ? ' checked' : '')
+              + ' onchange="ctRentSet(\'' + bid + '\',\'day.ex.' + e.id + '\',this.checked?1:0)"> ' + ctE(e.l) + '</label>'; }).join('')
+        + '</div>'
+        + '<div class="ct-hint" style="padding:0">P&amp;L รายทริปจะลง <b>' + ctB(+DY.amt || 0) + '/วัน</b> ให้ทุกวันที่ลำนี้ออกเรือในช่วงนี้ · '
+        + 'วันที่อยู่ในสัญญารายเดือนใช้ค่าเช่ารายเดือน ไม่ใช้ตัวนี้ · ว่างทั้งคู่ = ทุกวันนอกสัญญารายเดือน</div>') : '')
+      + '</div>';
+
     if(RN && RN.amt > 0){
       body += '<div class="ct-rcalc">' + ctB(RN.amt) + ' ÷ (' + RN.days + ' − ' + RN.off + ' วันหยุด) = <b>'
         + ctB(RN.perDay) + '/วันวิ่ง</b>'
         + (RN.trips > 1 ? (' ÷ ' + RN.trips + ' รอบ = <b>' + ctB(RN.perTrip) + '/ทริป</b>') : '')
         + ' · มีให้วิ่ง ' + RN.runDays + ' วัน/งวด</div>';
     } else {
-      body += '<div class="ct-rcalc warn" data-rentzero="1">ยังไม่ได้ใส่ค่าเช่า · ลำนี้จึง<b>ยังคิดแบบเรือบริษัท</b> (มีค่าเสื่อม กัปตัน เด็กเรือ) จนกว่าจะใส่ค่าเช่า · ถ้าไม่ใช่เรือเช่า เอาติ๊ก "เป็นเรือเช่า" ออก</div>';
+      body += '<div class="ct-rcalc warn" data-rentzero="1">ยังไม่ได้ใส่ค่าเช่ารายเดือน · ' + (DY.on && +DY.amt > 0 ? 'ลำนี้คิดตาม<b>ดีลเหมารายวัน</b>ข้างล่าง' : 'ลำนี้จึง<b>ยังคิดแบบเรือบริษัท</b>') + ' (มีค่าเสื่อม กัปตัน เด็กเรือ) จนกว่าจะใส่ค่าเช่า · ถ้าไม่ใช่เรือเช่า เอาติ๊ก "เป็นเรือเช่า" ออก</div>';
     }
     body += '</div>';
 
@@ -48831,6 +49097,10 @@ function cxwCanEdit(){
   return false;
 }
 function cxwE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* §cxwTab (2026-10-27) · owner "เอาไปวางไว้ตรงที่อื่นได้ไหม" (แถบแดงเต็มกว้างบนทุกแท็บของ Booking)
+   เลือก: ย้ายแถบเต็มไปอยู่ในแท็บ Cancellations · แท็บอื่นเหลือตัวเลขแดงบนปุ่มแท็บ Cancellations */
+function cxwTabBadge(){ var n=0; try{ n=cxwList().length; }catch(_){ n=0; } if(!n) return '';
+  return ' <span title="'+n+' ใบถูกยกเลิกแต่ยังไม่ระบุเหตุผล" style="display:inline-block;background:#A32D2D;color:#fff;border-radius:99px;padding:0 6px;font-size:10.5px;font-weight:800;line-height:16px;margin-left:4px;vertical-align:1px">'+n+'</span>'; }
 function cxwBanner(){
   var L=cxwList(); if(!L.length) return '';
   var px=L.reduce(function(s,b){ return s+cxwPax(b); },0), nb=L.filter(cxwIsB2C).length;
