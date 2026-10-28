@@ -9,6 +9,11 @@
      · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
    (§cxWhy, the reason of a booking cancelled without one, saves since 2026-10-28: ops/41-ops-cancel-reason.js →
     POST /v1/bookings/{id}/cancel-reason)
+   From the 10-29 sync:
+     · §eqLink     Fleet › Equipment: link a gearbox / propeller / engine by position (saves through flSave, a no-op here;
+                   swap and remove still save: ops/23-ops-fleet-assets.js)
+     · §rentDay    Costing › เรือเช่า: the daily charter rate per boat and per route (the server's boat rent has no such
+                   fields, so the adapter drops them); the other rent fields still save
    (§tcxPartner, Send to partner, saves since 2026-10-28: ops/27-ops-weather.js → POST /v1/weather-closures/{id}/send-to-partner)
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
@@ -42,4 +47,17 @@
 
   /* §flnWd · the job itself is still created; parts are withdrawn from the job page afterwards */
   block(['flnWdAdd'], 'Withdrawing parts while adding work (create the job, then withdraw from its page)');
+
+  /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
+  block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');
+
+  /* §rentDay · only the daily-rate fields are refused; the box is put back by redrawing the page */
+  wrap('ctRentSet', function(orig, boatId, k, v){
+    if(String(k || '').indexOf('day.') === 0){
+      refuse('The daily charter rate');
+      try{ if(typeof window.ctRender === 'function') window.ctRender(); }catch(_){}
+      return false;
+    }
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
 })();

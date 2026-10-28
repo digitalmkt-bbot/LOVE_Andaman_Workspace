@@ -760,6 +760,13 @@
     }).catch(function(){ return null; });
   });
 
+  /* §propBoat (lk 10-27) · the Asset page's fix for a Spare propeller still on a gearbox: "on" sets it Active, the other choice takes it
+     off the gearbox as a Spare. Both are the server's commands here (activate / remove), so nothing is changed in the browser first. */
+  wrap('faPropFix', function(orig, id, how){
+    if(how === 'on') return typeof window.flEquipPropActive === 'function' ? window.flEquipPropActive(id) : null;
+    return typeof window.flEquipRemove === 'function' ? window.flEquipRemove('prop', id) : null;
+  });
+
   wrap('flEquipRemove', function(orig, type, id){
     var list = type === 'eng' ? listEngines() : type === 'gb' ? listGearboxes() : listPropellers();
     var o = list.find(function(x){ return x && x.id === id; });
