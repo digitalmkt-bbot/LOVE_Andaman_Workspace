@@ -50,6 +50,7 @@
   function nul(v){ var s = text(v); return s === '' ? null : s; }
 
   P.clone = clone; P.text = text; P.nul = nul; P.enabled = enabled;
+  P.adopt = function(name, rows){ var s = P.specs.filter(function(x){ return x.name === name; })[0]; if(s && s.adopt) s.adopt(rows); };
   P.register = function(spec){
     P.specs = P.specs.filter(function(s){ return s.name !== spec.name; });
     P.specs.push(spec);
@@ -188,6 +189,20 @@
       commit: function(){ if(base) base = clone(spec.rows()); if(cfg.onCommit) try{ cfg.onCommit(); }catch(_){} },
       baseIds: function(){ return (base || []).map(function(r){ return r.id; }); },
       setRows: function(rows){ window[cfg.global] = rows; base = clone(rows); if(cfg.after) try{ cfg.after(); }catch(_){} },
+      // rows the server made or changed itself (a transfer's receipt makes the receiver's item): into the list and its
+      // base alike, so the next save does not send them back
+      adopt: function(svRows){
+        if(!Array.isArray(window[cfg.global])) window[cfg.global] = [];
+        (svRows || []).forEach(function(sv){
+          var r = cfg.fromServer(sv);
+          [window[cfg.global], base].forEach(function(list){
+            if(!list) return;
+            var i = -1; list.forEach(function(x, n){ if(x && x.id === r.id) i = n; });
+            if(i >= 0) list[i] = clone(r); else list.push(clone(r));
+          });
+        });
+        if(cfg.after) try{ cfg.after(); }catch(_){}
+      },
       plan: function(){
         if(!base) return [];
         var cur = spec.rows(), was = {}, now = {}, jobs = [];

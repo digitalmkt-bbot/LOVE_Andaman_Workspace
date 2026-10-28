@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
+const BLOCKED = ['cxwOpen', 'cxwSave', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
@@ -37,6 +37,16 @@ test("only the partner result and a ticked boat-back box are refused; their neig
   assert.equal(ctx.bookingV2SetTripField(2, 'ovnReturnDate', '2026-11-02'), 'orig');
   assert.deepEqual(calls, [['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 0], ['bookingV2SetTripField', 2, 'ovnReturnDate', '2026-11-02']]);
   assert.equal(alerts.length, 2);
+});
+
+test('§poXfer is no longer refused here: 48-ops-pier-office.js sends it to operation-backend', () => {
+  const XFER = ['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'];
+  const alerts = [], ctx = { alert: (m) => alerts.push(m), document: { getElementById: () => null }, laOps: { enabled: () => true } };
+  ctx.window = ctx;
+  for (const n of XFER) ctx[n] = () => 'adapter';
+  vm.runInNewContext(SOURCE, ctx);
+  for (const n of XFER) assert.equal(ctx[n]('x'), 'adapter', n);
+  assert.deepEqual(alerts, []);
 });
 
 test('outside ops mode (lk-inbox itself) everything is the legacy function', () => {

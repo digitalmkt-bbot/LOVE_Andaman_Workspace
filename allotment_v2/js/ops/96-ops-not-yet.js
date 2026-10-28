@@ -5,7 +5,6 @@
    message instead (or, for a banner that only leads to one, not drawn). Remove a block when its
    adapter or endpoint lands.
      · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
-     · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
      · §tcxPartner cancelled trip → "Send to partner" and its per-booking partner entries
      · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
      · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
@@ -31,9 +30,6 @@
   wrap('cxwBanner', function(){ return ''; });
   wrap('cxwDetailCard', function(){ return ''; });
   block(['cxwOpen', 'cxwSave'], 'Entering a reason for an already cancelled booking');
-
-  /* §poXfer */
-  block(['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'], 'Transferring equipment to another pier');
 
   /* §tcxPartner · the other results of the cancelled-trip dialog are unchanged */
   wrap('tcxDlgSet', function(orig, key, val){

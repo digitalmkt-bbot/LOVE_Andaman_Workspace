@@ -602,3 +602,106 @@ test('sheet: a refusal keeps the dialog open and shows the server\'s message', a
   assert.equal(rt.fails[0].code, 'table_mismatch');
   assert.ok(!rt.legacy.includes('modalClose'));
 });
+
+/* ── §poXfer · transfers between piers, server first ── */
+const XV = (o) => ({ id: 'px_1', from_pier: 'tublamu', to_pier: PIER, item_id: 'pi_tl', date: DATE, note: 'van', created_at: 't', created_by: 'GSA',
+  sent: 5, received: 0, short: 0, cancelled: 0, left: 5, state: 'in_transit', label: 'Fin M (Tub Lamu)', kind_id: 'pk_fin', received_item_id: null, ...o });
+const XOUT = (o) => XV({ id: 'px_2', from_pier: PIER, to_pier: 'ranong', item_id: 'pi_a', label: 'Fin M', sent: 4, left: 4, ...o });
+// the server's side: a write's answer function changes `srv`, and the stock read after it answers from `srv`
+const xferRt = (answers = {}, dom = {}, extra = {}, srv = { bal: { pi_a: BAL({}) }, incoming: [XV({})], outgoing: [XOUT({})], moves: [] }) => runtime({ dom, answers: {
+  'GET /v1/pier-office/panwa/stock': () => ({ pier: PIER, items: Object.keys(srv.bal).map((id) => ({ id, label: id, kind_id: 'pk_fin', total: 40, active: true, note: null, ...srv.bal[id] })),
+    transfers: { incoming: srv.incoming, outgoing: srv.outgoing } }),
+  ['GET /v1/pier-office/panwa/days/' + DATE + '/boats']: { boats: [], closed: null, reopens: [] },
+  'GET /v1/pier-office/panwa/moves?from=2000-01-01&limit=5000': () => ({ pier: PIER, total: srv.moves.length, moves: srv.moves.slice().reverse() }),
+  ...Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, typeof a === 'function' || a instanceof Error ? a : (b) => { if (a.srv) a.srv(srv); (a.moves || []).forEach((m) => { if (m.pier === PIER) srv.moves.push(m); }); return J({ ...a, srv: undefined }); }])),
+}, over: () => ({
+  poXferPendIn: () => [{ legacy: 'in' }], poXferPendOut: () => [{ legacy: 'out' }], poXferLbl: () => 'legacy label',
+  poXferSave: () => 'legacy save', poXferRecvSave: () => 'legacy recv', poXferCancel: () => 'legacy cancel',
+  poGuard: () => true, poRecvItems: (id) => (id ? [{ id, pier: PIER }] : [{ id: 'pi_a', pier: PIER }, { id: 'pi_t', pier: PIER }]),
+  ...extra,
+}) });
+const val = (v) => ({ value: v, textContent: '' });
+
+test('transfers: in transit to and from the pier come from the stock read, as legacy\'s rows; legacy mode is legacy\'s', async () => {
+  const off = runtime({ enabled: false, over: () => ({ poXferPendIn: () => ['legacy'] }) });
+  assert.deepEqual(off.w.poXferPendIn(PIER), ['legacy']);
+  const rt = xferRt();
+  await boot(rt);
+  assert.deepEqual(J(rt.w.poXferPendIn(PIER)), [], 'before the stock read: nothing, never legacy\'s one-pier list');
+  rt.w.renderPierOffice(); await rt.flush();
+  const inn = rt.w.poXferPendIn(PIER);
+  assert.deepEqual(J(inn), [{ m: { itemId: 'pi_tl', date: DATE, by: 'GSA', note: 'van' }, id: 'px_1', src: 'tublamu', dst: PIER, sent: 5, got: 0, short: 0, back: 0, left: 5, srvLabel: 'Fin M (Tub Lamu)' }]);
+  assert.equal(rt.w.poXferLbl(inn[0]), 'Fin M (Tub Lamu)', 'the other pier\'s item is named by the server');
+  assert.deepEqual(rt.w.poXferPendOut(PIER).map((o) => [o.id, o.dst, o.left]), [['px_2', 'ranong', 4]]);
+});
+
+test('transfers: send goes to the command with the dialog as typed; the server\'s moves, balances and transfer come back', async () => {
+  const sent = { transfers: [XOUT({ id: 'px_9', to_pier: 'tublamu', sent: 3, left: 3 })], balances: [{ item_id: 'pi_a', label: 'Fin M', ...BAL({ ready: 37, inhand: 37 }) }],
+    moves: [MOVE({ id: 'pm_x', type: 'xfer_out', qty: 3, source: null, transfer_id: 'px_9', note: 'with Aa' })] };
+  const dom = { porxto: val('tublamu'), porxd: val(DATE), porxn: val(' with Aa '), porx_pi_a: val('3'), porx_pi_t: val(''), porxerr: val('') };
+  sent.srv = (s) => { s.bal.pi_a = BAL({ ready: 37, inhand: 37 }); s.outgoing = [XOUT({}), sent.transfers[0]]; };
+  const rt = xferRt({ 'POST /v1/pier-office/panwa/transfers': sent }, dom);
+  await boot(rt); rt.w.renderPierOffice(); await rt.flush();
+  rt.legacy.length = 0;
+  assert.equal(await rt.w.poXferSave(), true);
+  assert.deepEqual(writes(rt).map((c) => [c.path, c.body]), [['/v1/pier-office/panwa/transfers', { date: DATE, to_pier: 'tublamu', lines: [{ item_id: 'pi_a', qty: 3 }], note: 'with Aa' }]]);
+  assert.equal(rt.w.poBal('pi_a').ready, 37);
+  const m = rt.w.PIER_MOVES.at(-1);
+  assert.deepEqual([m.id, m.type, m.from, m.srv], ['pm_x', 'xfer_out', 'to|tublamu', true], 'the ledger can say where it went');
+  assert.ok(rt.w.poXferPendOut(PIER).some((o) => o.id === 'px_9'));
+  assert.deepEqual(rt.wrote, ['pier']);
+  assert.ok(rt.legacy.includes('modalClose') && rt.legacy.includes('renderPierOffice'));
+});
+
+test('transfers: a refused send changes nothing and shows the server\'s message in the dialog', async () => {
+  const refusal = Object.assign(new Error('Fin M: ready stock is 2, cannot send 3'), { status: 409, code: 'insufficient_stock' });
+  const dom = { porxto: val('tublamu'), porxd: val(DATE), porx_pi_a: val('3'), porxerr: val('') };
+  const rt = xferRt({ 'POST /v1/pier-office/panwa/transfers': refusal }, dom);
+  await boot(rt); rt.w.renderPierOffice(); await rt.flush();
+  const before = J(rt.w.PIER_MOVES);
+  rt.legacy.length = 0;
+  assert.equal(await rt.w.poXferSave('pi_a'), false);
+  assert.equal(dom.porxerr.textContent, 'Fin M: ready stock is 2, cannot send 3');
+  assert.deepEqual(rt.fails.map((f) => [f.title, f.code]), [['Transfer not sent', 'insufficient_stock']]);
+  assert.deepEqual(J(rt.w.PIER_MOVES), before);
+  assert.equal(rt.w.poBal('pi_a').ready, 40);
+  assert.ok(!rt.legacy.includes('modalClose'), 'the dialog stays open with what was typed');
+  assert.deepEqual(rt.wrote, []);
+});
+
+test('transfers: receive sends what arrived and the short choice; an item the server made joins the list and is not sent back', async () => {
+  const made = { id: 'pi_new', pier: PIER, kind_id: 'pk_fin', label: 'Fin M (Tub Lamu)', total: 0, active: true, note: 'Made by a transfer from tublamu' };
+  const got = { transfers: [XV({ received: 3, short: 2, left: 0, state: 'closed_short', received_item_id: 'pi_new' })], balances: [{ item_id: 'pi_new', label: made.label, ...BAL({ ready: 3, inhand: 3 }) }],
+    moves: [MOVE({ id: 'pm_r', item_id: 'pi_new', qty: 3, source: 'transfer', transfer_id: 'px_1' }), MOVE({ id: 'pm_s', pier: 'tublamu', item_id: 'pi_tl', type: 'xfer_short', qty: 2, source: null, transfer_id: 'px_1' })],
+    items_made: [made], items_switched_on: [] };
+  const dom = { porr_px_1: val('3'), porrs_px_1: val('short'), porrd: val(DATE), porrn: val(''), porrerr: val('') };
+  got.srv = (s) => { s.bal.pi_new = BAL({ ready: 3, inhand: 3 }); s.incoming = []; };
+  const rt = xferRt({ 'POST /v1/pier-office/panwa/transfers/receive': got }, dom);
+  await boot(rt); rt.w.renderPierOffice(); await rt.flush();
+  assert.equal(await rt.w.poXferRecvSave(), true);
+  assert.deepEqual(writes(rt).map((c) => [c.path, c.body]), [['/v1/pier-office/panwa/transfers/receive', { date: DATE, lines: [{ transfer_id: 'px_1', qty: 3, close_short: true }] }]]);
+  assert.deepEqual(J(rt.w.poXferPendIn(PIER)), [], 'closed: no longer awaiting receipt');
+  assert.deepEqual(J(rt.w.PIER_ITEMS.find((i) => i.id === 'pi_new')), { id: 'pi_new', pier: PIER, kind: 'pk_fin', label: 'Fin M (Tub Lamu)', total: 0, active: true, note: 'Made by a transfer from tublamu' });
+  assert.equal(rt.w.poBal('pi_new').ready, 3);
+  assert.deepEqual(rt.w.PIER_MOVES.filter((m) => m.srv).map((m) => [m.type, m.from]).sort(), [['receive', 'transfer|px_1'], ['xfer_short', 'xfer|px_1']], 'legacy\'s ledger reads the transfer from rom');
+  await save(rt);
+  assert.ok(!writes(rt).some((c) => c.path === '/v1/pier-office/items'), 'the made item is already the server\'s');
+});
+
+test('transfers: cancel asks, then sends the day on screen; only a transfer this pier sent', async () => {
+  const back = { transfer: XOUT({ cancelled: 4, left: 0, state: 'cancelled' }), balances: [{ item_id: 'pi_a', label: 'Fin M', ...BAL({ ready: 44, inhand: 44 }) }],
+    moves: [MOVE({ id: 'pm_b', type: 'xfer_back', qty: 4, source: null, transfer_id: 'px_2' })] };
+  back.srv = (s) => { s.bal.pi_a = BAL({ ready: 44, inhand: 44 }); s.outgoing = []; };
+  const rt = xferRt({ 'POST /v1/pier-office/panwa/transfers/px_2/cancel': back });
+  await boot(rt); rt.w.renderPierOffice(); await rt.flush();
+  assert.equal(rt.w.poXferCancel('px_1'), undefined, 'an incoming transfer is not this pier\'s to cancel');
+  assert.equal(await rt.w.poXferCancel('px_2'), true);
+  assert.deepEqual(writes(rt).map((c) => [c.path, c.body]), [['/v1/pier-office/panwa/transfers/px_2/cancel', { date: DATE }]]);
+  assert.deepEqual(J(rt.w.poXferPendOut(PIER)), []);
+  assert.equal(rt.w.poBal('pi_a').ready, 44);
+  const refused = xferRt({ 'POST /v1/pier-office/panwa/transfers/px_2/cancel': Object.assign(new Error('Transfer px_2 is no longer in transit'), { status: 409, code: 'transfer_closed' }) });
+  await boot(refused); refused.w.renderPierOffice(); await refused.flush();
+  assert.equal(await refused.w.poXferCancel('px_2'), false);
+  assert.deepEqual(refused.fails.map((f) => f.code), ['transfer_closed']);
+  assert.ok(refused.w.poXferPendOut(PIER).some((o) => o.id === 'px_2'), 'still listed: nothing changed');
+});
