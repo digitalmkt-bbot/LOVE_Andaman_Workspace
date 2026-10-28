@@ -32906,6 +32906,44 @@ function ctOdRev(pl, tpl, ctx){
   });
   return r;
 }
+/* ══ §pxWhy (2026-10-28) · owner "อันนี้เพิ่มให้ได้ไหมว่า ผลรวมอันนี้ คือ จำนวนเท่าไหร่ คูณกับอะไร · เช่นค่าน้ำมัน กี่ลิตร คูณกับ กี่บาท"
+   คำอธิบายของแต่ละส่วนประกอบ · ตรรกะเดียวกับ ctPartAmt ทุกกิ่ง (แก้ที่หนึ่งต้องแก้อีกที่)
+   สร้างเฉพาะตอน ctx.wantWhy (Trip P&L) · หน้าคุ้มทุนเรียก ctCalc หลายร้อยรอบ ไม่ต้องเสียเวลาประกอบข้อความ */
+function _ctWn(n){ n=+n||0; return (Math.round(n*100)/100).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function _ctWb(n){ return '฿'+_ctWn(n); }
+function ctPartWhy(p, ctx){
+  if(!p) return '';
+  if(p.k === 'fix'){
+    var q = (ctx.eng === '4EN' && p.q4 != null) ? p.q4 : p.q;
+    var u = (ctx.eng === '4EN' && p.u4 != null) ? p.u4 : p.u;
+    var bt = (p.per === 'boat' && (+ctx.boats || 1) > 1) ? (' × '+(+ctx.boats || 1)+' ลำ') : '';
+    if(p.fuel) return _ctWn(q)+' ลิตร × '+_ctWb(ctx.fuel)+'/ลิตร'+bt;
+    return _ctWn(q)+' × '+_ctWb(u)+bt;
+  }
+  if(p.k === 'var'){
+    if(p.fuel) return _ctWn(p.q)+' ลิตร/คน × '+_ctWn(ctx.pax)+' คน × '+_ctWb(ctx.fuel)+'/ลิตร';
+    var u = +p.u || 0;
+    var uTH   = (p.uTH   != null && p.uTH   !== '') ? (+p.uTH   || 0) : u;
+    var uCh   = (p.uCh   != null && p.uCh   !== '') ? (+p.uCh   || 0) : u;
+    var uChTH = (p.uChTH != null && p.uChTH !== '') ? (+p.uChTH || 0)
+                : ((p.uCh != null && p.uCh !== '') ? uCh : uTH);
+    var S = ctPaxSplit(ctx);
+    var parts = [[S.adFR,u,'ผู้ใหญ่ต่างชาติ'],[S.adTH,uTH,'ผู้ใหญ่ไทย'],[S.chFR,uCh,'เด็กต่างชาติ'],[S.chTH,uChTH,'เด็กไทย']].filter(function(x){ return x[0] > 0; });
+    if(!parts.length) return '0 คน';
+    var same = parts.every(function(x){ return x[1] === parts[0][1]; });
+    if(same) return _ctWn(parts.reduce(function(a,x){ return a + x[0]; }, 0))+' คน × '+_ctWb(parts[0][1]);
+    return parts.map(function(x){ return x[2]+' '+_ctWn(x[0])+' × '+_ctWb(x[1]); }).join(' + ');
+  }
+  if(p.k === 'step'){
+    if(p.mode === 'over'){
+      var on = (+ctx.pax || 0) > (+p.over || 0);
+      return on ? ('เกิน '+_ctWn(p.over)+' คน → '+_ctWn(+p.add || 1)+' × '+_ctWb(p.u)) : ('ไม่เกิน '+_ctWn(p.over)+' คน → 0');
+    }
+    var ev = Math.max(1, +p.every || 1), n = Math.max(+p.min || 0, Math.ceil((+ctx.pax || 0) / ev));
+    return _ctWn(ctx.pax)+' คน ÷ ทุก '+_ctWn(ev)+' คน = '+n+(((+p.min||0) > Math.ceil((+ctx.pax||0)/ev))?(' (ขั้นต่ำ '+_ctWn(p.min)+')'):'')+' × '+_ctWb(p.u);
+  }
+  return '';
+}
 function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
   /* §boatRent · ดูจาก "ลำที่วิ่ง" ไม่ใช่จากแผน · หน้าแผนส่งลำที่ปักไว้ · P&L ส่งลำที่ออกวันนั้น
@@ -32932,11 +32970,11 @@ function ctCalc(pl, ctx, tpl){
     if(RN && RN.ex[ln.id]) return;                        // §boatRent · เจ้าของเรือรับผิดชอบ ไม่ใช่เรา
     if(ctGrpCfg(pl, g).off) return;                       // §category · ปิดทั้งหมวด
     var L = ctEffLine(ln, pl); if(L.off) return;
-    var amt = 0, fx = 0, vr = 0;
+    var amt = 0, fx = 0, vr = 0, W = (ctx && ctx.wantWhy) ? [] : null;   /* §pxWhy */
     if(ln.od){
       /* §ctOd · ราคาต่อหน่วย × จำนวนที่สั่ง · ไม่เกี่ยวกับจำนวนหัวบนเรือ */
       var _q = ctOdQty(pl, ln, ctx);
-      L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; });
+      L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; if(W && a) W.push(_ctWn(_q)+' × '+_ctWb(p.u)); });
     } else {
       L.parts.forEach(function(p){
         var a = ctPartAmt(p, ctx);
@@ -32944,6 +32982,7 @@ function ctCalc(pl, ctx, tpl){
            ก็ติ๊ก fuel ที่ส่วนประกอบเหมือนกัน จะได้ไม่ต้องกลับมาแก้ชื่อ id ที่นี่อีก */
         if(p.fuel && FM !== 1) a *= FM;
         amt += a; if(p.k === 'var') vr += a; else fx += a;
+        if(W && a){ var _w = ctPartWhy(p, ctx); if(_w) W.push(_w + ((p.fuel && FM !== 1) ? (' × '+_ctWn(FM)+' (ตัวคูณน้ำมันของลำ)') : '')); }   /* §pxWhy */
       });
     }
     var m = ctGrpMul(pl, g);                              // §category · ปรับ ±% ทั้งหมวด
@@ -32952,7 +32991,9 @@ function ctCalc(pl, ctx, tpl){
     out.gross += amt; out.vin += v;
     out.fixNet += fx - (L.vat ? fx * R : 0);
     out.varNet += vr - (L.vat ? vr * R : 0);
-    out.rows.push({ id:L.id, g:L.g, l:L.l, vat:L.vat, amt:amt, vatAmt:v, net:amt - v, fix:fx, varr:vr });
+    var why = '';
+    if(W && W.length){ why = W.join(' + ') + (W.length > 1 ? (' = '+ctB(amt / (m || 1))) : '') + (m !== 1 ? (' × '+_ctWn(m*100)+'% (ปรับทั้งหมวด) = '+ctB(amt)) : '') + (L.vat ? ((W.length > 1 || m !== 1 ? '' : (' = '+ctB(amt))) + ' · หัก VAT ซื้อ → '+ctB(amt - v)) : ''); }   /* §pxWhy */
+    out.rows.push({ id:L.id, g:L.g, l:L.l, vat:L.vat, amt:amt, vatAmt:v, net:amt - v, fix:fx, varr:vr, why:why });
   });
   /* §boatRent · แถวสังเคราะห์ · ตั้งใจไม่ใส่ไว้ในสูตรกลาง
      ค่าเช่าเป็นตัวเลขตามสัญญาของเรือลำหนึ่ง ไม่ใช่ค่าที่แต่ละเส้นทางจะมาประมาณเอง
@@ -33340,7 +33381,8 @@ function pxTrip(date, bid){
             odQty:{ ltj:LT.join, ltc:LT.chtr },
             pax:PX.tot, paxTH:PX.th, paxFR:PX.fr,
             /* §ctChd · ทารกนับรวมกับเด็ก · ไม่มีทางที่ทารกจะกินเท่าผู้ใหญ่ */
-            paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)) };
+            paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)),
+            wantWhy:1 };   /* §pxWhy */
   var C=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx, T):{rows:[],net:0};
 
   /* ของจริงทับค่าประมาณเป็นรายบรรทัด */
@@ -33395,7 +33437,7 @@ function pxTrip(date, bid){
     var est=r.net;                                   /* สูตรคิดเป็นยอดหลังหัก VAT ซื้อแล้ว */
     var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
     var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
-    var why = a ? a.why : '';
+    var why = a ? a.why : (r.why || '');   /* §pxWhy · ไม่มีของจริง = บอกสูตร (จำนวน × ราคา) */
     /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
     if(r.id==='fuel' && real==null){
       if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
