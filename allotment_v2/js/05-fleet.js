@@ -9230,7 +9230,23 @@ function flPosDelBtn(){
   else delete rec.pos;
   flSave(); flxClose(); flRenderDR();
 }
+/* §drFast · ครอบ render ด้วยดัชนีบุคกิ้งของวันนั้น (ดู flBoatBookingsFor) · เปิดก่อน ปิดเสมอแม้ error */
 function flRenderDR(){
+  const _el=document.getElementById('fl-dr-date'); if(_el && !_el.value) _el.value=TODAY_STR;
+  const _ds=_el?_el.value:TODAY_STR;
+  try{
+    if(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS))
+      window._flBkDayIdx={ds:_ds, arr:SB_BOOKINGS, list:SB_BOOKINGS.filter(bk=>bk && (bk.trips||[]).some(t=>t && t.date===_ds))};
+    return _flRenderDRInner();
+  } finally { window._flBkDayIdx=null; }
+}
+/* §drFast · กดช่องวันที่ → ติ๊กขาวทันที แล้วค่อย render ใน tick ถัดไป (ไม่งั้นช่องจะเปลี่ยนหลัง render เสร็จ ดูเหมือนกดไม่ติด) */
+function flDRGo(el,ds){
+  const grid=el&&el.parentNode; if(grid){ grid.querySelectorAll('.drh-dc.on').forEach(x=>x.classList.remove('on')); el.classList.add('on'); }
+  const inp=document.getElementById('fl-dr-date'); if(inp) inp.value=ds;
+  setTimeout(flRenderDR,0);
+}
+function _flRenderDRInner(){
   const dateEl=document.getElementById('fl-dr-date');
   if(!dateEl.value)dateEl.value=TODAY_STR;
   const ds=dateEl.value;
@@ -9521,7 +9537,7 @@ function flRenderDR(){
     for(let d=1; d<=nd; d++){
       const ds2=`${y}-${pad(m+1)}-${pad(d)}`, dow=new Date(y,m,d).getDay();
       const cls=(ds2===ds?' on':'')+(ds2===TODAY_STR?' td':'')+(ds2>TODAY_STR?' fut':'')+((dow===0||dow===6)?' we':'');
-      cells+=`<button type="button" class="drh-dc${cls}" onclick="document.getElementById('fl-dr-date').value='${ds2}';flRenderDR()"><i>${_WDS[dow]}</i><b>${d}</b></button>`;
+      cells+=`<button type="button" class="drh-dc${cls}" onclick="flDRGo(this,'${ds2}')"><i>${_WDS[dow]}</i><b>${d}</b></button>`;
     }
     const mon=`<div class="drh-mon-grid" style="grid-template-columns:repeat(${nd},minmax(0,1fr))">${cells}</div>`;
     const css=`<style>
