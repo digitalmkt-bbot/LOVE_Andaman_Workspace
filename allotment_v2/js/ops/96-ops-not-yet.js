@@ -4,11 +4,12 @@
    staff would see a save that is gone on the next reload. In ops mode they are refused with a plain
    message instead (or, for a banner that only leads to one, not drawn). Remove a block when its
    adapter or endpoint lands.
-     · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
      · §tcxPartner cancelled trip → "Send to partner" and its per-booking partner entries
      · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
      · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
+   (§cxWhy, the reason of a booking cancelled without one, saves since 2026-10-28: ops/41-ops-cancel-reason.js →
+    POST /v1/bookings/{id}/cancel-reason)
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -26,11 +27,6 @@
     w.__opsNotYet = true; window[name] = w;
   }
   function block(names, what){ names.forEach(function(n){ wrap(n, function(){ return refuse(what); }); }); }
-
-  /* §cxWhy · the banner and the detail card only lead to the dialog: not drawn */
-  wrap('cxwBanner', function(){ return ''; });
-  wrap('cxwDetailCard', function(){ return ''; });
-  block(['cxwOpen', 'cxwSave'], 'Entering a reason for an already cancelled booking');
 
   /* §poXfer */
   block(['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'], 'Transferring equipment to another pier');

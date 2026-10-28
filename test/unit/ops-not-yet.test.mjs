@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
+const BLOCKED = ['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
@@ -22,8 +22,7 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.equal(calls.length, 0, 'no legacy function ran');
   assert.equal(alerts.length, BLOCKED.length);
   assert.ok(alerts.every((m) => /is not available yet: operation-backend does not save it/.test(m)));
-  assert.equal(ctx.cxwBanner(), '', 'the cancel-reason banner is not drawn');
-  assert.equal(ctx.cxwDetailCard({ id: 'b1' }), '', 'nor the booking-detail card');
+  assert.equal(ctx.cxwBanner(), '<div class="cxw-bar">', 'the cancel-reason banner is drawn again: it saves (41-ops-cancel-reason.js)');
 });
 
 test("only the partner result and a ticked boat-back box are refused; their neighbours pass through", () => {
