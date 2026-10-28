@@ -16207,6 +16207,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       /* §landCk · ชิปโปรแกรมกับยอดหัวหน้าต้องตรงกับหน้าที่เปิดอยู่ · เฉพาะหน้าเช็คอินท่า/City tour
          หน้าเช็คอินรถ (kind='van') ไม่แตะ — รถรับส่งมีทั้งสองฝั่ง ทั้งหน้านั้นจึงต้องเห็นครบ */
       if(kind==='pier' && typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
+      if(kind==='pier' && typeof ckTripWx==='function' && ckTripWx(t.routeId,date)) return;   /* §pckCxlTrip · ทริปยกเลิกไม่เข้ายอดหน้าท่า */
       var p=t.pax||{};
       // §check-in · ทุกตัวเลขบนการ์ด = "เดินทางจริง" · หักคนที่ No-show / CXL ออกรายประเภท
       var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
@@ -20533,6 +20534,11 @@ function pckProgToggle(fid){
 /* ── ตัวเลขของแต่ละโปรแกรม / แต่ละ variant ในวันนั้น ────────────────────────
    เดินรายการ booking รอบเดียว · ตัวเลขทุกตัวเป็น "เดินทางจริง" หักคนที่ไม่มาแล้ว
    เหมือนที่การ์ดโปรแกรมของเดิมทำ (ckRoutePills) เพื่อให้สองที่ไม่ขัดกัน */
+/* §pckCxlTrip (2026-10-28) · owner (หน้าเช็คอินหน้าท่า · Early 05.30 ตี CXL แล้วยังขึ้น 58 pax + "ยังไม่จัดเรือ 19 booking")
+   ทริปที่ตี CXL จากแท็บ Cancellations (SB_WEATHER_CLOSURES) · ใบจองยังสถานะปกติจนกว่าจะเคลียร์
+   หน้าท่าไม่ต้องรอรับคนของทริปนั้น และไม่ต้องจัดเรือ → ตัดออกจากแถว/ยอด แล้วบอกเป็นชิปเทา "ทริปยกเลิก" แทน */
+function ckTripWx(rid,date){ return !!rid && (typeof bkV2IsWeatherClosed==='function') && bkV2IsWeatherClosed(rid,date); }
+function ckTripWxLbl(rid,date){ var k=(typeof tcxReason==='function')?tcxReason(rid,date):'weather'; var R=(typeof TCX_R!=='undefined'&&TCX_R[k])||{}; return 'ยกเลิก'+(R.th?(' · '+R.th):''); }
 function pckProgData(date){
   var P=function(pax,k){ return (typeof bkV2PaxTot==='function')?bkV2PaxTot(pax||{},k):0; };
   var fam={}, order=[];
@@ -20547,6 +20553,11 @@ function pckProgData(date){
       if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
       var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null;
       if(!f) return;
+      if(ckTripWx(t.routeId,date)){   /* §pckCxlTrip · ทริปยกเลิก · ให้มีแถว variant ไว้บอก แต่ไม่นับคน/ใบ */
+        var Aw=fam[f.id]; if(!Aw){ Aw=fam[f.id]={f:f, v:{}, vord:[], pax:0, booked:0, arr:0, clr:0, brd:0, due:0, rows:0}; order.push(f.id); }
+        var Vw=Aw.v[t.routeId]; if(!Vw){ Vw=Aw.v[t.routeId]=newV(); Aw.vord.push(t.routeId); }
+        var _pw=t.pax||{}; Vw.wx=1; Vw.cxlPax=(Vw.cxlPax||0)+P(_pw,'ad')+P(_pw,'chd')+P(_pw,'inf')+P(_pw,'foc');
+        return; }
       var p=t.pax||{};
       var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
       var g=function(k){ var v=P(p,k); if(!L||L.total<=0) return v;
@@ -20645,7 +20656,7 @@ function pckProgList(date){
     var op=!!_pckProgOpen[A.f.id] || !!famOn;
     var st=pckProgStatus(A), bar=A.pax?Math.round(A.brd*100/A.pax):0;
     var live=A.vord.filter(function(rid){
-      return (typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date); }).length;
+      return !(A.v[rid]&&A.v[rid].wx) && ((typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)); }).length;   /* §pckCxlTrip */
     /* §pckHead5 · พื้นหลังเป็นสีของโปรแกรมนั้น · กวาดตาหาโปรแกรมด้วยสีได้เหมือนที่ทำกับเอเจนซี่
        ที่เลือกอยู่เข้มขึ้นหนึ่งขั้น + มีแถบสีด้านซ้าย จะได้ยังแยกออกว่ากำลังกรองอันไหน */
     var _col=A.f.color||'#8b909c';
@@ -20669,6 +20680,11 @@ function pckProgList(date){
         var V=A.v[rid], lbl=pckVarLbl(A.f, rid), dep=pckDepOf(rid)||'';
         var open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
         var _vbg=pckTint(_col,.965);
+        if(V.wx) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ทริปถูกยกเลิก · ไม่นับคน · ไม่ต้องรอรับ">'
+          +'<span class="pgv-nm">'+e(lbl)+'</span>'
+          +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
+          +(V.cxlPax?('<span class="pgv-px ck-mono" style="color:#A32D2D;text-decoration:line-through">'+V.cxlPax+' pax</span>'):'')
+          +'<span class="pgv-off" style="background:#FBE4E0;color:#A32D2D">'+e(ckTripWxLbl(rid,date))+'</span></div>';   /* §pckCxlTrip */
         if(!open) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ไม่ออกวันนี้">'
           +'<span class="pgv-nm">'+e(lbl)+'</span>'
           +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
@@ -25312,6 +25328,7 @@ function renderPierCheckin(){
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
+  var _pckWxN=0, _pckWxPax=0;   /* §pckCxlTrip */
   var _pckSx=0;
   (SB_BOOKINGS||[]).forEach(function(b){
     /* §strandPck · ยกเลิกแล้วแต่จัดเรือ/จัดรถไว้แล้ว ต้องคาไว้ในกลุ่มเดิม
@@ -25329,6 +25346,7 @@ function renderPierCheckin(){
        คนหน้าท่าไม่มีหน้าที่กับทัวร์ในเมือง และทัวร์ในเมืองก็ไม่มีเรือให้ขึ้น */
     if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
     if(_pckPier && pckPierOf(t.routeId)!==_pckPier) return;   /* §pckHead3 · กรองตามท่า */
+    if(ckTripWx(t.routeId,date)){ if(!_sx){ _pckWxN++; _pckWxPax+=ckBookedPax(t); } return; }   /* §pckCxlTrip · ไม่ต้องรอรับ · ไม่ต้องจัดเรือ */
     if(_pckRoute){ if(t.routeId!==_pckRoute) return; }
     else if(_pckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_pckFam) return; }
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -25635,6 +25653,7 @@ function renderPierCheckin(){
   // §perProgramme · ถึงท่า / เคลียร์ / ขึ้นเรือ อยู่ใต้การ์ดของแต่ละโปรแกรมและแต่ละลำแล้ว
   // (แต่ละโปรแกรมออกคนละเวลา ยอดรวมทั้งวันตอบไม่ได้ว่าลำที่กำลังจะออกพร้อมหรือยัง)
   var kpi='<span style="background:#F1EFE8;color:#5F5E5A">ทั้งท่า '+all.length+' booking · รอรับ '+tExpect+' pax</span>'
+        +(_pckWxN?('<span style="background:#F1EFE8;color:#6b6a63;cursor:pointer" onclick="nav(document.querySelector(\'[data-view=booking]\'));if(typeof bkV2SwitchTab===\'function\')bkV2SwitchTab(\'cancel\')" title="ทริปที่ตี CXL · ไม่ต้องรอรับ · ไม่นับในยอด · กดไปแท็บ Cancellations">&#10006; ทริปยกเลิก '+_pckWxN+' booking · '+_pckWxPax+' pax</span>'):'')
         +(ovnAll.length?('<span style="background:#EDE7FB;color:#5B289A" title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · ไม่ต้องเช็คอินที่ท่า และไม่มีเงินต้องเก็บ">&#8617; รับกลับจากเกาะ '+pckAgg(ovnAll).pax+' pax</span>'):'')
         +(tDue>0?'<span style="background:#FBF0DD;color:#7A4A00">ค้างเก็บทั้งวัน &#3647;'+Math.round(tDue).toLocaleString()+'</span>':'')
         +(tGot>0?'<span style="background:#DCF4E8;color:#0F6E56">เก็บแล้ว &#3647;'+Math.round(tGot).toLocaleString()+'</span>':'')
