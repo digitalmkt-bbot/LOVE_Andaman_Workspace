@@ -280,3 +280,39 @@ test('v35 · LOV-9461107 · a later trip carries the traveller list, capped to i
   assert.equal(list({ ad_th: 2 }, false).length, 3, 'line 0 is unchanged: the whole list');
   assert.equal(list(null, true).length, 3, 'no counts (charter) = no cap');
 });
+
+// ---- v36 · return-leg area + per-line travellers (B2C handoff 2026-10-23) ----
+const mapLine = (det, extra = {}) => map.mapB2CItemBooking(
+  { booking_id: 'LOV-T', line_no: 1, type: 'day_trip', travel_date: '2026-11-01', product_id: 'POW-004', pax_adult: 2,
+    customer_name: 'Lead', details: det, ...extra },
+  true, (n, z) => (/^layan$/i.test(n) && (!z || z === 'PK')) ? { id: 'ar1', name: 'Layan' } : null, []);
+test('v36 · new-format drop-off: area name from the dropdown + hotel, matched like pickup', () => {
+  const b = mapLine({ pickupZone: 'PK', pickupLocation: 'Patong', dropoffSame: false, dropoffZone: 'PK', dropoffLocation: 'Layan', dropoffHotel: 'Blu Monkey' });
+  assert.equal(b.dropoffSame, false);
+  assert.equal(b.dropoffAreaId, 'ar1');
+  assert.equal(b.dropoffArea, 'Layan');
+  assert.equal(b.dropoffHotelName, 'Blu Monkey');
+});
+test('v36 · dropoffSame:true ignores the copied "Hotel · Area" dropoffLocation', () => {
+  const b = mapLine({ pickupZone: 'PK', pickupLocation: 'Patong', pickupHotel: 'H', dropoffSame: true, dropoffZone: 'PK', dropoffLocation: 'H · Patong', dropoffHotel: 'H' });
+  assert.equal(b.dropoffSame, true);
+  assert.equal(b.dropoffHotelName, '');
+});
+test('v36 · unmatched new-format drop-off area keeps its name and is flagged', () => {
+  const b = mapLine({ pickupZone: 'PK', pickupLocation: 'Patong', dropoffSame: false, dropoffZone: 'KL', dropoffLocation: 'Khao Lak' });
+  assert.equal(b.dropoffAreaId, null);
+  assert.equal(b.dropoffArea, 'Khao Lak');
+  assert.match(b.note, /Drop-off: Khao Lak — area unassigned/);
+});
+test('v36 · legacy free-text drop-off (no dropoffZone/dropoffHotel) is unchanged', () => {
+  const b = mapLine({ pickupZone: 'PK', pickupLocation: 'Patong', dropoffSame: false, dropoffLocation: 'KIRI Restaurant, Layan' });
+  assert.equal(b.dropoffSame, false);
+  assert.equal(b.dropoffHotelName, 'KIRI Restaurant, Layan');
+});
+test('v36 · travellerUids keeps only the guests on that line; absent key keeps everyone', () => {
+  const rows = [{ paxNo: 1, name: 'A', nationality: 'TH' }, { paxNo: 2, name: 'B', nationality: 'TH' }, { paxNo: 3, name: 'C', nationality: 'TH' }];
+  const h = { bk_passengers: [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }] };
+  assert.deepEqual(map.b2cLineTravellers(rows, h, { travellerUids: ['lead', 'u1', 'u3'] }).map(r => r.name), ['A', 'C']);
+  assert.equal(map.b2cLineTravellers(rows, h, {}).length, 3);
+  assert.equal(map.b2cLineTravellers(rows, { bk_passengers: [{ name: 'x' }] }, { travellerUids: ['u1'] }).length, 3, 'no uids = left whole');
+});

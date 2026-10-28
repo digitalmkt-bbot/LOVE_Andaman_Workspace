@@ -1562,6 +1562,7 @@ function flOpenAddSafetyModal(id){
     document.getElementById('fl-sf-note').value='';
   }
   openModal('fl-modal-safety');
+  try{ flAnchorFormSync(); }catch(e){ console.warn('[anchor] form', e); }   /* §anchor */
   setTimeout(()=>document.getElementById('fl-sf-name').focus(), 50);
 }
 
@@ -1575,7 +1576,7 @@ function flSaveSafety(){
   const fields = {
     boatId, category, name,
     brand: document.getElementById('fl-sf-brand').value.trim(),
-    model: document.getElementById('fl-sf-model').value.trim(),
+    model: flAnchorModelFromForm(category, document.getElementById('fl-sf-model').value.trim()),   /* §anchor · หมวดสมอประกอบจากช่องน้ำหนัก/โซ่/เชือก/ขา */
     serial: document.getElementById('fl-sf-serial').value.trim(),
     qty: parseInt(document.getElementById('fl-sf-qty').value)||1,
     installDate: document.getElementById('fl-sf-install').value || '',

@@ -28,6 +28,7 @@ function bookingV2RenderTopbar(){
       ` : ''}
       <div class="bkv2-topspacer"></div>
       <div class="bkv2-meta2">${bookingV2TopbarMeta()}</div>
+      <button class="bkv2-newbtn2" onclick="bkImpStart()" title="นำเข้าไฟล์ Excel รายชื่อลูกค้าจากเอเยนต์ (เช่น Tour Customer List) · กรอกฟอร์มให้ทีละใบ" style="background:#fff;color:#16265C;border:1px solid #CBD2E0;margin-right:6px">&#11014; Import Excel</button>   <!-- §bkImp -->
       <button class="bkv2-newbtn2" onclick="bookingV2NewBooking()">+ New booking <span class="bkv2-kbd2">C</span></button>
     </div>
   `;

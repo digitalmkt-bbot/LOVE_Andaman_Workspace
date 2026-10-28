@@ -12,6 +12,7 @@ function bookingV2EditBooking(bookingId){
   // Deep-clone bk into _bkV2.newBooking shape
   const clone = JSON.parse(JSON.stringify(bk));
   delete clone.editLock;
+  (clone.trips||[]).forEach(t => { if(t && t.ovnOf==='boatback' && !t.ovnLeg) t.ovnBoatBack = 1; });   /* §ovnBoatBack3 · ธงจากคอลัมน์ → ช่องติ๊กในฟอร์ม */
   // Normalize arrays the relational backend drops when empty ([] → 0 child rows → key missing on
   // reload). Form renderers/calc read these without guards → "reading 'forEach'" crash on edit.
   ['addOns','passengers','adjustments','feeItems','altPickups'].forEach(k => { if(!Array.isArray(clone[k])) clone[k] = []; });

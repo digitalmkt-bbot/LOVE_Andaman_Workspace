@@ -9,8 +9,9 @@ function bookingV2RenderApprovals(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
   const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);
-  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').filter(_ctLandBk);
-  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').filter(_ctLandBk).sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
+  const _pOk=b=>(typeof laBkOk!=='function')||laBkOk(b);   /* §pierScope */
+  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').filter(_ctLandBk).filter(_pOk);
+  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').filter(_ctLandBk).filter(_pOk).sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
   const card=(b)=>{
     const a=sbGetAgent(b.agentId); const ap=b.approval||{};
     const hasCap=(ap.over&&ap.over.length)||ap.totOver>0;

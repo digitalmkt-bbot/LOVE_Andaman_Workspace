@@ -181,6 +181,7 @@ function bookingV2LockOverlays(){
             <span style="margin-left:auto;font-size:10.5px;color:var(--ink-soft)">${kFree.length?`<b style="color:#0F6E56">ว่าง ${kFree.length}</b>`:''}${kUsed.length?` · <b style="color:#3730A3">ใช้แล้ว ${kUsed.length}</b>`:''}${kRel.length?` · ปล่อยแล้ว ${kRel.length}`:''}</span>
           </div>
           ${kidRows}
+          ${bookingV2LockHistoryHtml(mL, esc)}
         </div>
         <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border);flex-wrap:wrap">
           ${(mL.status==='active')?`<button onclick="bookingV2LockManageClose();bookingV2LockAddOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ เพิ่มที่นั่ง</button>`:''}

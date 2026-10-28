@@ -17,6 +17,7 @@ function bookingV2NewTrip(){
     longtailManual: false,     // manual checkbox (for routes without bundled longtail)
     ovn: null,                 // OVN (overnight) leg · null = normal day-trip · 'return' = ขากลับค้างคืน (we bring back) · 'self' = ค้างคืน กลับเอง (one-way)
     ovnReturnDate: '',         // OVN · วันที่กลับ (เมื่อ ovn==='return')
+    ovnBoatBack: 0,            // §ovnBoatBack · เหมาลำ OVN แบบเรือกลับท่าวันเดียวกัน (ส่งแล้วกลับ ไปรับอีกวัน) · ไม่กันเรือวันระหว่างกลาง
     ovnCharge: 0,              // OVN · ค่าค้างคืน (extra) · บวกเข้ายอดรวม
     ovnLeg: false,             // = trip ขากลับ (auto-สร้าง) · ราคา 0 · กันที่นั่งวันกลับ
     lockUse: 0,                // seats this booking will draw from seat-locks (Step 3c)

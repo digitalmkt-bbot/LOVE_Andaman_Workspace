@@ -156,10 +156,8 @@ function bookingV2CommitBooking(status){
       }
     }
     // Train the nationality guesser from what staff entered/confirmed → future auto-detect gets smarter
-    if(typeof natLearnRecord==='function'){
-      if(d.leadPax && d.leadNationality) natLearnRecord(d.leadPax, d.leadNationality);
-      (d.passengers||[]).forEach(p=>{ if(p && p.name && p.nationality) natLearnRecord(p.name, p.nationality); });
-    }
+    // §natFast (lk-inbox 0de46b48) · one blob write for the whole booking, not one per passenger (§natBoot)
+    if(typeof natLearnRecordMany==='function') natLearnRecordMany(_natLearnPairs(d.leadPax, d.leadNationality, d.passengers));
     // ── Duplicate-booking guard (soft · warn, allow proceed) ──
     if(typeof bookingV2FindDuplicateBookings==='function'){
       const _dups=bookingV2FindDuplicateBookings(d, _bkV2.editingId||null, true);   /* §dupFast · ตอนบันทึกอ่านสดเสมอ */
@@ -379,7 +377,9 @@ function bookingV2CommitBooking(status){
       ovnReturnDate: t.ovn==='return' ? (t.ovnReturnDate||'') : '',
       ovnCharge: t.ovn ? Math.max(0, Number(t.ovnCharge)||0) : 0,
       ovnLeg: !!t.ovnLeg,
-      ovnOf: (t.ovnOf!=null) ? t.ovnOf : null,
+      /* §ovnBoatBack3 · ขากลับ: ovnOf = index ของขาไป (เดิม) · ขาไป: 'boatback' = เรือกลับท่าวันเดียวกัน · ตารางทริปเป็นคอลัมน์คงที่ จึงใช้ช่องนี้แทนฟิลด์ใหม่ */
+      ovnOf: t.ovnLeg ? ((t.ovnOf!=null && t.ovnOf!=='boatback') ? t.ovnOf : null)
+                      : ((t.ovn==='return' && t.bookingMode==='charter' && t.ovnBoatBack) ? 'boatback' : null),
       seatSource: (() => {
         const paxT = bookingV2PaxAllTot(t.pax);
         const lu = (t.bookingMode==='charter') ? 0 : Math.min(Number(t.lockUse)||0, paxT);
@@ -702,10 +702,7 @@ function bookingV2CommitBooking(status){
   }
 
   // ── Train nationality learning system · record name→code from this booking ──
-  if(d.leadPax && d.leadNationality) natLearnRecord(d.leadPax, d.leadNationality);
-  (newBk.passengers || []).forEach(p => {
-    if(p.name && p.nationality) natLearnRecord(p.name, p.nationality);
-  });
+  natLearnRecordMany(_natLearnPairs(d.leadPax, d.leadNationality, newBk.passengers));   // §natFast · one write
 
   // ── Wire charter → TRIPS · lock boats for chartered trips ──
   /* §ovnSpan · ของเดิมจองเรือให้ "วันของ trip" วันเดียว · ใบค้างเกาะ 16→19
@@ -777,4 +774,5 @@ function bookingV2CommitBooking(status){
     laSaveToast({kind:_k, title:(wasEditing?'อัปเดต booking แล้ว':'บันทึก booking แล้ว'), id:newBk.id, status:_st,
       sub: tripsModified ? `🚤 ล็อกเหมาลำ · ${_n} ลำ` : ''});
   }
+  try{ if(typeof bkImpAfterSave==='function') bkImpAfterSave(newBk); }catch(_e){}   /* §bkImp · ใบนำเข้า → เปิดใบถัดไป */
 }

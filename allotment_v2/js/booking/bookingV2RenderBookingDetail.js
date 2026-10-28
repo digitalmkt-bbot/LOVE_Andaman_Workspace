@@ -89,6 +89,7 @@ function bookingV2RenderBookingDetail(){
             </div>
           </div>`:''}
 
+          ${(typeof cxwNeed==='function' && cxwNeed(bk))?cxwDetailCard(bk):''}
           ${bk.cancellation?`
           <!-- CANCELLATION -->
           <div class="bkv2-nb-card" style="border-color:#E89A92;background:#FDEEEC">

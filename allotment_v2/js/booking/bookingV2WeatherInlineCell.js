@@ -4,6 +4,7 @@ function bookingV2WeatherInlineCell(bkId){
   if(!wr) return '<span class="t2-dim">&mdash;</span>';
   const st=wr.status;
   if(st==='resolved'){
+    if(wr.outcome==='partner') return tcxPtCell(bk);   /* §tcxPartner */
     const oL={reschedule:'Rescheduled',refund:'Refunded',credit:'Credit',cancel:'Cancelled',move:'Moved'};
     const ex=(wr.outcome==='reschedule'&&wr.newDate)?(' &rarr; '+String(wr.newDate).slice(5)):(wr.outcome==='move'&&wr.newRoute)?(' &rarr; '+tcxRName(wr.newRoute)+(wr.newDate?(' '+String(wr.newDate).slice(5)):'')):'';
     return '<span style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap">&#10003; '+(oL[wr.outcome]||wr.outcome)+ex+'</span>';

@@ -38,7 +38,7 @@ function bookingV2Render(){
       host.innerHTML = `<div class="bkv2">${bookingV2RenderNewBooking()}</div>`;
       return;
     }
-    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bookingV2RenderTopbar()}</div><div class="bkv2 bkv2-bodycard">${bookingV2RenderTabBody()}</div>${bookingV2RenderLockModal()}${(typeof bookingV2LockOverlays==='function'?bookingV2LockOverlays():'')}`;
+    host.innerHTML = `<div class="bkv2 bkv2-topcard">${bookingV2RenderTopbar()}</div>${(typeof cxwBanner==='function'?cxwBanner():'')}<div class="bkv2 bkv2-bodycard">${bookingV2RenderTabBody()}</div>${bookingV2RenderLockModal()}${(typeof bookingV2LockOverlays==='function'?bookingV2LockOverlays():'')}`;
     // Stack the sticky headers below the (sticky) day header · set LITERAL px offsets (no calc-in-custom-prop, which can fail to resolve)
     requestAnimationFrame(()=>{ try{
       const vb=document.getElementById('view-booking'); if(!vb) return;

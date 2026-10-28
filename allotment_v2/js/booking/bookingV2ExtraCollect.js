@@ -1,8 +1,9 @@
 /* §exCot · เก็บเงินสดหน้าท่าแล้วกดปุ่มเดียวจบ · ถ้าเป็นโอน/บัตรให้กดแก้ไขแล้วเลือกวิธีเอง */
 function bookingV2ExtraCollect(id, bkId){
   var e=SB_EXTRAS.find(function(x){ return x.id===id; }); if(!e) return;
+  if(bkxExCovered(e)){ alert('รายการนี้เก็บเงินผ่านหน้าท่าไปแล้ว · ไม่ต้องกดซ้ำ'); return; }   /* §exDupPier */
   if(!confirm('ยืนยันว่าเก็บเงิน "'+(e.service||'')+'" ฿'+pckNum(e.total)
-    +' เป็นเงินสดแล้ว\n\n(ถ้ารับเป็นโอน/บัตร ให้กดแก้ไขแทน)')) return;
+    +' เป็นเงินสดแล้ว\n\n(ถ้ารับเป็นโอน/บัตร ให้กด "เก็บเงิน" ในหน้า Pier check-in · ไม่ต้องแก้รายการนี้)')) return;
   e.method='cash'; e.feePct=0; e.fee=0; e.customerPaid=+e.total||0;
   e.settle='done'; e.collectedAt=new Date().toISOString();
   var bk=(SB_BOOKINGS||[]).find(function(x){ return x.id===(bkId||e.bookingId); });

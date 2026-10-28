@@ -17,6 +17,15 @@ function bookingV2UpgradeSave(bkId){
                 fee:_ufee, customerPaid:pckN(sellPrice+_ufee), slips:_uslips };
   if(_bkUpgEditId){
     const u=bk.upgrades.find(x=>x.id===_bkUpgEditId);
+    /* §exDupPier · ยังไม่ติ๊กเก็บ และหน้าท่าเก็บเงินก้อนนี้ไปแล้ว → ห้ามติ๊กเก็บซ้ำ ไม่งั้นนับสองรอบ */
+    if(u && !u.collected && collected){
+      var _d=(typeof bookingV2ExtraDayOf==='function')?bookingV2ExtraDayOf(bk):(((bk.trips||[])[0]||{}).date||'');
+      var _paid=(typeof pckPaidSum==='function')?pckPaidSum(bk,_d):0;
+      if(_paid>0 && pckN(_paid) >= pckN(bkxExNeed(bk,_d)) - 0.005){
+        alert('เงินของอัปเกรดนี้บันทึกไว้ที่หน้าท่าแล้ว (ปุ่มเก็บเงินในหน้า Pier check-in)\n\nไม่ต้องติ๊ก "เก็บแล้ว" ซ้ำ · ระบบนับจากแถวเงินหน้าท่าอยู่แล้ว\nถ้าวิธี/ค่าธรรมเนียมไม่ตรง ให้แก้ที่รายการเงินหน้าท่าแทน');
+        return;
+      }
+    }
     if(u){ Object.assign(u,{label,sellPrice,toCompany,commission,collected,note,seller}, _upay); }
     if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(bk,'extra','Edited upgrade · '+label+' · ขาย ฿'+pckNum(sellPrice)+' · คอม ฿'+pckNum(commission)+(seller?' · '+seller:''),'Extra');
     _bkUpgEditId=null;

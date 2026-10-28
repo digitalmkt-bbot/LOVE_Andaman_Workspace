@@ -1,7 +1,7 @@
 function bookingV2RouteDDRender(idx, val){
   const dd = document.getElementById('bkv2-route-dd-' + idx);
   if(!dd) return;
-  const opts = bookingV2RouteDDOpts();
+  const opts = bookingV2RouteDDOpts().filter(o => (typeof laRouteIdOk!=='function') || laRouteIdOk(o.id));   /* §pierScope */
   const q = String(val||'').trim().toLowerCase();
   const filtered = !q ? opts : opts.filter(o => o.label.toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
   if(filtered.length === 0){ dd.innerHTML = '<div class="bkv2-nb-dd-empty">no route matches · agent rate type may not cover this</div>'; return; }
