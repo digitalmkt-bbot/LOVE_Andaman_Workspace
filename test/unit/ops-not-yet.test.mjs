@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
+const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'flnWdAdd'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
@@ -26,17 +26,17 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.equal(ctx.cxwDetailCard({ id: 'b1' }), '', 'nor the booking-detail card');
 });
 
-test("only the partner result and a ticked boat-back box are refused; their neighbours pass through", () => {
+test("only a ticked boat-back box is refused; Send to partner saves now (27-ops-weather.js) and passes through", () => {
   const { ctx, calls, alerts, box } = boot(true);
-  assert.equal(ctx.tcxDlgSet('out', 'partner'), false);
+  assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
   assert.equal(ctx.tcxDlgSet('out', 'move'), 'orig');
-  assert.equal(ctx.tcxDlgSet('note', 'partner'), 'orig', 'only the result choice');
+  assert.equal(ctx.tcxDlgSet('note', 'partner'), 'orig');
   assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 1), false);
   assert.equal(box.checked, false, 'the box is unticked again');
   assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 0), 'orig', 'unticking still saves');
   assert.equal(ctx.bookingV2SetTripField(2, 'ovnReturnDate', '2026-11-02'), 'orig');
-  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 0], ['bookingV2SetTripField', 2, 'ovnReturnDate', '2026-11-02']]);
-  assert.equal(alerts.length, 2);
+  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'partner'], ['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 0], ['bookingV2SetTripField', 2, 'ovnReturnDate', '2026-11-02']]);
+  assert.equal(alerts.length, 1);
 });
 
 test('outside ops mode (lk-inbox itself) everything is the legacy function', () => {
