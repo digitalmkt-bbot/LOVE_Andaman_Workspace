@@ -55551,6 +55551,13 @@ function bkV2RenderTab2(){
   const famF = _bkV2T2Family || '';
   const routeF = _bkV2.filterRoute;
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
+  /* §btCxlTrip (2026-10-28) · owner "Early 05.30 ถูกตี CXL จำนวนไม่น่าจะต้องเอามานับ และ Notice น่าจะต้องแยกออกมาจากไม่ใส่เรือ"
+     ทริปที่ตี CXL จากแท็บ Cancellations อยู่ใน SB_WEATHER_CLOSURES · ใบจองยังสถานะปกติจนกว่าจะเคลียร์ (คืนเงิน/ย้ายวัน/Partner)
+     การ์ด Programmes เดิมดูแค่ bkV2IsRouteOpenOn จึงนับคนของรอบที่ยกเลิกเข้ายอดโปรแกรม/ยอดวัน และขึ้น "ไม่จำกัด" เพราะไม่มีเรือ
+     ตอนนี้: รอบที่ยกเลิก = ไม่นับคน · ไม่นับ running · แถวขึ้น "ยกเลิก · เหตุผล" · Notice แยกเป็นบรรทัด "ทริปยกเลิก" ไม่ปนกับ ยังไม่จัดเรือ */
+  const _btWx = rid => !!rid && (typeof bkV2IsWeatherClosed==='function') && bkV2IsWeatherClosed(rid,date);
+  const _btWxLbl = rid => { const k=(typeof tcxReason==='function')?tcxReason(rid,date):'weather'; const R=(typeof TCX_R!=='undefined'&&TCX_R[k])||{}; return laT('ยกเลิก')+(R.th?(' · '+R.th):''); };
+  const _btSkip = r => !!(r.cxl || _btWx(r.routeId));
   /* §bkLockMf (2026-10-02) · เรือที่กันไว้ทั้งลำของวันนี้ แยกตามเส้นทาง
      ที่มา · ผู้ใช้แจ้งว่าล็อกเรือ "ในหน้า Manifest ก็ไม่โชว์" · ลองทำตามแล้วเจอว่า
      แถวในตารางมีอยู่จริง แต่การ์ดหัวหน้าทั้งสามใบพูดคนละเรื่องกับตาราง
@@ -55714,7 +55721,7 @@ function bkV2RenderTab2(){
     return _timeOf(a).localeCompare(_timeOf(b)) || _btOrdCmp(a,b);
   });
 
-  const totalPax = rowsF.reduce((s,r)=> s + (r.cxl?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
+  const totalPax = rowsF.reduce((s,r)=> s + (_btSkip(r)?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))), 0);
 
   // ── Filter bar (pier segmented + program dropdown) · original ──
   const pierBtn = (val,lbl)=>((typeof laPierScoped==='function')&&laPierScoped()) ? '' : `<button class="${pierF===val?'on':''}" onclick="bkV2Tab2SetPier('${val}')">${lbl}</button>`;   /* §pierScope */
@@ -55763,15 +55770,15 @@ function bkV2RenderTab2(){
     </aside>`;
 
   // ── Day-level aggregates (whole day · all programs · independent of filters) ──
-  const _dAD = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'ad')),0);
-  const _dCHD = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'chd')),0);
-  const _dINF = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'inf')),0);
-  const _dFOC = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'foc')),0);
+  const _dAD = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'ad')),0);
+  const _dCHD = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'chd')),0);
+  const _dINF = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'inf')),0);
+  const _dFOC = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'foc')),0);
   const _dPax = _dAD+_dCHD+_dINF+_dFOC;
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
-  rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.bd=a.bd||{ad:0,chd:0,inf:0,foc:0}; ['ad','chd','inf','foc'].forEach(k=>{ a.bd[k]+=P(r.pax,k); }); a.rids.add(r.routeId); });
+  rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; if(_btWx(r.routeId)){ a.rids.add(r.routeId); return; } a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.bd=a.bd||{ad:0,chd:0,inf:0,foc:0}; ['ad','chd','inf','foc'].forEach(k=>{ a.bd[k]+=P(r.pax,k); }); a.rids.add(r.routeId); });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
   Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bkV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
@@ -55788,6 +55795,7 @@ function bkV2RenderTab2(){
   const _unRn = id => { const f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(id):null; return (f&&f.name) || (typeof bkV2RouteShort==='function'&&bkV2RouteShort(id)) || (((typeof getRoute==='function'&&getRoute(id))||{}).name) || id; };
   const _PPABBR={speedboat:'SB',catamaran:'CAT',sunset:'SS',premium:'PREM',longtail:'LT',private:'PRIV',early:'EARLY',whale:'WS'};
   const _tripAbbr=s=>{ const k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(const w in _PPABBR){ if(k.includes(w)) return _PPABBR[w]; } const ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(w=>w[0]||'').join(''):String(s).slice(0,4)).toUpperCase(); };
+  let _wxN=0,_wxPax=0,_wxPend=0; const _wxR={};   /* §btCxlTrip */
   let _unBoatN=0,_unBoatPax=0,_unVanN=0,_unVanPax=0,_unRetN=0,_unRetPax=0,_unRcN=0,_unRcPax=0; const _unBoatR={}, _unVanR={}, _unRetR={}, _unRcR={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
@@ -55797,6 +55805,10 @@ function bkV2RenderTab2(){
     const _lbl=_unRn(dts[0].routeId);
     // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
     const _tcxPt=(typeof tcxPtOf==='function')?tcxPtOf(b,date):null;   /* §tcxPartner · ไปกับเรือ Partner */
+    if(dts.every(t=>_btWx(t.routeId))){   /* §btCxlTrip · ใบของทริปที่ยกเลิก · ไม่ต้องจัดเรือ/รถ · นับแยก */
+      _wxN++; _wxPax+=pax; _wxR[_lbl]=(_wxR[_lbl]||0)+pax;
+      if(!(b.weatherResolve && b.weatherResolve.status==='resolved')) _wxPend++;
+      return; }
     const hasBoat=_bkV2CityTourOnly || !!_tcxPt || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
     if(!hasBoat){ _unBoatN++; _unBoatPax+=pax; _unBoatR[_lbl]=(_unBoatR[_lbl]||0)+pax; }
     const zone=(dts[0].zone||b.pickupZone||'NoTransfer');
@@ -55886,7 +55898,7 @@ function bkV2RenderTab2(){
      ไม่ให้รก: ตัวเลขเล็ก สีจาง ตัวอักษรย่อ A C I F · ประเภทที่เป็น 0 ไม่แสดงเลย (ส่วนใหญ่ INF/FOC เป็น 0)
      โปรแกรมที่วิ่ง variant เดียว แถวหัวไม่แสดงซ้ำ (ตัวเลขเดียวกับแถวล่าง) · ชี้เมาส์ได้ครบสี่ตัว · นับจากใบจองชุดเดียวกับตัวเลข pax ของแถวนั้น (ไม่นับใบยกเลิก) */
   const _btBdOf = list => { const o={ad:0,chd:0,inf:0,foc:0};
-    (list||[]).forEach(r=>{ if(r.cxl) return; o.ad+=P(r.pax,'ad'); o.chd+=P(r.pax,'chd'); o.inf+=P(r.pax,'inf'); o.foc+=P(r.pax,'foc'); });
+    (list||[]).forEach(r=>{ if(_btSkip(r)) return; o.ad+=P(r.pax,'ad'); o.chd+=P(r.pax,'chd'); o.inf+=P(r.pax,'inf'); o.foc+=P(r.pax,'foc'); });
     return o; };
   const _btBdHtml = (o,cls) => { o=o||{};
     const ks=[['ad','A'],['chd','C'],['inf','I'],['foc','F']].filter(x=>(+o[x[0]]||0)>0);
@@ -55982,7 +55994,7 @@ function bkV2RenderTab2(){
     const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
         const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
       .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))) || _btOrdCmp(x,y));   /* §btOrder · เวลาเดียวกัน → ลำดับที่ตั้งไว้ (Program Config) */
-    const nRun=rids.filter(r=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date)).length;
+    const nRun=rids.filter(r=>!_btWx(r) && ((typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date))).length;
     /* §famSum (2026-10-13) · owner "ตัวผลรวมที่เป็น Variant เพิ่มจำนวนล็อคทั้งหมดด้วย และผลรวมจะเป็นเท่าไหร่"
        แถวหัวโปรแกรมรวมทุก variant ที่วิ่งวันนี้: 🔒 ล็อกทั้งหมด · รวม = จอง + ล็อก / ที่นั่งทั้งหมด · ว่าง
        ตัวเลขมาจากชุดเดียวกับแถว variant (getAllotment · bkV2LockedTotal) ผลรวมจึงตรงกับที่บวกด้วยตาเสมอ
@@ -55992,6 +56004,8 @@ function bkV2RenderTab2(){
       const open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
       const ron=(routeF===rid);
       const nm=esc(_btSub(rid)), dep=_btDep(rid), pr=_btPier(rid);
+      if(_btWx(rid)){ const _wp=_btBdOf(rowsPier.filter(r=>r.routeId===rid && !r.cxl)); const _wn=_wp.ad+_wp.chd+_wp.inf+_wp.foc;
+        return `<div class="bt-pgv off" onclick="bkV2SwitchTab('cancel')" title="${laT('ทริปนี้ถูกยกเลิก · ไม่นับคนเข้ายอด · เปิดแท็บ Cancellations')}"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span><span class="sp">${_wn?`<span class="bt-seat" style="color:#A32D2D"><b>${_wn}</b> pax</span>`:''}<span class="bt-free none" style="background:#FBE4E0;color:#A32D2D">${esc(_btWxLbl(rid))}</span></span></div>`; }
       if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · not running</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
       /* §noCapSeat · โปรแกรมบกที่ยังไม่ตั้ง dailyCap · getAllotment ตั้งใจ return ศูนย์ทั้งก้อน
@@ -56036,7 +56050,7 @@ function bkV2RenderTab2(){
       <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
       ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear</button>`:''}
       <span class="sp"></span>
-      <span class="bt-daytot"><b>${rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
+      <span class="bt-daytot"><b>${rows.filter(r=>!_btSkip(r)).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
 
   /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
@@ -56182,10 +56196,11 @@ function bkV2RenderTab2(){
   const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
   const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">today</span></div>
     <div class="bt-ncb">
+      ${_wxN>0?`<div class="bt-nc warn" style="cursor:pointer" onclick="bkV2SwitchTab('cancel')" title="${laT('เปิดแท็บ Cancellations')}"><span class="i">&#10006;</span><span><b>${laT('ทริปยกเลิก')}</b> &middot; ${_wxN} booking &middot; ${_wxPax} pax<i>${_brkHtml(_wxR)}${_wxPend?' &middot; '+laTp('รอจัดการ {0} ใบ',_wxPend):''} &middot; ${laT('ไม่นับเข้ายอดวัน · ไม่ต้องจัดเรือ/รถ')}</i></span></div>`:''}
       ${_unassignBar}
       ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>Pending approval</b> &middot; ${_btPendN} booking<i>Not counted in trip totals &middot; not on van/boat job orders yet</i></span></div>`:''}
       ${_ckBar}
-      ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
+      ${(!_unassignBar && !_btPendN && !_ckBar && !_wxN)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
     </div></div>`;
 
   const header = `
