@@ -8,7 +8,7 @@
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
      · §tcxPartner cancelled trip → "Send to partner" and its per-booking partner entries
      · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
-     · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
+   (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -50,7 +50,4 @@
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });
-
-  /* §flnWd · the job itself is still created; parts are withdrawn from the job page afterwards */
-  block(['flnWdAdd'], 'Withdrawing parts while adding work (create the job, then withdraw from its page)');
 })();
