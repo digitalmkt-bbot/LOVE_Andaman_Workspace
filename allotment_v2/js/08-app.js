@@ -56196,11 +56196,11 @@ function bkV2RenderTab2(){
   const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
   const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">today</span></div>
     <div class="bt-ncb">
-      ${_wxN>0?`<div class="bt-nc warn" style="cursor:pointer" onclick="bkV2SwitchTab('cancel')" title="${laT('เปิดแท็บ Cancellations')}"><span class="i">&#10006;</span><span><b>${laT('ทริปยกเลิก')}</b> &middot; ${_wxN} booking &middot; ${_wxPax} pax<i>${_brkHtml(_wxR)}${_wxPend?' &middot; '+laTp('รอจัดการ {0} ใบ',_wxPend):''} &middot; ${laT('ไม่นับเข้ายอดวัน · ไม่ต้องจัดเรือ/รถ')}</i></span></div>`:''}
       ${_unassignBar}
       ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>Pending approval</b> &middot; ${_btPendN} booking<i>Not counted in trip totals &middot; not on van/boat job orders yet</i></span></div>`:''}
       ${_ckBar}
-      ${(!_unassignBar && !_btPendN && !_ckBar && !_wxN)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
+      ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
+      ${/* §btCxlTrip2 · ล่างสุด · ไม่ใช่เรื่องที่ต้องจัด แค่ให้รู้ว่ามีใบรอเคลียร์ */''}      ${_wxN>0?`<div class="bt-nc warn" style="cursor:pointer" onclick="bkV2SwitchTab('cancel')" title="${laT('เปิดแท็บ Cancellations')}"><span class="i">&#10006;</span><span><b>${laT('ทริปยกเลิก')}</b> &middot; ${_wxN} booking &middot; ${_wxPax} pax<i>${_brkHtml(_wxR)}${_wxPend?' &middot; '+laTp('รอจัดการ {0} ใบ',_wxPend):''} &middot; ${laT('ไม่นับเข้ายอดวัน · ไม่ต้องจัดเรือ/รถ')}</i></span></div>`:''}
     </div></div>`;
 
   const header = `
