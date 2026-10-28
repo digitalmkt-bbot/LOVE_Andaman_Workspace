@@ -32623,7 +32623,39 @@ function ctRentBlank(){
   return { on:1, mode:'lump', amt:0, seat:0, days:30, off:2, trips:1, vat:0, note:'',
            from:'', to:'',                    /* §rentSpan · ช่วงสัญญา · ว่าง = ไม่จำกัด */
            fuelMul:100,                       /* §boatFuel · % เทียบสูตรกลาง · 100 = เท่ากัน */
-           ex:{ dep:1, cap:1, crew:1 } };
+           ex:{ dep:1, cap:1, crew:1 },
+           day:ctRentDayBlank() };
+}
+/* ══ §rentDay (2026-10-28) · เหมารายวัน ═══════════════════════════════════════════
+   owner: "LKC66 เช่ารายเดือนตั้งแต่ 15 เป็นต้นไป ก่อนหน้านั้นเป็นรายวัน รายวันลำละ 38,000
+           ราคารายวันเป็น ราคาเรือ + น้ำมัน + กัปตัน เด็กเรือ แล้ว"
+   ลำเดียวกันมีได้สองดีล: สัญญารายเดือน (ช่วง from–to ข้างบน) และเหมารายวันนอกช่วงนั้น
+   รายวันเป็นเลขต่อวันที่ออกเรือ ไม่ต้องหาร · และมักรวมน้ำมัน/กัปตัน/เด็กเรือมาแล้ว
+   จึงมี ex ของตัวเอง (ตั้งต้นตัดน้ำมันด้วย ต่างจากรายเดือนที่ผู้เช่าจ่ายน้ำมันเอง)
+   ลำดับการเลือกต่อวัน: รายเดือนถ้าวันนั้นอยู่ในสัญญาและมีค่าเช่า → ไม่งั้นรายวันถ้าเปิดและอยู่ในช่วง → ไม่งั้นเรือบริษัท */
+var CT_RENT_DAY_EX = [
+  { id:'fuel', l:'น้ำมันเรือ',   why:'ราคารายวันรวมน้ำมันแล้ว' },
+  { id:'cap',  l:'กัปตัน',       why:'เจ้าของเรือจัดให้' },
+  { id:'crew', l:'เด็กเรือ',     why:'เจ้าของเรือจัดให้' },
+  { id:'dep',  l:'ค่าเสื่อมเรือ', why:'เรือไม่ใช่ของเรา' },
+  { id:'pier', l:'ค่าเรือเทียบท่า', why:'ถ้าเจ้าของเรือจ่ายค่าเทียบท่าเอง' }
+];
+function ctRentDayBlank(){ return { on:0, amt:0, vat:0, from:'', to:'', ex:{ fuel:1, cap:1, crew:1, dep:1 } }; }
+function ctRentDayOf(boatId, ymd){
+  var R = ctRentRaw(boatId); if(!R || !R.on) return null;
+  var D = R.day; if(!D || !D.on || !(+D.amt > 0)) return null;
+  if(ymd){ if(D.from && ymd < D.from) return null; if(D.to && ymd > D.to) return null; }
+  var b = (typeof getBoat === 'function') ? (getBoat(boatId) || {}) : {};
+  var ex = D.ex || { fuel:1, cap:1, crew:1, dep:1 };
+  return { boatId:boatId, name:b.name || boatId, mode:'day', day:1, amt:+D.amt, perTrip:+D.amt, perDay:+D.amt,
+           trips:1, vat:!!D.vat, from:D.from || '', to:D.to || '', ex:ex,
+           inc:CT_RENT_DAY_EX.filter(function(e){ return ex[e.id]; }).map(function(e){ return e.l; }) };
+}
+/* ดีลที่ใช้กับ "ลำนี้ วันนี้" · null = คิดแบบเรือบริษัท */
+function ctRentFor(boatId, ymd){
+  var RN = ctRentOf(boatId);
+  if(RN && ctRentActiveOn(RN, ymd) && RN.perTrip > 0) return RN;
+  return ctRentDayOf(boatId, ymd);
 }
 /* ══ §ctRentCache · ทำไมต้องมีแคชตรงนี้ ═══════════════════════════════════════════════════════
    วัดจริงที่หน้าแผนคำนวณ · 8 แผน · ปักเรือเช่าไว้ · วาดหนึ่งรอบ = 113ms
@@ -32702,7 +32734,14 @@ function ctRentSet(boatId, k, v){
   /* §rentZero · ระเบียนใหม่ที่เกิดจากการแก้ช่องอื่น (เช่น % น้ำมันของเรือบริษัท) ต้องไม่กลายเป็นเรือเช่าเอง
      ctRentBlank() ตั้ง on:1 ไว้ · เป็นเรือเช่าได้ทางเดียวคือมีคนติ๊ก "เป็นเรือเช่า" */
   if(!R){ R = ctRentBlank(); if(k !== 'on') R.on = 0; }
-  if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
+  if(k.indexOf('day.') === 0){                                   /* §rentDay */
+    R.day = R.day || ctRentDayBlank(); var dk = k.slice(4);
+    if(dk.indexOf('ex.') === 0){ R.day.ex = R.day.ex || {}; R.day.ex[dk.slice(3)] = v ? 1 : 0; }
+    else if(dk === 'from' || dk === 'to') R.day[dk] = v;
+    else if(dk === 'on' || dk === 'vat') R.day[dk] = v ? 1 : 0;
+    else R.day[dk] = (v === '') ? 0 : (+v || 0);
+  }
+  else if(k.indexOf('ex.') === 0){ R.ex = R.ex || {}; R.ex[k.slice(3)] = v ? 1 : 0; }
   else if(k === 'mode' || k === 'note' || k === 'from' || k === 'to') R[k] = v;   /* §rentSpan */
   else if(k === 'on' || k === 'vat') R[k] = v ? 1 : 0;
   else R[k] = (v === '') ? 0 : (+v || 0);
@@ -32948,9 +32987,9 @@ function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
   /* §boatRent · ดูจาก "ลำที่วิ่ง" ไม่ใช่จากแผน · หน้าแผนส่งลำที่ปักไว้ · P&L ส่งลำที่ออกวันนั้น
      ลำบริษัทวิ่งเส้นทางเดียวกัน = ไม่มีค่าเช่า แต่มีกัปตัน/เด็กเรือ/ค่าเสื่อม ตามปกติ */
-  var RN = ctRentOf(ctx && ctx.boatId);
-  /* §rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก */
-  if(RN && !ctRentActiveOn(RN, ctx && ctx.date)) RN = null;
+  /* §rentDay · รายเดือนถ้าวันนั้นอยู่ในสัญญา → ไม่งั้นเหมารายวันถ้ามี → ไม่งั้นเรือบริษัท
+     (§rentSpan · นอกช่วงสัญญาให้กลับไปเป็นเรือปกติทั้งชุด — ทั้งค่าเช่าและบรรทัดที่ตัดออก) */
+  var RN = ctRentFor(ctx && ctx.boatId, ctx && ctx.date);
   /* §rentZero (2026-10-04) · ติ๊กเป็นเรือเช่าแต่ยังไม่ได้ใส่ค่าเช่า = ยังคิดแบบเรือบริษัทไปก่อน
      ผู้ใช้ถาม "ทำไมเรือเช่า Break even ถูกกว่าเรือของตัวเอง" · Aluminous1 (เรือบริษัท) มีระเบียน
      on:1 · ค่าเช่า 0 · ของเดิมตัดค่าเสื่อม กัปตัน เด็กเรือ ออกทั้งที่ไม่มีค่าเช่ามาแทน
@@ -33001,7 +33040,7 @@ function ctCalc(pl, ctx, tpl){
   if(RN && RN.perTrip > 0){
     var ra = RN.perTrip, rv = RN.vat ? ra * R : 0;
     out.gross += ra; out.vin += rv; out.fixNet += ra - rv;
-    out.rows.push({ id:'rent', g:'ค่าเช่าเรือ', l:'ค่าเช่าเรือ · ' + RN.name,
+    out.rows.push({ id:'rent', g:'ค่าเช่าเรือ', l:'ค่าเช่าเรือ · ' + RN.name + (RN.day ? ' · เหมารายวัน' : ''),
                     vat:RN.vat, amt:ra, vatAmt:rv, net:ra - rv, fix:ra, varr:0 });
   }
   out.net = out.gross - out.vin;
@@ -33444,7 +33483,9 @@ function pxTrip(date, bid){
       else if(FP.src==='sib' || FP.src==='back' || FP.src==='plan') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
     }
     /* §boatRent · ค่าเช่าเป็นเลขตามสัญญา ไม่ใช่ค่าประมาณจากสูตร ป้ายจึงเป็น "ของจริง" */
-    if(r.id==='rent' && real==null && C.rent){
+    if(r.id==='rent' && real==null && C.rent && C.rent.day){   /* §rentDay */
+      src='r'; why='เหมารายวัน '+ctB(C.rent.amt)+'/วัน'+(C.rent.inc&&C.rent.inc.length?(' · รวม '+C.rent.inc.join(' · ')+' แล้ว'):''); }
+    else if(r.id==='rent' && real==null && C.rent){
       src='r';
       why=ctB(C.rent.amt)+'/'+C.rent.days+' วัน · หยุด '+C.rent.off+' → วิ่ง '+C.rent.runDays+' วัน'
          +' = '+ctB(C.rent.perDay)+'/วัน'+(C.rent.trips>1?(' ÷ '+C.rent.trips+' รอบ'):'');
@@ -36911,13 +36952,41 @@ function ctPlanHtml(){
         + 'นอกช่วงนี้ลำนี้คิดแบบเรือบริษัทตามปกติ</span>'
       + '</div>';
 
+    /* §rentDay · เหมารายวัน · ใช้กับวันที่อยู่นอกสัญญารายเดือน (หรือลำที่เช่าเป็นรายวันอย่างเดียว) */
+    var DY = rr.day || ctRentDayBlank();
+    var DS = function(k, v, w, ph){
+      return '<input class="ct-in" data-fk="rn.' + bid + '.day.' + k + '" value="' + ((v == null || v === 0) && ph != null ? '' : ctE(v))
+        + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'day.' + k + '\',this.value)"'
+        + ' style="width:' + (w || 84) + 'px">'; };
+    body += '<div class="ct-rsec" data-rentday="1"><div class="ct-rsech">เหมารายวัน · ใช้กับวันที่ไม่อยู่ในสัญญารายเดือนข้างบน (หรือลำที่เช่าเป็นรายวันอย่างเดียว)</div>'
+      + '<div class="ct-rrow">'
+      + '<label class="ct-rchk"><input type="checkbox"' + (DY.on ? ' checked' : '')
+        + ' onchange="ctRentSet(\'' + bid + '\',\'day.on\',this.checked?1:0)"> <b>มีดีลเหมารายวัน</b></label>'
+      + (DY.on ? ('<label class="ct-f"><span>ค่าเหมา/วัน (บาท)</span>' + DS('amt', DY.amt, 110) + '</label>'
+        + '<label class="ct-f"><span>ตั้งแต่</span><input type="date" class="ct-in" style="width:150px" data-fk="rn.' + bid + '.day.from" value="' + ctE(DY.from || '') + '"'
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.from\',this.value)"></label>'
+        + '<label class="ct-f"><span>ถึง</span><input type="date" class="ct-in" style="width:150px" data-fk="rn.' + bid + '.day.to" value="' + ctE(DY.to || '') + '"'
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.to\',this.value)"></label>'
+        + '<label class="ct-rchk" style="align-self:end;padding-bottom:8px"><input type="checkbox"' + (DY.vat ? ' checked' : '')
+          + ' onchange="ctRentSet(\'' + bid + '\',\'day.vat\',this.checked?1:0)"> มี VAT ขอคืนได้</label>') : '')
+      + '</div>'
+      + (DY.on ? ('<div class="ct-rrow"><span class="ct-u" style="align-self:center">ราคารายวันรวมอะไรมาแล้วบ้าง · ติ๊กไว้ = ตัดบรรทัดนั้นออกจากต้นทุนของเรา</span>'
+        + CT_RENT_DAY_EX.map(function(e){
+            return '<label class="ct-rchk" title="' + ctE(e.why) + '"><input type="checkbox"'
+              + ((DY.ex || {})[e.id] ? ' checked' : '')
+              + ' onchange="ctRentSet(\'' + bid + '\',\'day.ex.' + e.id + '\',this.checked?1:0)"> ' + ctE(e.l) + '</label>'; }).join('')
+        + '</div>'
+        + '<div class="ct-hint" style="padding:0">P&amp;L รายทริปจะลง <b>' + ctB(+DY.amt || 0) + '/วัน</b> ให้ทุกวันที่ลำนี้ออกเรือในช่วงนี้ · '
+        + 'วันที่อยู่ในสัญญารายเดือนใช้ค่าเช่ารายเดือน ไม่ใช้ตัวนี้ · ว่างทั้งคู่ = ทุกวันนอกสัญญารายเดือน</div>') : '')
+      + '</div>';
+
     if(RN && RN.amt > 0){
       body += '<div class="ct-rcalc">' + ctB(RN.amt) + ' ÷ (' + RN.days + ' − ' + RN.off + ' วันหยุด) = <b>'
         + ctB(RN.perDay) + '/วันวิ่ง</b>'
         + (RN.trips > 1 ? (' ÷ ' + RN.trips + ' รอบ = <b>' + ctB(RN.perTrip) + '/ทริป</b>') : '')
         + ' · มีให้วิ่ง ' + RN.runDays + ' วัน/งวด</div>';
     } else {
-      body += '<div class="ct-rcalc warn" data-rentzero="1">ยังไม่ได้ใส่ค่าเช่า · ลำนี้จึง<b>ยังคิดแบบเรือบริษัท</b> (มีค่าเสื่อม กัปตัน เด็กเรือ) จนกว่าจะใส่ค่าเช่า · ถ้าไม่ใช่เรือเช่า เอาติ๊ก "เป็นเรือเช่า" ออก</div>';
+      body += '<div class="ct-rcalc warn" data-rentzero="1">ยังไม่ได้ใส่ค่าเช่ารายเดือน · ' + (DY.on && +DY.amt > 0 ? 'ลำนี้คิดตาม<b>ดีลเหมารายวัน</b>ข้างล่าง' : 'ลำนี้จึง<b>ยังคิดแบบเรือบริษัท</b>') + ' (มีค่าเสื่อม กัปตัน เด็กเรือ) จนกว่าจะใส่ค่าเช่า · ถ้าไม่ใช่เรือเช่า เอาติ๊ก "เป็นเรือเช่า" ออก</div>';
     }
     body += '</div>';
 
