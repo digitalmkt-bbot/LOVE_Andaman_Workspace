@@ -8667,6 +8667,14 @@ function flRenderDashboard(){
 // fl-boatstatus is handled by unified renderBoats() above
 
 // ── FLEET DAILY REPORT ──
+/* §drHead · เลื่อนเดือนของปฏิทินบนหัว · วันในเดือนใหม่ = วันเดิม (ถ้าไม่มี = วันสุดท้ายของเดือน) */
+function flDRShiftMonth(n){
+  const el=document.getElementById('fl-dr-date'); const cur=new Date((el.value||TODAY_STR)+'T12:00:00');
+  const y=cur.getFullYear(), m=cur.getMonth()+n, d=cur.getDate();
+  const last=new Date(y,m+1,0).getDate(); const t=new Date(y,m,Math.min(d,last));
+  el.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  flRenderDR();
+}
 function flShiftDRDay(n){
   const el=document.getElementById('fl-dr-date');
   const cur=new Date(el.value||TODAY_STR);
@@ -9471,6 +9479,80 @@ function flRenderDR(){
     </div>`;
     return`<div style="display:flex;gap:5px;margin-bottom:14px;align-items:center">${monthCard}${wkBtn(-7,'&#8249;','สัปดาห์ก่อน')}${days.join('')}${wkBtn(7,'&#8250;','สัปดาห์ถัดไป')}</div>`;
   })();
+  void headerBar; void kpiStrip; void pillRow; void weekStrip;
+  /* ══ §drHead (2026-10-28) · owner "เอาดีไซน์ของ Fleet work ไปครอบ" + "เอาวันที่มาใส่ตรงนี้ และทำให้ครบเดือน" + "ไม่ต้องมีจำนวนคนหรือจำนวนลำ"
+     หัวหน้าใช้โครงเดียวกับ Fleet Work (#view-fl-work): พื้นกรม · ซ้ายตัวเลขใหญ่ · กลาง wordmark · ขวา chips · แถวแท็บเม็ดเลือกท่า
+     แถวที่สาม = ปฏิทินทั้งเดือน 31 ช่อง (แค่วัน+วันที่) แทนแถบ 7 วัน · ตารางของแต่ละท่าไม่แตะ
+     ตัวแปรเดิม (headerBar · kpiStrip · pillRow · weekStrip) ยังสร้างอยู่แต่ไม่ได้ใช้ · ลบทีหลังเมื่อนิ่งแล้ว */
+  const drHead=(()=>{
+    const E=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const _THL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const _WDS=['อา','จ','อ','พ','พฤ','ศ','ส'], _WDL=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+    const y=dt.getFullYear(), m=dt.getMonth(), nd=new Date(y,m+1,0).getDate();
+    const pad=n=>String(n).padStart(2,'0');
+    // ค่าน้ำมันทั้งวัน · ลิตร × ราคาต่อลำ (เหมือนหัวการ์ดท่า)
+    let fuelCost=0, costMiss=false, noHours=0;
+    companyBoats.forEach(b=>{
+      const fl=((FL_DAILY[ds]||{})[b.id]?.fuel||0)+((typeof flPosFuelOf==='function')?flPosFuelOf(ds,b):0);
+      if(fl){ const pr=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):null; if(pr!=null) fuelCost+=fl*pr; else costMiss=true; }
+      const bp=boatPax[b.id]||{};
+      if(bp.eff>0){ const engs=FL_ENGINES.filter(e=>e.boatId===b.id); const hrs=(FL_DAILY[ds]||{})[b.id]?.hours||{};
+        if(engs.length && !engs.some(e=>hrs[e.id]!=null && hrs[e.id]!=='')) noHours++; }
+    });
+    ['tublamu','panwa','ranong'].forEach(pk=>{ try{ flReqGet(ds,pk).forEach(r=>{ if(r.fuel){ if(r.price!=null) fuelCost+=r.fuel*r.price; else costMiss=true; } }); }catch(_){} });
+    const chip=(cls,h)=>`<span class="drh-chip ${cls}">${h}</span>`;
+    const chips=[
+      chip('', `&#9981; <b>${totalFuel?totalFuel.toLocaleString():'—'} L</b> · ${avgLPP} L/คน`),
+      fuelCost>0?chip('', `฿ <b>${Math.round(fuelCost).toLocaleString()}</b>${costMiss?' <i>+ยังไม่ใส่ราคาบางลำ</i>':''}`):'',
+      noHours?chip('amb', `&#9201; <b>${noHours} ลำ</b> ยังไม่กรอกชั่วโมง`):'',
+      anomalies.length?chip('red', `&#9888; <b>${anomalies.length}</b> ${E(BOATS.find(x=>x.id===anomalies[0].bid)?.name||'')} น้ำมันสูง`):'',
+      `<button type="button" class="drh-chip wh" onclick="nav(document.querySelector('[data-view=fl-boatstatus]'))" title="สถานะเรือ">+ Report</button>`
+    ].join('');
+    const top=`<div class="drh-top"><div class="drh-l"><b>${totalPAX||'—'}</b><span>PAX · ${operatingBoats} ลำออก<i>${_WDL[dt.getDay()]} ${dt.getDate()} ${laMonAbbrTH()[m]} ${y+543} · ${operatingBoats} / ${companyBoats.length} fleet</i></span></div>
+      <div class="drh-wm"><i>LOVE ANDAMAN</i>DAILY FLEET LOG</div><div class="drh-chips">${chips}</div></div>`;
+    const tabs=`<div class="drh-tabs">${_pierMeta.map(pm=>{
+        const on=_FL_DR_PIER===pm.k, closed=pm.k&&_drPierClosed(pm.k);
+        const opr=pm.boats.filter(b=>(boatPax[b.id]||{}).eff>0).length;
+        const sub=pm.k?(closed?'ปิด':(opr+' ออก')):(companyBoats.length+' ลำ');
+        return `<button type="button" class="${on?'on':''}${closed?' dim':''}" onclick="flDRSetPier('${pm.k}')">${pm.k?`<i class="dt" style="background:${pm.col}"></i>`:''}${E(pm.lbl)} · ${sub}</button>`; }).join('')}
+      <div class="drh-mon"><button type="button" class="ar" onclick="flDRShiftMonth(-1)" title="เดือนก่อน">&#8249;</button><span class="mn">${_THL[m]} ${y+543}</span><button type="button" class="ar" onclick="flDRShiftMonth(1)" title="เดือนถัดไป">&#8250;</button>
+        <button type="button" class="drh-chip wh" style="margin-left:8px;height:32px" onclick="document.getElementById('fl-dr-date').value=TODAY_STR;flRenderDR()">วันนี้</button></div></div>`;
+    let cells='';
+    for(let d=1; d<=nd; d++){
+      const ds2=`${y}-${pad(m+1)}-${pad(d)}`, dow=new Date(y,m,d).getDay();
+      const cls=(ds2===ds?' on':'')+(ds2===TODAY_STR?' td':'')+(ds2>TODAY_STR?' fut':'')+((dow===0||dow===6)?' we':'');
+      cells+=`<button type="button" class="drh-dc${cls}" onclick="document.getElementById('fl-dr-date').value='${ds2}';flRenderDR()"><i>${_WDS[dow]}</i><b>${d}</b></button>`;
+    }
+    const mon=`<div class="drh-mon-grid" style="grid-template-columns:repeat(${nd},minmax(0,1fr))">${cells}</div>`;
+    const css=`<style>
+#view-fl-dailyreport > .page-hd{display:none}
+#view-fl-dailyreport{background:#16265C;min-height:100%}
+.drh-page{font-family:'DM Sans','IBM Plex Sans Thai',sans-serif;color:#0F1B3D}
+.drh-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;min-height:46px}
+.drh-l{display:flex;align-items:center;gap:10px;color:#fff}.drh-l b{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.drh-l span{line-height:1.15;font-size:13px;font-weight:700}.drh-l span i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#B4BCDD}
+.drh-wm{text-align:center;line-height:1.25;font-size:16px;font-weight:800;letter-spacing:.30em;color:#fff;padding-left:.3em;white-space:nowrap}.drh-wm i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.34em;color:#B4BCDD}
+.drh-chips{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.drh-chip{height:28px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.14);white-space:nowrap;font-family:inherit;cursor:default}
+.drh-chip b{font-weight:800}.drh-chip i{font-style:normal;font-weight:600;color:#C5CCE6;font-size:11px}
+.drh-chip.red{background:#FBE0DD;color:#8E2A20;border-color:transparent}.drh-chip.amb{background:#FBEBD3;color:#7A4300;border-color:transparent}
+.drh-chip.wh{background:#fff;color:#0F1B3D;border-color:#fff;cursor:pointer}
+.drh-tabs{display:flex;gap:6px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.drh-tabs>button{height:32px;padding:0 14px;border-radius:16px;border:1px solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff;font:600 12.5px inherit;font-family:inherit;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.drh-tabs>button.on{background:#fff;border-color:#fff;color:#0F1B3D;font-weight:700}.drh-tabs>button.dim{color:#8E97BC;border-color:rgba(255,255,255,.14)}
+.drh-tabs i.dt{width:8px;height:8px;border-radius:4px;display:inline-block}
+.drh-mon{margin-left:auto;display:flex;align-items:center;gap:4px}
+.drh-mon .ar{width:30px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:transparent;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;cursor:pointer;font-family:inherit}
+.drh-mon .mn{font-size:13px;font-weight:800;color:#fff;letter-spacing:.04em;padding:0 10px;min-width:130px;text-align:center}
+.drh-mon-grid{display:grid;gap:4px;margin:10px 0 12px}
+.drh-dc{height:52px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;min-width:0;padding:0;cursor:pointer;font-family:inherit}
+.drh-dc i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.06em;color:#B4BCDD}.drh-dc b{font-size:16px;font-weight:800;margin-top:1px}
+.drh-dc.we i{color:#4FD1A5}.drh-dc.on{background:#fff;border-color:#fff;color:#0F1B3D}.drh-dc.on i{color:#6B7489}.drh-dc.on.we i{color:#0F6E56}
+.drh-dc.td{border:1.5px solid #F6C76B}.drh-dc.fut{opacity:.45}
+@media(max-width:1180px){.drh-top{grid-template-columns:1fr}.drh-wm{display:none}.drh-chips{justify-content:flex-start}}
+</style>`;
+    return css+top+tabs+mon;
+  })();
 
   // Boat row builder
   const boatAvatarColor=(b)=>{
@@ -9725,8 +9807,9 @@ function flRenderDR(){
     }
     let pPAX=0,pTrips=0,pFuel=0,pCost=0,pCostMissing=false;
     boats.forEach(b=>{
-      const op=(TRIPS[ds]||{})[b.id];
-      if(op?.booked){pPAX+=op.booked;pTrips++;}
+      /* §drHead · เดิมอ่าน TRIPS.booked ซึ่งเป็น 0 เสมอตรงนี้ → หัวการ์ดขึ้น "0 PAX · 0 trips" ทั้งที่แถวมีคน · ใช้ boatPax ตัวเดียวกับแถว */
+      const _bp=boatPax[b.id]||{};
+      if(_bp.eff>0){pPAX+=_bp.eff;pTrips+=Math.max(1,_bp.trips||1);}
       const fl=((FL_DAILY[ds]||{})[b.id]?.fuel||0) + flPosFuelOf(ds,b);   /* §drPos · รวมน้ำมันตีเรือ */
       if(fl){ pFuel+=fl; const pr=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):null; if(pr!=null) pCost+=fl*pr; else pCostMissing=true; }
     });
@@ -9734,7 +9817,7 @@ function flRenderDR(){
       if(r.pax) pPAX+=r.pax;
       if(r.fuel){ pFuel+=r.fuel; if(r.price!=null) pCost+=r.fuel*r.price; else pCostMissing=true; }
     });
-    const operating=boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
+    const operating=boats.filter(b=>(boatPax[b.id]||{}).eff>0).length;   /* §drHead */
     const locked=flDRLocked(ds, pierKey);   // saved → read-only until Edit
     // Fuel cost = Σ (each boat's L × that boat's ฿/L) · price is entered PER BOAT in each row (no pier-level price box)
     const _fcost=(pCost>0)?Math.round(pCost):null;
@@ -9774,7 +9857,7 @@ function flRenderDR(){
         <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
         <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
         <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace">${operating} operating</span>
-        <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${pFuel} L${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
+        <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${(Math.round(pFuel*100)/100).toLocaleString()} L${pPAX&&pFuel?` · ${(pFuel/pPAX).toFixed(1)} L/คน`:''}${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
         ${locked?'':`<button onclick="event.stopPropagation();flPosOpen('${ds}','${pierKey}','')" title="บันทึกเรือที่ตีย้ายท่า · ใส่น้ำมันที่ใช้ (ไม่มีลูกค้า)" style="margin-left:12px;border:1.5px solid #B5D4F4;background:#fff;color:#185FA5;border-radius:8px;padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit">+ ตีเรือ</button>`}
         <button onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการเบิกของ · พิมพ์ชื่อเอง ชื่อที่เคยใช้ขึ้นให้เลือก" style="margin-left:12px;border:1.5px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ อื่นๆ</button>
         <button onclick="event.stopPropagation();flIssueManageOpen('${pierKey}')" title="จัดการรายการเบิกของทั้งหมด" style="border:1px solid ${dim.line};background:#fff;color:${dim.ink2};border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">&#9881; จัดการรายการ</button>
@@ -9993,11 +10076,8 @@ function flRenderDR(){
 .flx-r.gone input{background:#F7F6F2;color:#a3a29a}
 .flx-hz{font-size:9.5px;color:#a3a29a;margin:11px 0 6px;border-top:1px solid #F0EEE8;padding-top:8px}
 .flx-n{font-size:9.5px;color:#a3a29a;line-height:1.6;margin-top:10px;border-top:1px solid #F0EEE8;padding-top:9px}
-</style><div style="background:${dim.bg};margin:14px -16px -16px;padding:18px 20px 22px">
-    ${headerBar}
-    ${kpiStrip}
-    ${pillRow}
-    ${weekStrip}
+</style><div class="drh-page" style="background:#16265C;margin:14px -16px -16px;padding:18px 20px 22px">
+    ${drHead}
     ${tlSection}
     ${vpSection}
     ${rnSection}
