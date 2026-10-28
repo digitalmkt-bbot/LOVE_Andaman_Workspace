@@ -9549,6 +9549,9 @@ function flRenderDR(){
 .drh-dc i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.06em;color:#B4BCDD}.drh-dc b{font-size:16px;font-weight:800;margin-top:1px}
 .drh-dc.we i{color:#4FD1A5}.drh-dc.on{background:#fff;border-color:#fff;color:#0F1B3D}.drh-dc.on i{color:#6B7489}.drh-dc.on.we i{color:#0F6E56}
 .drh-dc.td{border:1.5px solid #F6C76B}.drh-dc.fut{opacity:.45}
+.drh-ps>div{padding:0 16px;border-right:1px solid #EEF1F5;font-size:11px;color:#6B7489;font-weight:700;line-height:1.25}
+.drh-ps>div:last-child{border-right:0}.drh-ps>div>span{display:block}.drh-ps b{display:block;font-size:17px;color:#0F1B3D;font-family:'DM Mono',monospace;font-weight:700;white-space:nowrap}
+/* §drHead2 */
 @media(max-width:1180px){.drh-top{grid-template-columns:1fr}.drh-wm{display:none}.drh-chips{justify-content:flex-start}}
 </style>`;
     return css+top+tabs+mon;
@@ -9853,11 +9856,17 @@ function flRenderDR(){
     const NCOL=7+ENG_COLS.length+Math.max(1,ISS.length);
 
     return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7;flex-wrap:wrap">
-        <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
-        <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
-        <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace">${operating} operating</span>
-        <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${(Math.round(pFuel*100)/100).toLocaleString()} L${pPAX&&pFuel?` · ${(pFuel/pPAX).toFixed(1)} L/คน`:''}${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
+      <div class="drh-ph" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #EEF1F5;background:#fff;flex-wrap:wrap">
+        <div style="width:36px;height:36px;border-radius:10px;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none">${label.slice(0,2)}</div>
+        <span style="font-size:20px;font-weight:800;color:#0F1B3D;letter-spacing:-.01em;white-space:nowrap">${label}</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;background:${operating?'#E4F3EC':'#F1F4F8'};color:${operating?'#0F6E56':'#6B7489'};white-space:nowrap">&#9679; ${operating?`วิ่ง ${operating} ลำ`:'ไม่มีลำออก'}</span>
+        <div class="drh-ps" style="display:flex;margin-left:6px;border-left:1px solid #EEF1F5">
+          <div><span>ลูกค้า</span><b>${pPAX.toLocaleString()}</b></div>
+          <div><span>น้ำมัน</span><b>${pFuel?(Math.round(pFuel*10)/10).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1}):'—'} L</b></div>
+          <div><span>เฉลี่ย</span><b>${(pPAX&&pFuel)?(pFuel/pPAX).toFixed(1):'—'} L/คน</b></div>
+          <div><span>ค่าน้ำมัน</span><b>${_fcost!=null?`฿${_fcost.toLocaleString()}`:'—'}${(pCostMissing&&pFuel>0)?` <i style="font-style:normal;font-size:10px;color:#BA7517;font-family:inherit" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</i>`:''}</b></div>
+        </div>
+        <span style="margin-left:auto"></span>
         ${locked?'':`<button onclick="event.stopPropagation();flPosOpen('${ds}','${pierKey}','')" title="บันทึกเรือที่ตีย้ายท่า · ใส่น้ำมันที่ใช้ (ไม่มีลูกค้า)" style="margin-left:12px;border:1.5px solid #B5D4F4;background:#fff;color:#185FA5;border-radius:8px;padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit">+ ตีเรือ</button>`}
         <button onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการเบิกของ · พิมพ์ชื่อเอง ชื่อที่เคยใช้ขึ้นให้เลือก" style="margin-left:12px;border:1.5px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ อื่นๆ</button>
         <button onclick="event.stopPropagation();flIssueManageOpen('${pierKey}')" title="จัดการรายการเบิกของทั้งหมด" style="border:1px solid ${dim.line};background:#fff;color:${dim.ink2};border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">&#9881; จัดการรายการ</button>
