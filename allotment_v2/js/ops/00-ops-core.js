@@ -84,10 +84,20 @@
        laOps.later.now()        a screen is opened before the queue is through: run everything left at once
        laOps.later.whenDone(cb) cb once, when every queued load has finished (90-ops-boot.js redraws then)
      A load that fails is reported by its own adapter (O.fail) and counted as finished. If nothing starts the
-     queue (no boot), it starts by itself 20 s after the first load is queued. */
+     queue (no boot), it starts by itself 20 s after the first load is queued.
+     §loadOnOpen (2026-10-28) · laOps.later(name, fn, rank, views): a load only some screens read waits until one
+     of them is opened, so a login that never opens them never downloads it. `views` lists view ids; 'fl-*' is a
+     prefix. start() and done() leave such loads out; open(view) runs the ones that view needs (and anything the
+     queue still holds), now() runs all of them.
+       laOps.later.open(view)   90-ops-boot.js, on opening a screen: resolves true when it started a load the
+                                screen waited for (the boot then draws the screen again) */
   var later = (function(){
     var tasks = [], running = 0, started = false, waiting = [], fallback = null, MAX = 2;
-    function done(){ return tasks.every(function(t){ return t.finished; }); }
+    function auto(t){ return !t.views; }
+    function wants(t, view){
+      return !!view && t.views.some(function(v){ return v === view || (v.slice(-1) === '*' && view.indexOf(v.slice(0, -1)) === 0); });
+    }
+    function done(){ return tasks.every(function(t){ return t.finished || !auto(t); }); }
     function settle(){
       if(!done()) return;
       var cbs = waiting; waiting = [];
@@ -101,17 +111,24 @@
       }).then(function(){ t.finished = true; running--; pump(); settle(); });
       return t.p;
     }
-    function pump(){ for(var i = 0; i < tasks.length && running < MAX; i++) if(!tasks[i].p) run(tasks[i]); }
+    function pump(){ for(var i = 0; i < tasks.length && running < MAX; i++) if(!tasks[i].p && auto(tasks[i])) run(tasks[i]); }
     function start(){ if(fallback){ clearTimeout(fallback); fallback = null; } started = true; pump(); }
-    function queueLoad(name, fn, rank){
-      var t = { name: name, fn: fn, rank: rank == null ? 99 : rank, p: null, finished: false }, i = tasks.length;
+    function queueLoad(name, fn, rank, views){
+      var t = { name: name, fn: fn, rank: rank == null ? 99 : rank, views: Array.isArray(views) && views.length ? views.slice() : null, p: null, finished: false }, i = tasks.length;
       while(i > 0 && tasks[i - 1].rank > t.rank) i--;
       tasks.splice(i, 0, t);
+      if(!auto(t)) return;
       if(started) pump();
       else if(!fallback) fallback = setTimeout(start, 20000);
     }
     queueLoad.start = start;
     queueLoad.now = function(){ start(); return Promise.all(tasks.map(run)); };
+    queueLoad.open = function(view){
+      start();
+      var mine = tasks.filter(function(t){ return !auto(t) && wants(t, view); });
+      var fresh = mine.some(function(t){ return !t.finished; });
+      return Promise.all(tasks.filter(function(t){ return auto(t) || mine.indexOf(t) >= 0; }).map(run)).then(function(){ return fresh; });
+    };
     queueLoad.done = done;
     queueLoad.whenDone = function(cb){ if(done()) cb(); else waiting.push(cb); };
     queueLoad.names = function(){ return tasks.map(function(t){ return t.name + (t.finished ? ' ✓' : t.p ? ' …' : ''); }); };

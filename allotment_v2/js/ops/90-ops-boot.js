@@ -46,12 +46,20 @@
   }
 
   /* §bootLater · a screen opened while the background loads are still queued may read their data
-     (fleet, money): run what is left at once; the redraw when they are in fills the screen. */
+     (fleet, money): run what is left at once; the redraw when they are in fills the screen.
+     §loadOnOpen · a load only some screens read (laOps.later's `views`) starts when one of them opens; the
+     screen is drawn again when it is in, if the person is still on it. */
+  function openLoads(view){
+    O.later.open(view).then(function(fresh){
+      var el = document.querySelector('.nav-item.active[data-view]');
+      if(fresh && el && el.dataset.view === view) redraw();
+    }, function(){});
+  }
   (function(){
     var orig = window.nav;
     if(typeof orig !== 'function' || !O.later) return;
-    window.nav = function(){
-      if(O.state.loaded && !selfNav && !O.later.done()) O.later.now();
+    window.nav = function(el){
+      if(O.state.loaded && !selfNav) openLoads(el && el.dataset ? el.dataset.view : '');
       return orig.apply(this, arguments);
     };
   })();
@@ -68,7 +76,9 @@
     .then(step('deployments', function(){ return O.deployments && O.deployments.load(); }))
     .then(step('seat locks', function(){ return O.locks && O.locks.load(); }))
     .then(step('weather closures', function(){ return O.weather && O.weather.load(); }))
-    .then(step('market data', function(){ return !window.__laEmbedToken && O.marketData && O.marketData.load(); }))
+    // §loadOnOpen · market stats (SB_MARKET_STATS / _MONTHLY, ~370 KB) are read by Market Data, the Pickup Map arrivals and
+    // Accounting's market chip only: they load when one of those opens, not at every login
+    .then(function(){ if(!window.__laEmbedToken && O.marketData && O.later) O.later('market data', function(){ return O.marketData.load(); }, 6, ['marketdata', 'pickupmap', 'accounting']); })
     .then(step('meal venues and trip actuals', function(){ return !window.__laEmbedToken && O.meals && O.meals.load(); }))
     .then(function(){
       // Booking records are page-owned: Calendar loads its visible month and
@@ -100,6 +110,9 @@
           redraw();
         });
         O.later.start();
+        // the first screen (the one the router restored) may be one that loads on open
+        var first = document.querySelector('.nav-item.active[data-view]');
+        if(first) openLoads(first.dataset.view);
       }
     });
 })();

@@ -29,7 +29,10 @@
     if((O.busy() && !window._dashLoaderShown) || O.activeView() !== 'dashboard' || typeof window.renderDash !== 'function') return;
     window.renderDash();
   }
-  function ensure(date, mode, family){
+  /* opts.bare (§loadOnOpen): the day alone, without the other pieces. The pier ticker reads yesterday's routes[].booked_pax
+     only; asking for the month and both rolling series too made the server build three more dashboards for it. A bare day is
+     still a full day answer (the pieces are cached under their own keys), so it is cached under the same key. */
+  function ensure(date, mode, family, opts){
     mode = (mode === 'month' || mode === 'year') ? mode : 'day';
     if(!O.enabled() || !validDate(date)) return Promise.resolve(null);
     family = (mode === 'month' && family) ? family : '';
@@ -41,7 +44,7 @@
        12-month bars): one request instead of four. The server nests each piece under its own key; they are
        cached under the keys their own requests would use. */
     var q = { date: date, mode: mode };
-    if(mode === 'day'){
+    if(mode === 'day' && !(opts && opts.bare)){
       var fam = window._dashCalFam || '';
       q.include = 'month,rolling_month,rolling_year';
       if(fam) q.family = fam;

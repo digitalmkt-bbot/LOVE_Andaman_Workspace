@@ -3896,7 +3896,7 @@ function _renderDashRaw(){
      With the server dashboard (GET /v1/dashboard · routes[].booked_pax) for the day and for yesterday, each route's
      booked pax is added to its pier, as the legacy sums did. Until both answers are in, the legacy sums stay. */
   if(_opsDashApi && _opsDash && Array.isArray(_opsDash.routes) && window.laOps.enabled && window.laOps.enabled()){
-    _opsDashApi.ensure(yDs,'day');
+    _opsDashApi.ensure(yDs,'day','',{bare:true});   // §loadOnOpen · yesterday's day figures only, not its month / rolling pieces
     const _yDash=_opsDashApi.get(yDs,'day');
     if(_yDash && Array.isArray(_yDash.routes)){
       const _sumPier=(routes,into)=>{ Object.keys(into).forEach(k=>into[k]=0);
