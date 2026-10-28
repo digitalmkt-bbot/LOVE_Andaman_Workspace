@@ -98,6 +98,10 @@
     var list = closures();
     for(var i = list.length - 1; i >= 0; i--){ if(list[i] && list[i].opsId === cid) list.splice(i, 1); }
   }
+  /* §tcxPartner · the partner record of each booking sent with a partner company, by local booking id, in legacy's trip_cxl_partner
+     shape ({ ev, name, ppx, pax, cost, van, drop, time, ref, by, at }): legacy's readers (tcxPtOf, tcxPtCell, tcxPtDay for the
+     Executive Board, tcxPtHistNote) read it through tcxPtAll (below). Filled from the closures' follow-up lists as they are read. */
+  var partners = {};
   // Mirror the follow-up list onto the local bookings (memory only): the by-trip inline cell reads bk.weatherResolve.
   function syncFollowUps(d){
     var key = d.route_id + '|' + d.service_date, rows = {};
@@ -109,6 +113,10 @@
         bk.weatherResolve = { event: key, status: r.status, outcome: r.outcome || undefined,
           newDate: r.new_date || undefined, newRoute: r.new_route_id || undefined, by: r.resolved_by || undefined, notifiedAt: r.notified_at || undefined, resolvedAt: r.resolved_at || undefined };
       } else if(bk.weatherResolve && bk.weatherResolve.event === key){ delete bk.weatherResolve; }
+      var p = r && r.outcome === 'partner' && r.partner;
+      if(p) partners[bk.id] = { ev: key, name: p.name, ppx: +p.price_per_head || 0, pax: +p.pax || 0, cost: +p.cost || 0, van: p.van,
+        drop: p.drop_point || '', time: p.drop_time || '', ref: p.ref || '', by: p.by || '', at: p.at || '' };
+      else if(partners[bk.id] && partners[bk.id].ev === key) delete partners[bk.id];
     });
   }
   /* A re-opened trip keeps the follow-up of the bookings that were already resolved (outcome, new date), as legacy keeps bk.weatherResolve;
@@ -172,7 +180,7 @@
   function renderPanel(routeId, date, d){
     var rname = routeName(routeId), cid = d.id;
     var list = d.bookings || [];
-    var outLbl = { reschedule: 'Rescheduled', refund: 'Refunded', credit: 'Credit', cancel: 'Cancelled', move: 'Moved' };
+    var outLbl = { reschedule: 'Rescheduled', refund: 'Refunded', credit: 'Credit', cancel: 'Cancelled', move: 'Moved', partner: 'Sent to partner' };
     var rsn = (typeof TCX_R !== 'undefined' && (TCX_R[d.reason] || TCX_R.weather)) || { en: 'Weather' };
     curPanel = { routeId: routeId, date: date, cid: cid };
     var nAwait = 0, nNotif = 0, nDone = 0;
@@ -196,8 +204,17 @@
           + '<button data-la-wx="resolve" data-cid="' + esc(cid) + '" data-bid="' + esc(bid) + '" data-route="' + esc(routeId) + '" data-date="' + esc(date) + '" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer">Resolve</button></div>';
       } else {
         var extra = (b.outcome === 'reschedule' && b.new_date) ? (' → ' + esc(b.new_date))
-          : (b.outcome === 'move' && b.new_route_id) ? (' → ' + esc(routeName(b.new_route_id)) + (b.new_date ? ' ' + esc(String(b.new_date).slice(5)) : '')) : '';
+          : (b.outcome === 'move' && b.new_route_id) ? (' → ' + esc(routeName(b.new_route_id)) + (b.new_date ? ' ' + esc(String(b.new_date).slice(5)) : ''))
+          : (b.outcome === 'partner' && b.partner) ? (' · ' + esc(b.partner.name) + ' · ' + fmt(b.partner.cost)) : '';
         action = '<span style="font-size:11.5px;color:#0F6E56;font-weight:600">✓ ' + esc(outLbl[b.outcome] || b.outcome || '') + extra + '</span>';
+        // a listed partner: whether its email went, and Email / Resend
+        var pt = b.outcome === 'partner' && b.partner;
+        if(pt && pt.partner_id){
+          var mailBtn = function(label){ return ' <button data-la-wx="email" data-cid="' + esc(cid) + '" data-bid="' + esc(bid) + '" style="border:1px solid var(--fd-line);background:#fff;font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:7px;cursor:pointer">' + label + '</button>'; };
+          action += pt.emailed_at ? '<div style="font-size:10.5px;color:var(--fd-ink-soft);text-align:right">Emailed ' + esc(String(pt.emailed_at).slice(0, 16).replace('T', ' ')) + ' · ' + esc(pt.emailed_to || '') + mailBtn('Resend') + '</div>'
+            : pt.email_error ? '<div style="font-size:10.5px;color:#A32D2D;text-align:right" title="' + esc(pt.email_error) + '">Email not sent' + mailBtn('Resend') + '</div>'
+            : '<div style="font-size:10.5px;color:var(--fd-ink-soft);text-align:right">Not emailed' + mailBtn('Email') + '</div>';
+        }
       }
       var money = (+b.refundable || 0) > 0 ? ('Refundable ' + fmt(b.refundable)) : 'Nothing refundable';
       return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
@@ -401,6 +418,7 @@
       if(!canEdit()) return viewOnly();
       var cid = t.getAttribute('data-cid'), bid = t.getAttribute('data-bid');
       if(act === 'notify'){ notifyAct(cid, bid, false); return; }
+      if(act === 'email'){ t.disabled = true; emailAgain(cid, bid); return; }
       if(act === 'resolve'){
         var out = (document.getElementById('wx-out-' + bid) || {}).value || 'reschedule';
         var nd = (document.getElementById('wx-date-' + bid) || {}).value || t.getAttribute('data-date');
@@ -609,10 +627,11 @@
       else { var inv = (typeof acctBookingInvoice === 'function') ? acctBookingInvoice(L[0].id) : null; paid = inv ? acctInvoicePaid(inv) : 0; }
     }
     var ag = function(b){ return (typeof sbGetAgent === 'function' && b.agentId) ? ((sbGetAgent(b.agentId) || {}).name || 'B2C') : 'B2C'; };
-    var title = D.bulk ? ('Move all ' + D.n + ' booking' + (D.n === 1 ? '' : 's') + ' · ' + pax + ' pax')
+    var title = D.bulk ? ((D.out === 'partner' ? 'Send all ' : 'Move all ') + D.n + ' booking' + (D.n === 1 ? '' : 's') + ' · ' + pax + ' pax')
       : (esc(L[0].voucherRef || L[0].code || L[0].id) + ' · ' + esc(ag(L[0])) + ' · ' + pax + ' pax');
-    var seg = D.bulk ? '' : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
-      + [['move', 'Move program'], ['reschedule', 'Reschedule'], ['refund', 'Refund'], ['credit', 'Credit'], ['cancel', 'Cancel']].map(function(o){
+    // §tcxPartner · "Send to partner" beside the other results; the bulk dialog chooses between it and Move program (legacy tcxPtBulkSeg)
+    var seg = D.bulk ? (typeof window.tcxPtBulkSeg === 'function' ? window.tcxPtBulkSeg(D) : '') : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+      + [['move', 'Move program'], ['reschedule', 'Reschedule'], ['refund', 'Refund'], ['credit', 'Credit'], ['cancel', 'Cancel'], ['partner', '→ Partner']].map(function(o){
           var dis = (o[0] === 'credit' && !(paid > 0));
           return '<button ' + (dis ? 'disabled ' : '') + 'onclick="tcxDlgSet(\'out\',\'' + o[0] + '\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:' + (dis ? 'default' : 'pointer') + ';background:' + (D.out === o[0] ? '#16265C' : 'transparent') + ';color:' + (D.out === o[0] ? '#fff' : (dis ? '#B9BFCC' : '#3E4658')) + '">' + o[1] + '</button>'; }).join('') + '</div>');
     var body = '';
@@ -639,6 +658,12 @@
         + '</div><div style="font-size:11px;color:#8A8F9C;margin-top:6px">Price stays the same · boat/van of the cancelled trip are cleared · pickup time is read again for the new program</div>';
     } else if(D.out === 'reschedule'){
       body = '<label style="font-size:11px;font-weight:700;color:#6B7489">New date (same program) <input type="date" value="' + esc(D.rsDs) + '" onchange="_tcxD.rsDs=this.value" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>';
+    } else if(D.out === 'partner'){
+      // legacy's form (tcxPtBody: partner, price per head, money boxes, per-booking van, the message to copy) over the bookings on this browser
+      var PL = ptList(D);
+      if(!D.pt && typeof window.tcxPtInit === 'function') D.pt = window.tcxPtInit(PL.map(function(b){ return b.id; }));
+      loadPartnerNames();
+      body = (typeof window.tcxPtBody === 'function' && D.pt) ? window.tcxPtBody(D, PL) : '';
     } else {
       body = '<div style="font-size:12.5px;line-height:1.6;color:#3E4658">' + (D.out === 'refund' ? ('Booking is cancelled and ' + (paid > 0 ? ('฿' + Math.round(paid).toLocaleString() + ' is refunded') : 'nothing has been paid') + '.') : D.out === 'credit' ? ('Booking is cancelled and ฿' + Math.round(paid).toLocaleString() + ' stays as agent credit.') : 'Booking is cancelled · invoice voided · no refund.') + '</div>';
     }
@@ -650,10 +675,201 @@
       + '<button onclick="tcxDlgApply()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply' + (D.bulk ? (' to ' + D.n) : '') + '</button></div></div>');
   });
   function dlgDone(){ try{ if(typeof acctModalClose === 'function') acctModalClose(); }catch(_){} window._tcxD = null; redrawBooking(); redrawOp(); }
+
+  /* ── §tcxPartner · Send to partner (lk-inbox 229dd16d) ──
+     POST /v1/weather-closures/{id}/send-to-partner { name, price_per_head, booking_ids, vans, ref?, drop_point?, drop_time? }: the server
+     resolves the follow-ups as `partner`, keeps the record, and clears our boat (and the van when the partner picks up). The booking stays
+     confirmed; its agent invoice is not touched. Undo: POST …/bookings/{id}/undo-partner. The partners used before: GET /v1/weather-closures/partners. */
+  // The dialog's bookings as local objects: a single dialog holds local ids, the bulk one the server's
+  function ptList(D){
+    return (D.ids || []).map(function(id){ return bookingList().find(function(b){ return b && (b.id === id || b.opsId === id); }); }).filter(Boolean);
+  }
+  var partnerNames = null, partnerNamesLoading = null;
+  function loadPartnerNames(){
+    if(partnerNames || partnerNamesLoading) return;
+    partnerNamesLoading = O.get('/v1/weather-closures/partners').then(function(j){
+      partnerNames = ((j && j.partners) || []).map(function(n){ return { name: n.name, n: +n.uses || 0, last: n.last_at || '', ppx: +n.price_per_head || 0 }; });
+      var D = window._tcxD; if(D && D.out === 'partner') window.tcxDlgRender();
+    }, function(){ partnerNames = []; }).then(function(){ partnerNamesLoading = null; });
+  }
+  /* Partner companies (operation-backend migration 582): the list the dialog picks from, kept on the server. A partner picked from it
+     is sent as partner_id, and the server emails it the guest list (unless "Email" is unticked); a name typed in is sent as before and
+     nobody is emailed. GET/POST /v1/partner-companies, PATCH /v1/partner-companies/{id}; POST /v1/weather-closures/{id}/email-partner
+     sends the email again. Legacy kept no list and sent nothing. */
+  var companies = null, companiesLoading = null;
+  function fetchCompanies(){
+    if(companiesLoading) return companiesLoading;
+    companiesLoading = O.get('/v1/partner-companies').then(function(j){ companies = (j && j.partner_companies) || []; },
+      function(){ companies = companies || []; }).then(function(){ companiesLoading = null; refreshMailRow(); return companies; });
+    return companiesLoading;
+  }
+  function companyByName(name){
+    var k = String(name || '').trim().toLowerCase();
+    return k ? ((companies || []).find(function(c){ return String(c.name).trim().toLowerCase() === k; }) || null) : null;
+  }
+  // The dialog's email line: who gets the guest list, or why nobody does
+  function mailRowHtml(D){
+    var P = (D && D.pt) || {}, c = companyByName(P.name), name = String(P.name || '').trim();
+    var btn = function(label, arg){ return '<button onclick="laOpsPartners(' + (arg ? '\'' + esc(arg) + '\'' : '') + ')" style="height:24px;border:1px solid #D5DAE5;border-radius:7px;background:#fff;font-family:inherit;font-size:11px;font-weight:700;padding:0 9px;cursor:pointer;margin-left:auto">' + label + '</button>'; };
+    var line;
+    if(c && c.email) line = '<label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"' + (P.noEmail ? '' : ' checked') + ' onchange="laOpsPartnerEmailSet(this.checked)">'
+      + '<span>Email the guest list to <b>' + esc(c.email) + '</b></span></label>' + btn('Edit partner', c.id);
+    else if(c) line = '<span style="color:#7A4A00">No email for ' + esc(c.name) + ' in the partner list: nothing will be emailed</span>' + btn('Add email', c.id);
+    else if(name) line = '<span style="color:#7A4A00">Not in the partner list: nothing will be emailed</span>' + btn('Add to list', '+' + name);
+    else line = '<span style="color:#8A8F9C">Pick a partner from the list to email them the guest list</span>' + btn('Partners', '');
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px">' + line + '</div>';
+  }
+  function refreshMailRow(){
+    if(typeof document === 'undefined') return;
+    var el = document.getElementById('tcxp-mail'), D = window._tcxD;
+    if(el && D && D.out === 'partner') el.innerHTML = mailRowHtml(D);
+  }
+  function emailNote(d){
+    var m = d && d.email;
+    if(!m) return;
+    if(m.sent) O.toast({ kind: 'success', title: 'Partner emailed', status: 'OPERATION-BACKEND', sub: 'Guest list sent to ' + m.to, dur: 3200 });
+    else O.toast({ kind: 'error', title: 'Sent to partner, but NOT emailed', status: 'OPERATION-BACKEND', sub: m.reason || 'Email not sent', dur: 9000 });
+  }
+  function sendPartner(D){
+    var P = D.pt || {}, name = String(P.name || '').trim();
+    if(!name){ alert('Enter the partner company.'); return null; }
+    if(String(P.ppx).trim() === '' || !(+P.ppx >= 0)){ alert('Enter the partner price per head (0 if there is no charge).'); return null; }
+    var ppx = +P.ppx || 0;
+    var L = ptList(D).filter(function(b){ return b.opsId && !(b.weatherResolve && b.weatherResolve.status === 'resolved'); });
+    if(!L.length){ alert('Nothing left to send on this trip.'); return null; }
+    var pax = L.reduce(function(s, b){ return s + window.tcxPaxOf(b, D.rid, D.ds); }, 0);
+    if(L.length > 1 && !confirm('Send ' + L.length + ' booking(s) · ' + pax + ' guest(s) to ' + name + '?\nPrice ' + ppx.toLocaleString() + '/head · total ' + (ppx * pax).toLocaleString() + ' THB.')) return null;
+    var vans = {}; L.forEach(function(b){ vans[b.opsId] = (P.van && P.van[b.id]) || 'ours'; });
+    var body = { name: name, price_per_head: ppx, booking_ids: L.map(function(b){ return b.opsId; }), vans: vans };
+    var ref = String(P.ref || '').trim(), drop = String(P.drop || '').trim(), time = String(P.time || '').trim();
+    if(ref) body.ref = ref;
+    if(drop) body.drop_point = drop;
+    if(time) body.drop_time = time;
+    var cidP = D.cid ? Promise.resolve(D.cid) : closureIdFor(D.rid, D.ds);
+    return Promise.all([cidP, companies ? companies : fetchCompanies()]).then(function(x){
+      var cid = x[0], c = companyByName(name);
+      if(!cid) throw noId('This trip\'s closure');
+      if(c){ body.partner_id = c.id; if(P.noEmail) body.email = false; }
+      return O.queue(function(){ return O.post('/v1/weather-closures/' + enc(cid) + '/send-to-partner', body); }).then(function(d){
+        upsertLocal(d); syncFollowUps(d); details[cid] = d; partnerNames = null;
+        L.forEach(reloadLocal);
+        O.wrote('weather');
+        dlgDone();
+        emailNote(d);
+        return d;
+      });
+    }).catch(function(e){ O.fail('Send to partner refused · nothing changed', e); return null; });
+  }
+  // The panel's "Email" / "Resend" on a booking sent to a listed partner
+  function emailAgain(cid, bid){
+    return O.queue(function(){ return O.post('/v1/weather-closures/' + enc(cid) + '/email-partner', { booking_ids: [bid] }); }).then(function(d){
+      details[cid] = d; syncFollowUps(d); emailNote(d);
+      if(curPanel && curPanel.cid === cid) renderPanel(curPanel.routeId, curPanel.date, d);
+      return d;
+    }, function(e){
+      O.fail('Partner not emailed', e);
+      return refreshDetail(cid).then(function(d){ if(d && curPanel && curPanel.cid === cid) renderPanel(curPanel.routeId, curPanel.date, d); return null; });
+    });
+  }
+  /* The partner list editor: its own layer over the Send to partner dialog (which is the shared modal). `arg` is a partner id to
+     edit, '+Name' to add one with that name, or empty for a new one. */
+  var PT_FIELDS = [['name', 'Company name'], ['contact_name', 'Contact person'], ['email', 'Email (gets the guest list)'], ['phone', 'Phone'], ['line_id', 'LINE ID'], ['price_per_head', 'Usual price / head (฿)'], ['note', 'Note']];
+  function partnerEditor(arg){
+    if(typeof document === 'undefined') return;
+    var host = document.getElementById('la-ptn-ed');
+    if(!host){ host = document.createElement('div'); host.id = 'la-ptn-ed'; document.body.appendChild(host); }
+    var id = arg && arg.charAt(0) !== '+' ? arg : '';
+    var c = id ? ((companies || []).find(function(x){ return x.id === id; }) || null) : null;
+    var v = c || { name: arg && arg.charAt(0) === '+' ? arg.slice(1) : '', active: true };
+    var inp = 'height:32px;border:1.5px solid #D5DAE5;border-radius:9px;padding:0 10px;font-family:inherit;font-size:13px;width:100%;box-sizing:border-box;background:#fff;color:#0F1B3D';
+    var list = (companies || []).map(function(x){
+      return '<div onclick="laOpsPartners(\'' + esc(x.id) + '\')" style="padding:7px 10px;border-bottom:1px solid #F0F1F4;cursor:pointer;font-size:12px;' + (x.id === id ? 'background:#EEF5FB;' : '') + (x.active ? '' : 'opacity:.5;') + '">'
+        + '<b>' + esc(x.name) + '</b><div style="color:#6B7489;font-size:11px">' + esc(x.email || 'no email') + (x.price_per_head != null ? ' · ฿' + (+x.price_per_head).toLocaleString() + '/head' : '') + '</div></div>';
+    }).join('') || '<div style="padding:10px;font-size:12px;color:#8A8F9C">No partners yet</div>';
+    var form = PT_FIELDS.map(function(f){
+      var val = v[f[0]] == null ? '' : v[f[0]];
+      return '<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#6B7489;margin-bottom:3px">' + f[1] + '</div><input id="la-ptn-' + f[0] + '"'
+        + (f[0] === 'price_per_head' ? ' type="number" min="0" step="1"' : f[0] === 'email' ? ' type="email"' : '') + ' value="' + esc(val) + '" style="' + inp + '"></div>';
+    }).join('') + '<label style="display:flex;align-items:center;gap:7px;font-size:12px"><input type="checkbox" id="la-ptn-active"' + (v.active === false ? '' : ' checked') + '> Active (shown in the list)</label>';
+    host.innerHTML = '<div style="position:fixed;inset:0;z-index:100000;background:rgba(15,27,61,.35);display:flex;align-items:center;justify-content:center;padding:16px">'
+      + '<div style="background:#fff;border-radius:14px;width:min(720px,100%);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)">'
+      + '<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #E6E8EE"><b style="font-size:14px">Partner companies</b>'
+      + '<button onclick="laOpsPartners(\'+\')" style="margin-left:auto;height:28px;border:1px solid #D5DAE5;border-radius:8px;background:#fff;font-family:inherit;font-size:12px;font-weight:700;padding:0 10px;cursor:pointer">+ New</button>'
+      + '<button onclick="laOpsPartnerClose()" style="margin-left:6px;height:28px;border:0;background:transparent;font-size:18px;cursor:pointer">×</button></div>'
+      + '<div style="display:grid;grid-template-columns:240px 1fr;min-height:0;overflow:hidden"><div style="overflow-y:auto;border-right:1px solid #E6E8EE">' + list + '</div>'
+      + '<div style="padding:14px 16px;overflow-y:auto">' + form
+      + '<div style="display:flex;gap:8px;margin-top:12px"><button onclick="laOpsPartnerSave(\'' + esc(id) + '\')" style="height:34px;border:0;border-radius:9px;background:#1683C7;color:#fff;font-family:inherit;font-size:13px;font-weight:700;padding:0 16px;cursor:pointer">' + (c ? 'Save changes' : 'Add partner') + '</button></div></div></div></div></div>';
+  }
+  function savePartnerForm(id){
+    if(!guardEdit()) return null;
+    var body = {}, val = function(k){ var el = document.getElementById('la-ptn-' + k); return el ? String(el.value || '').trim() : ''; };
+    PT_FIELDS.forEach(function(f){
+      var s = val(f[0]);
+      if(f[0] === 'price_per_head'){ if(s !== '') body[f[0]] = +s; else if(id) body[f[0]] = null; }
+      else if(s !== '') body[f[0]] = s; else if(id && f[0] !== 'name') body[f[0]] = null;
+    });
+    var act = document.getElementById('la-ptn-active'); body.active = !act || !!act.checked;
+    if(!body.name){ alert('Enter the partner company name.'); return null; }
+    var before = id ? String((((companies || []).find(function(x){ return x.id === id; })) || {}).name || '').trim().toLowerCase() : '';
+    return O.queue(function(){ return id ? O.patch('/v1/partner-companies/' + enc(id), body) : O.post('/v1/partner-companies', body); }).then(function(j){
+      var saved = (j && j.partner_company) || {}, D = window._tcxD;
+      companies = null; partnerNames = null;
+      return fetchCompanies().then(function(){
+        // the dialog picks the partner just saved when it had none, had this one under its old name, or typed the name just added
+        var cur = D && D.pt ? String(D.pt.name || '').trim().toLowerCase() : null;
+        if(cur !== null && saved.name && (!cur || (before && cur === before) || cur === String(saved.name).trim().toLowerCase())) D.pt.name = saved.name;
+        if(D && D.pt && String(D.pt.ppx) === '' && saved.price_per_head != null) D.pt.ppx = String(saved.price_per_head);
+        closePartnerEditor();
+        if(D && D.out === 'partner' && typeof window.tcxDlgRender === 'function') window.tcxDlgRender();
+        O.toast({ kind: 'success', title: (id ? 'Partner saved' : 'Partner added') + ' · ' + (saved.name || ''), status: 'OPERATION-BACKEND', dur: 2400 });
+        return saved;
+      });
+    }).catch(function(e){ O.fail('Partner not saved', e); return null; });
+  }
+  function closePartnerEditor(){ var h = typeof document !== 'undefined' && document.getElementById('la-ptn-ed'); if(h) h.innerHTML = ''; }
+  window.laOpsPartners = function(arg){ (companies ? Promise.resolve() : fetchCompanies()).then(function(){ partnerEditor(arg || ''); }); };
+  window.laOpsPartnerSave = function(id){ return savePartnerForm(id || ''); };
+  window.laOpsPartnerClose = closePartnerEditor;
+  window.laOpsPartnerEmailSet = function(on){ var D = window._tcxD; if(D && D.pt) D.pt.noEmail = !on; };
+  // legacy readers of the partner record (tcxPtOf, tcxPtCell, tcxPtDay, tcxPtHistNote, tcxPtNames) read it from the server's follow-ups
+  function pw(name, fn){
+    var orig = window[name]; if(typeof orig !== 'function') return;
+    window[name] = function(){ return O.enabled() ? fn.apply(this, [orig].concat([].slice.call(arguments))) : orig.apply(this, arguments); };
+  }
+  pw('tcxPtAll', function(){ return partners; });
+  pw('tcxPtSave', function(){ return false; });   // nothing is kept in the blob here; sendPartner / undo write to the server
+  // the name box's list: the partner list's active companies first (their usual price), then names typed in before
+  pw('tcxPtNames', function(){
+    loadPartnerNames(); if(!companies) fetchCompanies();
+    var used = partnerNames || [], usedOf = function(n){ var k = String(n).trim().toLowerCase(); return used.find(function(u){ return String(u.name).trim().toLowerCase() === k; }); };
+    var listed = (companies || []).filter(function(c){ return c.active; }).map(function(c){
+      var u = usedOf(c.name); return { name: c.name, n: u ? u.n : 0, last: u ? u.last : '', ppx: c.price_per_head != null ? +c.price_per_head : (u ? u.ppx : 0) };
+    });
+    return listed.concat(used.filter(function(u){ return !companyByName(u.name); }));
+  });
+  pw('tcxPtBody', function(orig, D, L){ return orig(D, L) + '<div id="tcxp-mail" style="margin-top:10px;padding:8px 10px;border:1px solid #E6E8EE;border-radius:9px;background:#FAFBFD">' + mailRowHtml(D) + '</div>'; });
+  pw('tcxPtSet', function(orig, k, v){ var r = orig(k, v); if(k === 'name') refreshMailRow(); return r; });
+  pw('_tcxPtL', function(){ var D = window._tcxD; return D ? ptList(D) : []; });
+  pw('tcxPtUndo', function(orig, bkId){
+    if(!guardEdit()) return null;
+    var b = findBkById(bkId); if(!b || !b.weatherResolve || !b.opsId) return null;
+    var p = partners[bkId] || {}, ev = String(b.weatherResolve.event || '').split('|');
+    if(!confirm('Undo "sent to partner" for ' + (b.voucherRef || b.code || b.id) + '?\nIt goes back to awaiting a decision. Boat/van assignments are not restored.')) return null;
+    return closureIdFor(ev[0], ev[1]).then(function(cid){
+      if(!cid) throw noId('This trip\'s closure');
+      return O.queue(function(){ return O.post('/v1/weather-closures/' + enc(cid) + '/bookings/' + enc(b.opsId) + '/undo-partner', {}); }).then(function(d){
+        upsertLocal(d); syncFollowUps(d); details[cid] = d;
+        reloadLocal(b); O.wrote('weather'); redrawBooking();
+        return d;
+      });
+    }).catch(function(e){ O.fail('Undo refused' + (p.name ? ' (' + p.name + ')' : '') + ' · nothing changed', e); return null; });
+  });
+
   tw('tcxDlgApply', function(){
     var D = window._tcxD; if(!D) return null;
     if(!guardEdit()) return null;
     var cid = D.cid || ((findClosure(D.rid, D.ds) || {}).opsId);
+    if(D.out === 'partner') return sendPartner(D);
     if(D.out === 'move'){
       if(!D.nr){ alert('Pick the program to move to.'); return null; }
       if(!cid){ O.fail('Move refused', noId('This closure')); return null; }
@@ -760,5 +976,5 @@
   if(typeof O.onWrite === 'function') O.onWrite(function(){ tg.cache = {}; reopenedAsked = {}; hist.cache = {}; below.at = 0; });
 
   O.weather = { load: load, refreshDetail: refreshDetail, mapClosure: mapClosure, listRows: listRows,
-                syncFollowUps: syncFollowUps, followUpOf: followUpOf, closureIdFor: closureIdFor };
+                syncFollowUps: syncFollowUps, followUpOf: followUpOf, closureIdFor: closureIdFor, emailPartner: emailAgain, mailRowHtml: mailRowHtml };
 })();
