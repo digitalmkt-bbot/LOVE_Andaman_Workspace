@@ -47,6 +47,43 @@ test('now() runs everything left at once; a failed load still counts as finished
   assert.deepEqual(plain(O.later.names()), ['a …', 'b ✓', 'c ✓']);
 });
 
+test('a load with views waits for one of its screens: start() and done() leave it out, open(view) runs it once', async () => {
+  const { O, settle } = runtime({ globals: { setTimeout: () => 0, clearTimeout: () => {} } });
+  const ran = [];
+  O.later('jobs', () => { ran.push('jobs'); return Promise.resolve(); }, 2);
+  O.later('stock', () => { ran.push('stock'); return Promise.resolve(); }, 3, ['fl-*']);
+  O.later('market', () => { ran.push('market'); return Promise.resolve(); }, 6, ['marketdata', 'pickupmap']);
+  let finished = 0;
+  O.later.whenDone(() => { finished++; });
+  O.later.start();
+  await settle();
+  assert.deepEqual(ran, ['jobs'], 'only the load every screen needs runs after the first draw');
+  assert.equal(O.later.done(), true, 'done() means the loads every screen needs are in');
+  assert.equal(finished, 1);
+
+  assert.equal(await O.later.open('dashboard'), false, 'a screen none of them is for starts nothing');
+  assert.equal(await O.later.open('fl-inventory'), true, "a fleet screen starts the 'fl-*' load and asks for a redraw");
+  assert.deepEqual(ran, ['jobs', 'stock']);
+  assert.equal(await O.later.open('fl-work'), false, 'the next fleet screen finds it loaded: no second request, no redraw');
+  assert.equal(await O.later.open('fl'), false, "'fl-*' is a prefix: 'fl' is not one of them");
+  assert.equal(await O.later.open('pickupmap'), true, 'an exact view id');
+  assert.deepEqual(ran, ['jobs', 'stock', 'market']);
+  assert.deepEqual(plain(O.later.names()), ['jobs ✓', 'stock ✓', 'market ✓']);
+});
+
+test('open(view) before start() also runs what the queue still holds; now() still runs everything', async () => {
+  const { O, settle } = runtime({ globals: { setTimeout: () => 0, clearTimeout: () => {} } });
+  const ran = [];
+  O.later('money', () => { ran.push('money'); return Promise.resolve(); }, 1);
+  O.later('assets', () => { ran.push('assets'); return Promise.resolve(); }, 5, ['fl-*']);
+  O.later('market', () => { ran.push('market'); return Promise.resolve(); }, 6, ['marketdata']);
+  await O.later.open('booking');
+  assert.deepEqual(ran, ['money'], 'a screen opened early gets the shared loads, not other screens\' ones');
+  await O.later.now();
+  await settle();
+  assert.deepEqual(ran, ['money', 'assets', 'market']);
+});
+
 test('the same GET asked twice while in flight is sent once; each caller gets its own copy', async () => {
   const g = gate();
   const { O, requests, settle } = runtime({ handlers: { 'GET /v1/boats': g.handler } });
