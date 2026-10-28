@@ -9230,6 +9230,12 @@ function flPosDelBtn(){
   else delete rec.pos;
   flSave(); flxClose(); flRenderDR();
 }
+/* §drNum (2026-10-28) · owner "ตัวเลขมันควรพอดีกับช่องนะ และเพิ่ม , ให้ด้วย"
+   input type=number โชว์ , ไม่ได้ → ช่องตัวเลขในตารางท่าเป็น text (แป้นตัวเลขบนมือถือผ่าน inputmode)
+   โชว์ด้วย _fsNum (en-US · ทศนิยมไม่เกิน 2) · ตอนบันทึกตัด , ออกด้วย _fsRaw แล้วฟอร์แมตกลับให้ในช่องทันที
+   handler เดิม (parseFloat) ไม่แตะ · ตัวเลขที่เก็บเป็น number เหมือนเดิม */
+function _fsNum(v){ if(v==null||v==='') return ''; const n=+String(v).replace(/,/g,''); if(isNaN(n)) return String(v); return n.toLocaleString('en-US',{maximumFractionDigits:2}); }
+function _fsRaw(el){ const s=String(el.value||'').replace(/[,\s]/g,''); if(s!=='' && isNaN(+s)){ el.value=''; return ''; } el.value=_fsNum(s); return s; }
 /* §drFast · ครอบ render ด้วยดัชนีบุคกิ้งของวันนั้น (ดู flBoatBookingsFor) · เปิดก่อน ปิดเสมอแม้ error */
 function flRenderDR(){
   const _el=document.getElementById('fl-dr-date'); if(_el && !_el.value) _el.value=TODAY_STR;
@@ -9568,6 +9574,11 @@ function _flRenderDRInner(){
 .drh-ps>div{padding:0 16px;border-right:1px solid #EEF1F5;font-size:11px;color:#6B7489;font-weight:700;line-height:1.25}
 .drh-ps>div:last-child{border-right:0}.drh-ps>div>span{display:block}.drh-ps b{display:block;font-size:17px;color:#0F1B3D;font-family:'DM Mono',monospace;font-weight:700;white-space:nowrap}
 /* §drHead2 */
+/* §drNum · ช่องตัวเลขกว้างพอ 7-8 หลัก · ฟอนต์ 14px ไม่ล้น */
+#fl-dr-body td.fs-n{width:98px;min-width:92px}
+#fl-dr-body td.fs-ro{width:70px;min-width:64px}
+#fl-dr-body td.fs-i{width:80px;min-width:72px}
+#fl-dr-body td.fs-n .fs-in{font-size:14px;letter-spacing:-.01em;padding-left:0;padding-right:0}
 /* §drSharp · owner "เพิ่มความคมชัด รายละเอียด ตัวหนังสือ ตาราง ของแต่ละตาราง" */
 #fl-dr-body table.fs{font-size:13px;color:#111827}
 #fl-dr-body table.fs th{font-size:10.5px;color:#4B5563;padding:7px 8px;border-color:#D9D6CC;background:#F1EFE8}
@@ -9762,7 +9773,7 @@ function _flRenderDRInner(){
     const _posChip = posI ? `<div class="fs-pos${locked?'':' on'}"${locked?'':` onclick="flPosOpen('${ds}','','${b.id}')"`} title="${posI.auto?'จากใบย้ายท่าใน Boat Status · ':''}${_e(posI.note||'')}"><b>&#8644; ตีเรือ</b> ${flPosLbl(posI)}${(!posOnly)?`<input class="fs-in" type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" placeholder="L" ${_DIS} onclick="event.stopPropagation()" onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ (แยกจากเที่ยวลูกค้า)">`:''}</div>` : '';
     const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
-    const IN='class="fs-in"';
+    const IN='class="fs-in"';   /* §drNum · ช่องตัวเลขเป็น text+decimal เพื่อโชว์ , · ค่าดิบผ่าน _fsRaw */
     /* §drIssIdle (2026-09-12) · "แอดเพิ่ม เป็นชื่อเรือ กลายเป็นว่า
        ช่องถัดๆไป สามารถคีย์ได้ ไม่ใช่การสร้างซ้อนแบบนี้"
 
@@ -9774,7 +9785,7 @@ function _flRenderDRInner(){
        จำนวนคอลัมน์เท่าเดิม (colspan หดลงเท่าจำนวนช่องที่แยกออกมา) ตารางจึงไม่เลื่อน */
     const _issTd=ISS.length ? ISS.map(it=>{
       const v=flIssueGet(ds,b.id,it.id);
-      return `<td class="fs-n fs-i${noEntry?' fs-iq':''}"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
+      return `<td class="fs-n fs-i${noEntry?' fs-iq':''}"><input ${IN} type="text" inputmode="decimal" value="${v!=null?_fsNum(v):''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',_fsRaw(this))"></td>`;
     }).join('') : '<td class="fs-n fs-i fs-na"></td>';
 
     if(noEntry){
@@ -9789,18 +9800,18 @@ function _flRenderDRInner(){
       const prev=(typeof flPrevMeter==='function')?flPrevMeter(eng.id,ds):null;
       const filled=cur!=null;
       const delta=(filled&&prev!=null)?(Math.round((cur-prev)*10)/10):null;
-      return `<td class="fs-n fs-e"><input ${IN} type="number" step="0.1" value="${filled?cur:''}" placeholder="${prev!=null?prev:''}" ${_DIS} onchange="flSaveMeter('${ds}','${b.id}','normal','${eng.id}',this.value)">${delta!=null?`<em style="color:${delta<0?'#A32D2D':'#3B6D11'}">${delta>=0?'+':''}${delta}</em>`:''}</td>`;
+      return `<td class="fs-n fs-e"><input ${IN} type="text" inputmode="decimal" value="${filled?_fsNum(cur):''}" placeholder="${prev!=null?_fsNum(prev):''}" ${_DIS} onchange="flSaveMeter('${ds}','${b.id}','normal','${eng.id}',_fsRaw(this))">${delta!=null?`<em style="color:${delta<0?'#A32D2D':'#3B6D11'}">${delta>=0?'+':''}${_fsNum(delta)}</em>`:''}</td>`;
     }).join('');
     const _w=flWaterGet(ds,b.id), _wu=flWaterUsed(ds,b.id);
-    const _wTd=`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.o!=null?_w.o:''}" placeholder="เปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','o',this.value)"></td>`
-      +`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.c!=null?_w.c:''}" placeholder="ปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','c',this.value)">${_wu!=null?`<em style="color:${_wu<0?'#A32D2D':'#3E93B8'}">${_wu>=0?'+':''}${_wu}</em>`:''}</td>`;
+    const _wTd=`<td class="fs-n fs-w"><input ${IN} type="text" inputmode="decimal" value="${_w.o!=null?_fsNum(_w.o):''}" placeholder="เปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','o',_fsRaw(this))"></td>`
+      +`<td class="fs-n fs-w"><input ${IN} type="text" inputmode="decimal" value="${_w.c!=null?_fsNum(_w.c):''}" placeholder="ปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','c',_fsRaw(this))">${_wu!=null?`<em style="color:${_wu<0?'#A32D2D':'#3E93B8'}">${_wu>=0?'+':''}${_fsNum(_wu)}</em>`:''}</td>`;
     const _fpOwn2=_fpOwn;
     return `<tr>${_btCell}${_rtCell}
-      <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
+      <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${_fsNum(pax||0)}</td>
       ${posOnly
-        ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
-        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
-      <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
+        ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="text" inputmode="decimal" value="${posI.fuel!=null?_fsNum(posI.fuel):''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',_fsRaw(this))" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
+        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
+      <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="text" inputmode="decimal" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',_fsRaw(this))">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };
 
