@@ -7,7 +7,6 @@
      · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
      · §tcxPartner cancelled trip → "Send to partner" and its per-booking partner entries
-     · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
      · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
@@ -41,15 +40,6 @@
     return orig.apply(this, [].slice.call(arguments, 1));
   });
   block(['tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo'], 'Send to partner');
-
-  /* §ovnBoatBack · the box is unticked again; every other trip field saves as before */
-  wrap('bookingV2SetTripField', function(orig, idx, key, val){
-    if(key === 'ovnBoatBack' && val){
-      try{ var box = document.getElementById('bkv2-ovnbb-' + idx); if(box) box.checked = false; }catch(_){}
-      return refuse('"Boat returns to the pier the same day"');
-    }
-    return orig.apply(this, [].slice.call(arguments, 1));
-  });
 
   /* §flnWd · the job itself is still created; parts are withdrawn from the job page afterwards */
   block(['flnWdAdd'], 'Withdrawing parts while adding work (create the job, then withdraw from its page)');
