@@ -36121,6 +36121,71 @@ function ctIcon(k, sz, sw){ return '<svg viewBox="0 0 24 24" fill="none" stroke=
   + '" stroke-linecap="round" stroke-linejoin="round" style="width:' + (sz || 16) + 'px;height:' + (sz || 16) + 'px;flex:none">' + (CT_ICON[k] || '') + '</svg>'; }
 
 function ctSetTab(t){ _ct.tab = t; ctRender(); }
+/* ══ §rentTab (2026-10-28) · แท็บ "เรือเช่า" · ดีลของทุกลำในที่เดียว ═══════════════════════
+   owner: "ลำอื่น ๆ ทำยังไง" · เดิมตั้งค่าเช่าได้ทางเดียวคือปักลำนั้นไว้กับแผนสักแผน
+   LKC77 / LKC33 / BMP ไม่ได้ปักกับแผนไหน จึงไม่มีที่ให้ใส่ดีล และ P&L คิดเป็นเรือบริษัทตลอด
+   แท็บนี้ลิสต์ทุกลำที่ ownership==='charter' (และลำที่ติ๊กเป็นเรือเช่าไว้แล้ว) · แก้ตรงนี้ = ระเบียนเดียวกับที่การ์ดในแผนใช้ */
+function ctRentTabHtml(){
+  var BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){
+    return b && !b.retired && (b.ownership === 'charter' || (ctRentRaw(b.id) && ctRentRaw(b.id).on)); })
+    .sort(function(a, z){ return String(a.name).localeCompare(String(z.name)); });
+  var T = ctTpl(), R = ctVatR(T);
+  /* กี่ทริปที่จัดไว้ของแต่ละลำ · ไว้เห็นว่าลำไหนวิ่งจริงแล้วยังไม่มีดีล */
+  var runs = {};
+  try{ Object.keys(TRIPS || {}).forEach(function(d){ Object.keys(TRIPS[d] || {}).forEach(function(bid){
+    var op = TRIPS[d][bid]; if(!op || !op.route) return; var r = runs[bid] = runs[bid] || { n:0, first:d, last:d, noDeal:0 };
+    r.n++; if(d < r.first) r.first = d; if(d > r.last) r.last = d; if(!ctRentFor(bid, d)) r.noDeal++; }); }); }catch(_){ }
+  var cards = BL.map(function(b){
+    var bid = b.id, rr = ctRentRaw(bid) || ctRentBlank(), on = !!(ctRentRaw(bid) && rr.on);
+    var RN = ctRentOf(bid), DY = rr.day || ctRentDayBlank(), ru = runs[bid];
+    var S = function(k, v, w, ph){ return '<input class="ct-in" data-fk="rt.' + bid + '.' + k + '" value="' + ((v == null || v === 0) && ph != null ? '' : ctE(v))
+      + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)" style="width:' + (w || 84) + 'px">'; };
+    var D = function(k, v){ return '<input type="date" class="ct-in" style="width:150px" data-fk="rt.' + bid + '.' + k + '" value="' + ctE(v || '') + '" onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)">'; };
+    var C = function(k, v, lbl, ttl){ return '<label class="ct-rchk"' + (ttl ? (' title="' + ctE(ttl) + '"') : '') + '><input type="checkbox"' + (v ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.checked?1:0)"> ' + lbl + '</label>'; };
+    var status = !on ? '<span class="ct-u">ยังไม่ติ๊กเป็นเรือเช่า · P&amp;L คิดแบบเรือบริษัท (กัปตัน เด็กเรือ ค่าเสื่อม น้ำมันตามสูตร)</span>'
+      : ((RN && RN.perTrip > 0 ? ('<b style="color:#B45309">รายเดือน ' + ctB(RN.amt) + '/งวด = ' + ctB(RN.perTrip) + '/ทริป' + (RN.from || RN.to ? (' · ' + (RN.from || '…') + ' → ' + (RN.to || '…')) : ' · ไม่จำกัดช่วง') + '</b>') : '<span class="ct-u">ไม่มีค่าเช่ารายเดือน</span>')
+        + ' &nbsp;·&nbsp; ' + (DY.on && +DY.amt > 0 ? ('<b style="color:#0F6E56">รายวัน ' + ctB(+DY.amt) + '/วัน' + (DY.from || DY.to ? (' · ' + (DY.from || '…') + ' → ' + (DY.to || '…')) : ' · ทุกวันนอกสัญญารายเดือน') + '</b>') : '<span class="ct-u">ไม่มีดีลรายวัน</span>'));
+    var runTxt = ru ? ('<span class="ct-u">จัดเรือไว้ ' + ru.n + ' วัน (' + ru.first + ' → ' + ru.last + ')' + (ru.noDeal ? (' · <b style="color:#A32D2D">' + ru.noDeal + ' วันไม่มีดีลครอบ → คิดแบบเรือบริษัท</b>') : ' · ทุกวันมีดีลครอบ') + '</span>') : '<span class="ct-u">ยังไม่เคยจัดลงตาราง</span>';
+    var head = '<div class="ct-cath"><span>' + ctIcon('anchor', 15) + '<b>' + ctE(b.name) + '</b><span class="ct-u" style="margin-left:8px">' + (+b.cap || 0) + ' ที่นั่ง · ' + ctE(b.type || '') + (b.ownership === 'charter' ? ' · เรือเช่า/เรือร่วม' : '') + '</span></span>'
+      + '<label class="ct-rchk big"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'on\',this.checked?1:0)"> <b>เป็นเรือเช่า</b></label></div>';
+    var body = '<div class="ct-rentbody"><div class="ct-rrow">' + status + '</div><div class="ct-rrow">' + runTxt + '</div>';
+    if(on){
+      var md = rr.mode || 'lump', seats = +b.cap || 0;
+      body += '<div class="ct-rsec"><div class="ct-rsech">สัญญารายเดือน (ต่องวด) · ผู้เช่าจ่ายน้ำมันเอง · กัปตัน เด็กเรือ ค่าเสื่อม ตัดออกตามที่ติ๊กข้างล่าง</div>'
+        + '<div class="ct-rrow">'
+        + '<label class="ct-rchk"><input type="radio" name="rtm' + bid + '"' + (md === 'lump' ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'lump\')"> เหมาทั้งลำ</label>'
+        + '<label class="ct-rchk"><input type="radio" name="rtm' + bid + '"' + (md === 'seat' ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'mode\',\'seat\')"> ต่อที่นั่ง × ' + seats + '</label>'
+        + (md === 'seat' ? ('<label class="ct-f"><span>ค่าเช่า/ที่นั่ง/งวด</span>' + S('seat', rr.seat, 96) + '</label>') : ('<label class="ct-f"><span>ค่าเช่า/งวด (บาท)</span>' + S('amt', rr.amt, 110) + '</label>'))
+        + '<label class="ct-f"><span>วันในงวด</span>' + S('days', rr.days, 64, 30) + '</label>'
+        + '<label class="ct-f"><span>วันหยุดตามตกลง</span>' + S('off', rr.off, 64, 0) + '</label>'
+        + '<label class="ct-f"><span>รอบต่อวัน</span>' + S('trips', rr.trips, 64, 1) + '</label>'
+        + '<label class="ct-f"><span>สัญญาเริ่ม</span>' + D('from', rr.from) + '</label>'
+        + '<label class="ct-f"><span>สัญญาจบ</span>' + D('to', rr.to) + '</label>'
+        + '<span style="align-self:end;padding-bottom:8px">' + C('vat', rr.vat, 'มี VAT ขอคืนได้') + '</span>'
+        + '</div><div class="ct-rrow"><span class="ct-u" style="align-self:center">เจ้าของเรือรับผิดชอบ (รายเดือน):</span>'
+        + CT_RENT_EX.map(function(e){ return C('ex.' + e.id, (rr.ex || {})[e.id], ctE(e.l), e.why); }).join('')
+        + '<label class="ct-f" style="margin-left:auto"><span>น้ำมันเทียบสูตรกลาง %</span>' + S('fuelMul', (rr.fuelMul == null || rr.fuelMul === '') ? 100 : rr.fuelMul, 64, 100) + '</label>'
+        + '</div></div>';
+      body += '<div class="ct-rsec" data-rentday="1"><div class="ct-rsech">เหมารายวัน · ใช้กับวันที่ออกเรือนอกสัญญารายเดือน (หรือลำที่เช่าเป็นรายวันอย่างเดียว)</div>'
+        + '<div class="ct-rrow">' + C('day.on', DY.on, '<b>มีดีลเหมารายวัน</b>')
+        + (DY.on ? ('<label class="ct-f"><span>ค่าเหมา/วัน (บาท)</span>' + S('day.amt', DY.amt, 110) + '</label>'
+          + '<label class="ct-f"><span>ตั้งแต่</span>' + D('day.from', DY.from) + '</label>'
+          + '<label class="ct-f"><span>ถึง</span>' + D('day.to', DY.to) + '</label>'
+          + '<span style="align-self:end;padding-bottom:8px">' + C('day.vat', DY.vat, 'มี VAT ขอคืนได้') + '</span>') : '')
+        + '</div>'
+        + (DY.on ? ('<div class="ct-rrow"><span class="ct-u" style="align-self:center">ราคารายวันรวมมาแล้ว (ตัดออกจากต้นทุนเรา):</span>'
+          + CT_RENT_DAY_EX.map(function(e){ return C('day.ex.' + e.id, (DY.ex || {})[e.id], ctE(e.l), e.why); }).join('') + '</div>') : '')
+        + '</div>';
+    }
+    body += '</div>';
+    return '<div class="ct-card ct-catcard ct-rent">' + head + body + '</div>';
+  }).join('');
+  return '<div class="ct-sheet" style="padding:14px"><div class="ct-hint" style="padding:0 0 12px">'
+    + '<b>เรือเช่า / เรือร่วม ทุกลำ</b> · ดีลเป็นของ<b>ลำ</b> ใช้ร่วมทุกเส้นทางที่ลำนั้นวิ่ง · P&amp;L รายทริปเลือกให้เองทีละวัน: '
+    + 'อยู่ในสัญญารายเดือน → ค่าเช่ารายเดือน/ทริป · นอกนั้นถ้ามีดีลรายวัน → ค่าเหมา/วัน · ไม่มีทั้งคู่ → คิดแบบเรือบริษัท · '
+    + 'ตั้งค่าที่นี่หรือในการ์ด "เรือที่ใช้ &amp; ค่าเช่า" ของแผนที่ปักลำนั้น ได้ผลเหมือนกัน</div>'
+    + (cards || '<div class="ct-hint">ยังไม่มีเรือที่ตั้ง ownership = เรือเช่า/เรือร่วม ในทะเบียนเรือ</div>') + '</div>';
+}
 // §staticTabs · แถบแท็บอยู่นอกส่วนที่ re-render · เดิมแท็บถูกลบทิ้งกลางคลิก ทำให้ "กดหัวข้อไม่ลง"
 function ctPaintTabs(){
   var bar = document.getElementById('ct-tabs'); if(!bar) return;
@@ -36183,6 +36248,7 @@ function ctRender(){
                  : (_ct.tab === 'ovr') ? ctOvrHtml()
                  : (_ct.tab === 'real') ? ctRealHtml()      /* §plCost */
                  : (_ct.tab === 'match') ? ctMatchHtml()    /* §ctMatch */
+                 : (_ct.tab === 'rent') ? ctRentTabHtml()   /* §rentTab */
                  : ctPlanHtml();
   var restore = function(){
     var s2 = host.querySelector('.ct-sheet');
