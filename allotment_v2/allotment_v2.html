@@ -1012,6 +1012,7 @@
           <button class="ct-tab" data-t="tpl" onclick="ctSetTab('tpl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>สูตรกลาง</button>
           <button class="ct-tab" data-t="real" onclick="ctSetTab('real')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>ราคาจริง</button>
           <button class="ct-tab" data-t="match" onclick="ctSetTab('match')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>จับคู่เส้นทาง</button>
+          <button class="ct-tab" data-t="rent" onclick="ctSetTab('rent')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v6M5 9l7-1 7 1M3 13c0 4 4 8 9 8s9-4 9-8H3zM12 21v-8"/></svg>เรือเช่า</button>
           <button class="ct-tab" data-t="ovr" onclick="ctSetTab('ovr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M9 6h11M9 12h11M9 18h11M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/></svg>ปรับ / ปิด รายแผน</button>
         </nav>
       </div>
@@ -1519,13 +1520,13 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=7590f996"></script>
+<script src="js/04-data-core.js?v=fefeb446"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
-  <div class="modal" style="width:min(760px,95vw);max-width:760px;max-height:90vh;display:flex;flex-direction:column">
-    <div class="modal-hd"><div class="modal-title">ถอด / สลับ อุปกรณ์</div><button class="modal-close" onclick="closeModal('fl-modal-equip')">×</button></div>
-    <div id="fl-equip-modal-body" style="overflow:auto;padding:14px 16px;background:#F4F2EE"></div>
+  <div class="modal" style="width:min(1180px,96vw);max-width:1180px;max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-hd"><div class="modal-title">ผูก / เปลี่ยน อุปกรณ์ขับเคลื่อน</div><button class="modal-close" onclick="closeModal('fl-modal-equip')">×</button></div>
+    <div id="fl-equip-modal-body" style="overflow:auto;padding:16px 18px;background:#F4F6FA"></div>
   </div>
 </div>
 <div class="modal-overlay" id="fl-modal-engine">
@@ -1942,7 +1943,7 @@
 .outcome-pill:hover{border-color:#bbb}
 </style>
 
-<script src="js/05-fleet.js?v=4a5de6d8"></script>
+<script src="js/05-fleet.js?v=bf05b288"></script>
 <!-- Assign Engine Modal -->
 <div class="modal-overlay" id="fl-modal-assign-eng">
   <div class="modal" style="max-width:420px">
@@ -3107,7 +3108,7 @@
      ไม่งั้น ReferenceError แล้ว 08-app.js หยุดกลางไฟล์ · let/const ข้างล่างจุดนั้นไม่ถูกประกาศเลย (TDZ) ทั้งแอปพังเป็นแถว
      ใส่ได้เฉพาะฟังก์ชันใบ (ไม่เรียกอะไรของ 08-app.js) · ห้ามย้ายทั้งโฟลเดอร์มา -->
 <script src="js/booking/bookingV2LocalYMD.js"></script>
-<script src="js/08-app.js?v=80c19a48"></script>
+<script src="js/08-app.js?v=12077369"></script>
 <script src="js/booking/bookingV2GetArea.js"></script>
 <script src="js/booking/bookingV2SplitArea.js"></script>
 <script src="js/booking/bookingV2GetPickupTime.js"></script>
@@ -3412,7 +3413,7 @@
 <script src="js/booking/bookingV2FmtTHB.js"></script>
 <script src="js/booking/bookingV2FmtDate.js"></script>
 <script src="js/booking/bookingV2StatusLabel.js"></script>
-<script src="js/booking/bookingV2Render.js?v=booking-state-global"></script>
+<script src="js/booking/bookingV2Render.js?v=36ed5f96"></script>
 <script src="js/booking/bookingV2RenderNewBooking.js"></script>
 <script src="js/booking/bookingV2RenderPickupSection.js"></script>
 <script src="js/booking/bookingV2RenderTripsSection.js?v=79202786"></script>
@@ -3433,7 +3434,7 @@
 <script src="js/booking/bookingV2NoRateTrips.js"></script>
 <script src="js/booking/bookingV2RenderSubmitButton.js"></script>
 <script src="js/booking/bookingV2RenderList.js"></script>
-<script src="js/booking/bookingV2RenderTopbar.js?v=4a3008f3"></script>
+<script src="js/booking/bookingV2RenderTopbar.js?v=c88825cb"></script>
 <script src="js/booking/bookingV2TopbarMeta.js"></script>
 <script src="js/booking/bookingV2RenderTabBody.js"></script>
 <script src="js/booking/bookingV2RenderApprovals.js"></script>
@@ -3489,7 +3490,7 @@
 <script src="js/booking/bookingV2AgentColorEdit.js"></script>
 <script src="js/booking/bookingV2AgentColorSet.js"></script>
 <script src="js/booking/bookingV2OtherToggleAll.js"></script>
-<script src="js/booking/bookingV2RenderTab2.js?v=3cbd0b60"></script>
+<script src="js/booking/bookingV2RenderTab2.js?v=af5c0cac"></script>
 <script src="js/booking/bookingV2RenderTab3.js?v=e7dbe2da"></script>
 <script src="js/booking/bookingV2MonthKey.js"></script>
 <script src="js/booking/bookingV2MonthLabel.js"></script>
@@ -3978,7 +3979,7 @@
 <script src="js/ops/99-ops-dash-prog.js"></script>
 <script src="js/ops/99-ops-inv-overview.js"></script>
 <script src="js/ops/99-ops-md-sales-load.js"></script>
-<script src="js/ops/96-ops-not-yet.js?v=d9ea5289"></script>
+<script src="js/ops/96-ops-not-yet.js?v=3238fb6c"></script>
 <script src="js/ops/90-ops-boot.js?v=4179636d"></script>
 <script src="js/11-router.js?v=34bea09a"></script>
 </body>

@@ -11366,8 +11366,13 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
 function flBoatBookingsFor(boatId, dateStr){
   const out = { pax:0, routes:{}, trips:0 };
   if(!boatId || !dateStr || typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return out;
-  SB_BOOKINGS.forEach(bk => {
-    if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
+  /* §drFast (2026-10-28) · owner "ดูการติ๊กวันที่ มันดีเลย์" · หน้า Daily Fleet Log เรียกฟังก์ชันนี้ ~20-30 ครั้งต่อ render
+     แต่ละครั้งไล่ SB_BOOKINGS ทั้งก้อน (หลายหมื่นใบ) · ใบที่ไม่มีทริปในวันนั้นให้ 0 อยู่แล้ว (ทั้งทาง split และทาง ops)
+     → ตอน render ที่ flRenderDR เปิดดัชนีไว้ ใช้เฉพาะใบที่มีทริปวันนั้น · นอก render ทำเหมือนเดิมทุกอย่าง */
+  const _ix=(typeof window!=='undefined')?window._flBkDayIdx:null;
+  const _src=(_ix && _ix.ds===dateStr && _ix.arr===SB_BOOKINGS)?_ix.list:SB_BOOKINGS;
+  _src.forEach(bk => {
+    if(!bk || ['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
     /* §flSplitPax (2026-10-24) · owner (ใบบันทึกประจำวันเรือ · Visit Panwa) "อันนี้บัคมาจากการแยกลงเรือไหม"
        ใบที่แยกลงหลายลำ (§boatSplit) เคยนับทั้งใบให้ลำหลัก (ops.boatId = ก้อนแรก) · ลำที่สองได้ 0 → ขึ้น "ไม่ออก"
        เคสจริง: Hermetis 121 คน (เรือ 65 ที่) · Achilles ไม่ออก · ตอนนี้แต่ละลำนับเฉพาะก้อนที่อยู่บนลำนั้น (bkBoatPaxOnBoat) */

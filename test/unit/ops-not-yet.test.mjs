@@ -5,13 +5,14 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'flnWdAdd'];
+const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'flnWdAdd',
+  'flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
   const ctx = { alert: (m) => alerts.push(m), document: { getElementById: (id) => (id === 'bkv2-ovnbb-2' ? box : null) }, laOps: { enabled: () => enabled } };
   ctx.window = ctx;
-  for (const n of [...BLOCKED, 'cxwBanner', 'cxwDetailCard', 'tcxDlgSet', 'bookingV2SetTripField']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : 'orig'; };
+  for (const n of [...BLOCKED, 'cxwBanner', 'cxwDetailCard', 'cxwTabBadge', 'tcxDlgSet', 'bookingV2SetTripField', 'ctRentSet', 'ctRender']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : n === 'cxwTabBadge' ? '<span>3</span>' : 'orig'; };
   vm.runInNewContext(SOURCE, ctx);
   return { ctx, calls, alerts, box };
 }
@@ -24,6 +25,16 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.ok(alerts.every((m) => /is not available yet: operation-backend does not save it/.test(m)));
   assert.equal(ctx.cxwBanner(), '', 'the cancel-reason banner is not drawn');
   assert.equal(ctx.cxwDetailCard({ id: 'b1' }), '', 'nor the booking-detail card');
+  assert.equal(ctx.cxwTabBadge(), '', 'nor the Cancellations tab count (§cxwTab)');
+});
+
+test('§rentDay: only the daily-rate fields of a rented boat are refused; the page is redrawn to put the box back', () => {
+  const { ctx, calls, alerts } = boot(true);
+  assert.equal(ctx.ctRentSet('b1', 'day.rt.r1', '5000'), false);
+  assert.equal(ctx.ctRentSet('b1', 'day.on', true), false);
+  assert.equal(ctx.ctRentSet('b1', 'amt', '90000'), 'orig');
+  assert.deepEqual(calls, [['ctRender'], ['ctRender'], ['ctRentSet', 'b1', 'amt', '90000']]);
+  assert.equal(alerts.length, 2);
 });
 
 test("only a ticked boat-back box is refused; Send to partner saves now (27-ops-weather.js) and passes through", () => {
@@ -46,5 +57,6 @@ test('outside ops mode (lk-inbox itself) everything is the legacy function', () 
   assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
   assert.equal(ctx.bookingV2SetTripField(0, 'ovnBoatBack', 1), 'orig');
   assert.equal(alerts.length, 0);
-  assert.equal(calls.length, BLOCKED.length + 3);
+  assert.equal(ctx.ctRentSet('b1', 'day.on', true), 'orig');
+  assert.equal(calls.length, BLOCKED.length + 4);
 });
