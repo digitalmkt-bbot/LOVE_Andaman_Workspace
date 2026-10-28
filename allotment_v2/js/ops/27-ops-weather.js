@@ -98,6 +98,10 @@
     var list = closures();
     for(var i = list.length - 1; i >= 0; i--){ if(list[i] && list[i].opsId === cid) list.splice(i, 1); }
   }
+  /* §tcxPartner · the partner record of each booking sent with a partner company, by local booking id, in legacy's trip_cxl_partner
+     shape ({ ev, name, ppx, pax, cost, van, drop, time, ref, by, at }): legacy's readers (tcxPtOf, tcxPtCell, tcxPtDay for the
+     Executive Board, tcxPtHistNote) read it through tcxPtAll (below). Filled from the closures' follow-up lists as they are read. */
+  var partners = {};
   // Mirror the follow-up list onto the local bookings (memory only): the by-trip inline cell reads bk.weatherResolve.
   function syncFollowUps(d){
     var key = d.route_id + '|' + d.service_date, rows = {};
@@ -109,6 +113,10 @@
         bk.weatherResolve = { event: key, status: r.status, outcome: r.outcome || undefined,
           newDate: r.new_date || undefined, newRoute: r.new_route_id || undefined, by: r.resolved_by || undefined, notifiedAt: r.notified_at || undefined, resolvedAt: r.resolved_at || undefined };
       } else if(bk.weatherResolve && bk.weatherResolve.event === key){ delete bk.weatherResolve; }
+      var p = r && r.outcome === 'partner' && r.partner;
+      if(p) partners[bk.id] = { ev: key, name: p.name, ppx: +p.price_per_head || 0, pax: +p.pax || 0, cost: +p.cost || 0, van: p.van,
+        drop: p.drop_point || '', time: p.drop_time || '', ref: p.ref || '', by: p.by || '', at: p.at || '' };
+      else if(partners[bk.id] && partners[bk.id].ev === key) delete partners[bk.id];
     });
   }
   /* A re-opened trip keeps the follow-up of the bookings that were already resolved (outcome, new date), as legacy keeps bk.weatherResolve;
@@ -172,7 +180,7 @@
   function renderPanel(routeId, date, d){
     var rname = routeName(routeId), cid = d.id;
     var list = d.bookings || [];
-    var outLbl = { reschedule: 'Rescheduled', refund: 'Refunded', credit: 'Credit', cancel: 'Cancelled', move: 'Moved' };
+    var outLbl = { reschedule: 'Rescheduled', refund: 'Refunded', credit: 'Credit', cancel: 'Cancelled', move: 'Moved', partner: 'Sent to partner' };
     var rsn = (typeof TCX_R !== 'undefined' && (TCX_R[d.reason] || TCX_R.weather)) || { en: 'Weather' };
     curPanel = { routeId: routeId, date: date, cid: cid };
     var nAwait = 0, nNotif = 0, nDone = 0;
@@ -196,7 +204,8 @@
           + '<button data-la-wx="resolve" data-cid="' + esc(cid) + '" data-bid="' + esc(bid) + '" data-route="' + esc(routeId) + '" data-date="' + esc(date) + '" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer">Resolve</button></div>';
       } else {
         var extra = (b.outcome === 'reschedule' && b.new_date) ? (' → ' + esc(b.new_date))
-          : (b.outcome === 'move' && b.new_route_id) ? (' → ' + esc(routeName(b.new_route_id)) + (b.new_date ? ' ' + esc(String(b.new_date).slice(5)) : '')) : '';
+          : (b.outcome === 'move' && b.new_route_id) ? (' → ' + esc(routeName(b.new_route_id)) + (b.new_date ? ' ' + esc(String(b.new_date).slice(5)) : ''))
+          : (b.outcome === 'partner' && b.partner) ? (' · ' + esc(b.partner.name) + ' · ' + fmt(b.partner.cost)) : '';
         action = '<span style="font-size:11.5px;color:#0F6E56;font-weight:600">✓ ' + esc(outLbl[b.outcome] || b.outcome || '') + extra + '</span>';
       }
       var money = (+b.refundable || 0) > 0 ? ('Refundable ' + fmt(b.refundable)) : 'Nothing refundable';
@@ -609,10 +618,11 @@
       else { var inv = (typeof acctBookingInvoice === 'function') ? acctBookingInvoice(L[0].id) : null; paid = inv ? acctInvoicePaid(inv) : 0; }
     }
     var ag = function(b){ return (typeof sbGetAgent === 'function' && b.agentId) ? ((sbGetAgent(b.agentId) || {}).name || 'B2C') : 'B2C'; };
-    var title = D.bulk ? ('Move all ' + D.n + ' booking' + (D.n === 1 ? '' : 's') + ' · ' + pax + ' pax')
+    var title = D.bulk ? ((D.out === 'partner' ? 'Send all ' : 'Move all ') + D.n + ' booking' + (D.n === 1 ? '' : 's') + ' · ' + pax + ' pax')
       : (esc(L[0].voucherRef || L[0].code || L[0].id) + ' · ' + esc(ag(L[0])) + ' · ' + pax + ' pax');
-    var seg = D.bulk ? '' : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
-      + [['move', 'Move program'], ['reschedule', 'Reschedule'], ['refund', 'Refund'], ['credit', 'Credit'], ['cancel', 'Cancel']].map(function(o){
+    // §tcxPartner · "Send to partner" beside the other results; the bulk dialog chooses between it and Move program (legacy tcxPtBulkSeg)
+    var seg = D.bulk ? (typeof window.tcxPtBulkSeg === 'function' ? window.tcxPtBulkSeg(D) : '') : ('<div style="display:flex;gap:4px;padding:4px;background:#F2F4F8;border-radius:11px;margin-bottom:12px">'
+      + [['move', 'Move program'], ['reschedule', 'Reschedule'], ['refund', 'Refund'], ['credit', 'Credit'], ['cancel', 'Cancel'], ['partner', '→ Partner']].map(function(o){
           var dis = (o[0] === 'credit' && !(paid > 0));
           return '<button ' + (dis ? 'disabled ' : '') + 'onclick="tcxDlgSet(\'out\',\'' + o[0] + '\')" style="flex:1;border:0;border-radius:8px;padding:7px 6px;font-family:inherit;font-size:12px;font-weight:700;cursor:' + (dis ? 'default' : 'pointer') + ';background:' + (D.out === o[0] ? '#16265C' : 'transparent') + ';color:' + (D.out === o[0] ? '#fff' : (dis ? '#B9BFCC' : '#3E4658')) + '">' + o[1] + '</button>'; }).join('') + '</div>');
     var body = '';
@@ -639,6 +649,12 @@
         + '</div><div style="font-size:11px;color:#8A8F9C;margin-top:6px">Price stays the same · boat/van of the cancelled trip are cleared · pickup time is read again for the new program</div>';
     } else if(D.out === 'reschedule'){
       body = '<label style="font-size:11px;font-weight:700;color:#6B7489">New date (same program) <input type="date" value="' + esc(D.rsDs) + '" onchange="_tcxD.rsDs=this.value" style="height:32px;border:1px solid #D5DAE5;border-radius:8px;padding:0 8px;font-family:inherit;font-size:12.5px;margin-left:4px"></label>';
+    } else if(D.out === 'partner'){
+      // legacy's form (tcxPtBody: partner, price per head, money boxes, per-booking van, the message to copy) over the bookings on this browser
+      var PL = ptList(D);
+      if(!D.pt && typeof window.tcxPtInit === 'function') D.pt = window.tcxPtInit(PL.map(function(b){ return b.id; }));
+      loadPartnerNames();
+      body = (typeof window.tcxPtBody === 'function' && D.pt) ? window.tcxPtBody(D, PL) : '';
     } else {
       body = '<div style="font-size:12.5px;line-height:1.6;color:#3E4658">' + (D.out === 'refund' ? ('Booking is cancelled and ' + (paid > 0 ? ('฿' + Math.round(paid).toLocaleString() + ' is refunded') : 'nothing has been paid') + '.') : D.out === 'credit' ? ('Booking is cancelled and ฿' + Math.round(paid).toLocaleString() + ' stays as agent credit.') : 'Booking is cancelled · invoice voided · no refund.') + '</div>';
     }
@@ -650,10 +666,79 @@
       + '<button onclick="tcxDlgApply()" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer">Apply' + (D.bulk ? (' to ' + D.n) : '') + '</button></div></div>');
   });
   function dlgDone(){ try{ if(typeof acctModalClose === 'function') acctModalClose(); }catch(_){} window._tcxD = null; redrawBooking(); redrawOp(); }
+
+  /* ── §tcxPartner · Send to partner (lk-inbox 229dd16d) ──
+     POST /v1/weather-closures/{id}/send-to-partner { name, price_per_head, booking_ids, vans, ref?, drop_point?, drop_time? }: the server
+     resolves the follow-ups as `partner`, keeps the record, and clears our boat (and the van when the partner picks up). The booking stays
+     confirmed; its agent invoice is not touched. Undo: POST …/bookings/{id}/undo-partner. The partners used before: GET /v1/weather-closures/partners. */
+  // The dialog's bookings as local objects: a single dialog holds local ids, the bulk one the server's
+  function ptList(D){
+    return (D.ids || []).map(function(id){ return bookingList().find(function(b){ return b && (b.id === id || b.opsId === id); }); }).filter(Boolean);
+  }
+  var partnerNames = null, partnerNamesLoading = null;
+  function loadPartnerNames(){
+    if(partnerNames || partnerNamesLoading) return;
+    partnerNamesLoading = O.get('/v1/weather-closures/partners').then(function(j){
+      partnerNames = ((j && j.partners) || []).map(function(n){ return { name: n.name, n: +n.uses || 0, last: n.last_at || '', ppx: +n.price_per_head || 0 }; });
+      var D = window._tcxD; if(D && D.out === 'partner') window.tcxDlgRender();
+    }, function(){ partnerNames = []; }).then(function(){ partnerNamesLoading = null; });
+  }
+  function sendPartner(D){
+    var P = D.pt || {}, name = String(P.name || '').trim();
+    if(!name){ alert('Enter the partner company.'); return null; }
+    if(String(P.ppx).trim() === '' || !(+P.ppx >= 0)){ alert('Enter the partner price per head (0 if there is no charge).'); return null; }
+    var ppx = +P.ppx || 0;
+    var L = ptList(D).filter(function(b){ return b.opsId && !(b.weatherResolve && b.weatherResolve.status === 'resolved'); });
+    if(!L.length){ alert('Nothing left to send on this trip.'); return null; }
+    var pax = L.reduce(function(s, b){ return s + window.tcxPaxOf(b, D.rid, D.ds); }, 0);
+    if(L.length > 1 && !confirm('Send ' + L.length + ' booking(s) · ' + pax + ' guest(s) to ' + name + '?\nPrice ' + ppx.toLocaleString() + '/head · total ' + (ppx * pax).toLocaleString() + ' THB.')) return null;
+    var vans = {}; L.forEach(function(b){ vans[b.opsId] = (P.van && P.van[b.id]) || 'ours'; });
+    var body = { name: name, price_per_head: ppx, booking_ids: L.map(function(b){ return b.opsId; }), vans: vans };
+    var ref = String(P.ref || '').trim(), drop = String(P.drop || '').trim(), time = String(P.time || '').trim();
+    if(ref) body.ref = ref;
+    if(drop) body.drop_point = drop;
+    if(time) body.drop_time = time;
+    var cidP = D.cid ? Promise.resolve(D.cid) : closureIdFor(D.rid, D.ds);
+    return cidP.then(function(cid){
+      if(!cid) throw noId('This trip\'s closure');
+      return O.queue(function(){ return O.post('/v1/weather-closures/' + enc(cid) + '/send-to-partner', body); }).then(function(d){
+        upsertLocal(d); syncFollowUps(d); details[cid] = d; partnerNames = null;
+        L.forEach(reloadLocal);
+        O.wrote('weather');
+        dlgDone();
+        return d;
+      });
+    }).catch(function(e){ O.fail('Send to partner refused · nothing changed', e); return null; });
+  }
+  // legacy readers of the partner record (tcxPtOf, tcxPtCell, tcxPtDay, tcxPtHistNote, tcxPtNames) read it from the server's follow-ups
+  function pw(name, fn){
+    var orig = window[name]; if(typeof orig !== 'function') return;
+    window[name] = function(){ return O.enabled() ? fn.apply(this, [orig].concat([].slice.call(arguments))) : orig.apply(this, arguments); };
+  }
+  pw('tcxPtAll', function(){ return partners; });
+  pw('tcxPtSave', function(){ return false; });   // nothing is kept in the blob here; sendPartner / undo write to the server
+  pw('tcxPtNames', function(){ loadPartnerNames(); return partnerNames || []; });
+  pw('_tcxPtL', function(){ var D = window._tcxD; return D ? ptList(D) : []; });
+  pw('tcxPtUndo', function(orig, bkId){
+    if(!guardEdit()) return null;
+    var b = findBkById(bkId); if(!b || !b.weatherResolve || !b.opsId) return null;
+    var p = partners[bkId] || {}, ev = String(b.weatherResolve.event || '').split('|');
+    if(!confirm('Undo "sent to partner" for ' + (b.voucherRef || b.code || b.id) + '?\nIt goes back to awaiting a decision. Boat/van assignments are not restored.')) return null;
+    return closureIdFor(ev[0], ev[1]).then(function(cid){
+      if(!cid) throw noId('This trip\'s closure');
+      return O.queue(function(){ return O.post('/v1/weather-closures/' + enc(cid) + '/bookings/' + enc(b.opsId) + '/undo-partner', {}); }).then(function(d){
+        upsertLocal(d); syncFollowUps(d); details[cid] = d;
+        reloadLocal(b); O.wrote('weather'); redrawBooking();
+        return d;
+      });
+    }).catch(function(e){ O.fail('Undo refused' + (p.name ? ' (' + p.name + ')' : '') + ' · nothing changed', e); return null; });
+  });
+
   tw('tcxDlgApply', function(){
     var D = window._tcxD; if(!D) return null;
     if(!guardEdit()) return null;
     var cid = D.cid || ((findClosure(D.rid, D.ds) || {}).opsId);
+    if(D.out === 'partner') return sendPartner(D);
     if(D.out === 'move'){
       if(!D.nr){ alert('Pick the program to move to.'); return null; }
       if(!cid){ O.fail('Move refused', noId('This closure')); return null; }

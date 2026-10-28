@@ -6,9 +6,9 @@
    adapter or endpoint lands.
      · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
-     · §tcxPartner cancelled trip → "Send to partner" and its per-booking partner entries
      · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
      · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
+   (§tcxPartner, Send to partner, saves since 2026-10-28: ops/27-ops-weather.js → POST /v1/weather-closures/{id}/send-to-partner)
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -34,13 +34,6 @@
 
   /* §poXfer */
   block(['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'], 'Transferring equipment to another pier');
-
-  /* §tcxPartner · the other results of the cancelled-trip dialog are unchanged */
-  wrap('tcxDlgSet', function(orig, key, val){
-    if(key === 'out' && val === 'partner') return refuse('Send to partner');
-    return orig.apply(this, [].slice.call(arguments, 1));
-  });
-  block(['tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo'], 'Send to partner');
 
   /* §ovnBoatBack · the box is unticked again; every other trip field saves as before */
   wrap('bookingV2SetTripField', function(orig, idx, key, val){
