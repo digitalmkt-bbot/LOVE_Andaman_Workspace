@@ -1041,9 +1041,20 @@
     toMemoBody: toMemoBody
   };
 
-  /* §bootLater · after the first draw: the Dashboard's memo figures read FL_MEMOS */
+  /* §bootLater · after the first draw: the Dashboard's memo figures read FL_MEMOS
+     §loadOnOpen · the Dashboard reads only the memos: they load after the first draw; the stock items with their
+     movements (~1 MB), consumables, warehouses and suppliers are the fleet screens' (fl-*) and load when one opens.
+     A memo write refetches through refetchStockAndMemos (fleet screens only), so the two never race on a screen. */
+  function loadMemos(){
+    if(!enabled() || state.loaded) return Promise.resolve(true);
+    return O.get('/v1/fleet/memos').then(function(r){ if(!state.loaded) replaceMemos((r && r.memos) || []); return true; })
+      .catch(function(e){ O.fail('Could not load fleet memos from operation-backend', e); throw e; });
+  }
   if(enabled()){
-    if(O.later) O.later('fleet stock', function(){ return loadAll(false); }, 3);
+    if(O.later){
+      O.later('fleet memos', loadMemos, 3);
+      O.later('fleet stock', function(){ return loadAll(false); }, 3, ['fl-*']);
+    }
     else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
   }
 })();
