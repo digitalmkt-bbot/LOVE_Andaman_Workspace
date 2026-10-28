@@ -315,3 +315,14 @@ test('engine edit happy path: every step lands, modal closes, no failure message
   assert.ok(!rt.calls.some(x => x.fail));
   assert.deepEqual(reopened, []);
 });
+
+test('§propBoat: the Asset page fix for a Spare propeller on a gearbox goes through the server commands (activate / remove)', async () => {
+  const { runtime } = await import('./fe-harness.mjs');
+  const r = runtime({ files: ['23-ops-fleet-assets.js'], pre: 'function faPropFix(){ return "legacy"; } function flEquipPropActive(){} function flEquipRemove(){}' });
+  const seen = [];
+  r.ctx.flEquipPropActive = (id) => { seen.push(['activate', id]); return 'a'; };
+  r.ctx.flEquipRemove = (kind, id) => { seen.push(['remove', kind, id]); return 'r'; };
+  assert.equal(r.ctx.faPropFix('p1', 'on'), 'a');
+  assert.equal(r.ctx.faPropFix('p2', 'off'), 'r');
+  assert.deepEqual(seen, [['activate', 'p1'], ['remove', 'prop', 'p2']]);
+});
