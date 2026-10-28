@@ -8760,7 +8760,16 @@ function flIssueAddItem(name,unit,pierKey){
   var L=flIssueItems().slice();
   /* ชื่อเดิมที่เคยเลิกใช้ → เปิดกลับ ไม่สร้างใหม่ · ตัวเลขเก่าจะได้กลับมาด้วย */
   var hit=L.find(function(x){ return x && String(x.name).trim()===name; });
-  if(hit){ delete hit.off; if(unit) hit.unit=unit; hit.pier=pierKey||''; flIssueItemsSave(L); return hit.id; }
+  if(hit){
+    delete hit.off; if(unit) hit.unit=unit;
+    /* §issShare (2026-10-28) · owner "ทำไมรายการเบิกของ Visit Panwa ถึงหายไป"
+       เดิม hit.pier=pierKey เสมอ → กด "+ อื่นๆ" ที่ Tub Lamu พิมพ์ชื่อที่ Visit Panwa มีอยู่แล้ว
+       รายการถูกดึงไป Tub Lamu · คอลัมน์หายจาก Visit Panwa ทั้งที่ตัวเลขยังอยู่ (ผูกกับ id รายการ)
+       ตอนนี้: ชื่อเดิมอยู่ท่าอื่น → เป็น "ทุกท่า" · ชื่อเดิมเคยเลิกใช้ → คืนให้ท่าที่ขอ · ขอแบบทุกท่า → ทุกท่า */
+    var _was=hit.pier||'', _want=pierKey||'';
+    if(!_want || !_was || _was===_want) hit.pier=_want; else hit.pier='';
+    flIssueItemsSave(L); return hit.id;
+  }
   var id='it'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
   L.push({id:id, name:name, unit:unit, pier:pierKey||''});
   flIssueItemsSave(L); return id;
