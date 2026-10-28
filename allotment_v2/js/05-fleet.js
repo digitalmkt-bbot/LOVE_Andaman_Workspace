@@ -9552,6 +9552,27 @@ function flRenderDR(){
 .drh-ps>div{padding:0 16px;border-right:1px solid #EEF1F5;font-size:11px;color:#6B7489;font-weight:700;line-height:1.25}
 .drh-ps>div:last-child{border-right:0}.drh-ps>div>span{display:block}.drh-ps b{display:block;font-size:17px;color:#0F1B3D;font-family:'DM Mono',monospace;font-weight:700;white-space:nowrap}
 /* §drHead2 */
+/* §drSharp · owner "เพิ่มความคมชัด รายละเอียด ตัวหนังสือ ตาราง ของแต่ละตาราง" */
+#fl-dr-body table.fs{font-size:13px;color:#111827}
+#fl-dr-body table.fs th{font-size:10.5px;color:#4B5563;padding:7px 8px;border-color:#D9D6CC;background:#F1EFE8}
+#fl-dr-body table.fs th em{font-size:9.5px;color:#6B7280;font-weight:600}
+#fl-dr-body tr.fs-grp th{font-size:11px;padding:7px 8px;letter-spacing:.05em}
+#fl-dr-body table.fs td{border-color:#DCD9CF;padding:6px 9px}
+#fl-dr-body .fs-av{width:26px;height:26px;font-size:10px}
+#fl-dr-body .fs-nm b{font-size:14px;font-weight:700;color:#0F1B3D}
+#fl-dr-body .fs-nm em{font-size:11px;color:#4B5563}
+#fl-dr-body td.fs-rt{font-size:12.5px;color:#1F2937}
+#fl-dr-body td.fs-rt span{font-size:12px}
+#fl-dr-body td.fs-n .fs-in{font-size:15px;font-weight:700;padding:4px 1px 2px}
+#fl-dr-body td.fs-n .fs-in::placeholder{color:#B8B5AC}
+#fl-dr-body td.fs-n em{font-size:10.5px}
+#fl-dr-body td.fs-ro{font-size:15px}
+#fl-dr-body td.fs-e{color:#1F2937}
+#fl-dr-body td.fs-dim{font-size:12px;color:#8B8A82}
+#fl-dr-body table.fs tfoot td{font-size:14px;border-top:2px solid #BDB8A8;color:#0F1B3D}
+#fl-dr-body table.fs tfoot td.fs-bt,#fl-dr-body table.fs tfoot td.fs-rt{font-size:12.5px;color:#374151}
+#fl-dr-body td.fs-xb{font-size:12.5px}#fl-dr-body .fs-xt{font-size:13px}#fl-dr-body .fs-xq{font-size:14px}
+#fl-dr-body table.fs tbody tr:nth-child(even) td{background-color:rgba(15,27,61,.015)}
 @media(max-width:1180px){.drh-top{grid-template-columns:1fr}.drh-wm{display:none}.drh-chips{justify-content:flex-start}}
 </style>`;
     return css+top+tabs+mon;
