@@ -19,6 +19,8 @@
      pckAgg(rows) / pckSheetAgg(rows)-> the rows' stage, expected, no_show and money, as the server gave them
      pckProgData(date)               -> programmes[] (cards, variants, PK / KL / OWN boxes)
      pckProgStatus(A)                -> programmes[].status (the pier's own answer when a pier is picked)
+     ckTripWx / ckTripWxLbl          -> cancelled_trips[] (a trip closed from the Cancellations tab, and why)
+     laOpsPierCxlTrip(date, pier)    -> cancelled_trip (the grey "ทริปยกเลิก" chip in renderPierCheckin)
 
    The held answer, its freshness and the per-pier read live in 74-ops-pier-service.js (O.pierService.day / pierDay).
    What stays the browser's: the pax breakdown of a split part (ad / chd / inf / foc of a booking's own boat split or van part: a client
@@ -230,6 +232,7 @@
           PK: { d: num(v.zones && v.zones.PK && v.zones.PK.done), t: num(v.zones && v.zones.PK && v.zones.PK.total) },
           KL: { d: num(v.zones && v.zones.KL && v.zones.KL.done), t: num(v.zones && v.zones.KL && v.zones.KL.total) },
           OWN: { t: num(v.zones && v.zones.OWN && v.zones.OWN.total) } };
+        if(v.cancelled){ A.v[v.route_id].wx = 1; A.v[v.route_id].cxlPax = num(v.cancelled_pax); }   /* §opsCxlTrip · pckProgList draws "ยกเลิก · reason" */
         A.vord.push(v.route_id);
       });
       list.push(A); order.push(pg.family_id);
@@ -270,6 +273,31 @@
     if(!pg) return undefined;
     var fn = ST[pg.status && pg.status.code]; return fn ? fn(pg.status) : undefined;
   });
+
+  /* ── §opsCxlTrip (2026-10-29) · a trip closed from the Cancellations tab (lk-inbox §pckCxlTrip) ──
+     The server leaves its bookings out of rows, totals and programmes, and lists the day's closed trips (cancelled_trips[] {route_id, reason})
+     and the grey chip's count (cancelled_trip {bookings, pax, pending}). ckTripWx / ckTripWxLbl answer from that list, so the sheet's own
+     loop and ckRoutePills drop the same trips; an answer without the list (an older server) leaves legacy's SB_WEATHER_CLOSURES test in charge. */
+  function cxlList(date){ var ans = dayAns(date); return ans && Array.isArray(ans.cancelled_trips) ? ans.cancelled_trips : null; }
+  function cxlOf(list, rid){ for(var i = 0; i < list.length; i++) if(list[i] && list[i].route_id === rid) return list[i]; return null; }
+  wrap('ckTripWx', function(orig, a){
+    var rid = a[0], list = cxlList(a[1]); if(!list) return undefined;
+    return !!rid && !!cxlOf(list, rid);
+  });
+  wrap('ckTripWxLbl', function(orig, a){
+    var list = cxlList(a[1]); if(!list) return undefined;
+    var c = cxlOf(list, a[0]); if(!c) return undefined;
+    var R = (typeof TCX_R !== 'undefined' && TCX_R[c.reason]) || {};
+    return 'ยกเลิก' + (R.th ? (' · ' + R.th) : '');
+  });
+  /* the chip: { bookings, pax, pending } of the pier on screen (the whole day without one), or null */
+  window.laOpsPierCxlTrip = function(date, pier){
+    if(!enabled() || isLand()) return null;
+    var p = PS(); if(!p || !date) return null;
+    var ans = p.pierDay(date, pier || null), c = ans && ans.cancelled_trip;
+    if(!c || typeof c !== 'object') return null;
+    return { bookings: num(c.bookings), pax: num(c.pax), pending: num(c.pending) };
+  };
 
   O.pierDay = { rowOf: rowOfSheetRow, rowsOf: rowsOf };
 })();

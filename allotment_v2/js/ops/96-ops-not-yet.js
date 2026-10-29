@@ -11,10 +11,11 @@
    (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
    (§rentDay / §rentRoute, the daily charter rate per boat and per route, saves since 2026-10-29: ops/44-ops-costing-pl.js maps
     the boat rent's day both ways → PUT /v1/costing/boat-rents/{boat_id}, migration 584; Trip P&L charges it on the server)
-   From the 10-29 sync:
-     · §eqLink     Fleet › Equipment: link a gearbox / propeller / engine by position (saves through flSave, a no-op here;
-                   swap and remove still save: ops/23-ops-fleet-assets.js)
+   (§eqLink, Fleet › Equipment: link a gearbox / propeller / engine by position, saves since 2026-10-29:
+    ops/23-ops-fleet-assets.js → POST /v1/fleet/{engines|gearboxes|propellers}/{id}/link and /unlink)
    (§tcxPartner, Send to partner, saves since 2026-10-28: ops/27-ops-weather.js → POST /v1/weather-closures/{id}/send-to-partner)
+   Nothing is refused since 2026-10-29: every feature from the 10-27 and 10-29 syncs saves (above). `refuse` and `wrap` stay
+   for the next sync's features.
    Loaded after every other ops adapter (just before 90-ops-boot.js), so these wrappers run first.
    ═════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -31,8 +32,4 @@
     var w = function(){ if(!O.enabled()) return orig.apply(this, arguments); return fn.apply(this, [orig].concat([].slice.call(arguments))); };
     w.__opsNotYet = true; window[name] = w;
   }
-  function block(names, what){ names.forEach(function(n){ wrap(n, function(){ return refuse(what); }); }); }
-
-  /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
-  block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');
 })();

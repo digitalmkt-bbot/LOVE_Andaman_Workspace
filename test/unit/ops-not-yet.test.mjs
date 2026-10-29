@@ -5,14 +5,16 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = [
-  'flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
+// whole functions refused (none since §eqLink saves, 2026-10-29; §rentDay refuses only some fields of ctRentSet)
+const BLOCKED = [];
+// §eqLink saves now (23-ops-fleet-assets.js → POST /v1/fleet/{family}/{id}/link | unlink): these pass through
+const EQLINK = ['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
   const ctx = { alert: (m) => alerts.push(m), document: { getElementById: (id) => (id === 'bkv2-ovnbb-2' ? box : null) }, laOps: { enabled: () => enabled } };
   ctx.window = ctx;
-  for (const n of [...BLOCKED, 'cxwBanner', 'cxwDetailCard', 'cxwTabBadge', 'tcxDlgSet', 'bookingV2SetTripField']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : n === 'cxwTabBadge' ? '<span>3</span>' : 'orig'; };
+  for (const n of [...BLOCKED, ...EQLINK, 'cxwBanner', 'cxwDetailCard', 'cxwTabBadge', 'tcxDlgSet', 'bookingV2SetTripField', 'ctRentSet', 'ctRender']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : n === 'cxwTabBadge' ? '<span>3</span>' : 'orig'; };
   vm.runInNewContext(SOURCE, ctx);
   return { ctx, calls, alerts, box };
 }
@@ -40,6 +42,14 @@ test('Send to partner (27-ops-weather.js) and the boat-back box (ovn_boat_back, 
   assert.equal(alerts.length, 0);
   assert.doesNotMatch(SOURCE, /'ovnBoatBack'/);
   assert.doesNotMatch(SOURCE, /'ctRentSet'/, '§rentDay saves now (44-ops-costing-pl.js, migration 584): ctRentSet is not wrapped');
+});
+
+test('§eqLink saves now (23-ops-fleet-assets.js): choosing, linking and taking out pass through to its adapter', () => {
+  const { ctx, calls, alerts } = boot(true);
+  for (const n of EQLINK) assert.equal(ctx[n]('x'), 'orig', n);
+  assert.deepEqual(calls.map((c) => c[0]), EQLINK);
+  assert.equal(alerts.length, 0);
+  assert.doesNotMatch(SOURCE, /'flEq/);
 });
 
 test('outside ops mode (lk-inbox itself) everything is the legacy function', () => {

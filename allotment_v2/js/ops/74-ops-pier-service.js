@@ -170,12 +170,13 @@
     var k = String(kind || '');
     // w5-d: the sheet's figures (stages, expected, money, totals) are the server's now: any write that can move one makes the held answer stale,
     //   legacy's arithmetic answers until the fresh one lands (the same number unless two machines disagree)
-    if(!/^(weather|market|devlog|daily-report|fleet|costing|trip-pl|config|addon-types)/i.test(k)){
+    // §opsCxlTrip: a weather write closes or reopens a trip, which takes its bookings off the sheet (cancelled_trips), so it counts here too
+    if(!/^(market|devlog|daily-report|fleet|costing|trip-pl|config|addon-types)/i.test(k)){
       epoch++;
       var open0 = pckDate();
       if(open0 && O.activeView && O.activeView() === 'piercheckin') setTimeout(function(){ ensure(open0, true); }, 0);
     }
-    if(!/^(booking|remote|rate-type|addon|agents|contract)/i.test(k)) return;
+    if(!/^(booking|remote|rate-type|addon|agents|contract|weather)/i.test(k)) return;
     var open = pckDate();
     Object.keys(days).forEach(function(k){ if(!days[k].loading) delete days[k]; else days[k].at = 0; });
     if(open && O.activeView && O.activeView() === 'piercheckin') ensure(open, true);
