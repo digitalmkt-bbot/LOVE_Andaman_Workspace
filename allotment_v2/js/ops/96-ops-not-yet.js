@@ -4,7 +4,8 @@
    staff would see a save that is gone on the next reload. In ops mode they are refused with a plain
    message instead (or, for a banner that only leads to one, not drawn). Remove a block when its
    adapter or endpoint lands.
-     · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
+   (§cxWhy, the reason of a booking cancelled without one, saves since 2026-10-28: ops/41-ops-cancel-reason.js →
+    POST /v1/bookings/{id}/cancel-reason; the banner, the detail card and the Cancellations tab count are drawn again)
    (§poXfer, Pier Office equipment transfers between piers, save since 2026-10-29: pier transfers, migration 581)
    (§ovnBoatBack, charter OVN "boat returns to the pier the same day", saves since 2026-10-28: ovn_boat_back, migration 580)
    (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
@@ -31,12 +32,6 @@
     w.__opsNotYet = true; window[name] = w;
   }
   function block(names, what){ names.forEach(function(n){ wrap(n, function(){ return refuse(what); }); }); }
-
-  /* §cxWhy · the banner and the detail card only lead to the dialog: not drawn */
-  wrap('cxwBanner', function(){ return ''; });
-  wrap('cxwDetailCard', function(){ return ''; });
-  wrap('cxwTabBadge', function(){ return ''; });   // §cxwTab (10-29 sync): the Cancellations tab's count leads to the same dialog
-  block(['cxwOpen', 'cxwSave'], 'Entering a reason for an already cancelled booking');
 
   /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
   block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');
