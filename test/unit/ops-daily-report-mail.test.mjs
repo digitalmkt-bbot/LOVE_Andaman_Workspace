@@ -26,7 +26,10 @@ function setup({ fail = false, cfg = { to: 'a@x', cc: '', note: 'Dear team', inc
   };
   return { h, paints, toasts, origCalls, mailReads };
 }
-const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+// The adapter asks for the mail from a setTimeout(…, 0) (mailFor). Node runs that timer only once 1 ms has passed, and 20
+// setImmediate turns can finish sooner on an idle machine, so the request was sometimes still waiting (a flaky copy test).
+// Each turn now also waits a timer tick, which runs after any timer the adapter set before it.
+const settle = async () => { for (let i = 0; i < 20; i++) { await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setImmediate(r)); } };
 
 test('opening the form asks the server for the mail of the open day, with the typed note and ticked parts, and repaints with it', async () => {
   const s = setup();
