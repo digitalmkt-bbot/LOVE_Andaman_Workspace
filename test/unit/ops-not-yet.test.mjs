@@ -5,13 +5,14 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'tcxPtSet', 'tcxPtPickName', 'tcxPtVan', 'tcxPtApply', 'tcxPtUndo', 'flnWdAdd'];
+const BLOCKED = ['cxwOpen', 'cxwSave',
+  'flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
 
 function boot(enabled) {
   const calls = [], alerts = [], box = { checked: true };
   const ctx = { alert: (m) => alerts.push(m), document: { getElementById: (id) => (id === 'bkv2-ovnbb-2' ? box : null) }, laOps: { enabled: () => enabled } };
   ctx.window = ctx;
-  for (const n of [...BLOCKED, 'cxwBanner', 'cxwDetailCard', 'tcxDlgSet', 'bookingV2SetTripField']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : 'orig'; };
+  for (const n of [...BLOCKED, 'cxwBanner', 'cxwDetailCard', 'cxwTabBadge', 'tcxDlgSet', 'bookingV2SetTripField', 'ctRentSet', 'ctRender']) ctx[n] = (...a) => { calls.push([n, ...a]); return n === 'cxwBanner' || n === 'cxwDetailCard' ? '<div class="cxw-bar">' : n === 'cxwTabBadge' ? '<span>3</span>' : 'orig'; };
   vm.runInNewContext(SOURCE, ctx);
   return { ctx, calls, alerts, box };
 }
@@ -24,29 +25,28 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.ok(alerts.every((m) => /is not available yet: operation-backend does not save it/.test(m)));
   assert.equal(ctx.cxwBanner(), '', 'the cancel-reason banner is not drawn');
   assert.equal(ctx.cxwDetailCard({ id: 'b1' }), '', 'nor the booking-detail card');
+  assert.equal(ctx.cxwTabBadge(), '', 'nor the Cancellations tab count (§cxwTab)');
 });
 
-test("only the partner result and a ticked boat-back box are refused; their neighbours pass through", () => {
-  const { ctx, calls, alerts, box } = boot(true);
-  assert.equal(ctx.tcxDlgSet('out', 'partner'), false);
-  assert.equal(ctx.tcxDlgSet('out', 'move'), 'orig');
-  assert.equal(ctx.tcxDlgSet('note', 'partner'), 'orig', 'only the result choice');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 1), false);
-  assert.equal(box.checked, false, 'the box is unticked again');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 0), 'orig', 'unticking still saves');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnReturnDate', '2026-11-02'), 'orig');
-  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 0], ['bookingV2SetTripField', 2, 'ovnReturnDate', '2026-11-02']]);
+test('§rentDay: only the daily-rate fields of a rented boat are refused; the page is redrawn to put the box back', () => {
+  const { ctx, calls, alerts } = boot(true);
+  assert.equal(ctx.ctRentSet('b1', 'day.rt.r1', '5000'), false);
+  assert.equal(ctx.ctRentSet('b1', 'day.on', true), false);
+  assert.equal(ctx.ctRentSet('b1', 'amt', '90000'), 'orig');
+  assert.deepEqual(calls, [['ctRender'], ['ctRender'], ['ctRentSet', 'b1', 'amt', '90000']]);
   assert.equal(alerts.length, 2);
 });
 
-test('§poXfer is no longer refused here: 48-ops-pier-office.js sends it to operation-backend', () => {
-  const XFER = ['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'];
-  const alerts = [], ctx = { alert: (m) => alerts.push(m), document: { getElementById: () => null }, laOps: { enabled: () => true } };
-  ctx.window = ctx;
-  for (const n of XFER) ctx[n] = () => 'adapter';
-  vm.runInNewContext(SOURCE, ctx);
-  for (const n of XFER) assert.equal(ctx[n]('x'), 'adapter', n);
-  assert.deepEqual(alerts, []);
+test('Send to partner (27-ops-weather.js) and the boat-back box (ovn_boat_back, migration 580) save now: both pass through', () => {
+  const { ctx, calls, alerts, box } = boot(true);
+  assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
+  assert.equal(ctx.tcxDlgSet('out', 'move'), 'orig');
+  assert.equal(ctx.tcxDlgSet('note', 'partner'), 'orig');
+  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 1), 'orig');
+  assert.equal(box.checked, true, 'the box stays ticked');
+  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'partner'], ['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 1]]);
+  assert.equal(alerts.length, 0);
+  assert.doesNotMatch(SOURCE, /'ovnBoatBack'/);
 });
 
 test('outside ops mode (lk-inbox itself) everything is the legacy function', () => {
@@ -56,5 +56,6 @@ test('outside ops mode (lk-inbox itself) everything is the legacy function', () 
   assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
   assert.equal(ctx.bookingV2SetTripField(0, 'ovnBoatBack', 1), 'orig');
   assert.equal(alerts.length, 0);
-  assert.equal(calls.length, BLOCKED.length + 3);
+  assert.equal(ctx.ctRentSet('b1', 'day.on', true), 'orig');
+  assert.equal(calls.length, BLOCKED.length + 4);
 });

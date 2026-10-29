@@ -210,6 +210,10 @@
       Object.assign(o, pk);
       if(t.ovn){ o.ovn = t.ovn; if(t.ovn === 'return' && t.ovnReturnDate) o.ovnReturnDate = t.ovnReturnDate; }
       if(t.ovnLeg){ o.ovnLeg = true; if(t.ovnOf != null) o.ovnOf = +t.ovnOf; }
+      /* §ovnBoatBack · the boat goes back to the pier between the two days (migration 580). A saved trip keeps it as
+         ovnOf 'boatback' (bookingV2CommitBooking), the form as ovnBoatBack: the form's tick wins when it is there */
+      var bb = t.ovnBoatBack != null ? !!+t.ovnBoatBack : t.ovnOf === 'boatback';
+      if(bb && t.bookingMode === 'charter' && t.ovn === 'return' && !t.ovnLeg) o.ovnBoatBack = true;
       /* The API owns these values; do not send operations or the displacement
          acknowledgement.  They have dedicated commands and are read below. */
       if(t.ovnCharge != null) o.ovnCharge = Number(t.ovnCharge) || 0;
@@ -337,7 +341,8 @@
               lockDraws: lockDraws, lockDrawSel: sel, lockUse: locked, seatSource: { locked: locked, general: Math.max(0, total - locked) },
               zone: t.zone || '', pickupTime: pickupJoin(g('pickupTime', 'pickup_time'), g('pickupTimeEnd', 'pickup_time_end'), g('pickupAtPier', 'pickup_at_pier')),
               ovn: t.ovn || null, ovnReturnDate: g('ovnReturnDate', 'ovn_return_date') || '', ovnLeg: !!g('ovnLeg', 'ovn_leg'),
-              ovnOf: g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null,
+              /* §ovnBoatBack · legacy's stored shape: 'boatback' on the outbound (bkOvnBoatBack, the edit form's tick) */
+              ovnOf: g('ovnBoatBack', 'ovn_boat_back') === true ? 'boatback' : g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null,
               ovnCharge: g('ovnCharge', 'ovn_charge') != null ? +g('ovnCharge', 'ovn_charge') || 0 : 0,
               charterPriceMode: g('charterPriceMode', 'charter_price_mode') || '',
               charterPriceManual: g('charterPriceManual', 'charter_price_manual') != null ? +g('charterPriceManual', 'charter_price_manual') || 0 : 0,
