@@ -19,6 +19,11 @@
    POST   /v1/fleet/gearboxes|propellers/:id/move { spare_location, note? }
    POST   /v1/fleet/:family/:id/swap       { with_id }
    POST   /v1/fleet/engines|gearboxes/:id/service { hours }
+   §eqLink (lk 10-27) · the equipment bay's link by position:
+   POST   /v1/fleet/engines/:id/link       { replace_id | boat_id+pos, spare_location?, move_anyway? }
+   POST   /v1/fleet/gearboxes/:id/link     { engine_id, spare_location?, move_propeller?, move_anyway? }
+   POST   /v1/fleet/propellers/:id/link    { gearbox_id, spare_location?, move_anyway? }
+   POST   /v1/fleet/:family/:id/unlink     { spare_location? }
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -354,18 +359,42 @@
     try{ if(typeof window.flRenderEquip === 'function' && document.getElementById('fl-equip-modal-body')) window.flRenderEquip(); }catch(_){}
   }
 
+  function afterCommand(family, cmd, detail){
+    return refetchChain().then(function(){
+      if(detail && detail.id) fetchAssetDetail(family, detail.id).catch(function(){});
+      O.wrote('fleet-asset-' + cmd);
+      redrawAssets();
+      return detail;
+    });
+  }
+
   function runAssetCommand(family, id, cmd, body, errTitle){
     return O.queue(function(){
       return O.post('/v1/fleet/' + family + '/' + enc(id) + '/' + cmd, body);
     }).then(function(detail){
-      return refetchChain().then(function(){
-        if(detail && detail.id) fetchAssetDetail(family, detail.id).catch(function(){});
-        O.wrote('fleet-asset-' + cmd);
-        redrawAssets();
-        return detail;
-      });
+      return afterCommand(family, cmd, detail);
     }, function(e){
       O.fail(errTitle || ('Could not run ' + cmd + ' on ' + family), e);
+      throw e;
+    });
+  }
+
+  /* §eqLink · a part sitting somewhere else (another engine, gearbox or boat) is moved only once the person agrees: the server's
+     409 message is the question, OK resends with move_anyway. Cancel changes nothing and shows no error. */
+  var EQ_ANYWAY = {
+    gearbox_on_other_engine: { flag: 'move_anyway' },
+    propeller_on_other_gearbox: { flag: 'move_anyway' },
+    engine_on_other_boat: { flag: 'move_anyway' }
+  };
+  function runEqCommand(family, id, cmd, body, errTitle){
+    return O.anyway(function(extra){
+      return O.queue(function(){
+        return O.post('/v1/fleet/' + family + '/' + enc(id) + '/' + cmd, Object.assign({}, body, extra));
+      });
+    }, EQ_ANYWAY).then(function(detail){
+      return afterCommand(family, cmd, detail);
+    }, function(e){
+      if(!(e && e.declined)) O.fail(errTitle, e);
       throw e;
     });
   }
@@ -777,6 +806,74 @@
       if(typeof window.flRenderEquip === 'function') window.flRenderEquip();
     }).catch(function(){ return null; });
   });
+
+  /* §eqLink (lk 10-27) · the equipment bay's link by position. Legacy changes FL_ENGINES / FL_GEARBOXES / FL_PROPELLERS and calls
+     flSave (a no-op here); these ask the server first (POST …/link, …/unlink, fleet-eqlink.ts on operation-backend), then refetch the
+     chain and redraw. A refusal leaves the picker open. The browser arrays are only read, for the confirm texts and the ids. */
+  function eqEngine(id){ return typeof window._flEqEng === 'function' ? window._flEqEng(id) : listEngines().find(function(x){ return x && x.id === id; }); }
+  function eqGearboxOf(engId){ return listGearboxes().find(function(g){ return g && g.engineId === engId; }) || null; }
+  function eqPropellerOf(gbId){
+    var L = listPropellers().filter(function(p){ return p && p.gearboxId === gbId; });
+    return L.find(function(p){ return (p.status || 'active') !== 'spare'; }) || L[0] || null;
+  }
+  function eqLoc(){ return typeof window._flEqReadLoc === 'function' ? (window._flEqReadLoc() || null) : null; }
+  function eqClosePicker(){
+    if(typeof _flEqPick !== 'undefined') _flEqPick = null;
+    try{ if(typeof window.flRenderEquip === 'function') window.flRenderEquip(); }catch(_){}
+  }
+  function eqLabel(o){ return (o && (o.serial || o.id)) || ''; }
+
+  wrap('flEqChoose', function(orig, id){
+    var pk = typeof _flEqPick !== 'undefined' ? _flEqPick : null;
+    if(!pk || !id) return null;
+    var e = eqEngine(pk.engId);
+    if(!e) return null;
+    var run;
+    if(e.virt){
+      run = runEqCommand('engines', id, 'link', { boat_id: e.boatId, pos: normalizePos(e.pos) }, 'Could not put the engine in');
+    } else if(pk.kind === 'gb'){
+      var mp = document.getElementById('fl-eq-moveprop');
+      run = runEqCommand('gearboxes', id, 'link', { engine_id: e.id, spare_location: eqLoc(), move_propeller: !!(mp && mp.checked) }, 'Could not link the gearbox');
+    } else if(pk.kind === 'prop'){
+      var g = eqGearboxOf(e.id);
+      if(!g) return null;
+      run = runEqCommand('propellers', id, 'link', { gearbox_id: g.id, spare_location: eqLoc() }, 'Could not link the propeller');
+    } else {
+      run = runEqCommand('engines', id, 'link', { replace_id: e.id, spare_location: eqLoc() }, 'Could not put the engine in');
+    }
+    return run.then(function(){ eqClosePicker(); return true; }).catch(function(){ return false; });
+  });
+
+  wrap('flEqTakeOut', function(orig, kind, engId){
+    var e = listEngines().find(function(x){ return x && x.id === engId; });
+    if(!e) return null;
+    var loc = eqLoc(), family, target;
+    if(kind === 'eng'){
+      var bn = typeof window.getBoat === 'function' ? ((window.getBoat(e.boatId) || {}).name || '') : '';
+      if(!confirm('Remove engine ' + eqLabel(e) + ' from ' + bn + '? The gearbox stays on the boat at this position (waiting for an engine).')) return null;
+      family = 'engines'; target = e;
+    } else if(kind === 'gb'){
+      target = eqGearboxOf(e.id);
+      if(!target || !confirm('Remove gearbox ' + eqLabel(target) + '? Its propeller goes with it.')) return null;
+      family = 'gearboxes';
+    } else {
+      var g = eqGearboxOf(e.id);
+      target = g ? eqPropellerOf(g.id) : null;
+      if(!target || !confirm('Remove propeller ' + eqLabel(target) + '?')) return null;
+      family = 'propellers';
+    }
+    return runEqCommand(family, target.id, 'unlink', { spare_location: loc }, 'Could not take the ' + (kind === 'eng' ? 'engine' : kind === 'gb' ? 'gearbox' : 'propeller') + ' out')
+      .then(function(){ eqClosePicker(); return true; }).catch(function(){ return false; });
+  });
+
+  /* "ผูกคู่นี้เลย" (the suggestion strip) and "ผูกกับ <engine>" (the gearbox page's alert): the gearbox onto that engine */
+  function eqLinkGearbox(gbId, engId){
+    if(!gbId || !engId) return null;
+    return runEqCommand('gearboxes', gbId, 'link', { engine_id: engId }, 'Could not link the gearbox')
+      .then(function(){ return true; }).catch(function(){ return false; });
+  }
+  wrap('flEqLinkPair', function(orig, gbId, engId){ return eqLinkGearbox(gbId, engId); });
+  wrap('flEqQuickLink', function(orig, gbId, engId){ return eqLinkGearbox(gbId, engId); });
 
   wrap('flConfirmMove', function(){
     var ctx = typeof flMoveCtx !== 'undefined' ? flMoveCtx : null;
