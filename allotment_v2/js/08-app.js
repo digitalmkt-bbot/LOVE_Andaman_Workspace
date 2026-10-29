@@ -57053,7 +57053,7 @@ function bkV2RenderTab2(){
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               const _rtFt='';   /* §rtFt2 · ป้ายย้ายไปช่อง Send back */
-              return ((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt; })()}</td>
+              return ((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt+((_unassignedCls && !vanMode)?`<div class="t2-unvan"><span class="nv">&#128652; ${laT('ยังไม่มีรถ')}</span><button type="button" class="pk" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">+ ${laT('เลือกรถ')}</button></div>`:''); })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room" title="ห้อง ${esc(bk.roomNumber)}">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(function(){
               /* ══ §splitZone · โซนของแถวที่แยกคนออกมา ════════════════════════
@@ -57115,7 +57115,10 @@ function bkV2RenderTab2(){
           </tr>${(a.first && typeof bkV2B2CStripRow==='function')?bkV2B2CStripRow(bk, COLN, date):''}${expandRow}`};   /* §b2cChg · บรรทัดสรุปใต้แถว · ใบที่แยกหลายแถวขึ้นครั้งเดียว */
       });
       let body='';
-      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g).length; const px=alist.filter(a=>!a.g).reduce((s,a)=>s+a.head,0); return `<tr><td colspan="${COLN}" style="background:#FFF7E6;box-shadow:inset 4px 0 0 #E6A23C;padding:6px 12px"><span style="font-weight:700;font-size:12px;color:#9A6B00">&#9888; ยังไม่ assign</span> <span style="font-size:11px;color:#9A6B00">${n} booking · ${px} pax — จับเข้ากลุ่ม/เลือกรถ</span></td></tr>`; };
+      /* §unBlock (2026-10-29) · owner "ปรับตัวที่ไม่ได้จัดรถให้เห็นชัดกว่านี้ ทั้ง Classic และ Compact · แถวแบบมุมโค้ง · เว้นช่องว่างบน-ล่าง · สีสดกว่านี้"
+         หัว + แถวใบที่ยังไม่มีรถ = การ์ดเดียวกัน (มุมโค้ง 12px ขอบแดง ขีดซ้าย 6px) · spacer 16px ก่อนและหลัง · ปุ่มเข้าโหมดจัดรถ */
+      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g).length; const px=alist.filter(a=>!a.g).reduce((s,a)=>s+a.head,0);
+        return `<tr class="t2-unsp"><td colspan="${COLN}"></td></tr><tr class="t2-unhd"><td colspan="${COLN}"><span class="t">&#9888; ${laT('ยังไม่จัดรถ')}</span><span class="n">${n} booking · ${px} pax</span><span class="m">${laT('ลูกค้าจะไม่มีรถไปรับ — จับเข้ากลุ่มหรือเลือกรถก่อนปิดวัน')}</span>${vanMode?`<span class="h">${laT('เลือกรถในช่องรถของแถวด้านล่าง')}</span>`:`<button type="button" class="b" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">${laT('จัดรถให้ใบนี้')} &rarr;</button>`}</td></tr>`; };
       // Boat Assign · per-boat cluster header (mirrors the van group header · read-only · very light tint)
       const _boatHdrRow=(bid)=>{
         const mem=alist.filter(a=>_boatId(a)===(bid||''));
@@ -57133,7 +57136,11 @@ function bkV2RenderTab2(){
             ${mem.length?`<button type="button" class="t2-bclr" onclick="event.stopPropagation();bkV2BoatClearTrip('${esc(bid)}','${esc(date)}','${esc(rid)}')" title="${esc(laT('ถอดเรือลำนี้ออกจากทุก booking ของรอบนี้ (ทุกโซน) · กลับไปเป็นยังไม่จัดเรือ'))}">&#10005; ${laT('ถอดทั้งลำ')}</button>`:''}
           </div></td></tr>`;
       };
-      { let _pg=null, _pb=null; _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups) body+=_unassignedHdr(); _pg=o.g; } body+=o.html; }); }
+      { let _pg=null, _pb=null, _inUn=false;
+        const _unLast=(()=>{ let k=null; _rowObjs.forEach(o=>{ if(!_boatCluster && _grouped && !o.g) k=o; }); return k; })();   /* §unBlock · แถวสุดท้ายของบล็อก → มุมโค้งล่าง */
+        _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups){ body+=_unassignedHdr(); _inUn=true; } _pg=o.g; }
+          body+=(o===_unLast && _inUn)?o.html.replace('t2-unassigned','t2-unassigned t2-un-last'):o.html; });
+        if(_inUn) body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; }
       /* ══ §btTable (2026-09-04) · ทุกโซนของทริปนี้อยู่ในตารางเดียว ═══════════
          ของเดิมแยกเป็นคนละ <table> ต่อโซน · ความกว้างคอลัมน์จึงคำนวณแยกกัน
          Voucher ของ Phuket กว้าง 118px แต่ของเขาหลัก 96px ตาไล่ลงมาแล้วสะดุด
@@ -58551,9 +58558,26 @@ function bkV2RenderTab2(){
     .t2-addbtn-up{color:#534AB7;border-color:#B8B2E8}
     /* Not-yet-assigned booking (after van grouping started) — amber frame, floats to top */
     /* unassigned cue · amber FRAME (กรอบคลุม) · NO fill override → the row shows its boat tint (inline _boatRowStyle) instead */
-    .t2-mtbl tr.t2-unassigned td{border-top:2px solid #E6A85C;border-bottom:2px solid #E6A85C}
-    .t2-mtbl tr.t2-unassigned td:first-child{border-left:2px solid #E6A85C}
-    .t2-mtbl tr.t2-unassigned td:last-child{border-right:2px solid #E6A85C}
+    /* §unBlock · การ์ดแดงมุมโค้ง · ใช้ทั้ง Classic และ Compact (body.btc) */
+    .t2-mtbl tr.t2-unsp td{padding:0!important;height:16px;border:0!important;background:#fff!important;box-shadow:none!important}
+    .t2-mtbl tr.t2-unhd td{background:#FFE1DA!important;box-shadow:inset 6px 0 0 #D92D20!important;border:1.5px solid #F08A7E!important;border-bottom:1px solid #F3C9C2!important;border-radius:12px 12px 0 0;padding:8px 14px 8px 16px!important;white-space:nowrap}
+    .t2-mtbl tr.t2-unhd .t{font-weight:800;font-size:13px;color:#9A1B12;margin-right:8px}
+    .t2-mtbl tr.t2-unhd .n{display:inline-block;background:#fff;color:#9A1B12;border:1.5px solid #F08A7E;border-radius:999px;padding:1px 9px;font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700;margin-right:8px}
+    .t2-mtbl tr.t2-unhd .m{font-size:12px;font-weight:600;color:#9A1B12}
+    .t2-mtbl tr.t2-unhd .h{font-size:11.5px;font-weight:700;color:#9A1B12;margin-left:10px}
+    .t2-mtbl tr.t2-unhd .b{margin-left:10px;background:#D92D20;color:#fff;border:0;border-radius:999px;padding:4px 12px;font:800 11.5px inherit;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(217,45,32,.35)}
+    .t2-mtbl tr.t2-unassigned td{background:#FFF1EC!important;border-top:1px dashed #F08A7E;border-bottom:1px dashed #F08A7E}
+    .t2-mtbl tr.t2-unassigned td:first-child{border-left:1.5px solid #F08A7E;box-shadow:inset 6px 0 0 #D92D20}
+    .t2-mtbl tr.t2-unassigned td:last-child{border-right:1.5px solid #F08A7E}
+    .t2-mtbl tr.t2-unassigned.t2-un-last td{border-bottom:1.5px solid #F08A7E}
+    .t2-mtbl tr.t2-unassigned.t2-un-last td:first-child{border-bottom-left-radius:12px}
+    .t2-mtbl tr.t2-unassigned.t2-un-last td:last-child{border-bottom-right-radius:12px}
+    .t2-unvan{display:flex;align-items:center;gap:5px;margin-top:4px}
+    .t2-unvan .nv{display:inline-flex;align-items:center;background:#FFD6CF;color:#9A1B12;border:1.5px dashed #F08A7E;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+    .t2-unvan .pk{background:#D92D20;color:#fff;border:0;border-radius:6px;padding:3px 8px;font:800 10.5px inherit;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(217,45,32,.35);white-space:nowrap}
+    body.btc .t2-mtbl tr.t2-unhd td{padding:6px 12px 6px 14px!important}
+    body.btc .t2-mtbl tr.t2-unhd .t{font-size:12px} body.btc .t2-mtbl tr.t2-unhd .m{display:none}
+    body.btc .t2-mtbl tr.t2-unsp td{height:14px}
     /* group with no van picked yet · ONE big red box around the whole group (header top + sides on every row + bottom on the last row only · no internal lines) */
     .t2-mtbl tr.t2-novan td:first-child{border-left:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan td:last-child{border-right:2px solid #E05B5B}
