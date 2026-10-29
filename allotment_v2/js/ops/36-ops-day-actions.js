@@ -873,6 +873,50 @@
     });
   });
 
+  // §turnBack (lk-inbox 2026-10-29) · tbSave / tbRemove (08-app.js): "⛵ กลับเข้าท่า" on Pier check-in.
+  //   PUT    /operations/trip-ops/{trip_id}/turn-back {reason, note, money:{kind, pct, amt, note}}
+  //   DELETE /operations/trip-ops/{trip_id}/turn-back
+  // Legacy put ops.turnBack on the booking and called ckPersist (local only here). The server stamps who, when, the
+  // heads (from the pier check-in) and the history line; the dialog stays open on a refusal.
+  function turnBackAfter(b, d, res){
+    var op = opsBlock(b, d);
+    var tb = res && res.trip && res.trip.operations && res.trip.operations.turn_back;
+    var mapped = O.bookings && O.bookings.turnBackFrom ? O.bookings.turnBackFrom(tb) : null;
+    if(mapped) op.turnBack = mapped; else delete op.turnBack;
+    O.wrote('trip-ops');
+    if(typeof window.ckReasonClose === 'function') window.ckReasonClose();
+    if(typeof window.ckAfter === 'function') window.ckAfter('pier');
+    try{ if(typeof window.bookingV2Render === 'function' && document.querySelector('#view-booking.active')) window.bookingV2Render(); }catch(_){}
+  }
+  wrap('tbSave', function(orig){
+    var st = window._tb || {};
+    if(!st.bkId) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    var b = findBooking(st.bkId); if(!b) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    var g = function(id){ var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    var pct = g('tb-pct'), amt = g('tb-amt');
+    if(st.money === 'refund' && !pct && !amt){ alert('Enter the refund as a % or an amount'); return null; }
+    var body = { reason: st.reason || 'other', note: g('tb-note') || null,
+      money: { kind: st.money || 'pending', pct: st.money === 'refund' && pct ? +pct : null, amt: st.money === 'refund' && amt ? +amt : null, note: g('tb-mnote') || null } };
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, st.date) : st.date;
+    var t = tripOnDate(b, d);
+    if(!t){ alert('This booking has no operation-backend trip on ' + d + ': save the booking first'); return null; }
+    return O.queue(function(){ return O.call('PUT', '/operations/trip-ops/' + enc(t.opsTripId) + '/turn-back', body); })
+      .then(function(res){ turnBackAfter(b, d, res); return res; }, function(e){ O.fail('Turn-back not saved', e); return null; });
+  });
+  wrap('tbRemove', function(orig){
+    var st = window._tb || {};
+    if(!st.bkId) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    if(!confirm('Remove the turn-back record from this booking?')) return null;
+    var b = findBooking(st.bkId); if(!b) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, st.date) : st.date;
+    var t = tripOnDate(b, d);
+    if(!t){ alert('This booking has no operation-backend trip on ' + d + ': save the booking first'); return null; }
+    return O.queue(function(){ return O.call('DELETE', '/operations/trip-ops/' + enc(t.opsTripId) + '/turn-back'); })
+      .then(function(res){ turnBackAfter(b, d, res); return res; }, function(e){ O.fail('Turn-back not removed', e); return null; });
+  });
+
   // ckStrandClear (08-app.js): "ล้างรายการค้าง" / "ล้างการจัดรถ/เรือ" on a struck-through row. Server first; the dialogs are legacy's.
   //   moved to another day  → DELETE /operations/van-strands/{booking_id}/{service_date} (404 = nothing left on the server: fine)
   //   cancelled, still in a van → PATCH /operations/trip-ops/{trip_id} {van_parts: null} for the booking's trips of that day
