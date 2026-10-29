@@ -6,7 +6,7 @@
    PATCH  …/photos/{pid}      {caption}
    POST   …/photos/{pid}/hide | /restore
    DELETE …/photos/{pid}      only a hidden photo; the server deletes the file when nothing else names it
-   Kinds: mj → jobs, inc → incidents, prj → projects. Legacy's picker, the 6 MB clip check and the prompts stay; the files go up through
+   Kinds: mj → jobs, inc → incidents, prj → projects, bat → batteries (§opsFleetBatteries, 2026-10-29). Legacy's picker, the 6 MB clip check and the prompts stay; the files go up through
    _flProjUploadAll (POST /v1/attachments through laOpsAttachments), then ONE photos call names them all. The record is then read again
    (its photos and its log are the server's). Not called in ops: flpPush, flpLog, flpStageNow (the server owns stage and log).
    Replaced: flpAdd, flpAddUrl, flpCap, flpHide, flpRestore, flpPurge. Classic script · after 98-…, before 90-ops-boot.js.
@@ -14,7 +14,7 @@
 (function(){
   'use strict';
   var O = window.laOps; if(!O) return;
-  var KIND = { mj: 'jobs', inc: 'incidents', prj: 'projects' };
+  var KIND = { mj: 'jobs', inc: 'incidents', prj: 'projects', bat: 'batteries' };
   var NAMES = ['flpAdd', 'flpAddUrl', 'flpCap', 'flpHide', 'flpRestore', 'flpPurge'];
   var orig = {};
   NAMES.forEach(function(n){ orig[n] = window[n]; });
@@ -23,7 +23,8 @@
   function base(kind, id){ return '/v1/fleet/' + KIND[kind] + '/' + enc(id) + '/photos'; }
   function can(){ return typeof window.flpCan !== 'function' || window.flpCan(); }
   function reload(kind, id){
-    var p = kind === 'mj' ? O.fleetJobs.reloadJob(id) : kind === 'inc' ? O.fleetJobs.reloadIncident(id) : O.fleetDaily.reloadProject(id);
+    var p = kind === 'mj' ? O.fleetJobs.reloadJob(id) : kind === 'inc' ? O.fleetJobs.reloadIncident(id)
+      : kind === 'bat' ? O.fleetBatteries.reload(id) : O.fleetDaily.reloadProject(id);
     return p.then(function(){ O.wrote('fleet-photo'); if(typeof window.flpRefresh === 'function') window.flpRefresh(kind, id, true); });
   }
   /* one write, then the record again; a refusal shows the server's words and changes nothing */
