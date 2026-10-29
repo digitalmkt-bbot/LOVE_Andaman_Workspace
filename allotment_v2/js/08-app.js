@@ -72030,8 +72030,29 @@ var PKB_LH=32;
 function pkbMode(){ try{ return localStorage.getItem('la_pk_calc_mode')==='b'?'b':'t'; }catch(_){ return 't'; } }
 function pkbSetMode(m){ try{ localStorage.setItem('la_pk_calc_mode', m==='b'?'b':'t'); }catch(_){} renderPierPark(); }
 function pkbKey(){ return 'la_pk_board_'+((typeof _poDate!=='undefined'&&_poDate)||''); }
-function pkbGet(){ try{ return localStorage.getItem(pkbKey())||''; }catch(_){ return ''; } }
-function pkbPut(v){ try{ if(v) localStorage.setItem(pkbKey(), v); else localStorage.removeItem(pkbKey()); }catch(_){} }
+/* §pkBoardShare (2026-10-29) · owner "ตัวที่เป็นบอร์ด มันเห็นได้เฉพาะ User นั้นๆ เหรอ พอเราออกไปเข้าใหม่อีกที่ ก็ไม่มี"
+   เดิมอยู่ใน localStorage เครื่องเดียว · ตอนนี้เก็บที่ PIER_CFG.parkBoard[วัน] = {v,by,at} (ที่เดียวกับชุดตั๋ว parkSets · pier_cfg)
+   อ่าน: เซิร์ฟเวอร์ก่อน · ไม่มีแต่เครื่องมี → ย้ายขึ้นให้ · เขียน: เซิร์ฟเวอร์ + สำเนาในเครื่อง · poPersist หลังหยุดพิมพ์ 1 วิ */
+var _pkbT=0;
+function pkbRec(){ var M=(typeof PIER_CFG!=='undefined'&&PIER_CFG&&PIER_CFG.parkBoard)||null; var d=(typeof _poDate!=='undefined'&&_poDate)||''; return (M&&d&&M[d]&&typeof M[d]==='object')?M[d]:null; }
+function pkbGet(){
+  var r=pkbRec(); if(r) return String(r.v||'');
+  var loc=''; try{ loc=localStorage.getItem(pkbKey())||''; }catch(_){}
+  if(loc){ try{ pkbPut(loc, true); }catch(_){} }   /* ย้ายของเก่าขึ้นเซิร์ฟเวอร์ครั้งแรก */
+  return loc;
+}
+function pkbPut(v, migrate){
+  var d=(typeof _poDate!=='undefined'&&_poDate)||''; if(!d) return;
+  try{ if(v) localStorage.setItem(pkbKey(), v); else localStorage.removeItem(pkbKey()); }catch(_){}
+  if(typeof PIER_CFG==='undefined'||!PIER_CFG) return;
+  if(!PIER_CFG.parkBoard||typeof PIER_CFG.parkBoard!=='object') PIER_CFG.parkBoard={};
+  if(v) PIER_CFG.parkBoard[d]={v:String(v), by:(typeof laBy==='function')?laBy():'', at:new Date().toISOString()};
+  else delete PIER_CFG.parkBoard[d];
+  try{ var c=new Date(); c.setDate(c.getDate()-120); var lim=c.toISOString().slice(0,10);
+    Object.keys(PIER_CFG.parkBoard).forEach(function(x){ if(String(x)<lim) delete PIER_CFG.parkBoard[x]; }); }catch(_){}
+  clearTimeout(_pkbT); _pkbT=setTimeout(function(){ try{ poPersist(); }catch(_){} }, migrate?200:1000);
+}
+function pkbWho(){ var r=pkbRec(); if(!r||!r.at) return ''; var t=''; try{ var d=new Date(r.at); t=String(d.getDate())+'/'+String(d.getMonth()+1)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(_){} return (r.by?('แก้ล่าสุด '+r.by+' · '):'')+t; }
 /* token: {t:'n',v} | {t:'o',v:'+-*\/'} | {t:'(' } | {t:')'} | {t:'%'} | {t:'S'} (รวม) */
 function pkbTok(s){
   s=String(s||'').replace(/รวม/g,' \u0001 ').replace(/[×xX✕]/g,function(c,i,str){
@@ -72188,7 +72209,7 @@ function pkBoard(flat, TY){
       +K('4')+K('5')+K('6')+K('×','o')+K('%','o')+K('\nรวม\n','w','รวม')
       +K('1')+K('2')+K('3')+K('−','o')+K(',')+K('\b','w','&#9003;')
       +K('0')+K('.')+K('+','o')+K('\n','w3','&#8629; บรรทัดใหม่')+'</div>'
-    +'<div class="pkb-ft"><span>จำไว้ในเครื่องนี้ · '+e(dLbl)+' · # โน้ต · รวม = ผลรวมข้างบน</span><span style="flex:1"></span>'
+    +'<div class="pkb-ft"><span title="บอร์ดกลางของวัน · ทุกเครื่อง/ทุกคนเห็นแผ่นเดียวกัน · ใครพิมพ์ล่าสุดชนะ">&#9729; บอร์ดกลาง · '+e(dLbl)+(pkbWho()?(' · '+e(pkbWho())):'')+' · # โน้ต · รวม = ผลรวมข้างบน</span><span style="flex:1"></span>'
     +'<button type="button" class="ol" onclick="pkbTools(this)" title="ซ่อน/แสดง ชิปตัวเลข · ราคา/ใบ · ปุ่มกด">'+(_tOn?'&#9650; ซ่อนตัวช่วย':'&#9660; แสดงตัวช่วย')+'</button>'
     +'<button type="button" class="ol" onclick="pkbCopy(this)">&#10697; คัดลอก</button><button type="button" class="ol" onclick="pkbClear()">ล้างบอร์ด</button></div>'
     +'<style>'
