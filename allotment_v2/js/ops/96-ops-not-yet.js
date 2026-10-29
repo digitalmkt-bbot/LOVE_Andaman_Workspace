@@ -5,9 +5,9 @@
    message instead (or, for a banner that only leads to one, not drawn). Remove a block when its
    adapter or endpoint lands.
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
-     · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
    (§cxWhy, the reason of a booking cancelled without one, saves since 2026-10-28: ops/41-ops-cancel-reason.js →
     POST /v1/bookings/{id}/cancel-reason; the banner, the detail card and the Cancellations tab count are drawn again)
+   (§ovnBoatBack, charter OVN "boat returns to the pier the same day", saves since 2026-10-28: ovn_boat_back, migration 580)
    (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
    From the 10-29 sync:
      · §eqLink     Fleet › Equipment: link a gearbox / propeller / engine by position (saves through flSave, a no-op here;
@@ -35,15 +35,6 @@
 
   /* §poXfer */
   block(['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'], 'Transferring equipment to another pier');
-
-  /* §ovnBoatBack · the box is unticked again; every other trip field saves as before */
-  wrap('bookingV2SetTripField', function(orig, idx, key, val){
-    if(key === 'ovnBoatBack' && val){
-      try{ var box = document.getElementById('bkv2-ovnbb-' + idx); if(box) box.checked = false; }catch(_){}
-      return refuse('"Boat returns to the pier the same day"');
-    }
-    return orig.apply(this, [].slice.call(arguments, 1));
-  });
 
   /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
   block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');
