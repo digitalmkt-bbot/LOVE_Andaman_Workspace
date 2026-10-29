@@ -84630,7 +84630,7 @@ function pc2CSS3(S){
     'body.btc #view-booking .bt-pgf .n::after{content:" pax";font-family:"DM Sans",sans-serif;font-size:11px;font-weight:500;color:#5B6275}',
     'body.btc #view-booking .bt-pgf .bt-tag{background:transparent!important;font-size:10.5px;font-weight:500;color:#8A8F9C;padding:0}',
     'body.btc #view-booking .bt-pgf .bt-tag.no{color:#B42318}',
-    'body.btc #view-booking .bt-pgv.btc-pr{display:grid;grid-template-columns:minmax(56px,128px) 84px 46px 58px minmax(34px,1fr) 58px;gap:8px;align-items:center;font-size:12px;line-height:16px;padding:1px 10px 1px 26px;min-height:21px}',
+    'body.btc #view-booking .bt-pgv.btc-pr{display:grid;grid-template-columns:minmax(56px,128px) 84px 46px 58px minmax(34px,1fr) auto;gap:8px;align-items:center;font-size:12px;line-height:16px;padding:1px 10px 1px 26px;min-height:21px}',
     'body.btc #view-booking .btc-pr .fr .bt-free{padding:1px 7px;font-size:10.5px;line-height:15px}',
     'body.btc #view-booking .bt-pgf{padding:3px 10px!important;margin:4px 8px 2px!important}',
     'body.btc #view-booking .bt-pgf:first-child{margin-top:0!important}',
@@ -84640,7 +84640,8 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-pr .lk{font-size:11px;font-weight:700;color:#6D28D9;white-space:nowrap}',
     'body.btc #view-booking .btc-pr .lk .bt-lk{background:transparent;padding:0;color:#53207A!important}',
     'body.btc #view-booking .btc-pr .st{text-align:right;white-space:nowrap}',
-    'body.btc #view-booking .btc-pr .fr{text-align:right}',
+    'body.btc #view-booking .btc-pr .fr{text-align:right;white-space:nowrap;min-width:58px}',
+    'body.btc #view-booking .btc-pr .fr .bt-cxl{display:inline-block;padding:1px 7px;font-size:10.5px;line-height:15px;margin-right:4px}',   /* §btLost4 */
     'body.btc #view-booking .btc-pr .fr .bt-free{display:inline-block}',
     'body.btc #view-booking .btc-pbar{display:flex;height:6px;border-radius:3px;background:#E6E9EF;overflow:hidden;align-self:center}',
     'body.btc #view-booking .btc-pbar i{display:block;height:100%}',
@@ -84976,7 +84977,7 @@ function pc2CSS3(S){
       var vn = v.querySelector(':scope > .vn'); var tmEl = vn ? vn.nextElementSibling : null;
       var sp = v.querySelector(':scope > .sp'); if(!vn || !tmEl || !sp) continue;
       var bdEl = v.querySelector(':scope > .bt-bd');   /* §btBd */
-      var seat = sp.querySelector('.bt-seat'), free = sp.querySelector('.bt-free');
+      var seat = sp.querySelector('.bt-seat'), free = sp.querySelector('.bt-free'), cxl = sp.querySelector('.bt-cxl');   /* §btLost4 */
       var lkEl = sp.querySelector('.bt-lk:not(.bt-bhold)'), hold = sp.querySelector('.bt-bhold');
       var bk = seat ? (parseInt((seat.querySelector('b') || {}).textContent, 10) || 0) : 0;
       var mcap = seat ? seat.textContent.match(/\/\s*(\d+)/) : null; var cap = mcap ? parseInt(mcap[1], 10) : 0;
@@ -84990,7 +84991,7 @@ function pc2CSS3(S){
             + '<span class="st">' + (seat ? (cap ? '<b style="color:#0F1B3D">' + bk + '</b><span style="color:#8A8F9C">/' + cap + '</span>' : '<b style="color:#0F1B3D">' + bk + '</b>') : '') + '</span>'
             /* §btBd · ช่องนี้เคยเป็นแถบความจุที่ถูกซ่อนไว้ (visibility:hidden) · ใช้ที่ว่างนี้แสดง AD/CHD/INF/FOC แทน */
             + '<span class="btc-pbd">' + (bdEl ? bdEl.outerHTML : '') + '</span>'
-            + '<span class="fr">' + (free ? '<span class="' + esc(free.className) + '">' + esc(freeTh(free.textContent)) + '</span>' : '') + '</span>';
+            + '<span class="fr">' + (cxl ? cxl.outerHTML : '') + (free ? '<span class="' + esc(free.className) + '">' + esc(freeTh(free.textContent)) + '</span>' : '') + '</span>';   /* §btLost4 · ป้าย CXL n ของแถว */
       v.innerHTML = h; v.classList.add('btc-pr');
     }
   }
