@@ -1022,7 +1022,23 @@
     adjustStock: function(id, wh, qty, date, note){ return O.queue(function(){ return O.post('/v1/fleet/stock-items/' + enc(id) + '/adjust', toStockAdjustBody(wh, qty, date, note)); }).then(function(r){ upsertInventory(r); return r; }); },
     mergeStock: function(keepId, fromIds){ return O.queue(function(){ return O.post('/v1/fleet/stock-items/' + enc(keepId) + '/merge', { from_ids: fromIds }); }).then(function(r){ return refetchStockAndMemos().then(function(){ return r; }); }); },
     createMemo: function(body){ return O.queue(function(){ return O.post('/v1/fleet/memos', toMemoBody(body, false)); }).then(function(r){ upsertMemo(r); return r; }); },
-    patchMemo: function(id, body){ return O.queue(function(){ return O.patch('/v1/fleet/memos/' + enc(id), toMemoBody(body, true)); }).then(function(r){ upsertMemo(r); return r; }); }
+    patchMemo: function(id, body){ return O.queue(function(){ return O.patch('/v1/fleet/memos/' + enc(id), toMemoBody(body, true)); }).then(function(r){ upsertMemo(r); return r; }); },
+    /* §flnWd · Fleet Work › Add work: the parts picked in the form ({invId, name, loc, qty}), withdrawn onto the job the server just
+       made, one POST …/jobs/{id}/parts each (the job page's flMaintAddPart, the server checks the stock). A refused line is skipped,
+       not fatal: the job exists, so the answer names what was not withdrawn ({ ok, bad: [name] }), as legacy's flnWdApply did. */
+    withdrawForJob: function(jobId, lines){
+      var ok = 0, bad = [];
+      return (lines || []).reduce(function(p, w){
+        return p.then(function(){
+          return O.queue(function(){ return O.post('/v1/fleet/jobs/' + enc(jobId) + '/parts', { item_id: w.invId, warehouse: normalizeWarehouse(w.loc), qty: +w.qty || 0 }); })
+            .then(function(res){ if(res && res.item) upsertInventory(res.item); ok++; }, function(e){ try{ console.warn('[ops] add-work part not withdrawn · ' + w.name + ' · ' + (e && e.message)); }catch(_){} bad.push(w.name); });
+        });
+      }, Promise.resolve()).then(function(){
+        if(!ok) return null;
+        O.wrote('fleet-job-part-add');
+        return O.fleetJobs && typeof O.fleetJobs.load === 'function' ? O.fleetJobs.load() : null;
+      }).then(function(){ redrawStock(); return { ok: ok, bad: bad }; });
+    }
   };
 
   O.fleetStock = api;
