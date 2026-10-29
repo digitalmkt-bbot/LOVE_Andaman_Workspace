@@ -30,14 +30,6 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.equal(ctx.cxwTabBadge(), '<span>3</span>', 'and the Cancellations tab count (§cxwTab)');
 });
 
-test('§rentDay: only the daily-rate fields of a rented boat are refused; the page is redrawn to put the box back', () => {
-  const { ctx, calls, alerts } = boot(true);
-  assert.equal(ctx.ctRentSet('b1', 'day.rt.r1', '5000'), false);
-  assert.equal(ctx.ctRentSet('b1', 'day.on', true), false);
-  assert.equal(ctx.ctRentSet('b1', 'amt', '90000'), 'orig');
-  assert.deepEqual(calls, [['ctRender'], ['ctRender'], ['ctRentSet', 'b1', 'amt', '90000']]);
-  assert.equal(alerts.length, 2);
-});
 
 test('Send to partner (27-ops-weather.js) and the boat-back box (ovn_boat_back, migration 580) save now: both pass through', () => {
   const { ctx, calls, alerts, box } = boot(true);
@@ -49,6 +41,7 @@ test('Send to partner (27-ops-weather.js) and the boat-back box (ovn_boat_back, 
   assert.deepEqual(calls, [['tcxDlgSet', 'out', 'partner'], ['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 1]]);
   assert.equal(alerts.length, 0);
   assert.doesNotMatch(SOURCE, /'ovnBoatBack'/);
+  assert.doesNotMatch(SOURCE, /'ctRentSet'/, '§rentDay saves now (44-ops-costing-pl.js, migration 584): ctRentSet is not wrapped');
 });
 
 test('§eqLink saves now (23-ops-fleet-assets.js): choosing, linking and taking out pass through to its adapter', () => {
@@ -66,6 +59,5 @@ test('outside ops mode (lk-inbox itself) everything is the legacy function', () 
   assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
   assert.equal(ctx.bookingV2SetTripField(0, 'ovnBoatBack', 1), 'orig');
   assert.equal(alerts.length, 0);
-  assert.equal(ctx.ctRentSet('b1', 'day.on', true), 'orig');
-  assert.equal(calls.length, BLOCKED.length + 4);
+  assert.equal(calls.length, BLOCKED.length + 3);
 });

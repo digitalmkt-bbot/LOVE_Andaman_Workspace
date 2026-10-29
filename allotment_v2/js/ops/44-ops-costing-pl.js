@@ -27,7 +27,7 @@
   var O = window.laOps; if(!O) return;
   var TTL = 60000;
   var S = { day:{}, mday:{}, an:{}, loading:{}, rent:{} };   // rent: month -> { at, data: trip-pl/month rent_idle } (w5-d)
-  var cost = { loaded:false, template:null, plans:[], rents:{}, rentSrv:{}, known:{}, idMap:{}, seq:0, loading:null };
+  var cost = { loaded:false, template:null, plans:[], rents:{}, rentSrv:{}, rentDaySrv:false, known:{}, idMap:{}, seq:0, loading:null };
 
   function enabled(){ return O.enabled(); }
   function text(v){ return v == null ? '' : String(v); }
@@ -451,23 +451,45 @@
     if(Array.isArray(p.tiers)) body.tiers = p.tiers;
     return body;
   }
+  /* §rentDay / §rentRoute · the daily charter deal: server `day` {on, amount, vat, from, to, owner_pays[], routes{}} <-> legacy
+     `R.day` {on, amt, vat, from, to, ex{}, rt{}}, keys in ctRentDayBlank's order so an untouched record compares equal.
+     No `day` from the server (a backend from before migration 584) reads as ctRentDayBlank. */
+  var DAY_EX_DEFAULT = ['fuel', 'cap', 'crew', 'dep'];
+  function dayFromServer(d){
+    var ex = {}, rt = {};
+    ((d && d.owner_pays) || DAY_EX_DEFAULT).forEach(function(id){ ex[id] = 1; });
+    Object.keys((d && d.routes) || {}).forEach(function(id){ var a = n(d.routes[id]); if(a > 0) rt[id] = a; });
+    return { on:d && d.on ? 1 : 0, amt:(d && n(d.amount)) || 0, vat:d && d.vat ? 1 : 0, from:(d && d.from) || '', to:(d && d.to) || '', ex:ex, rt:rt };
+  }
+  function dayToServer(D){
+    var ex = [], rt = {};
+    Object.keys(D.ex || {}).forEach(function(id){ if(D.ex[id]) ex.push(id); });
+    Object.keys(D.rt || {}).forEach(function(id){ var a = n(D.rt[id]); if(a > 0) rt[id] = a; });
+    return { on:!!D.on, amount:Math.max(0, n(D.amt)), vat:!!D.vat, from:D.from || null, to:D.to || null, owner_pays:ex, routes:rt };
+  }
+  /* a deal that says nothing: what a backend without `day` would be told about it */
+  function dayBlank(D){ return !D || JSON.stringify(dayFromServer(dayToServer(D))) === JSON.stringify(dayFromServer(null)); }
   function rentFromServer(r){
     var ex = {}; (r.owner_pays || []).forEach(function(id){ ex[id] = 1; });
     return { on:r.rented ? 1 : 0, mode:r.mode, amt:r.amount, seat:r.per_seat, days:r.days, off:r.days_off, trips:r.trips_per_day, vat:r.vat ? 1 : 0, note:r.note || '',
-             from:r.from || '', to:r.to || '', fuelMul:r.fuel_pct == null ? 100 : r.fuel_pct, ex:ex };
+             from:r.from || '', to:r.to || '', fuelMul:r.fuel_pct == null ? 100 : r.fuel_pct, ex:ex, day:dayFromServer(r.day) };
   }
   function rentToServer(r){
     var fm = n(r.fuelMul), ex = [];
     Object.keys(r.ex || {}).forEach(function(id){ if(r.ex[id]) ex.push(id); });
-    return { rented:!!r.on, mode:r.mode === 'seat' ? 'seat' : 'lump', amount:Math.max(0, n(r.amt)), per_seat:Math.max(0, n(r.seat)), days:whole(r.days || 30, 1),
+    var body = { rented:!!r.on, mode:r.mode === 'seat' ? 'seat' : 'lump', amount:Math.max(0, n(r.amt)), per_seat:Math.max(0, n(r.seat)), days:whole(r.days || 30, 1),
              days_off:whole(r.off, 0), trips_per_day:whole(r.trips || 1, 1), vat:!!r.vat, note:r.note ? text(r.note) : null, from:r.from || null, to:r.to || null,
              fuel_pct:(fm > 0 && fm !== 100) ? fm : null, owner_pays:ex };
+    /* sent once the server has shown it keeps the deal, or when there is a deal to keep (an older server then refuses it: server first) */
+    if(cost.rentDaySrv || !dayBlank(r.day)) body.day = dayToServer(r.day || dayFromServer(null));
+    return body;
   }
   function rentsFromServer(list){ var o = {}; (list || []).forEach(function(r){ o[r.boat_id] = rentFromServer(r); }); return o; }
 
   /* the rent numbers the server worked out (seats, total, run days, per day, per trip), kept with the record they belong to */
   function rentSrvSet(list){
     cost.rentSrv = {};
+    if((list || []).some(function(r){ return r && r.day; })) cost.rentDaySrv = true;   /* §rentDay · this backend stores the daily deal */
     (list || []).forEach(function(r){ cost.rentSrv[r.boat_id] = { sig:JSON.stringify(rentFromServer(r)), seats:r.seats, total:r.total, run_days:r.run_days, per_day:r.per_day, per_trip:r.per_trip, per_calendar_day:r.per_calendar_day }; });
   }
   function costApply(tpl, plans, rents){
