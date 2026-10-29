@@ -22098,6 +22098,9 @@ function renderPierCheckin(){
   var pills=ckRoutePills(date, _pckFam, _pckRoute, 'pckSetFam', 'pckSetRoute', 'pier');
   // §perProgramme · ถึงท่า / เคลียร์ / ขึ้นเรือ อยู่ใต้การ์ดของแต่ละโปรแกรมและแต่ละลำแล้ว
   // (แต่ละโปรแกรมออกคนละเวลา ยอดรวมทั้งวันตอบไม่ได้ว่าลำที่กำลังจะออกพร้อมหรือยัง)
+  /* §opsCxlTrip (2026-10-29) · the grey chip is the server's cancelled_trip {bookings, pax} (ops/83-ops-pier-day.js) · the count above only when it has not answered */
+  var _pckWxS=(typeof window.laOpsPierCxlTrip==='function')?window.laOpsPierCxlTrip(date,_pckPier):null;
+  if(_pckWxS){ _pckWxN=_pckWxS.bookings; _pckWxPax=_pckWxS.pax; }
   var kpi='<span style="background:#F1EFE8;color:#5F5E5A">ทั้งท่า '+all.length+' booking · รอรับ '+tExpect+' pax</span>'
         +(_pckWxN?('<span style="background:#F1EFE8;color:#6b6a63;cursor:pointer" onclick="nav(document.querySelector(\'[data-view=booking]\'));if(typeof bookingV2SwitchTab===\'function\')bookingV2SwitchTab(\'cancel\')" title="ทริปที่ตี CXL · ไม่ต้องรอรับ · ไม่นับในยอด · กดไปแท็บ Cancellations">&#10006; ทริปยกเลิก '+_pckWxN+' booking · '+_pckWxPax+' pax</span>'):'')
         +(ovnAll.length?('<span style="background:#EDE7FB;color:#5B289A" title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · ไม่ต้องเช็คอินที่ท่า และไม่มีเงินต้องเก็บ">&#8617; รับกลับจากเกาะ '+pckAgg(ovnAll).pax+' pax</span>'):'')

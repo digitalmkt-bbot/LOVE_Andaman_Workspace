@@ -64,5 +64,26 @@
   /* any write may move a count · the figures stay until the new ones are in */
   O.onWrite(function(){ Object.keys(cache).forEach(function(k){ if(cache[k]) cache[k].stale = true; }); });
 
+  /* §opsCxlTrip (2026-10-29) · a trip closed from the Cancellations tab (lk-inbox §btCxlTrip): the server leaves its bookings out of every
+     count above and says so per route (routes[].cancelled, routes[].cancelled_trip) and for the Notice line (cancelled_trip).
+     An answer from a server without these fields gives null, so the page keeps legacy's own test (bookingV2IsWeatherClosed). */
+  function knowsCxl(srv){ return !!(srv && Array.isArray(srv.routes) && srv.cancelled_trip && typeof srv.cancelled_trip === 'object'); }
+  /* null = no answer · false = the trip runs · { reason, note, bookings, pax, bd, pending } = cancelled */
+  window.laOpsByTripCxlRoute = function(srv, routeId){
+    if(!knowsCxl(srv)) return null;
+    var r = srv.routes.filter(function(x){ return x && x.route_id === routeId; })[0];
+    if(!r || !r.cancelled) return false;
+    var c = r.cancelled_trip || {}, p = c.pax || {};
+    return { reason: r.cancelled.reason || 'weather', note: r.cancelled.note || '', bookings: +c.bookings || 0, pending: +c.pending || 0,
+             pax: +p.total || 0, bd: { ad: +p.ad || 0, chd: +p.chd || 0, inf: +p.inf || 0, foc: +p.foc || 0 } };
+  };
+  /* the Notice line: { bookings, pax, pending, by_route[{route_id, pax}] }, or null */
+  window.laOpsByTripCxlDay = function(srv){
+    if(!knowsCxl(srv)) return null;
+    var c = srv.cancelled_trip;
+    return { bookings: +c.bookings || 0, pax: +c.pax || 0, pending: +c.pending || 0,
+             by_route: (Array.isArray(c.by_route) ? c.by_route : []).map(function(x){ return { route_id: x.route_id, pax: +x.pax || 0 }; }) };
+  };
+
   window.laOpsByTrip = { _cache: cache };
 })();

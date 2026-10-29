@@ -79,8 +79,10 @@ function bookingV2RenderTab2(){
      ทริปที่ตี CXL จากแท็บ Cancellations อยู่ใน SB_WEATHER_CLOSURES · ใบจองยังสถานะปกติจนกว่าจะเคลียร์ (คืนเงิน/ย้ายวัน/Partner)
      การ์ด Programmes เดิมดูแค่ bookingV2IsRouteOpenOn จึงนับคนของรอบที่ยกเลิกเข้ายอดโปรแกรม/ยอดวัน และขึ้น "ไม่จำกัด" เพราะไม่มีเรือ
      ตอนนี้: รอบที่ยกเลิก = ไม่นับคน · ไม่นับ running · แถวขึ้น "ยกเลิก · เหตุผล" · Notice แยกเป็นบรรทัด "ทริปยกเลิก" ไม่ปนกับ ยังไม่จัดเรือ */
-  const _btWx = rid => !!rid && (typeof bookingV2IsWeatherClosed==='function') && bookingV2IsWeatherClosed(rid,date);
-  const _btWxLbl = rid => { const k=(typeof tcxReason==='function')?tcxReason(rid,date):'weather'; const R=(typeof TCX_R!=='undefined'&&TCX_R[k])||{}; return laT('ยกเลิก')+(R.th?(' · '+R.th):''); };
+  /* §opsCxlTrip (2026-10-29) · the server says which trip is cancelled and why (routes[].cancelled, routes[].cancelled_trip) · legacy's test only when it has not answered */
+  const _btWxSrv = rid => (typeof window.laOpsByTripCxlRoute==='function') ? window.laOpsByTripCxlRoute(_srv, rid) : null;   /* null = no answer · false = runs · {reason, pax, ...} = cancelled */
+  const _btWx = rid => { if(!rid) return false; const s=_btWxSrv(rid); if(s!==null) return !!s; return (typeof bookingV2IsWeatherClosed==='function') && bookingV2IsWeatherClosed(rid,date); };
+  const _btWxLbl = rid => { const s=_btWxSrv(rid); const k=(s&&s.reason)||((typeof tcxReason==='function')?tcxReason(rid,date):'weather'); const R=(typeof TCX_R!=='undefined'&&TCX_R[k])||{}; return laT('ยกเลิก')+(R.th?(' · '+R.th):''); };
   const _btSkip = r => !!(r.cxl || _btWx(r.routeId));
   /* §bkLockMf (2026-10-02) · เรือที่กันไว้ทั้งลำของวันนี้ แยกตามเส้นทาง
      ที่มา · ผู้ใช้แจ้งว่าล็อกเรือ "ในหน้า Manifest ก็ไม่โชว์" · ลองทำตามแล้วเจอว่า
@@ -356,12 +358,17 @@ function bookingV2RenderTab2(){
       _unRcN=_w.reconfirm.bookings||0; _unRcPax=_w.reconfirm.pax||0; Object.keys(_unRcR).forEach(k=>delete _unRcR[k]);
       (_w.reconfirm.by_route||[]).forEach(x=>{ const l=_unRn(x.route_id); _unRcR[l]=(_unRcR[l]||0)+x.pax; });
     }
+    /* §opsCxlTrip · the Notice line "ทริปยกเลิก" is the server's cancelled_trip {bookings, pax, pending, by_route} */
+    const _cx=(typeof window.laOpsByTripCxlDay==='function') ? window.laOpsByTripCxlDay(_srv) : null;
+    if(_cx){ _wxN=_cx.bookings; _wxPax=_cx.pax; _wxPend=_cx.pending; Object.keys(_wxR).forEach(k=>delete _wxR[k]);
+      _cx.by_route.forEach(x=>{ const l=_unRn(x.route_id); _wxR[l]=(_wxR[l]||0)+x.pax; }); }
   }
   /* §opsByTripExtras · the return-van chip: the van board's routes[].return_unarranged (this page's marine / land routes only) */
   const _vboard = (typeof window.laOpsVanBoardFor==='function') ? window.laOpsVanBoardFor(date) : null;
   if(_vboard && Array.isArray(_vboard.routes)){
     _unRetN=0; _unRetPax=0; Object.keys(_unRetR).forEach(k=>delete _unRetR[k]);
     _vboard.routes.forEach(r=>{ if((typeof laIsLandRoute==='function' && laIsLandRoute(r.route_id))!==_bkV2CityTourOnly) return;
+      if(_btWx(r.route_id)) return;   /* §btCxlTrip · a cancelled trip needs no return van */
       (r.return_unarranged||[]).forEach(x=>{ _unRetN++; _unRetPax+=(+x.pax||0); const l=_unRn(r.route_id); _unRetR[l]=(_unRetR[l]||0)+(+x.pax||0); }); });
   }
   /* §btUnit · ตัวเลขในแถบนี้เป็น "pax" ส่วนเลขบนการ์ดโหมดเป็น "booking"
@@ -555,7 +562,7 @@ function bookingV2RenderTab2(){
       const open=(typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date);
       const ron=(routeF===rid);
       const nm=esc(_btSub(rid)), dep=_btDep(rid), pr=_btPier(rid);
-      if(_btWx(rid)){ const _wp=_btBdOf(rowsPier.filter(r=>r.routeId===rid && !r.cxl)); const _wn=_wp.ad+_wp.chd+_wp.inf+_wp.foc;
+      if(_btWx(rid)){ const _ws=_btWxSrv(rid); const _wn=_ws ? _ws.pax : rowsPier.filter(r=>r.routeId===rid && !r.cxl).reduce((s,r)=>s+P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'),0);   /* §opsCxlTrip · the server's cancelled_trip.pax · (lk's _btBdOf skips these rows, so it showed 0) */
         return `<div class="bt-pgv off" onclick="bookingV2SwitchTab('cancel')" title="${laT('ทริปนี้ถูกยกเลิก · ไม่นับคนเข้ายอด · เปิดแท็บ Cancellations')}"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span><span class="sp">${_wn?`<span class="bt-seat" style="color:#A32D2D"><b>${_wn}</b> pax</span>`:''}<span class="bt-free none" style="background:#FBE4E0;color:#A32D2D">${esc(_btWxLbl(rid))}</span></span></div>`; }
       if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · not running</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
