@@ -7,7 +7,7 @@
      · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
      · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
      · §ovnBoatBack charter OVN "boat returns to the pier the same day" (trips have no field for it)
-     · §flnWd      Fleet Work › Add work: withdraw parts from stock while creating the job
+   (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
    From the 10-29 sync:
      · §eqLink     Fleet › Equipment: link a gearbox / propeller / engine by position (saves through flSave, a no-op here;
                    swap and remove still save: ops/23-ops-fleet-assets.js)
@@ -49,9 +49,6 @@
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });
-
-  /* §flnWd · the job itself is still created; parts are withdrawn from the job page afterwards */
-  block(['flnWdAdd'], 'Withdrawing parts while adding work (create the job, then withdraw from its page)');
 
   /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
   block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');
