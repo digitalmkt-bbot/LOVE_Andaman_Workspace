@@ -15,7 +15,8 @@
    PUT    /v1/pier-office/{pier}/roster/{date}/{staff}              a hand-set cell, a plan, the night code
    GET    /v1/pier-office/{pier}/pay?cycle=                         the trip allowance (paPayOf answers from it)
    PUT    /v1/pier-office/staff/{id}/pay-rate · GET|PUT /v1/pier-office/pay-rules
-   GET    /v1/pier-office/{pier}/stock                              balances (poBal answers from them)
+   GET    /v1/pier-office/{pier}/stock                              balances (poBal answers from them), transfers in transit (poXferPendIn/Out)
+   POST   /v1/pier-office/{pier}/transfers | /transfers/receive | /transfers/{id}/cancel   §poXfer: send, receive, cancel (server first)
    POST   /v1/pier-office/{pier}/stock/{receive|count|adjust|laundry-out|laundry-in|mark-fixed|write-off}
    GET    /v1/pier-office/{pier}/moves?from=&limit=                  the stock ledger with each fine's status (PIER_MOVES, poLedgerOpen, finePay)
    GET    /v1/pier-office/{pier}/days/{date}/boats/{boat}/outstanding   per item: carry, issued, settled, outstanding (poBoatSum, poBoatCarry, the close dialog)
@@ -509,12 +510,13 @@
   };
 
   /* ════ stock · balances, commands, boat close ═════════════════════════ */
-  var stock = {}, stages = {}, towelsRaw = {};
+  var stock = {}, stages = {}, towelsRaw = {}, xfers = {};
   function balOf(r){ return { ready: r.ready, onboat: r.on_boat, onship: r.on_ship, dirty: r.dirty, laundry: r.laundry, repair: r.repair, gone: r.gone, inhand: r.inhand }; }
   function itemOf(id){ return arr('PIER_ITEMS').filter(function(i){ return i.id === id; })[0] || null; }
   function loadStock(pier){
     return O.get('/v1/pier-office/' + enc(pier) + '/stock').then(function(j){
       var m = {}; (j.items || []).forEach(function(r){ m[r.id] = balOf(r); }); stock[pier] = m;
+      if(j.transfers) xfers[pier] = { incoming: j.transfers.incoming || [], outgoing: j.transfers.outgoing || [] };   // §poXfer: in transit to / from the pier
       var tw = { today: j.today || '', towels: j.towels || null, queue: {} };   // w5-f: the towel batches (legacy poTowelQ), per pier and per item
       (j.items || []).forEach(function(r){ if(r.queue) tw.queue[r.id] = r.queue; });
       towelsRaw[pier] = tw;
@@ -628,8 +630,11 @@
   function fromServerMove(m){
     var o = { id: m.id, pier: m.pier, date: m.date, itemId: m.item_id, boatId: m.boat_id || '', type: m.type, qty: m.qty,
               note: m.note || '', at: m.recorded_at, by: m.recorded_by || '', srv: true, srvNote: m.note || '' };
-    if(m.type === 'receive' && m.source) o.from = m.source;
+    if(m.type === 'receive' && m.source) o.from = m.source + (m.transfer_id ? '|' + m.transfer_id : '');
     else if(m.from_kind) o.from = m.from_kind;
+    // §poXfer: legacy's ledger reads the other pier from `from` (to|<pier>), the receipt and cancel from the transfer (xfer|<id>)
+    else if(m.type === 'xfer_out') o.from = 'to|' + ((m.transfer && m.transfer.to_pier) || '');
+    else if(m.type === 'xfer_back' || m.type === 'xfer_short') o.from = 'xfer|' + (m.transfer_id || '');
     if(m.fine_baht > 0){ o.fine = m.fine_baht; o.finePaid = m.fine_status === 'paid' || m.fine_status === 'waived'; }
     return o;
   }
@@ -965,6 +970,104 @@
     return sheetSave(bid, false).then(function(ok){ if(ok){ window.renderPierOffice(); window.poSignSheet(bid); } });
   };
 
+  /* ════ transfers between piers (§poXfer) · server first ═════════════════
+     poXferPendIn / poXferPendOut answer from the stock read's `transfers` (in transit to / from the pier, worked
+     out by the server from both piers' moves); legacy's own poXferList only sees the moves of the pier on screen.
+     poXferOpen and poXferRecvOpen stay legacy's dialogs (they read poBal and poXferPendIn, both the server's).
+     The three saves send the dialog to its command before anything changes: the server's moves, balances and
+     transfers come back and are put in, then the dialog closes. A refusal is the server's message in the dialog
+     and a red toast; nothing local changed, so there is nothing to undo. */
+  var XL = {};
+  ['poXferPendIn', 'poXferPendOut', 'poXferLbl', 'poXferSave', 'poXferRecvSave', 'poXferCancel'].forEach(function(n){ XL[n] = window[n]; });
+  // the server's transfer as legacy's poXferList row ({ m, id, src, dst, sent, got, short, back, left })
+  function xferRow(v){
+    return { m: { itemId: v.item_id, date: v.date, by: v.created_by || '', note: v.note || '' }, id: v.id, src: v.from_pier, dst: v.to_pier,
+             sent: v.sent, got: v.received, short: v.short, back: v.cancelled, left: v.left, srvLabel: v.label };
+  }
+  function xferList(pier, side){
+    var x = xfers[pier];
+    if(!x) return [];   // not read yet: the render's stock read brings it (legacy's list would miss the other pier's receipts)
+    return (x[side] || []).filter(function(v){ return v.left > 0; }).map(xferRow);
+  }
+  // a command's answer: its transfers replace the cached ones (a closed one leaves the in-transit lists)
+  function putXfers(views){
+    (views || []).forEach(function(v){
+      [v.from_pier, v.to_pier].forEach(function(p){
+        var side = p === v.from_pier ? 'outgoing' : 'incoming', x = xfers[p];
+        if(!x) return;   // a pier not read yet gets its whole list when it is
+        x[side] = x[side].filter(function(o){ return o.id !== v.id; });
+        if(v.left > 0) x[side].unshift(v);
+      });
+    });
+  }
+  function putServer(pier, out){
+    var views = out.transfers || (out.transfer ? [out.transfer] : []), sides = {};
+    views.forEach(function(v){ sides[v.id] = { from_pier: v.from_pier, to_pier: v.to_pier }; });
+    (out.moves || []).forEach(function(m){
+      moves().push(fromServerMove(m.transfer || !m.transfer_id ? m : Object.assign({}, m, { transfer: sides[m.transfer_id] || null })));
+    });
+    putBalances(pier, out.balances);
+    putXfers(views);
+    if((out.items_made || []).length || (out.items_switched_on || []).length) P.adopt('items', (out.items_made || []).concat(out.items_switched_on || []));
+  }
+  function xferMsg(id, t){ var el = document.getElementById(id); if(el) el.textContent = t; }
+  var xferBusy = false;
+  function xferSend(url, body, errId, title){
+    if(xferBusy) return Promise.resolve(false);
+    xferBusy = true; xferMsg(errId, '');
+    var pier = window._poPier;
+    return O.queue(function(){ return O.call('POST', url, Object.assign(body, who(pier))); }).then(function(out){
+      xferBusy = false;
+      putServer(pier, out || {});
+      O.wrote('pier');
+      if(errId) window.poModalClose();
+      window.renderPierOffice();
+      return true;
+    }, function(e){
+      xferBusy = false;
+      xferMsg(errId, (e && e.message) || title);
+      O.fail(title, e);
+      return false;
+    });
+  }
+  window.poXferPendIn = function(pier){ return ready() ? xferList(pier, 'incoming') : XL.poXferPendIn.apply(this, arguments); };
+  window.poXferPendOut = function(pier){ return ready() ? xferList(pier, 'outgoing') : XL.poXferPendOut.apply(this, arguments); };
+  // an incoming transfer's item is the other pier's: the server names it
+  window.poXferLbl = function(o){ return o && o.srvLabel ? o.srvLabel : XL.poXferLbl.apply(this, arguments); };
+  window.poXferSave = function(itemId){
+    if(!ready()) return XL.poXferSave.apply(this, arguments);
+    if(typeof window.poGuard === 'function' && !window.poGuard()) return undefined;
+    var items = typeof window.poRecvItems === 'function' ? window.poRecvItems(itemId) : [], lines = [];
+    items.forEach(function(it){
+      var raw = String(field('porx_' + it.id) || '').trim();
+      if(raw !== '') lines.push({ item_id: it.id, qty: /^\d+$/.test(raw) ? +raw : raw });   // the server judges the number
+    });
+    var body = { date: field('porxd') || window._poDate, to_pier: field('porxto') || '', lines: lines };
+    var note = text(field('porxn')); if(note) body.note = note;
+    return xferSend('/v1/pier-office/' + enc(window._poPier) + '/transfers', body, 'porxerr', 'Transfer not sent');
+  };
+  window.poXferRecvSave = function(){
+    if(!ready()) return XL.poXferRecvSave.apply(this, arguments);
+    if(typeof window.poGuard === 'function' && !window.poGuard()) return undefined;
+    var lines = [];
+    window.poXferPendIn(window._poPier).forEach(function(o){
+      var raw = String(field('porr_' + o.id) || '').trim(); if(raw === '') return;   // left empty: not received yet
+      lines.push({ transfer_id: o.id, qty: /^\d+$/.test(raw) ? +raw : raw, close_short: field('porrs_' + o.id) === 'short' });
+    });
+    var body = { date: field('porrd') || window._poDate, lines: lines };
+    var note = text(field('porrn')); if(note) body.note = note;
+    return xferSend('/v1/pier-office/' + enc(window._poPier) + '/transfers/receive', body, 'porrerr', 'Transfer not received');
+  };
+  window.poXferCancel = function(id){
+    if(!ready()) return XL.poXferCancel.apply(this, arguments);
+    if(typeof window.poGuard === 'function' && !window.poGuard()) return undefined;
+    var o = xferList(window._poPier, 'outgoing').filter(function(x){ return x.id === id; })[0];
+    if(!o) return undefined;
+    var lbl = window.poXferLbl(o);
+    if(!confirm('Cancel this transfer?\n' + o.left + ' x ' + lbl + ' go back to ready stock here.\n(Anything the other pier already received stays there.)')) return undefined;
+    return xferSend('/v1/pier-office/' + enc(window._poPier) + '/transfers/' + enc(id) + '/cancel', { date: window._poDate }, null, 'Transfer not cancelled');
+  };
+
   /* ════ render wrappers · fetch once, draw again ═══════════════════════ */
   window.renderPierOffice = function(){
     var r = L.renderPierOffice.apply(this, arguments);
@@ -1164,5 +1267,5 @@
   };
 
   // test hooks
-  P._office = { loadMoves: loadMoves, cycleKey: cycleKey, sheetBody: sheetBody, setView: setView, state: function(){ return { stock: stock, stages: stages, cells: cells, pay: pay, dayBase: dayBase }; } };
+  P._office = { loadMoves: loadMoves, cycleKey: cycleKey, sheetBody: sheetBody, setView: setView, state: function(){ return { stock: stock, stages: stages, cells: cells, pay: pay, dayBase: dayBase, xfers: xfers }; } };
 })();

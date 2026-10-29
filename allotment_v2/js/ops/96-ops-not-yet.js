@@ -5,7 +5,7 @@
    message instead (or, for a banner that only leads to one, not drawn). Remove a block when its
    adapter or endpoint lands.
      · §cxWhy      cancellation reason for a booking already cancelled (banner, detail card, dialog)
-     · §poXfer     Pier Office: transfer equipment to another pier, receive it, cancel it
+   (§poXfer, Pier Office equipment transfers between piers, save since 2026-10-29: pier transfers, migration 581)
    (§ovnBoatBack, charter OVN "boat returns to the pier the same day", saves since 2026-10-28: ovn_boat_back, migration 580)
    (§flnWd, parts withdrawn while adding work, saves since 2026-10-28: ops/24-ops-fleet-jobs.js → O.fleetStock.withdrawForJob)
    From the 10-29 sync:
@@ -37,9 +37,6 @@
   wrap('cxwDetailCard', function(){ return ''; });
   wrap('cxwTabBadge', function(){ return ''; });   // §cxwTab (10-29 sync): the Cancellations tab's count leads to the same dialog
   block(['cxwOpen', 'cxwSave'], 'Entering a reason for an already cancelled booking');
-
-  /* §poXfer */
-  block(['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel'], 'Transferring equipment to another pier');
 
   /* §eqLink · the picker still opens and shows what it would link; choosing and linking are refused. Swap / remove are the server's. */
   block(['flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'], 'Linking engines, gearboxes and propellers by position (use Swap / Remove for now)');

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['cxwOpen', 'cxwSave', 'poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel',
+const BLOCKED = ['cxwOpen', 'cxwSave',
   'flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
 
 function boot(enabled) {
