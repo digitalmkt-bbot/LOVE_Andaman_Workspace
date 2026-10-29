@@ -55801,7 +55801,8 @@ function bkV2RenderTab2(){
       const L=ckLostByType(r.bk,date); const n=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
       return Math.min(n, Math.max(0,+(L&&L.total)||0)); }catch(_){ return 0; } };
   const _dLost = rows.reduce((s,r)=>s+_btLostOf(r),0);
-  const _btLostHtml = (pax,lost,cls) => lost>0 ? `<span class="bt-lost${cls?' '+cls:''}" title="${laT('จอง')} ${pax} · ${laT('ไม่มา/ยกเลิกหน้างาน')} ${lost} · ${laT('เดินทางจริง')} ${pax-lost} (${laT('จากหน้าเช็คอิน')})">${laT('ไป')} <b>${pax-lost}</b> · ${laT('ไม่มา')} <s>${lost}</s></span>` : '';
+  /* §btLost2 · owner "มันล้นมาก" · เหลือแค่ −M ตัวเล็กติดยอด · ตัวเต็มอยู่ใน tooltip */
+  const _btLostHtml = (pax,lost,cls) => lost>0 ? `<span class="bt-lost${cls?' '+cls:''}" title="${laT('จอง')} ${pax} · ${laT('ไม่มา/ยกเลิกหน้างาน')} ${lost} · ${laT('เดินทางจริง')} ${pax-lost} (${laT('จากหน้าเช็คอิน')})">&minus;${lost}</span>` : '';
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
@@ -58622,9 +58623,8 @@ function bkV2RenderTab2(){
     .bt-pgf .dot{width:9px;height:9px;border-radius:50%;background:var(--e);flex:none}
     .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
-    .bt-lost{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 8px;border-radius:999px;background:#FBEBD3;color:#7A4300;font-size:10.5px;font-weight:700;white-space:nowrap}
-    .bt-lost b{font-family:'DM Mono',monospace;font-weight:700}.bt-lost s{font-family:'DM Mono',monospace;text-decoration:none;color:#A32D2D;font-weight:700}
-    .bt-lost.d{margin-left:8px;vertical-align:middle}
+    .bt-lost{display:inline-block;margin-left:3px;padding:0 5px;border-radius:999px;background:#FBEBD3;color:#A32D2D;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;line-height:15px;white-space:nowrap;vertical-align:1px;cursor:help}
+    .bt-lost.d{margin-left:5px}
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
     /* §famSum · ผลรวมของทุก variant บนแถวหัวโปรแกรม */
     .bt-pgf .bt-fsum{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:#5B6275;white-space:nowrap}
