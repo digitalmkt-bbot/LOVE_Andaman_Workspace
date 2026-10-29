@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/96-ops-not-yet.js', 'utf8');
-const BLOCKED = ['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel', 'flnWdAdd',
+const BLOCKED = ['poXferOpen', 'poXferSave', 'poXferRecvOpen', 'poXferRecvSave', 'poXferCancel',
   'flEqChoose', 'flEqLinkPair', 'flEqQuickLink', 'flEqTakeOut'];
 
 function boot(enabled) {
@@ -24,6 +24,7 @@ test('in ops mode each blocked feature says it is not available and never reache
   assert.equal(alerts.length, BLOCKED.length);
   assert.ok(alerts.every((m) => /is not available yet: operation-backend does not save it/.test(m)));
   assert.equal(ctx.cxwBanner(), '<div class="cxw-bar">', 'the cancel-reason banner is drawn again: it saves (41-ops-cancel-reason.js)');
+  assert.equal(ctx.cxwDetailCard({ id: 'b1' }), '<div class="cxw-bar">', 'and the booking-detail card');
   assert.equal(ctx.cxwTabBadge(), '<span>3</span>', 'and the Cancellations tab count (§cxwTab)');
 });
 

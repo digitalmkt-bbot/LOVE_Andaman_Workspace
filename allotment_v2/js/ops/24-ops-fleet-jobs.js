@@ -1187,6 +1187,17 @@
       return p.then(function(){ return O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(m.id), body); }).then(upsertJob); });
     }, Promise.resolve());
   }
+  /* §flnWd · the parts picked in the form go onto the new job (O.fleetStock.withdrawForJob); the toast says what was withdrawn,
+     in legacy's words (flnSave / flnSaveJob) */
+  function flnWithdraw(F, jobId){
+    var lines = F.wd || [];
+    if(!lines.length || !O.fleetStock || typeof O.fleetStock.withdrawForJob !== 'function') return Promise.resolve('');
+    var tp = typeof window.flwTp === 'function' ? window.flwTp : function(s){ var a = [].slice.call(arguments, 1); return s.replace(/\{(\d+)\}/g, function(_, i){ return a[i]; }); };
+    return O.fleetStock.withdrawForJob(jobId, lines).then(function(W){
+      if(W.bad.length) return tp(' Not withdrawn (not enough stock): {0}.', W.bad.join(', '));
+      return tp(' Withdrew {0} from stock.', tp(W.ok === 1 ? '{0} item' : '{0} items', W.ok));
+    });
+  }
   function flnFinish(F, inc, jobs, note){
     var boat = F.boat;
     var key = jobs.length ? ('mj:' + jobs[0].id) : (F.next === 'quick' ? '' : (inc ? 'inc:' + inc.id : ''));
@@ -1251,6 +1262,8 @@
         return flnPatchOwnerDue(F, jobs).then(function(){
           return F.start ? window.flMaintStart(jobs[0].id) : null;
         }).then(function(){
+          return flnWithdraw(F, jobs[0].id).then(function(w){ note += w; });
+        }).then(function(){
           if(F.parts){
             if(window._flStartGear) note = ' Finish the start dialog first, then request parts from the job.';
             else window.flMaintCreateMemo(jobs[0].id, true);
@@ -1303,6 +1316,11 @@
       jobs = [job];
       return flnPatchOwnerDue(F, jobs).then(function(){
         return F.start ? window.flMaintStart(job.id) : null;
+      }).then(function(){
+        // stock moves only onto the job the server answered for this save; the "first job not seen before" fallback above
+        // may be another job (e.g. when the job list was reloaded meanwhile)
+        if(!(first && first.id === job.id)){ if((F.wd || []).length) note += ' Parts were not withdrawn: add them from the job page.'; return null; }
+        return flnWithdraw(F, job.id).then(function(w){ note += w; });
       }).then(function(){
         if(F.parts){ if(window._flStartGear) note = ' Finish the start dialog first, then request parts from the job.'; else window.flMaintCreateMemo(job.id, true); }
         var boat = F.boat;
