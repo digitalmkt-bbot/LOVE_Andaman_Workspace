@@ -32861,7 +32861,15 @@ function ctBoatFuelMul(boatId){
   if(!(m > 0)) return 1;
   return m / 100;
 }
-function ctRentSet(boatId, k, v){
+var _ctRentT = 0;
+/* §rentTyp (2026-10-29) · owner "กดลบเลข 1 แล้วหาย · พิมพ์ตัวเลขแล้วดีเลย์"
+   defer=1 มาจาก oninput ของช่องตัวเลข/ข้อความ → เซฟทันที แต่ ctRender() หลังหยุดพิมพ์ 600ms
+   แถวเส้นทาง: ค่าว่าง/0 = "ใช้ราคาตั้งต้น" ไม่ลบแถว · ลบแถวผ่าน ctRentRtDel เท่านั้น */
+function ctRentRtDel(boatId, rid){
+  var all = ctRentAll(), R = all[boatId]; if(!R || !R.day || !R.day.rt) return;
+  delete R.day.rt[rid]; all[boatId] = R; ctRentAllSave(all); ctRender();
+}
+function ctRentSet(boatId, k, v, defer){
   if(!boatId) return;
   var all = ctRentAll(), R = all[boatId];
   /* §rentZero · ระเบียนใหม่ที่เกิดจากการแก้ช่องอื่น (เช่น % น้ำมันของเรือบริษัท) ต้องไม่กลายเป็นเรือเช่าเอง
@@ -32871,7 +32879,7 @@ function ctRentSet(boatId, k, v){
     R.day = R.day || ctRentDayBlank(); var dk = k.slice(4);
     if(dk.indexOf('ex.') === 0){ R.day.ex = R.day.ex || {}; R.day.ex[dk.slice(3)] = v ? 1 : 0; }
     else if(dk.indexOf('rt.') === 0){ R.day.rt = R.day.rt || {}; var _rid = dk.slice(3), _a = (v === '') ? 0 : (+v || 0);   /* §rentRoute */
-      if(_a > 0) R.day.rt[_rid] = _a; else delete R.day.rt[_rid]; }
+      R.day.rt[_rid] = _a; }   /* §rentTyp · 0 = ตั้งต้น · แถวอยู่ต่อ */
     else if(dk === 'from' || dk === 'to') R.day[dk] = v;
     else if(dk === 'on' || dk === 'vat') R.day[dk] = v ? 1 : 0;
     else R.day[dk] = (v === '') ? 0 : (+v || 0);
@@ -32880,7 +32888,9 @@ function ctRentSet(boatId, k, v){
   else if(k === 'mode' || k === 'note' || k === 'from' || k === 'to') R[k] = v;   /* §rentSpan */
   else if(k === 'on' || k === 'vat') R[k] = v ? 1 : 0;
   else R[k] = (v === '') ? 0 : (+v || 0);
-  all[boatId] = R; ctRentAllSave(all); ctRender();
+  all[boatId] = R; ctRentAllSave(all);
+  if(defer){ clearTimeout(_ctRentT); _ctRentT = setTimeout(function(){ _ctRentT = 0; ctRender(); }, 600); }   /* §rentTyp */
+  else { clearTimeout(_ctRentT); _ctRentT = 0; ctRender(); }
 }
 /* ══ §rentSpan · ช่วงสัญญา ══════════════════════════════════════════════════
    สัญญาเช่ามีวันเริ่มวันจบ · เรือลำเดิมก่อนเริ่มสัญญาหรือหลังจบสัญญา
@@ -36307,6 +36317,7 @@ function ctRentTabHtml(){
     + '#view-costing .ct-rtt{width:100%;border-collapse:collapse;font-size:12px}'
     + '#view-costing .ct-rtt th{font-weight:600;color:#64748B;text-align:left;padding:4px 8px;border-bottom:1px solid #E3E7EE}'
     + '#view-costing .ct-rtt td{padding:5px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle}'
+    + '#view-costing .ct-rtt .ct-x{margin-left:6px;width:22px;height:22px;border-radius:6px;border:1px solid #E3E7EE;background:#fff;color:#A32D2D;font-size:14px;line-height:1;cursor:pointer;vertical-align:middle}'   /* §rentTyp */
     + '@media (max-width:1100px){#view-costing .ct-rwrap{grid-template-columns:1fr}#view-costing .ct-rbl{position:static}}'
     + '</style>'
     + '<div class="ct-sheet" style="padding:0"><div class="ct-hint" style="padding:12px 14px 0">'
@@ -36318,7 +36329,7 @@ function ctRentCard(b, ru){
   var bid = b.id, rr = ctRentRaw(bid) || ctRentBlank(), on = !!(ctRentRaw(bid) && rr.on);
   var RN = ctRentOf(bid), DY = rr.day || ctRentDayBlank();
   var S = function(k, v, w, ph){ return '<input class="ct-in" data-fk="rt.' + bid + '.' + k + '" value="' + ((v == null || v === 0) && ph != null ? '' : ctE(v))
-    + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)" style="width:' + (w || 84) + 'px">'; };
+    + '" placeholder="' + (ph == null ? 0 : ph) + '" oninput="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value,1)" onblur="if(_ctRentT){clearTimeout(_ctRentT);_ctRentT=0;ctRender();}" style="width:' + (w || 84) + 'px">'; };   /* §rentTyp · defer */
   var D = function(k, v){ return '<input type="date" class="ct-in" style="width:150px" data-fk="rt.' + bid + '.' + k + '" value="' + ctE(v || '') + '" onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.value)">'; };
   var C = function(k, v, lbl, ttl){ return '<label class="ct-rchk"' + (ttl ? (' title="' + ctE(ttl) + '"') : '') + '><input type="checkbox"' + (v ? ' checked' : '') + ' onchange="ctRentSet(\'' + bid + '\',\'' + k + '\',this.checked?1:0)"> ' + lbl + '</label>'; };
   var status = !on ? '<span class="ct-u">ยังไม่ติ๊กเป็นเรือเช่า · P&amp;L คิดแบบเรือบริษัท (กัปตัน เด็กเรือ ค่าเสื่อม น้ำมันตามสูตร)</span>'
@@ -36358,12 +36369,12 @@ function ctRentCard(b, ru){
             var ro = (typeof getRoute === 'function') ? getRoute(rid) : null, x = ru && ru.rt && ru.rt[rid];
             var amt = +RT[rid] || 0, eff = ctRentDayAmt(DY, rid);
             return '<tr><td><b>' + ctE((ro && ro.name) || rid) + '</b>' + (ro && ro.pier ? ('<span class="ct-u"> · ' + ctE(ro.pier) + '</span>') : '') + '</td>'
-              + '<td>' + S('day.rt.' + rid, amt, 100, '= ตั้งต้น') + '</td>'
+              + '<td style="white-space:nowrap">' + S('day.rt.' + rid, amt, 100, '= ตั้งต้น') + (x ? '' : (' <button type="button" class="ct-x" onclick="ctRentRtDel(\'' + bid + '\',\'' + ctE(rid) + '\')" title="เอาเส้นทางนี้ออกจากตาราง">&times;</button>')) + '</td>'   /* §rentTyp · ลบด้วยปุ่ม · เส้นทางที่ลำนี้วิ่งอยู่จริงลบไม่ได้ */
               + '<td>' + (eff > 0 ? ('<b>' + ctB(eff) + '</b>' + (amt > 0 ? '' : ' <span class="ct-u">(ตั้งต้น)</span>')) : '<b style="color:#A32D2D">ไม่มีราคา → เรือบริษัท</b>') + '</td>'
               + '<td class="ct-u">' + (x ? (x.n + ' วัน · ' + x.first + ' → ' + x.last + (x.noDeal ? (' · <b style="color:#A32D2D">' + x.noDeal + ' ไม่มีดีล</b>') : '')) : '—') + '</td></tr>';
           }).join('')
         + '</table>'
-        + (opts ? ('<div class="ct-rrow" style="margin-top:6px"><label class="ct-f"><span>เพิ่มเส้นทางที่ราคาต่างจากตั้งต้น</span><select class="ct-in" onchange="if(this.value){ctRentSet(\'' + bid + '\',\'day.rt.\'+this.value,\'1\');}" style="width:260px"><option value="">— เลือกเส้นทาง —</option>' + opts + '</select></label><span class="ct-u" style="align-self:end;padding-bottom:9px">เพิ่มแล้วไปพิมพ์ราคาในตาราง · ลบ = ล้างช่องให้ว่าง</span></div>') : '');
+        + (opts ? ('<div class="ct-rrow" style="margin-top:6px"><label class="ct-f"><span>เพิ่มเส้นทางที่ราคาต่างจากตั้งต้น</span><select class="ct-in" onchange="if(this.value){ctRentSet(\'' + bid + '\',\'day.rt.\'+this.value,\'1\');}" style="width:260px"><option value="">— เลือกเส้นทาง —</option>' + opts + '</select></label><span class="ct-u" style="align-self:end;padding-bottom:9px">เพิ่มแล้วไปพิมพ์ราคาในตาราง · ช่องว่าง = ใช้ราคาตั้งต้น · เอาออกด้วยปุ่ม ×</span></div>') : '');
     }
     body += '<div class="ct-rsec" data-rentday="1"><div class="ct-rsech">เหมารายวัน · ใช้กับวันที่ออกเรือนอกสัญญารายเดือน (หรือลำที่เช่าเป็นรายวันอย่างเดียว) · ราคาต่างกันได้ตามเส้นทาง</div>'
       + '<div class="ct-rrow">' + C('day.on', DY.on, '<b>มีดีลเหมารายวัน</b>')
