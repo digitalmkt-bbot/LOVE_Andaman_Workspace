@@ -15192,6 +15192,78 @@ function ckEventUndo(bkId, date, kind){
     reasonCode:prev?(prev.reasonCode||''):'', reasonNote:prev?(prev.note||''):'', reasonAt:prev?(prev.at||''):'' });
   ckPersist(); ckAfter(kind);
 }
+/* ══ §turnBack (2026-10-29) · ⛵ ออกเรือแล้วกลับเข้าท่า ═══════════════════════
+   owner (Tadeo 29 ต.ค.): "มาเช็คอิน แล้วออกเรือไปแล้ว แต่สภาพอากาศไม่ค่อยดี ลค เลยตัดสินไม่เดินทางต่อ …
+   มันก็จะมีเรื่องการเก็บเงินอีกนะ ว่าเก็บ 100 หรือ refund หรืออื่นๆ ตามตกลง"
+   ไม่ใช่ No-show / ยกเลิกหน้างาน: คนขึ้นเรือจริง ต้นทุนเกิดแล้ว → คนยังนับว่าขึ้นเรือ (Daily Fleet Log · ใบงาน · ยอดวัน)
+   แต่ต้องมีร่องรอยให้เซลล์/บัญชีตามเรื่องเงินต่อ · เก็บที่ ops ของวันนั้น (turnBack) ไม่ปนกับ events ของ No-show */
+var TB_REASON={weather:'อากาศ · คลื่นลม', boat:'เรือขัดข้อง', guest:'ลูกค้าขอกลับ', other:'อื่นๆ'};
+var TB_MONEY={pending:'รอตกลง', full:'เก็บเต็ม 100%', refund:'คืนเงินบางส่วน', resched:'ไปใหม่วันอื่น', other:'อื่นๆ ตามตกลง'};
+var _tb={bkId:null,date:'',reason:'weather',money:'pending'};
+function tbOf(b,date){ try{ var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{}); return (O&&O.turnBack)||null; }catch(_){ return null; } }
+function tbMoneyLbl(tb){ var m=(tb&&tb.money)||{}; var k=m.kind||'pending';
+  if(k==='refund') return 'คืน'+(m.pct?(' '+m.pct+'%'):'')+(m.amt?(' ฿'+Math.round(+m.amt).toLocaleString()):'')+((!m.pct&&!m.amt)?'เงินบางส่วน':'');
+  return TB_MONEY[k]||k; }
+function tbChip(tb, small){ if(!tb) return ''; var e=ckEsc; var pend=!(tb.money&&tb.money.kind)||tb.money.kind==='pending';
+  return '<span class="tb-chip'+(pend?' pend':'')+'" title="'+e('ออกเรือแล้วกลับเข้าท่า · '+(TB_REASON[tb.reason]||tb.reason||'')+(tb.note?(' · '+tb.note):'')+' · '+(tb.hm||'')+' · '+(tb.by||'')+' · เงิน: '+tbMoneyLbl(tb)+((tb.money&&tb.money.note)?(' · '+tb.money.note):''))+'">&#9973; '
+    +(small?'กลับเข้าท่า':('กลับเข้าท่า · '+e(TB_REASON[tb.reason]||tb.reason||'')))+' <b>'+e(tbMoneyLbl(tb))+'</b></span>'; }
+function tbOpen(bkId,date){
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var cur=tbOf(b,date), e=ckEsc, ck=ckRead(b,date,'pier')||{}, t=ckTripOn(b,date)||{}, booked=ckBookedPax(t);
+  var on=(ck.actualPax!=null)?ck.actualPax:(ck.at?booked:0);
+  _tb={bkId:bkId,date:date,reason:(cur&&cur.reason)||'weather',money:(cur&&cur.money&&cur.money.kind)||'pending'};
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var rb=function(k,l){ return '<button type="button" class="'+(_tb.reason===k?'on':'')+'" onclick="tbPick(\'reason\',\''+k+'\',this)"><div class="o1">'+e(l)+'</div></button>'; };
+  var mb=function(k,l,d){ return '<button type="button" class="'+(_tb.money===k?'on':'')+'" onclick="tbPick(\'money\',\''+k+'\',this)"><div class="o1">'+e(l)+'</div><div class="o2">'+e(d)+'</div></button>'; };
+  var m=(cur&&cur.money)||{};
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg">'
+   +'  <div class="ck-dh"><div><div class="t1">&#9973; ออกเรือแล้วกลับเข้าท่า</div>'
+   +'    <div class="t2">'+e(b.voucherRef||b.code||b.id)+' · '+e(b.leadPax||'')+' · จอง '+booked+' · ขึ้นเรือ '+on+'</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   +'    <div class="ck-fn" style="margin-bottom:8px">คนยัง<b>นับว่าขึ้นเรือ</b> (น้ำมัน · ลูกเรือ · ใบงาน เกิดแล้ว) · ไม่ใช่ No-show · ใบจะติดป้ายส้มให้เซลล์/บัญชีตามเรื่องเงิน</div>'
+   +'    <div class="lb">สาเหตุ</div><div class="ck-bkopt" id="tb-reason">'+rb('weather',TB_REASON.weather)+rb('boat',TB_REASON.boat)+rb('guest',TB_REASON.guest)+rb('other',TB_REASON.other)+'</div>'
+   +'    <input id="tb-note" class="ck-inp" type="text" placeholder="เช่น ออก 08:30 กลับเข้าท่า 09:15 · คลื่น 2 ม. · ลูกค้าตัดสินใจเอง" value="'+e((cur&&cur.note)||'')+'">'
+   +'    <div class="lb" style="margin-top:10px">เรื่องเงิน (ตามที่ตกลงกับเอเจนต์/ลูกค้า)</div><div class="ck-bkopt" id="tb-money">'
+   +mb('pending','รอตกลง','ยังไม่ได้คุย · ป้ายจะเตือนจนกว่าจะเลือก')+mb('full','เก็บเต็ม 100%','ออกเรือแล้ว · ลูกค้าเลือกกลับเอง')
+   +mb('refund','คืนเงินบางส่วน','ระบุ % หรือจำนวนเงินด้านล่าง')+mb('resched','ไปใหม่วันอื่น','จองใบใหม่อ้างใบนี้ · ราคาตามตกลง')+mb('other','อื่นๆ ตามตกลง','ระบุในหมายเหตุ')+'</div>'
+   +'    <div style="display:flex;gap:8px;margin-top:6px"><input id="tb-pct" class="ck-inp" type="number" min="0" max="100" step="1" placeholder="คืน %" style="width:90px" value="'+e(m.pct!=null?m.pct:'')+'">'
+   +'      <input id="tb-amt" class="ck-inp" type="number" min="0" step="1" placeholder="หรือ ฿" style="width:120px" value="'+e(m.amt!=null?m.amt:'')+'">'
+   +'      <input id="tb-mnote" class="ck-inp" type="text" placeholder="หมายเหตุเรื่องเงิน · ใครตกลง" style="flex:1" value="'+e(m.note||'')+'"></div>'
+   +'  </div>'
+   +'  <div class="ck-df">'+(cur?'<button class="c" style="color:#A32D2D" onclick="tbRemove()">ถอนรายการ</button>':'')+'<button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
+   +'    <button class="k" onclick="tbSave()">บันทึก</button></div>'
+   +'</div></div>';
+}
+function tbPick(k,v,el){ _tb[k]=v; var box=document.getElementById(k==='reason'?'tb-reason':'tb-money'); if(!box) return;
+  Array.prototype.forEach.call(box.children,function(x){ x.classList.remove('on'); }); if(el) el.classList.add('on'); }
+function tbSave(){
+  var st=_tb; if(!st.bkId) return ckReasonClose(); if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===st.bkId; }); if(!b) return ckReasonClose();
+  var cur=tbOf(b,st.date)||{}, ck=ckRead(b,st.date,'pier')||{}, t=ckTripOn(b,st.date)||{}, booked=ckBookedPax(t);
+  var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var pct=g('tb-pct'), amt=g('tb-amt');
+  if(st.money==='refund' && !pct && !amt){ alert('ใส่ % หรือจำนวนเงินที่คืน'); return; }
+  var tb={ at:cur.at||new Date().toISOString(), hm:cur.hm||ckNowHM(), by:cur.by||ckMe(),
+           reason:st.reason, note:g('tb-note'), pax:(ck.actualPax!=null)?ck.actualPax:(ck.at?booked:booked),
+           money:{ kind:st.money, pct:(st.money==='refund'&&pct)?+pct:null, amt:(st.money==='refund'&&amt)?+amt:null, note:g('tb-mnote'), by:ckMe(), at:new Date().toISOString() } };
+  if(cur.at) tb.editedAt=new Date().toISOString();
+  var O=bkOpsFor(b,st.date); O.turnBack=tb;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','⛵ ออกเรือแล้วกลับเข้าท่า · '+(TB_REASON[tb.reason]||tb.reason)+(tb.note?(' · '+tb.note):'')+' · เงิน: '+tbMoneyLbl(tb)+(tb.money.note?(' · '+tb.money.note):''),'Turn-back');
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+  try{ if(typeof bkV2Render==='function' && document.querySelector('#view-booking.active')) bkV2Render(); }catch(_){}
+}
+function tbRemove(){
+  var st=_tb; if(!st.bkId) return ckReasonClose(); if(!ckGuard()) return;
+  if(!confirm('Remove the turn-back record from this booking?')) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===st.bkId; }); if(!b) return ckReasonClose();
+  var O=bkOpsFor(b,st.date); delete O.turnBack;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','ถอนรายการ "ออกเรือแล้วกลับเข้าท่า"','Turn-back');
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+}
 /* ── §ckBack · ↩️ รับกลับ ─────────────────────────────────────────────────
    คืนคนเข้ายอด "ขึ้นจริง" แล้วทำเครื่องหมายรายการเดิมว่ายกเลิกแล้ว (ไม่ลบ)
    ทำทีละรายการเต็มใบ ไม่แบ่งครึ่ง · paxBreak จะได้ไม่ต้องเดาว่าใครกลับมา
@@ -21989,6 +22061,11 @@ function pckRowHtml(r, date, sheet){
         โหมดการ์ดมีที่เหลือเฟือ เก็บคำไว้ตามเดิม */
      /* §pckMoveRow (2026-10-10) · "อยากให้กดเปลี่ยนในหน้า Manifest เลย" · ปุ่มย้ายลำบนแถว ไม่ต้องเปิดแถบรายละเอียด
         เฉพาะคนที่มีสิทธิ์ act-pckmove · ไม่ขึ้นกับแถวที่ยกเลิก/ไม่ต้องเช็คอิน ใบเหมาลำ และแถวของใบที่แยกลงหลายลำ */
+     /* §turnBack · ปุ่มเฉพาะแถวที่เช็คอินขึ้นเรือแล้ว (หรือมีรายการอยู่แล้ว → แก้) */
+     +((!_vd && (on || tbOf(b,date)))
+       ? ('<button class="pck-tbrow" onclick="event.stopPropagation();tbOpen(\''+b.id+'\',\''+date+'\')" title="ออกเรือแล้วกลับเข้าท่า (อากาศ/เรือ/ลูกค้าขอกลับ) · คนยังนับว่าขึ้นเรือ · บันทึกข้อตกลงเรื่องเงิน" '
+          +'style="border:1px solid #F0C37A;background:'+(tbOf(b,date)?'#F59E0B':'#FFF7E6')+';color:'+(tbOf(b,date)?'#fff':'#7A4300')+';border-radius:999px;padding:'+(sheet?'2px 8px':'4px 11px')+';font:700 '+(sheet?'11px':'11.5px')+' inherit;font-family:inherit;cursor:pointer;white-space:nowrap">&#9973;'+(sheet?'':(tbOf(b,date)?' กลับเข้าท่า ✎':' กลับเข้าท่า'))+'</button>')
+       : '')
      +((!_vd && t.bookingMode!=='charter' && !(r.bsN>1) && typeof pckMoveCan==='function' && pckMoveCan())
        ? ('<button class="pck-mvrow" onclick="event.stopPropagation();pckMoveOpen(\''+b.id+'\')" title="ย้ายใบนี้ไปลำอื่นที่วิ่งโปรแกรมเดียวกันวันนี้" '
           +'style="border:1px solid #BFD3EA;background:#EEF4FB;color:#15396B;border-radius:999px;padding:'+(sheet?'2px 8px':'4px 11px')+';font:700 '+(sheet?'11px':'11.5px')+' inherit;font-family:inherit;cursor:pointer;white-space:nowrap">&#8644;'+(sheet?'':' ย้ายลำ')+'</button>')
@@ -22005,6 +22082,7 @@ function pckRowHtml(r, date, sheet){
      +(tally.no_show>0?'<div style="text-align:right"><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
      +(tally.cxl>0?'<div style="text-align:right"><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div style="text-align:right"><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
+     +(tbOf(b,date)?('<div style="text-align:right;margin-top:4px">'+tbChip(tbOf(b,date),!!sheet)+'</div>'):'')   /* §turnBack */
      +rsn
    +'</td>'
    +'</tr>';
@@ -25236,6 +25314,8 @@ function pckSheetCSS(){
   +S+' .pck-acts .ck-ev{font-size:9px;padding:1px 6px}'
   +S+' .pck-acts .pck-ok{padding:3px 10px;font-size:10px}'
   +S+' .pck-acts button{white-space:nowrap}'
+  +S+' .tb-chip{display:inline-flex;align-items:center;gap:4px;background:#FFF1DE;color:#7A4300;border:1px solid #F0C37A;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}'   /* §turnBack */
+  +S+' .tb-chip b{font-weight:800}.tb-chip.pend b{color:#A32D2D}'
   +S+' .pck-paychips{display:inline-flex !important;gap:3px;flex-wrap:nowrap}'
   /* ── สีแถวมีแค่ 2 แบบ · ไม่มีสี กับ สีสายรัดของลำนั้น ── */
   +S+' tbody.pcs-set tr.ck-row.ck-done>td{background:var(--wbbg) !important}'
@@ -55824,6 +55904,7 @@ function bkV2RenderTab2(){
   const _PPABBR={speedboat:'SB',catamaran:'CAT',sunset:'SS',premium:'PREM',longtail:'LT',private:'PRIV',early:'EARLY',whale:'WS'};
   const _tripAbbr=s=>{ const k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(const w in _PPABBR){ if(k.includes(w)) return _PPABBR[w]; } const ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(w=>w[0]||'').join(''):String(s).slice(0,4)).toUpperCase(); };
   let _wxN=0,_wxPax=0,_wxPend=0; const _wxR={};   /* §btCxlTrip */
+  let _tbN=0,_tbPax=0,_tbPend=0; const _tbR={};   /* §turnBack */
   let _unBoatN=0,_unBoatPax=0,_unVanN=0,_unVanPax=0,_unRetN=0,_unRetPax=0,_unRcN=0,_unRcPax=0; const _unBoatR={}, _unVanR={}, _unRetR={}, _unRcR={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
@@ -55833,6 +55914,7 @@ function bkV2RenderTab2(){
     const _lbl=_unRn(dts[0].routeId);
     // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
     const _tcxPt=(typeof tcxPtOf==='function')?tcxPtOf(b,date):null;   /* §tcxPartner · ไปกับเรือ Partner */
+    { const _tbx=(typeof tbOf==='function')?tbOf(b,date):null; if(_tbx){ _tbN++; _tbPax+=pax; _tbR[_lbl]=(_tbR[_lbl]||0)+pax; if(!(_tbx.money&&_tbx.money.kind&&_tbx.money.kind!=='pending')) _tbPend++; } }   /* §turnBack · นับไว้บอก · แถวยังเช็คตามปกติ */
     if(dts.every(t=>_btWx(t.routeId))){   /* §btCxlTrip · ใบของทริปที่ยกเลิก · ไม่ต้องจัดเรือ/รถ · นับแยก */
       _wxN++; _wxPax+=pax; _wxR[_lbl]=(_wxR[_lbl]||0)+pax;
       if(!(b.weatherResolve && b.weatherResolve.status==='resolved')) _wxPend++;
@@ -56232,6 +56314,7 @@ function bkV2RenderTab2(){
       ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>Pending approval</b> &middot; ${_btPendN} booking<i>Not counted in trip totals &middot; not on van/boat job orders yet</i></span></div>`:''}
       ${_ckBar}
       ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
+      ${_tbN>0?`<div class="bt-nc warn"><span class="i">&#9973;</span><span><b>${laT('ออกเรือแล้วกลับเข้าท่า')}</b> &middot; ${_tbN} booking &middot; ${_tbPax} pax<i>${_brkHtml(_tbR)}${_tbPend?' &middot; <b style="color:#A32D2D">'+laTp('รอตกลงเรื่องเงิน {0} ใบ',_tbPend)+'</b>':''} &middot; ${laT('คนนับว่าเดินทางแล้ว · ดูป้ายที่แถว')}</i></span></div>`:''}
       ${/* §btCxlTrip2 · ล่างสุด · ไม่ใช่เรื่องที่ต้องจัด แค่ให้รู้ว่ามีใบรอเคลียร์ */''}      ${_wxN>0?`<div class="bt-nc warn" style="cursor:pointer" onclick="bkV2SwitchTab('cancel')" title="${laT('เปิดแท็บ Cancellations')}"><span class="i">&#10006;</span><span><b>${laT('ทริปยกเลิก')}</b> &middot; ${_wxN} booking &middot; ${_wxPax} pax<i>${_brkHtml(_wxR)}${_wxPend?' &middot; '+laTp('รอจัดการ {0} ใบ',_wxPend):''} &middot; ${laT('ไม่นับเข้ายอดวัน · ไม่ต้องจัดเรือ/รถ')}</i></span></div>`:''}
     </div></div>`;
 
@@ -56901,6 +56984,7 @@ function bkV2RenderTab2(){
         const _ckNsCls=(_ckLost && _ckLost.total>0)?' t2-cklost':'';   // §check-in · มีคนไม่ได้เดินทาง → ไฮไลต์แดง
         const _unassignedCls=(_hasGroups && !a.g && !r.cxl)?' t2-unassigned':'';   // frame newly-added / not-yet-assigned bookings
         const _novanCls=(vanMode && a.g>0 && !_grpVan[a.g] && !r.cxl)?(' t2-novan'+(_novanLast[a.g]===a.key?' t2-novan-last':'')):'';   // red frame · group has no van picked yet (bottom border only on the last member → one big box, no internal lines)
+        const _tbBadge=(typeof tbOf==='function' && tbOf(bk,date))?('<div class="t2-movedin" style="background:#FFF1DE;color:#7A4300;border-color:#F0C37A;cursor:pointer" onclick="event.stopPropagation();tbOpen(\''+esc(bk.id)+'\',\''+date+'\')" title="'+esc('ออกเรือแล้วกลับเข้าท่า · '+(TB_REASON[tbOf(bk,date).reason]||'')+(tbOf(bk,date).note?(' · '+tbOf(bk,date).note):'')+' · เงิน: '+tbMoneyLbl(tbOf(bk,date)))+'">&#9973; กลับเข้าท่า · '+esc(tbMoneyLbl(tbOf(bk,date)))+'</div>'):'';   /* §turnBack */
         const _movedBadge=(bk.rebook && bk.rebook.to===date)?`<div class="t2-movedin" title="Rescheduled from ${esc(bk.rebook.from)}${bk.rebook.reason==='weather'?' due to weather':(bk.reschedule&&bk.reschedule.reason?(' · '+esc(bk.reschedule.reason)):'')}">&#8617; Moved from ${esc(String(bk.rebook.from).slice(5))}${bk.rebook.reason==='weather'?' · weather':''}</div>`:'';   // shown in the Special-request column (its own line)
         const _altPicks=(Array.isArray(bk.altPickups)?bk.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId):[]);   // §altPickups · รับหลายจุด
         const _altPickBadge=_altPicks.length?`<div class="t2-altpick" title="รับหลายจุด:${_altPicks.map(a=>' '+(Math.max(1,parseInt(a.qty)||1))+'คน '+((a.who||'').trim()||'')+(a.zone?(' ['+a.zone+']'):'')+' → '+((a.place||'').trim()||a.area||'?')).join(' ·')}">&#128652; รับหลายจุด (${_altPicks.length})</div>`:'';
@@ -56989,14 +57073,14 @@ function bkV2RenderTab2(){
             <td class="t2-sbk">${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${b2cAddonChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
-              ${_movedBadge}
+              ${_movedBadge}${_tbBadge}
               ${_splitBadge}
               ${_altPickBadge}
               ${reqBadges.length?`<div class="t2-rbwrap">${reqBadges.join('')}</div>`:''}
               ${allergTxt?`<div class="t2-allerg" title="Allergy: ${esc(allergTxt)}">Allergy: ${esc(allergTxt)}</div>`:''}
               ${''/* §upgPay · ย้ายไปช่อง Pay แล้ว (bkUpgPayChip) */}
               ${_note?`<div class="t2-note" title="${esc(_note)}">${esc(_note)}</div>`:''}
-              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
+              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_tbBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
             </td>
             ${vanMode?'':(_2nd?'<td></td>':`<td${bkUpgPayChip(bk, date)?' class="t2-pyc"':''}><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div>${bkUpgPayChip(bk, date, 'fl')}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
