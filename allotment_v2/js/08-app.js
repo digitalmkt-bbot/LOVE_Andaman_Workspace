@@ -56048,8 +56048,12 @@ function bkV2RenderTab2(){
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
       _fBk+=bk; _fLk+=lk; if(!_noCap){ _fCap+=cap; _fAv+=Math.max(0,av); _fCapN++; }   /* §famSum */
-      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">${laT('ไม่จำกัด')}</span>`
-                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
+      /* §btLost3 · คนที่ไม่มา/ยกเลิกหน้างานของรอบนี้ (จากหน้าเช็คอิน) · ป้ายแดงเฉพาะรอบที่มี · tooltip บอกตัวเลขเต็ม */
+      const _vRows=rowsPier.filter(r=>r.routeId===rid), _vLost=_vRows.reduce((s_,r)=>s_+_btLostOf(r),0);
+      const _vPax=_vRows.reduce((s_,r)=>s_+(_btSkip(r)?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))),0);
+      const _cxlHtml=_vLost>0?`<span class="bt-cxl" title="${laT('จอง')} ${_vPax} · ${laT('ไม่มา/ยกเลิกหน้างาน')} ${_vLost} · ${laT('เดินทางจริง')} ${_vPax-_vLost} (${laT('จากหน้าเช็คอิน')})">CXL ${_vLost}</span>`:'';
+      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span>${_cxlHtml}<span class="bt-free none">${laT('ไม่จำกัด')}</span>`
+                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span>${_cxlHtml}<span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>${_btBdHtml(_btBdOf(rowsPier.filter(r=>r.routeId===rid)),'v')}
@@ -56057,7 +56061,7 @@ function bkV2RenderTab2(){
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
-      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${_btLostHtml(a.pax,a.lost||0,'f')}${nRun>1?_btBdHtml(a.bd,'f'):''}
+      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${nRun>1?_btBdHtml(a.bd,'f'):''}
       ${(function(){ /* §famSum */
         if(!_fLk && !_fCapN) return '';
         const _tot=_fBk+_fLk, _r=_fCap>0?_fAv/_fCap:0, _c=_fAv<=0?'full':(_r<0.20?'low':'ok');
@@ -56078,7 +56082,7 @@ function bkV2RenderTab2(){
       <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
       ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear</button>`:''}
       <span class="sp"></span>
-      <span class="bt-daytot"><b>${rows.filter(r=>!_btSkip(r)).length}</b> booking &middot; <b>${_dPax}</b> pax${_btLostHtml(_dPax,_dLost,'d')}<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
+      <span class="bt-daytot"><b>${rows.filter(r=>!_btSkip(r)).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
 
   /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
@@ -58623,8 +58627,7 @@ function bkV2RenderTab2(){
     .bt-pgf .dot{width:9px;height:9px;border-radius:50%;background:var(--e);flex:none}
     .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
-    .bt-lost{display:inline-block;margin-left:3px;padding:0 5px;border-radius:999px;background:#FBEBD3;color:#A32D2D;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;line-height:15px;white-space:nowrap;vertical-align:1px;cursor:help}
-    .bt-lost.d{margin-left:5px}
+    /* §btLost3 · ป้าย −n ที่หัวโปรแกรม/ยอดวันเอาออกแล้ว (owner: เบียดชื่อ) · ดูที่แถว variant แทน */
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
     /* §famSum · ผลรวมของทุก variant บนแถวหัวโปรแกรม */
     .bt-pgf .bt-fsum{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:#5B6275;white-space:nowrap}
@@ -58650,6 +58653,7 @@ function bkV2RenderTab2(){
     .bt-free.low{background:#FAEEDA;color:#854F0B}
     .bt-free.full{background:#FCEBEB;color:#A32D2D}
     .bt-free.none{background:#F1EFE8;color:#a3a099}
+    .bt-cxl{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap;background:#A32D2D;color:#fff;font-family:'DM Mono',monospace;margin-right:4px;cursor:help}   /* §btLost3 */
     .bt-none{padding:22px 14px;text-align:center;font-size:12px;color:#a8a49c}
     .bt-none2{display:block;padding:14px;text-align:center;font-size:11.5px;color:#a8a49c}
     /* เรือ */
