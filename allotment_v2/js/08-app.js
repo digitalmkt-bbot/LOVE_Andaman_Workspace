@@ -55794,10 +55794,18 @@ function bkV2RenderTab2(){
   const _dINF = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'inf')),0);
   const _dFOC = rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'foc')),0);
   const _dPax = _dAD+_dCHD+_dINF+_dFOC;
+  /* §btLost (2026-10-29) · owner "ทำไมสิมิลันได้ 255 ตอนเช็คอินได้ 248 … ในนี้ให้เห็นด้วยได้ไหมว่ามียกไปเท่าไหร่"
+     หน้าเช็คอินนับ "เดินทางจริง" = จอง − No-show/CXL หน้างาน (ckLostByType) · หน้านี้นับตามใบจอง
+     โชว์ส่วนต่างต่อท้ายยอด: ไป N · ไม่มา M · ไม่เปลี่ยนตัวเลขหลัก (ยอดจองยังเป็นหน่วยของหน้านี้) */
+  const _btLostOf = r => { try{ if(_btSkip(r) || typeof ckLostByType!=='function') return 0;
+      const L=ckLostByType(r.bk,date); const n=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+      return Math.min(n, Math.max(0,+(L&&L.total)||0)); }catch(_){ return 0; } };
+  const _dLost = rows.reduce((s,r)=>s+_btLostOf(r),0);
+  const _btLostHtml = (pax,lost,cls) => lost>0 ? `<span class="bt-lost${cls?' '+cls:''}" title="${laT('จอง')} ${pax} · ${laT('ไม่มา/ยกเลิกหน้างาน')} ${lost} · ${laT('เดินทางจริง')} ${pax-lost} (${laT('จากหน้าเช็คอิน')})">${laT('ไป')} <b>${pax-lost}</b> · ${laT('ไม่มา')} <s>${lost}</s></span>` : '';
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
-  rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; if(_btWx(r.routeId)){ a.rids.add(r.routeId); return; } a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.bd=a.bd||{ad:0,chd:0,inf:0,foc:0}; ['ad','chd','inf','foc'].forEach(k=>{ a.bd[k]+=P(r.pax,k); }); a.rids.add(r.routeId); });
+  rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; if(_btWx(r.routeId)){ a.rids.add(r.routeId); return; } a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.bd=a.bd||{ad:0,chd:0,inf:0,foc:0}; ['ad','chd','inf','foc'].forEach(k=>{ a.bd[k]+=P(r.pax,k); }); a.rids.add(r.routeId); a.lost=(a.lost||0)+_btLostOf(r); });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; const _bh=_btHoldsOf(rr.id).length; if(lk<=0 && !_bh) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   /* §btDeploy · ทริปที่วางเรือไว้แล้วแต่ยังไม่มีใบจอง ต้องนับในการ์ดโปรแกรมด้วย ไม่งั้นขึ้น "No programme on this day" */
   Object.values((typeof TRIPS!=='undefined' && TRIPS[date]) || {}).forEach(op => { const rid=op&&op.route; if(!rid) return; const rr=(typeof ROUTES!=='undefined'?ROUTES:[]).find(x=>x.id===rid); if(!rr) return; if((typeof laIsLandRoute==='function' && laIsLandRoute(rid))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const f=bkV2RouteFamily(rid); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.rids.add(rid); });
@@ -56048,7 +56056,7 @@ function bkV2RenderTab2(){
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
-      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${nRun>1?_btBdHtml(a.bd,'f'):''}
+      <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>${_btLostHtml(a.pax,a.lost||0,'f')}${nRun>1?_btBdHtml(a.bd,'f'):''}
       ${(function(){ /* §famSum */
         if(!_fLk && !_fCapN) return '';
         const _tot=_fBk+_fLk, _r=_fCap>0?_fAv/_fCap:0, _c=_fAv<=0?'full':(_r<0.20?'low':'ok');
@@ -56069,7 +56077,7 @@ function bkV2RenderTab2(){
       <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
       ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear</button>`:''}
       <span class="sp"></span>
-      <span class="bt-daytot"><b>${rows.filter(r=>!_btSkip(r)).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
+      <span class="bt-daytot"><b>${rows.filter(r=>!_btSkip(r)).length}</b> booking &middot; <b>${_dPax}</b> pax${_btLostHtml(_dPax,_dLost,'d')}<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
 
   /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
@@ -58614,6 +58622,9 @@ function bkV2RenderTab2(){
     .bt-pgf .dot{width:9px;height:9px;border-radius:50%;background:var(--e);flex:none}
     .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
+    .bt-lost{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 8px;border-radius:999px;background:#FBEBD3;color:#7A4300;font-size:10.5px;font-weight:700;white-space:nowrap}
+    .bt-lost b{font-family:'DM Mono',monospace;font-weight:700}.bt-lost s{font-family:'DM Mono',monospace;text-decoration:none;color:#A32D2D;font-weight:700}
+    .bt-lost.d{margin-left:8px;vertical-align:middle}
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
     /* §famSum · ผลรวมของทุก variant บนแถวหัวโปรแกรม */
     .bt-pgf .bt-fsum{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:#5B6275;white-space:nowrap}
