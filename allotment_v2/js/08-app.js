@@ -20459,6 +20459,8 @@ function pckStageCell(r, date, sheet){
   if(st==='on') html+='<div style="font-size:10px;font-weight:800;color:#0F6E56">&#10003; ขึ้นเรือแล้ว</div>';
   else if(st==='clr' && due>0) html+='<div style="font-size:9.5px;color:#7A4A00">เคลียร์แล้ว · รอขึ้นเรือ</div>';
   else if(st==='arr' && due>0) html+='<div style="font-size:9.5px;color:#A32D2D;font-weight:700">&#9888; ยังไม่เก็บเงิน</div>';
+  (function(){ var tb=(typeof tbOf==='function')?tbOf(r.b,date):null; if(!tb) return;   /* §turnBack2 */
+    html+='<div style="font-size:10px;font-weight:800;color:#B4560A" title="'+ckEsc((TB_REASON[tb.reason]||tb.reason||'')+(tb.note?(' · '+tb.note):'')+' · เงิน: '+tbMoneyLbl(tb))+'">&#9973; กลับเข้าท่า '+ckEsc(tb.hm||'')+' · '+ckEsc(TB_REASON[tb.reason]||'')+'</div>'; })();
   return html;
 }
 
@@ -25594,6 +25596,8 @@ function renderPierCheckin(){
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
         +(a.sx?('<div class="pck-bchip" style="background:#FCE4E4;border:1px solid #fff;color:#A32D2D;font-weight:800" title="จัดเรือ/จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก · ไม่นับเข้ายอดใด"><span class="k" style="opacity:.85">&#10007; ค้างจัดการ</span><span class="v">'+a.sx+'</span></div>'):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
+        +(function(){ var n=0,px=0,pend=0; (B.rows||[]).forEach(function(r){ var tb=(typeof tbOf==='function')?tbOf(r.b,_pckDate):null; if(!tb) return; n++; px+=(+tb.pax||r.booked||0); if(!(tb.money&&tb.money.kind&&tb.money.kind!=='pending')) pend++; });   /* §turnBack2 */
+            return n?('<div class="pck-bchip" style="background:#FFF1DE;border:1px solid #fff;color:#7A4300;font-weight:800" title="ออกเรือแล้วกลับเข้าท่า · คนยังนับว่าขึ้นเรือ'+(pend?(' · รอตกลงเรื่องเงิน '+pend+' ใบ'):'')+'"><span class="k">&#9973; กลับเข้าท่า</span><span class="v">'+n+' ใบ · '+px+' คน'+(pend?' <b style="color:#A32D2D">รอตกลงเงิน</b>':'')+'</span></div>'):''; })()
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="จ่ายไกด์แล้วพิมพ์ ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ต่อกันเป็นชุดเดียว">&#128220; ใบสั่งงาน + ทะเบียน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
@@ -25892,7 +25896,8 @@ function tsRows(date){
       // §tsIssueReal · เข้าหัวข้อ "ตัดสินค่าปรับ" เฉพาะตอนมีคนไม่ได้เดินทางจริง
       //   เดิมใช้ events.length>0 ด้วย · กดอะไรหน้างานสักอย่างก็ติดค้างรอตัดสิน
       //   ทั้งที่ผลสุดท้ายที่ท่าเรืออาจเป็น "มาครบ" (มาเองที่ท่า / หน้าท่ายืนยันว่ามาแล้ว)
-      issue:(noShow>0 || _lostTot>0 || !!_decNow), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow,
+      issue:(noShow>0 || _lostTot>0 || !!_decNow || !!((typeof tbOf==='function')&&tbOf(b,date))), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow,   /* §turnBack2 · เข้าหมวด E ให้บัญชีเห็นข้อตกลงเงิน */
+      tb:(typeof tbOf==='function')?tbOf(b,date):null,
       ovnBack:_ovnB,
       pt:(typeof tcxPtOf==='function')?tcxPtOf(b,date):null,   /* §tcxPartner */
       ovnOut:((_ovnB && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'')
@@ -27428,8 +27433,18 @@ function tsCxlCell(r, date, DEC, money){
     if(cc&&cc.reason) L.push('<span class="ts-cxr" title="'+e(cc.reason)+'">'+e(cc.reason)+'</span>');
     return '<div class="ts-dcell">'+L.join('')+'</div>';
   }
+  /* §turnBack2 · ออกเรือแล้วกลับเข้าท่า · คนนับเดินทางจริง · เงินตามข้อตกลง */
+  var _tb=r.tb||((typeof tbOf==='function')?tbOf(b,date):null);
+  if(_tb){
+    var _pend=!(_tb.money&&_tb.money.kind&&_tb.money.kind!=='pending');
+    L.push('<span class="ts-chip a" style="background:#FFF1DE;color:#7A4300" title="'+e((TB_REASON[_tb.reason]||_tb.reason||'')+(_tb.note?(' · '+_tb.note):'')+' · '+(_tb.hm||'')+' · '+(_tb.by||''))+'">&#9973; ออกเรือแล้วกลับเข้าท่า · '+e(TB_REASON[_tb.reason]||'')+'</span>');
+    L.push(_pend?'<span class="ts-cxr" style="color:#A32D2D;font-weight:700">รอตกลงเรื่องเงิน</span>'
+                :('<span class="ts-chip '+((_tb.money.kind==='full')?'g':'p')+'">'+e(tbMoneyLbl(_tb))+'</span>'));
+    if(_tb.money&&_tb.money.note) L.push('<span class="ts-cxr" title="'+e(_tb.money.note)+'">'+e(_tb.money.note)+'</span>');
+    if(_tb.note) L.push('<span class="ts-cxr" title="'+e(_tb.note)+'">'+e(_tb.note)+'</span>');
+  }
   var Lt=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
-  if(!Lt||!Lt.total) return '<span style="color:var(--zn400)">—</span>';
+  if(!Lt||!Lt.total) return L.length?('<div class="ts-dcell">'+L.join('')+'</div>'):'<span style="color:var(--zn400)">—</span>';
   var w=[];
   if(Lt.ns) w.push('No-show '+Lt.ns);
   if(Lt.cxl) w.push('CXL หน้างาน '+Lt.cxl);
@@ -30505,7 +30520,8 @@ function renderTravelSum(){
   // ── ยอดรวม ──
   var tBooked=0,tTrav=0,tNs=0,tCxl=0,nDecided=0,charge=0,nPostpone=0;
   all.forEach(function(r){ tBooked+=r.booked; tTrav+=r.travelled; tNs+=r.ns; tCxl+=r.cxl;
-    if(r.issue&&r.dec){ nDecided++; if(r.dec.decision==='postpone') nPostpone++; else charge+=(+r.dec.amount||0); } });
+    if(r.issue&&r.dec){ nDecided++; if(r.dec.decision==='postpone') nPostpone++; else charge+=(+r.dec.amount||0); }
+    else if(r.issue&&r.tb&&r.tb.money&&r.tb.money.kind&&r.tb.money.kind!=='pending'&&!r.noShow&&!(r.events||[]).length){ nDecided++; }   /* §turnBack3 · ตกลงเงินจากหน้าท่าแล้ว */ });
   var nPending=issues.length-nDecided;
 
   // ── เงินหน้างาน ──
@@ -30592,8 +30608,11 @@ function renderTravelSum(){
       var _w=(typeof tsPaxWho==='function')?tsPaxWho(x.paxBreak):'';
       return '<span class="ts-chip '+(x.type==='cxl'?'a':'r')+'" title="'+e((x.at?x.at+' · ':'')+ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''))+'">'
         + T.label+' '+x.pax+(_w?(' \u00b7 '+e(_w)):'')+'</span>';
-    }).join('') || '<span class="ts-chip r">หาย '+r.noShow+' · ไม่ระบุเหตุ</span>';
+    }).join('') || (r.tb?'':('<span class="ts-chip r">หาย '+r.noShow+' · ไม่ระบุเหตุ</span>'));
+    /* §turnBack3 · ออกเรือแล้วกลับเข้าท่า · คนนับเดินทางจริง · ชิปเหตุผลนำหน้า */
+    if(r.tb) ev='<span class="ts-chip a" style="background:#FFF1DE;color:#7A4300" title="'+e((r.tb.hm||'')+' · '+(r.tb.by||'')+(r.tb.note?(' · '+r.tb.note):''))+'">&#9973; ออกเรือแล้วกลับเข้าท่า · '+e(TB_REASON[r.tb.reason]||r.tb.reason||'')+' · '+(+r.tb.pax||r.booked)+' คน</span>'+ev;
     var why=r.events.map(function(x){ return ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''); }).filter(Boolean).join(' · ');
+    if(r.tb&&r.tb.note) why=(why?(why+' · '):'')+r.tb.note;
     /* §tsLostPart (2026-10-17) · owner: "กดไม่ชาร์จ นี่หมายถึงไม่ชาร์จกี่คน" · "บางทีก็ไม่ได้หารแบบลงตัวเป๊ะ"
        ราคาเต็มเป็นของทั้งใบ · ใบที่ไม่ได้ไปแค่บางคน ปุ่มต้องพูดถึงเฉพาะคนที่ไม่ได้ไป
        เก็บเต็ม = ใส่ยอดของคนที่ไม่ได้ไปเอง (เติมยอดประมาณ ราคาใบ × คนไม่ไป ÷ คนจอง ให้ก่อน แก้ได้) · 50% = ครึ่งของยอดประมาณ
@@ -30661,7 +30680,12 @@ function renderTravelSum(){
       +'<td class="c">'+(dec
         ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+e(_decLbl(dec))+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
            +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(laAtLocal(dec.at,16))):'')+'</div>')
-        : '<span class="ts-chip r">รอตัดสิน</span>')+'</td>'
+        : (r.tb   /* §turnBack3 · ข้อตกลงเงินที่บันทึกจากหน้าท่า · แก้ที่ปุ่ม ⛵ ในหน้าเช็คอิน */
+            ? ((r.tb.money&&r.tb.money.kind&&r.tb.money.kind!=='pending')
+                ? ('<span class="ts-chip '+((r.tb.money.kind==='full')?'g':'p')+'" title="ตกลงจากหน้าท่า'+e((r.tb.money.note?(' · '+r.tb.money.note):''))+'">&#9973; '+e(tbMoneyLbl(r.tb))+'</span>'
+                   +'<div class="ts-tel" style="margin-top:3px">'+e(r.tb.money.by||'')+(r.tb.money.at?(' · '+e(laAtLocal(r.tb.money.at,16))):'')+(r.tb.money.note?('<br>'+e(r.tb.money.note)):'')+'</div>')
+                : '<span class="ts-chip r">&#9973; รอตกลงเรื่องเงิน</span><div class="ts-tel" style="margin-top:3px">แก้ที่ปุ่ม ⛵ หน้าเช็คอิน</div>')
+            : '<span class="ts-chip r">รอตัดสิน</span>'))+'</td>'
       +'</tr>';
   });
   /* ══ §tsStrand (2026-09-04) · กด "เลื่อนวัน" แล้วรายการหายจากใบปิดวันทันที
