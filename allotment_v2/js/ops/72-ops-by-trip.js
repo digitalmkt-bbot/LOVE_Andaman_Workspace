@@ -85,5 +85,18 @@
              by_route: (Array.isArray(c.by_route) ? c.by_route : []).map(function(x){ return { route_id: x.route_id, pax: +x.pax || 0 }; }) };
   };
 
+  /* §btLost3 (2026-10-29) · lk-inbox's red "CXL n" on a programme variant: the heads marked No-show / on-site CXL at check-in.
+     The server counts it per route (routes[].checkin_lost: each live booking capped at its own pax, pending approval in, cancelled
+     bookings and closed trips out). An answer without the field gives null, so the page keeps legacy's ckLostByType count.
+     -> null · or { total, booked, bookings, bd:{ad,chd,inf,foc} } (zeros for a route the answer does not list) */
+  function knowsLost(srv){ return !!(srv && Array.isArray(srv.routes) && srv.routes.some(function(x){ return x && x.checkin_lost && typeof x.checkin_lost === 'object'; })); }
+  window.laOpsByTripLost = function(srv, routeId){
+    if(!knowsLost(srv)) return null;
+    var r = srv.routes.filter(function(x){ return x && x.route_id === routeId; })[0];
+    var c = (r && r.checkin_lost) || {};
+    return { total: +c.total || 0, booked: +c.booked || 0, bookings: +c.bookings || 0,
+             bd: { ad: +c.ad || 0, chd: +c.chd || 0, inf: +c.inf || 0, foc: +c.foc || 0 } };
+  };
+
   window.laOpsByTrip = { _cache: cache };
 })();

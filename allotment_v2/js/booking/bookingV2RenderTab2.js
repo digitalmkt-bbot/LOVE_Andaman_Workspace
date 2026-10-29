@@ -301,6 +301,20 @@ function bookingV2RenderTab2(){
   const _dINF = _srv ? _srv.day.pax.inf : rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'inf')),0);
   const _dFOC = _srv ? _srv.day.pax.foc : rows.reduce((s,r)=>s+(_btSkip(r)?0:P(r.pax,'foc')),0);
   const _dPax = _dAD+_dCHD+_dINF+_dFOC;
+  /* §btLost3 (lk-inbox 2026-10-29) · owner "ทำไมสิมิลันได้ 255 ตอนเช็คอินได้ 248 … ในนี้ให้เห็นด้วยได้ไหมว่ามียกไปเท่าไหร่"
+     หน้าเช็คอินนับ "เดินทางจริง" = จอง − No-show/CXL หน้างาน · หน้านี้นับตามใบจอง · ตัวเลขหลักไม่เปลี่ยน
+     แถว variant ขึ้นป้ายแดง "CXL n" · n มาจาก server (routes[].checkin_lost, laOpsByTripLost)
+     ถ้า server ยังไม่ตอบ (หรือ server เก่าไม่มีช่องนี้) ใช้ ckLostByType ของ browser แบบที่ lk ทำ */
+  const _btLostOf = r => { try{ if(_btSkip(r) || typeof ckLostByType!=='function') return 0;
+      const L=ckLostByType(r.bk,date); const n=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+      return Math.min(n, Math.max(0,+(L&&L.total)||0)); }catch(_){ return 0; } };
+  const _btLostRoute = rid => {
+    const s=(_srv && typeof window.laOpsByTripLost==='function') ? window.laOpsByTripLost(_srv,rid) : null;
+    if(s) return { lost:s.total, booked:s.booked };
+    const vr=rowsPier.filter(r=>r.routeId===rid);
+    return { lost: vr.reduce((s_,r)=>s_+_btLostOf(r),0),
+             booked: vr.reduce((s_,r)=>s_+(_btSkip(r)?0:(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'))),0) };
+  };
   /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
@@ -578,8 +592,11 @@ function bookingV2RenderTab2(){
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
       _fBk+=bk; _fLk+=lk; if(!_noCap){ _fCap+=cap; _fAv+=Math.max(0,av); _fCapN++; }   /* §famSum */
-      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">${laT('ไม่จำกัด')}</span>`
-                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
+      /* §btLost3 · คนที่ไม่มา/ยกเลิกหน้างานของรอบนี้ (จากหน้าเช็คอิน) · ป้ายแดงเฉพาะรอบที่มี · tooltip บอกตัวเลขเต็ม */
+      const _vL=_btLostRoute(rid), _vLost=_vL.lost, _vPax=_vL.booked;
+      const _cxlHtml=_vLost>0?`<span class="bt-cxl" title="${laT('จอง')} ${_vPax} · ${laT('ไม่มา/ยกเลิกหน้างาน')} ${_vLost} · ${laT('เดินทางจริง')} ${_vPax-_vLost} (${laT('จากหน้าเช็คอิน')})">CXL ${_vLost}</span>`:'';
+      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span>${_cxlHtml}<span class="bt-free none">${laT('ไม่จำกัด')}</span>`
+                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span>${_cxlHtml}<span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
       const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bookingV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>${/* §opsByTripBd MARKED EDIT */_btBdHtml((_srv&&typeof window.laOpsByTripBd==='function')?window.laOpsByTripBd(_srv,[rid]):_btBdOf(rowsPier.filter(r=>r.routeId===rid)),'v')}
@@ -3186,6 +3203,7 @@ function bookingV2RenderTab2(){
     .bt-free.low{background:#FAEEDA;color:#854F0B}
     .bt-free.full{background:#FCEBEB;color:#A32D2D}
     .bt-free.none{background:#F1EFE8;color:#a3a099}
+    .bt-cxl{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap;background:#A32D2D;color:#fff;font-family:'DM Mono',monospace;margin-right:4px;cursor:help}   /* §btLost3 */
     .bt-none{padding:22px 14px;text-align:center;font-size:12px;color:#a8a49c}
     .bt-none2{display:block;padding:14px;text-align:center;font-size:11.5px;color:#a8a49c}
     /* เรือ */
