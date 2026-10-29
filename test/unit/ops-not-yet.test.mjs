@@ -37,17 +37,16 @@ test('§rentDay: only the daily-rate fields of a rented boat are refused; the pa
   assert.equal(alerts.length, 2);
 });
 
-test("only a ticked boat-back box is refused; Send to partner saves now (27-ops-weather.js) and passes through", () => {
+test('Send to partner (27-ops-weather.js) and the boat-back box (ovn_boat_back, migration 580) save now: both pass through', () => {
   const { ctx, calls, alerts, box } = boot(true);
   assert.equal(ctx.tcxDlgSet('out', 'partner'), 'orig');
   assert.equal(ctx.tcxDlgSet('out', 'move'), 'orig');
   assert.equal(ctx.tcxDlgSet('note', 'partner'), 'orig');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 1), false);
-  assert.equal(box.checked, false, 'the box is unticked again');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 0), 'orig', 'unticking still saves');
-  assert.equal(ctx.bookingV2SetTripField(2, 'ovnReturnDate', '2026-11-02'), 'orig');
-  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'partner'], ['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 0], ['bookingV2SetTripField', 2, 'ovnReturnDate', '2026-11-02']]);
-  assert.equal(alerts.length, 1);
+  assert.equal(ctx.bookingV2SetTripField(2, 'ovnBoatBack', 1), 'orig');
+  assert.equal(box.checked, true, 'the box stays ticked');
+  assert.deepEqual(calls, [['tcxDlgSet', 'out', 'partner'], ['tcxDlgSet', 'out', 'move'], ['tcxDlgSet', 'note', 'partner'], ['bookingV2SetTripField', 2, 'ovnBoatBack', 1]]);
+  assert.equal(alerts.length, 0);
+  assert.doesNotMatch(SOURCE, /'ovnBoatBack'/);
 });
 
 test('outside ops mode (lk-inbox itself) everything is the legacy function', () => {
