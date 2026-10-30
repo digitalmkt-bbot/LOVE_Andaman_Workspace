@@ -78274,6 +78274,13 @@ function pjCSS(){
   +H+'.sk .pj-kit1 select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}'
   +H+'.sk .pj-kit1 select:disabled{cursor:default}'
   +H+'.sk .pj-kit1:hover{filter:brightness(.97)}'
+  /* §pjWide (2026-10-30) · owner "ทำไม Alu1 ถึงกว้างกว่าเพื่อน"
+     การ์ดเป็น flex item · min-width ตั้งต้น = auto = กว้างเท่าของที่ยาวที่สุดที่หักบรรทัดไม่ได้
+     แถว Wristband + Group ห้ามตัดบรรทัด · ลำที่ลูกค้ามี 3 ภาษา (EN CN RU) + สีที่สืบมา ("ต่อจาก …") ยาวเกิน
+     การ์ดเลยถูกดันให้กว้างกว่าใบอื่น · ล็อกความกว้างไว้ที่ค่าตั้ง แล้วให้แถวนั้นตัดบรรทัดเองแทน */
+  +H+'.sk .pj-strip .bc{min-width:0}'
+  +H+'.sk .pj-wbrow{height:auto;min-height:36px;flex-wrap:wrap;row-gap:4px;padding-top:4px;padding-bottom:4px}'
+  +H+'.sk .pj-wb{white-space:nowrap;max-width:100%}'
   +H+'.sk .pj-idle,'+H+'.sk .pj-empty{border-radius:20px;border-color:#F1F5F9;box-shadow:0 10px 30px -5px rgba(0,0,0,.04)}';
 }
 
