@@ -9252,7 +9252,9 @@ function flRenderDR(){
   try{
     if(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS))
       window._flBkDayIdx={ds:_ds, arr:SB_BOOKINGS, list:SB_BOOKINGS.filter(bk=>bk && (bk.trips||[]).some(t=>t && t.date===_ds))};
-    return _flRenderDRInner();
+    const _r=_flRenderDRInner();
+    try{ if(typeof wxAfterDR==='function') wxAfterDR(_ds); }catch(_e){ console.warn('[wx] after DR', _e.message); }   /* §wx2 · captain sea report cells */
+    return _r;
   } finally { window._flBkDayIdx=null; }
 }
 /* §drFast · กดช่องวันที่ → ติ๊กขาวทันที แล้วค่อย render ใน tick ถัดไป (ไม่งั้นช่องจะเปลี่ยนหลัง render เสร็จ ดูเหมือนกดไม่ติด) */
@@ -9799,7 +9801,7 @@ function _flRenderDRInner(){
 
     if(noEntry){
       /* ลำที่ไม่ออกวันนี้ · ยุบช่วงการเดินเรือ แต่คงช่องเบิกของไว้ */
-      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td>${_issTd}</tr>`;
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${4+ENG_COLS.length+2}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td>${_issTd}</tr>`;
     }
     /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
     const _engTd=ENG_COLS.map(pos=>{
@@ -9821,6 +9823,7 @@ function _flRenderDRInner(){
         ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="text" inputmode="decimal" value="${posI.fuel!=null?_fsNum(posI.fuel):''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',_fsRaw(this))" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
         : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="text" inputmode="decimal" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',_fsRaw(this))">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
+      <td class="fs-n fs-sea">${typeof wxSeaCell==='function'?wxSeaCell(ds,b.id,!!_DIS):''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };
 
@@ -9840,6 +9843,7 @@ function _flRenderDRInner(){
       <td class="fs-n fs-ro">${r.pax!=null?r.pax:'—'}</td>
       <td class="fs-n fs-f">${r.fuel!=null?r.fuel:'—'}</td>
       <td class="fs-n fs-p">${r.price!=null?r.price:'—'}${fp!=null?`<em>฿${fp.toLocaleString()}</em>`:''}</td>
+      <td class="fs-n fs-sea"></td>
       <td class="fs-n fs-e" colspan="${ENG_COLS.length}">${r.eng!=null?r.eng:'—'}</td>
       <td class="fs-n fs-w">${r.wo!=null?r.wo:'—'}</td>
       <td class="fs-n fs-w">${r.wc!=null?r.wc:'—'}${wu!=null?`<em>${wu>=0?'+':''}${wu}</em>`:''}</td>
@@ -9910,7 +9914,7 @@ function _flRenderDRInner(){
     })();
     const ISS=flIssueFor(pierKey);
     /* §drExtra3 · จำนวนคอลัมน์จริงของตารางนี้ · ใช้ทำแถว "อื่นๆ" ที่กินเต็มความกว้าง */
-    const NCOL=7+ENG_COLS.length+Math.max(1,ISS.length);
+    const NCOL=8+ENG_COLS.length+Math.max(1,ISS.length);   /* §wx2 · +ทะเล */
 
     return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
       <div class="drh-ph" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #EEF1F5;background:#fff;flex-wrap:wrap">
@@ -9938,6 +9942,7 @@ function _flRenderDRInner(){
             <th class="fsg0" colspan="2">เรือ / ทริป</th>
             <th class="fsg1">ลูกค้า</th>
             <th class="fsg2" colspan="2">น้ำมัน</th>
+            <th class="fsg2">&#127754; ทะเล</th>
             <th class="fsg4" colspan="${ENG_COLS.length}">&#9881; ชั่วโมงเครื่อง</th>
             <th class="fsg3" colspan="2">&#128167; มิเตอร์น้ำ</th>
             <th class="fsg5" colspan="${Math.max(1,ISS.length)}">&#128230; เบิกของลงเรือ
@@ -9947,6 +9952,7 @@ function _flRenderDRInner(){
             <th class="fs-bt">Boat</th><th class="fs-rt">Route / Trips</th>
             <th class="fs-ro">PAX<em>จอง</em></th>
             <th class="fs-f">Fuel<em>L</em></th><th class="fs-p">฿/L</th>
+            <th class="fs-sea" title="กัปตันกดหลังกลับ · 1 เรียบ · 2 เล็กน้อย · 3 โยน · 4 แรง · 5 ไม่ควรออก · ไม่กดก็ได้ ระบบประเมินจากน้ำมันแทน">ทะเล<em>กัปตัน 1–5</em></th>
             ${ENG_COLS.map(p=>`<th class="fs-e">${p}</th>`).join('')}
             <th class="fs-w">เปิด<em>มิเตอร์</em></th><th class="fs-w">ปิด<em>ใช้ไป</em></th>
             ${ISS.length?ISS.map(it=>`<th class="fs-i">${_e(it.name)}<em>${_e(it.unit||'')}${it.pier?(' · '+(it.pier==='tublamu'?'TL':it.pier==='panwa'?'VP':'RN')):''}</em></th>`).join('')
@@ -10002,6 +10008,7 @@ function _flRenderDRInner(){
             <td class="fs-n fs-ro">${tp||'—'}</td>
             <td class="fs-n fs-f">${tf?tf.toLocaleString():'—'}</td>
             <td class="fs-n fs-p">${_fcost!=null?('฿'+_fcost.toLocaleString()):'—'}</td>
+            <td class="fs-n fs-sea"></td>
             ${ENG_COLS.map(()=>'<td class="fs-n fs-e">—</td>').join('')}
             <td class="fs-n fs-w">—</td>
             <td class="fs-n fs-w">${tw.v!=null?('<em>'+(tw.v>=0?'+':'')+(Math.round(tw.v*10)/10)+'</em>'):'—'}</td>
@@ -10049,6 +10056,7 @@ function _flRenderDRInner(){
 #fl-dr-body td.fs-f.fs-bad{background:#FCEBEB;color:#A32D2D}
 #fl-dr-body td.fs-p{background:#FDF9F0;color:#854F0B} #fl-dr-body td.fs-p em{color:#BA7517}
 #fl-dr-body td.fs-p.fs-need{background:#FFF6E0;box-shadow:inset 0 0 0 1px #EF9F27}
+#fl-dr-body td.fs-sea{background:#F3F8FC;width:124px;min-width:118px;text-align:right} #fl-dr-body td.fs-sea em{font-size:9px;font-style:normal;white-space:nowrap} #fl-dr-body th.fs-sea{background:#EAF2F9;color:#0F5F92}
 #fl-dr-body td.fs-e{background:#FAFAF9;color:#3F4654}
 #fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
 #fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}

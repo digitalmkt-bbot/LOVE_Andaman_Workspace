@@ -2783,6 +2783,47 @@ const server = http.createServer((req, res) => {
     }
     return J(res,200,_wxBf);
   }
+  if(u === '/api/weather/log'){   // §wx2 · decisions + captain reports for a date range
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    const qp=new URLSearchParams(q); const from=String(qp.get('from')||''), to=String(qp.get('to')||from);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return J(res,400,{error:'from/to=YYYY-MM-DD required'});
+    Promise.all([
+      pool.query('SELECT point_id,date,decision,reason,by_user,at FROM operation_schemas.weather_decision WHERE date BETWEEN $1 AND $2',[from,to]),
+      pool.query('SELECT date,boat_id,sea,flags,note,by_user,at FROM operation_schemas.weather_report WHERE date BETWEEN $1 AND $2',[from,to])
+    ]).then(([a,b])=>J(res,200,{decisions:a.rows,reports:b.rows})).catch(e=>J(res,500,{error:e.message}));
+    return;
+  }
+  if(u === '/api/weather/decision' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(s.edit===false) return J(res,403,{error:'view only'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{ let b={}; try{ b=JSON.parse(body); }catch(e){}
+      const pid=String(b.pointId||''), date=String(b.date||''), dec=String(b.decision||''), reason=String(b.reason||'').slice(0,500);
+      if(!pid || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return J(res,400,{error:'pointId + date required'});
+      if(!dec){ return pool.query('DELETE FROM operation_schemas.weather_decision WHERE point_id=$1 AND date=$2',[pid,date]).then(()=>J(res,200,{ok:true,deleted:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(!/^(ran_all|ran_part|cx_us|cx_port|cx_park|reroute)$/.test(dec)) return J(res,400,{error:'bad decision'});
+      pool.query(`INSERT INTO operation_schemas.weather_decision (point_id,date,decision,reason,by_user,at) VALUES ($1,$2,$3,$4,$5,now())
+                  ON CONFLICT (point_id,date) DO UPDATE SET decision=EXCLUDED.decision, reason=EXCLUDED.reason, by_user=EXCLUDED.by_user, at=now()`,
+                 [pid,date,dec,reason,s.name||s.username||''])
+        .then(()=>J(res,200,{ok:true,by:s.name||s.username||'',at:new Date().toISOString()})).catch(e=>J(res,500,{error:e.message}));
+    }); return;
+  }
+  if(u === '/api/weather/report' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(s.edit===false) return J(res,403,{error:'view only'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{ let b={}; try{ b=JSON.parse(body); }catch(e){}
+      const date=String(b.date||''), bid=String(b.boatId||''); const sea=b.sea==null?null:Math.max(1,Math.min(5,Math.round(+b.sea)||0))||null;
+      if(!bid || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return J(res,400,{error:'boatId + date required'});
+      const flags=Array.isArray(b.flags)?b.flags.map(String).slice(0,10):[]; const note=String(b.note||'').slice(0,500);
+      if(sea==null && !flags.length && !note){ return pool.query('DELETE FROM operation_schemas.weather_report WHERE date=$1 AND boat_id=$2',[date,bid]).then(()=>J(res,200,{ok:true,deleted:true})).catch(e=>J(res,500,{error:e.message})); }
+      pool.query(`INSERT INTO operation_schemas.weather_report (date,boat_id,sea,flags,note,by_user,at) VALUES ($1,$2,$3,$4,$5,$6,now())
+                  ON CONFLICT (date,boat_id) DO UPDATE SET sea=EXCLUDED.sea, flags=EXCLUDED.flags, note=EXCLUDED.note, by_user=EXCLUDED.by_user, at=now()`,
+                 [date,bid,sea,JSON.stringify(flags),note,s.name||s.username||''])
+        .then(()=>J(res,200,{ok:true,by:s.name||s.username||'',at:new Date().toISOString()})).catch(e=>J(res,500,{error:e.message}));
+    }); return;
+  }
   if(u === '/api/weather/fetch' && req.method === 'POST'){   // on-demand snapshot: ?date=&kind=fc05|fc17|hist
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
