@@ -258,6 +258,17 @@ var WX_CSS = '<style>'
   + '#wx-pop .wx-pseg{height:26px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:#fff;font:600 11px inherit;cursor:pointer;white-space:nowrap}'
   + '#wx-pop .wx-pseg.on{background:#fff;color:#0E3B5C;font-weight:800}'
   + '#wx-pop .wx-sg{display:grid;align-items:center;font-variant-numeric:tabular-nums}'
+  + '#wx-pop .wx-hs{padding:16px 20px;border-bottom:1px solid #EEF1F5}'
+  + '#wx-pop .wx-hs h4{margin:0 0 10px;font-size:12px;color:#64748B;font-weight:700}'
+  + '#wx-pop .wx-hbar{display:grid;grid-template-columns:96px 1fr 150px;align-items:center;gap:10px;margin-bottom:7px;font-size:11.5px}'
+  + '#wx-pop .wx-hbar .tr{display:flex;height:22px;border-radius:6px;overflow:hidden;background:#F1F5F9}'
+  + '#wx-pop .wx-hbar .tr span{display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;min-width:0;overflow:hidden}'
+  + '#wx-pop .wx-hsug{background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.65;color:#0C4A6E}'
+  + '#wx-pop .wx-hsug b{color:#075985}'
+  + '#wx-pop .wx-htb{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}'
+  + '#wx-pop .wx-htb th{position:sticky;top:0;background:#F8FAFC;text-align:left;font-size:10px;color:#64748B;padding:7px 10px;border-bottom:1px solid #E2E8F0;font-weight:700;cursor:pointer;white-space:nowrap}'
+  + '#wx-pop .wx-htb td{padding:6px 10px;border-bottom:1px solid #F1F5F9;vertical-align:top}'
+  + '#wx-pop .wx-htb tr:hover td{background:#F8FAFC}'
   + '.wx-dbar{display:flex;align-items:center;gap:9px;margin-top:5px;padding:7px 9px;border-radius:10px;border:1px solid #E2E8F0;background:#F8FAFC;font:inherit;text-align:left;cursor:pointer;width:100%}'
   + '.wx-dbar>span:first-child{width:24px;height:24px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none}'
   + '.wx-dbar b{font-size:11.5px}.wx-dbar i{font-style:normal;font-size:9.5px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}'
@@ -270,7 +281,8 @@ function wxHeadHtml(date, sub, right, compact){
     + '<div style="flex:1;min-width:0"><b style="white-space:nowrap">สภาพทะเล · '+(compact?'':WD[dt.getDay()]+' ')+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>'+sub+'</i></div>'+right+'</div>';
 }
 function wxCardBody(date, piers){
-  var expBtn = '<button type="button" class="wx-hb ic" title="ดูรายชั่วโมงทุกเส้นทาง" aria-label="ดูรายชั่วโมงทุกเส้นทาง" onclick="wxOpenPop(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>'
+  var expBtn = '<button type="button" class="wx-hb ic" title="ประวัติ · ทะเลแบบไหนออกได้" aria-label="ประวัติทะเล" onclick="wxOpenHist()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>'
+    + '<button type="button" class="wx-hb ic" title="ดูรายชั่วโมงทุกเส้นทาง" aria-label="ดูรายชั่วโมงทุกเส้นทาง" onclick="wxOpenPop(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>'
     + '<button type="button" class="wx-hb ic" title="ดึงพยากรณ์ตอนนี้" aria-label="ดึงพยากรณ์ตอนนี้" onclick="wxFetchNow(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg></button>';
   var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
   var kinds = {}; P0.forEach(function(p){ var b=wxBest(p.id,date); if(b) kinds[b.kind]=1; });
@@ -673,6 +685,109 @@ function wxTbSave(ptId, date, list){
       d.turnbacks = j.list || list; if(!d.decision && !wxTbArr(d.turnbacks).length) delete WX.dec[k]; _wxOutIdx = null; wxPatch(); })
     .catch(function(e){ alert('Save failed: '+e.message); });
 }
+/* ══ §wxHist (2026-10-30) · ประวัติ · ทะเลแบบไหนออกได้ (mockup artboard 4) ═══════════════
+   Per forecast point: every past day that had trips, the sea that day (forecast 05:00 = what the office
+   decided on, or the analysed actual), and what happened (wxOutcome: decision › captain › fuel › turn-back
+   › bookings). Bucketed by wave height → a suggested warn/risk line next to the one set in points.json.
+   A suggestion only · the thresholds themselves still live in weather/points.json. */
+var WX_HB = [ [0,1,'< 1.0 ม.'], [1,1.5,'1.0–1.4'], [1.5,2,'1.5–1.9'], [2,2.5,'2.0–2.4'], [2.5,99,'≥ 2.5 ม.'] ];
+function wxOpenHist(ptId){
+  var p0 = (WX.pts||[])[0]; if(!p0) return;
+  var ov = document.getElementById('wx-pop');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'wx-pop'; document.body.appendChild(ov);
+    ov.addEventListener('mousedown', function(e){ if(e.target === ov) wxClosePop(); });
+    document.addEventListener('keydown', wxPopKey); }
+  WX.pop = { mode:'hist', pt:ptId || (WX.histPt || p0.id), src:WX.histSrc || 'fc05', sort:'wave', only:false };
+  wxPopRender();
+}
+function wxHistSet(k, v){ if(!WX.pop) return; WX.pop[k] = v; if(k==='pt') WX.histPt = v; if(k==='src') WX.histSrc = v; wxPopRender(); }
+function wxHistClass(oc){ return oc.k==='cx' ? 'cx' : (oc.k==='rough' || oc.k==='bumpy' || oc.k==='part') ? 'bad' : 'ok'; }
+function wxHistDays(pt, src){
+  var H = WX.obs[pt.id] || {}, today = wxToday(), out = [];
+  Object.keys(H).forEach(function(d){
+    if(d >= today) return; var o = H[d];
+    var r = src==='hist' ? (o.hist || o.fc05) : (o.fc05 || o.fc17 || o.hist); if(!r || !r.summary || r.summary.wave==null) return;
+    var oc = wxOutcome(pt.id, d); if(!oc) return;
+    out.push({ d:d, S:r.summary, kind:r.kind, oc:oc, c:wxHistClass(oc), dec:WX.dec[pt.id+'|'+d] || null });
+  });
+  return out;
+}
+function wxHistRender(ov){
+  var st = WX.pop, pts = WX.pts||[], pt = pts.filter(function(p){ return p.id===st.pt; })[0] || pts[0]; if(!pt) return;
+  var days = wxHistDays(pt, st.src);
+  var MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var dTxt = function(d){ var x = new Date(d+'T12:00:00'); return x.getDate()+' '+MON[x.getMonth()]; };
+  var seg = function(on, label, js){ return '<button type="button" class="wx-pseg'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
+  var short = function(p){ return wxE(String(p.name||p.id).split(' · ')[0]); };
+  var head = '<div class="wx-hd" style="padding:14px 18px;gap:12px;flex-wrap:wrap">'
+    + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+    + '<div><b style="font-size:16px">ประวัติทะเล · '+short(pt)+'</b><i>'+(days.length?(dTxt(days.map(function(x){ return x.d; }).sort()[0])+' – '+dTxt(days.map(function(x){ return x.d; }).sort().pop())+' · '):'')+days.length+' วันที่มีเรือออก/ตัดสินใจ</i></div>'
+    + '<div class="wx-pgrp">'+pts.map(function(p){ return seg(p.id===pt.id, short(p), 'wxHistSet(\'pt\',\''+p.id+'\')'); }).join('')+'</div>'
+    + '<div class="wx-pgrp">'+seg(st.src!=='hist','พยากรณ์ 05:00','wxHistSet(\'src\',\'fc05\')')+seg(st.src==='hist','ข้อมูลจริง','wxHistSet(\'src\',\'hist\')')+'</div>'
+    + '<button type="button" class="wx-hb ic" style="margin-left:auto;width:34px;height:34px" aria-label="ปิด" onclick="wxClosePop()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+  var body;
+  if(!days.length){
+    body = '<div style="padding:40px;text-align:center;color:#64748B;font-size:13px">ยังไม่มีข้อมูลย้อนหลังของเส้นนี้<br><span style="font-size:11.5px">กด "ดึงย้อนหลัง" ใต้การ์ดสภาพทะเล เพื่อดึงข้อมูลตั้งแต่ 1 มิ.ย.</span></div>';
+  } else {
+    /* buckets */
+    var B = WX_HB.map(function(b){ return { lo:b[0], hi:b[1], l:b[2], ok:0, bad:0, cx:0, n:0 }; });
+    days.forEach(function(x){ var b = B.filter(function(b){ return x.S.wave >= b.lo && x.S.wave < b.hi; })[0]; if(b){ b[x.c]++; b.n++; } });
+    var C = { ok:'#10B981', bad:'#F59E0B', cx:'#DC2626' };
+    var bars = B.map(function(b){
+      var w = function(k){ return b.n ? (b[k]/b.n*100) : 0; };
+      var sp = function(k){ return b[k] ? '<span style="width:'+w(k)+'%;background:'+C[k]+'" title="'+b[k]+' วัน">'+(w(k)>=12?b[k]:'')+'</span>' : ''; };
+      return '<div class="wx-hbar"><b>'+b.l+'</b><div class="tr">'+(b.n?sp('ok')+sp('bad')+sp('cx'):'<span style="color:#94A3B8;font-weight:600;width:100%">ไม่มีวัน</span>')+'</div>'
+        + '<span style="color:#64748B">'+b.n+' วัน'+(b.n?(' · ออกปกติ '+Math.round(w('ok'))+'%'):'')+'</span></div>'; }).join('');
+    var legend = '<div style="display:flex;gap:14px;font-size:10.5px;color:#64748B;margin-top:4px">'
+      + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+C.ok+';vertical-align:-1px"></span> ออกปกติ</span>'
+      + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+C.bad+';vertical-align:-1px"></span> ออกแล้วโยน/แรง · บางลำ · ตีกลับ</span>'
+      + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+C.cx+';vertical-align:-1px"></span> ยกเลิก</span></div>';
+    /* suggested lines · first bucket (≥3 days) where clean runs fall under 70% → warn; where cancel+rough ≥ 50% → risk */
+    var sWarn = null, sRisk = null;
+    B.forEach(function(b){ if(b.n < 3) return; var okp = b.ok/b.n, badp = (b.cx + b.bad)/b.n, cxp = b.cx/b.n;
+      if(sWarn==null && okp < 0.7) sWarn = b.lo; if(sRisk==null && (cxp >= 0.5 || (badp >= 0.7 && b.lo > 0))) sRisk = b.lo; });
+    var lines = B.filter(function(b){ return b.n >= 3; }).map(function(b){
+      return '<b>'+b.l+'</b>: ออกปกติ '+Math.round(b.ok/b.n*100)+'% · โยน/ตีกลับ '+Math.round(b.bad/b.n*100)+'% · ยกเลิก '+Math.round(b.cx/b.n*100)+'%'; });
+    /* short period · among the bad/cancelled days that ran, how many had period ≤ 6 s */
+    var badRan = days.filter(function(x){ return x.c==='bad' && x.S.per!=null; }), shortP = badRan.filter(function(x){ return x.S.per <= 6; }).length;
+    var allP = days.filter(function(x){ return x.S.per!=null; }), allShort = allP.filter(function(x){ return x.S.per <= 6; }).length;
+    var nData = days.filter(function(x){ return x.oc.src!=='bk'; }).length;
+    var sug = '<div class="wx-hsug">'
+      + '<div style="font-weight:800;margin-bottom:4px">เกณฑ์ที่ประวัติเสนอ <span style="font-weight:600;color:#0369A1">(จากผลจริง ไม่ใช่กฎตายตัว)</span></div>'
+      + '<div>ตั้งไว้ตอนนี้: <b>ระวัง ≥ '+(pt.warn||1.5)+' ม.</b> · <b>เสี่ยง ≥ '+(pt.risk||2)+' ม.</b>'
+      + ' &nbsp;→&nbsp; ประวัติเสนอ: <b>ระวัง ≥ '+(sWarn!=null?sWarn+' ม.':'— (ข้อมูลยังไม่พอ)')+'</b> · <b>เสี่ยง ≥ '+(sRisk!=null?sRisk+' ม.':'— (ข้อมูลยังไม่พอ)')+'</b></div>'
+      + (lines.length ? '<div style="margin-top:4px">'+lines.join('<br>')+'</div>' : '')
+      + (badRan.length >= 3 ? '<div style="margin-top:4px">คาบคลื่น: '+shortP+' ใน '+badRan.length+' วันที่ออกแล้วโยน มีคาบ ≤ 6 วิ (ทั้งหมดมี '+Math.round(allShort/Math.max(1,allP.length)*100)+'% ของวัน)'
+          + (shortP/badRan.length > allShort/Math.max(1,allP.length) + 0.15 ? ' → <b>คาบสั้นทำให้แย่กว่าความสูงบอก</b>' : '')+'</div>' : '')
+      + '<div style="margin-top:6px;font-size:10.5px;color:#0369A1">มีข้อมูลเกินกว่าใบจอง (ตัดสินใจ / กัปตัน / น้ำมัน / ตีกลับ) '+nData+' จาก '+days.length+' วัน · ยิ่งบันทึกมาก เกณฑ์ยิ่งแม่น · วันที่ไม่มีอะไรเลยนับเป็น "ออกปกติ"</div></div>';
+    /* table */
+    var rows = days.slice();
+    if(st.only) rows = rows.filter(function(x){ return x.c!=='ok'; });
+    rows.sort(st.sort==='date' ? function(a,b){ return a.d < b.d ? 1 : -1; } : function(a,b){ return (b.S.wave||0) - (a.S.wave||0); });
+    var tb = '<table class="wx-htb"><thead><tr>'
+      + '<th onclick="wxHistSet(\'sort\',\'date\')">วันที่'+(st.sort==='date'?' ↓':'')+'</th><th onclick="wxHistSet(\'sort\',\'wave\')">คลื่น'+(st.sort!=='date'?' ↓':'')+'</th><th>คาบ</th><th>ลม · กระโชก</th><th>ผล</th><th>เหตุผล / หมายเหตุ</th></tr></thead><tbody>'
+      + rows.map(function(x){ var S = x.S, wc = wxWaveC(pt, S.wave), col = wxOutColor(x.oc.k);
+          var why = []; if(x.dec && x.dec.reason) why.push('“'+wxE(x.dec.reason)+'”');
+          (x.oc.tb||[]).forEach(function(e){ if(e.note) why.push('⛵ '+wxE(wxBoatNm(e.bid))+': '+wxE(e.note)); });
+          return '<tr><td style="white-space:nowrap">'+dTxt(x.d)+'</td>'
+            + '<td><b style="padding:1px 6px;border-radius:5px;background:'+wc[0]+';color:'+wc[1]+'">'+S.wave+' m</b></td>'
+            + '<td style="'+(S.per!=null && S.per<=6?'color:#B91C1C;font-weight:700':'')+'">'+(S.per==null?'—':S.per+' s')+'</td>'
+            + '<td>'+(S.wind==null?'—':Math.round(S.wind))+(S.gust!=null?(' · '+Math.round(S.gust)):'')+' kt</td>'
+            + '<td style="color:'+col+';font-weight:700">'+(x.dec && x.dec.decision ? (WX_DEC_IC[x.dec.decision]||'')+' ' : '')+wxE(x.oc.t)+'</td>'
+            + '<td style="color:#64748B;max-width:360px">'+(why.join(' · ')||'')+'</td></tr>'; }).join('')
+      + '</tbody></table>';
+    body = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid #EEF1F5">'
+      + '<div class="wx-hs" style="border-bottom:0;border-right:1px solid #EEF1F5"><h4>เกิดอะไรขึ้นที่คลื่นแต่ละระดับ · '+(st.src==='hist'?'ข้อมูลจริง':'พยากรณ์ 05:00')+' · จุดกลางทาง</h4>'+bars+legend+'</div>'
+      + '<div class="wx-hs" style="border-bottom:0">'+sug+'</div></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;padding:10px 20px 6px"><b style="font-size:12px">รายวัน</b>'
+      + '<label style="font-size:11px;color:#64748B;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" '+(st.only?'checked':'')+' onchange="wxHistSet(\'only\',this.checked)"> เฉพาะวันที่มีปัญหา</label></div>'
+      + tb;
+  }
+  var keep = ov.querySelector('.wx-pbody'), sT = keep ? keep.scrollTop : 0;
+  ov.innerHTML = WX_CSS + '<div class="wx-pbox" style="width:min(1180px,100%)">'+head+'<div class="wx-pbody">'+body+'</div>'
+    + '<div class="wx-ft" style="padding:10px 18px"><span>ผล = การตัดสินใจ › รายงานกัปตัน › น้ำมันเกินปกติ › เรือตีกลับ › ใบจองยกเลิกเพราะอากาศ</span><span style="flex:1"></span><span>Esc หรือคลิกนอกกรอบเพื่อปิด</span></div></div>';
+  var nb = ov.querySelector('.wx-pbody'); if(nb && sT) nb.scrollTop = sT;
+}
 /* ── popup ── */
 WX.pop = null;   /* {date, pier} while open */
 function wxOpenPop(date){
@@ -690,6 +805,7 @@ function wxPopDay(n){ if(!WX.pop) return; WX.pop.date = wxAddDays(WX.pop.date, n
 function wxPopPier(p){ if(!WX.pop) return; WX.pop.pier = p; wxPopRender(); }
 function wxPopRender(){
   var ov = document.getElementById('wx-pop'); if(!ov || !WX.pop) return;
+  if(WX.pop.mode === 'hist') return wxHistRender(ov);   /* §wxHist */
   var date = WX.pop.date, today = wxToday();
   if(!WX.hrLoad[date]) wxLoadHr(date);
   if(!(WX.obs && Object.keys(WX.obs).some(function(k){ return WX.obs[k][date]; })) && !WX['_pl'+date]){ WX['_pl'+date]=1; wxFetch('/api/weather?from='+date+'&to='+date).then(function(j){ wxIngest(j.rows); wxPopRender(); }).catch(function(){}); }
