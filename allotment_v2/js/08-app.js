@@ -84770,11 +84770,15 @@ function pc2CSS3(S){
   var KEY = 'la_bt_view';
   /* §bkMroBtc (2026-10-15) · ผิวมือถือดูอย่างเดียว (§bkMro · body.bk-mro) วาดการ์ดเองจากหน้า Classic
      Compact เขียนการ์ด Boats running ทับเป็นตาราง ตัวอ่านของ §bkMro เลยหาทริปไม่เจอ ("Boat running ไม่ขึ้น") · ในผิวนั้นถือว่า Classic */
-  function on(){ try{ if(document.body && document.body.classList.contains('bk-mro')) return false; return localStorage.getItem(KEY) === 'compact'; }catch(e){ return false; } }
-  function apply(){ try{ if(document.body) document.body.classList.toggle('btc', on()); }catch(e){} }
-  window.btcIsOn = on;
+  /* §btLayer (2026-10-30) · owner "เฉพาะ Compact · ทำเป็น Layer · ชื่อทริป Layer หลัก ตามด้วยโซนรถรับ Phuket เป็น Card ใหญ่ Khaolak อันนึง Own อันนึง"
+     mode: classic | compact | layer · layer = ผิว Compact ทุกอย่าง + จัดเป็นการ์ดซ้อน (body.btl) */
+  function mode(){ try{ if(document.body && document.body.classList.contains('bk-mro')) return 'classic'; var v = localStorage.getItem(KEY); return (v === 'compact' || v === 'layer') ? v : 'classic'; }catch(e){ return 'classic'; } }
+  function on(){ return mode() !== 'classic'; }
+  function isLayer(){ return mode() === 'layer'; }
+  function apply(){ try{ if(document.body){ document.body.classList.toggle('btc', on()); document.body.classList.toggle('btl', isLayer()); } }catch(e){} }
+  window.btcIsOn = on; window.btcIsLayer = isLayer;
   window.btcSet = function(v){
-    try{ localStorage.setItem(KEY, v === 'compact' ? 'compact' : 'classic'); }catch(e){}
+    try{ localStorage.setItem(KEY, (v === 'compact' || v === 'layer') ? v : 'classic'); }catch(e){}
     apply();
     try{ if(typeof bkV2RenderKeep === 'function') bkV2RenderKeep(); else if(typeof bkV2Render === 'function') bkV2Render(); }catch(e){ console.error('[btCompact] rerender', e); }
     setTimeout(pass, 0);
@@ -84786,6 +84790,23 @@ function pc2CSS3(S){
     '.btc-tg .sg{display:inline-flex;gap:2px;background:#fff;border:1px solid #E1E5EC;border-radius:14px;padding:2px}',
     '.btc-tg button{border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:700;color:#5B6275;padding:3px 11px;border-radius:12px;cursor:pointer;letter-spacing:0}',
     '.btc-tg button.on{background:#16265C;color:#fff}',
+    /* ---------- §btLayer · การ์ดซ้อน (body.btl) ---------- */
+    'body.btl #view-booking .t2-mtbl tr.ly-sp td{height:14px;padding:0!important;border:0!important;background:#fff!important;box-shadow:none!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-zh td{background:var(--lybg)!important;border:1.5px solid var(--lyb)!important;border-bottom:0!important;border-radius:12px 12px 0 0;padding:9px 12px!important;box-shadow:none!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-zh .zw{display:flex;align-items:center;gap:10px}',
+    'body.btl #view-booking .t2-mtbl tr.ly-zh .znm{font-size:15px!important;font-weight:800!important;color:var(--lyc)!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-zh .zsub{color:#5B6170;font-weight:600}',
+    'body.btl #view-booking .ly-zr{margin-left:auto;display:inline-flex;gap:6px}',
+    'body.btl #view-booking .ly-zr span{background:#fff;border:1px solid var(--lyb);border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:700;color:var(--lyc);white-space:nowrap}',
+    'body.btl #view-booking .ly-zr span.w{background:#FFF1DE;color:#7A4300;border-color:#E6A23C}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in>td:first-child{border-left:1.5px solid var(--lyb)}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in>td:last-child{border-right:1.5px solid var(--lyb)}',
+    'body.btl #view-booking .t2-mtbl tr.ly-last>td{border-bottom:1.5px solid var(--lyb)!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-last>td:first-child{border-bottom-left-radius:12px}',
+    'body.btl #view-booking .t2-mtbl tr.ly-last>td:last-child{border-bottom-right-radius:12px}',
+    'body.btl #view-booking .t2-mtbl tr.ly-cols td{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#6B7489;font-weight:700;background:#FAFBFC!important;border-bottom:1px solid #E6E8EE;padding:5px 10px!important;white-space:nowrap}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in[data-grp] td{background:#F7F8FB!important}',
+    'body.btl #view-booking .t2-mtbl thead th{position:sticky;top:0;z-index:3}',
     /* ---------- Compact skin ---------- */
     'body.btc #view-booking .bt-c{border-radius:14px}',
     /* programmes: aligned columns */
@@ -85060,13 +85081,14 @@ function pc2CSS3(S){
   function toggle(root){
     var hd = root.querySelector('.bt-hdtop');
     if(!hd) return;
-    var cur = on() ? 'compact' : 'classic';
+    var cur = mode();   /* §btLayer */
     var tg = hd.querySelector('.btc-tg');
     if(tg && tg.getAttribute('data-v') === cur) return;
     if(tg) tg.remove();
     tg = document.createElement('span'); tg.className = 'btc-tg'; tg.setAttribute('data-v', cur);
     tg.innerHTML = 'มุมมอง<span class="sg"><button type="button" data-v="classic"' + (cur==='classic'?' class="on"':'') + ' title="แบบเดิม">Classic</button>'
-                 + '<button type="button" data-v="compact"' + (cur==='compact'?' class="on"':'') + ' title="แบบกระชับ · เห็นทุกคอลัมน์">Compact</button></span>';
+                 + '<button type="button" data-v="compact"' + (cur==='compact'?' class="on"':'') + ' title="แบบกระชับ · เห็นทุกคอลัมน์">Compact</button>'
+                 + '<button type="button" data-v="layer"' + (cur==='layer'?' class="on"':'') + ' title="แบบกระชับ จัดเป็นการ์ดซ้อน: ทริป → พื้นที่รับ (Phuket / Khaolak / Own) → กรุ๊ปรถ → ใบ">Layer</button></span>';   /* §btLayer */
     tg.addEventListener('click', function(ev){
       var b = ev.target.closest('button[data-v]'); if(!b) return;
       ev.stopPropagation();
@@ -85487,10 +85509,70 @@ function pc2CSS3(S){
         noticeTable(root);   /* §ntClassic (2026-10-17) · owner "Notice ของ Classic ปรับให้เหมือนของ Compact" · ตาราง Notice ใช้ทั้งสองผิว */
         if(on()){ boatsTable(root); progBars(root); vanGroups(root); boatBands(root); colWidths(root); tripBars(root); groupNoPickup(root); selCard(root); vanBars(root); oneLine(root); rows(root); lockIcons(root); lnumFit(root); }
       }
+      if(root && root.querySelector('.bt-pkh') && isLayer()){ try{ layer(root); }catch(e){ console.error('[btLayer]', e); } }   /* §btLayer */
     }catch(e){ console.error('[btCompact] pass', e); }
     busy = false;
   }
   window.btcPass = pass;
+
+  /* ══ §btLayer · จัดตารางทริป (ตารางเดียว) ให้เป็นการ์ดซ้อน โดยติด class + แทรกแถว spacer/หัวคอลัมน์ · คอลัมน์ยังชุดเดียวกัน ══ */
+  function zoneKey(txt){ var t = String(txt || '').toLowerCase();
+    if(/phuket|ภูเก็ต/.test(t)) return 'pk'; if(/khao\s*lak|เขาหลัก/.test(t)) return 'kl'; if(/ranong|ระนอง/.test(t)) return 'rn';
+    if(/own|มาเอง|no transfer|self|ไม่มีรถ/.test(t)) return 'own'; if(/charter|เหมา/.test(t)) return 'ch'; return 'oth'; }
+  var ZC = { pk:['#1E3A8A','#C9D4EE','#F4F6FC'], kl:['#1F6B46','#CFE3D6','#F3F9F5'], rn:['#0E5E73','#C7E0E8','#F0F8FA'], own:['#5B289A','#DDD6EE','#F7F5FC'], ch:['#8A3E05','#F0D5B8','#FDF6EE'], oth:['#3E4658','#D9DEE9','#F6F7FA'] };
+  function layer(root){
+    var tbs = root.querySelectorAll('table.t2-mtbl:not(.ly-done)');
+    for(var ti = 0; ti < tbs.length; ti++){
+      var tb = tbs[ti]; tb.classList.add('ly-done');
+      var tbody = tb.tBodies[0]; if(!tbody) continue;
+      var headTr = tb.tHead && tb.tHead.rows[0];
+      var rows = Array.prototype.slice.call(tbody.rows), zone = null, zrows = [], first = true;
+      var flush = function(){
+        if(!zone) return;
+        var k = zone.k, C = ZC[k] || ZC.oth, grp = 0, novan = 0, unN = 0;
+        zrows.forEach(function(r){
+          r.classList.add('ly-in', 'ly-z-' + k); r.style.setProperty('--lyc', C[0]); r.style.setProperty('--lyb', C[1]);
+          if(r.hasAttribute('data-grp')){ grp++; if(/ยังไม่เลือกรถ|ยังไม่จัดรถ/.test(r.textContent)) novan++; }
+          if(r.classList.contains('t2-unhd')){ var m = r.textContent.match(/(\d+)\s*booking/); unN += m ? +m[1] : 1; }
+        });
+        var vis = zrows.filter(function(r){ return r.style.display !== 'none'; });
+        if(vis.length) vis[vis.length - 1].classList.add('ly-last');
+        /* ชิปสรุปขวาของหัวการ์ด */
+        var zw = zone.tr.querySelector('.zw'); if(zw && !zw.querySelector('.ly-zr')){
+          var zr = document.createElement('span'); zr.className = 'ly-zr';
+          var h = '';
+          if(k === 'own') h += '<span>ไม่ต้องจัดรถ</span><span>เช็คที่ท่า</span>';
+          else { if(grp) h += '<span>' + grp + ' กรุ๊ป</span><span>รถ ' + (grp - novan) + '/' + grp + ' คัน</span>';
+                 if(novan) h += '<span class="w">ยังไม่เลือกรถ ' + novan + '</span>';
+                 if(unN) h += '<span class="w">ยังไม่จัดรถ ' + unN + ' ใบ</span>'; }
+          zr.innerHTML = h; zw.appendChild(zr);
+        }
+        /* หัวคอลัมน์ของการ์ด · โคลนจาก thead */
+        if(headTr && !zone.tr.nextElementSibling?.classList.contains('ly-cols')){
+          var hc = document.createElement('tr'); hc.className = 'ly-cols ly-in ly-z-' + k; hc.style.setProperty('--lyc', C[0]); hc.style.setProperty('--lyb', C[1]);
+          for(var c = 0; c < headTr.cells.length; c++){ var td = document.createElement('td'); td.innerHTML = headTr.cells[c].innerHTML; td.className = headTr.cells[c].className; hc.appendChild(td); }
+          zone.tr.parentNode.insertBefore(hc, zone.tr.nextSibling);
+        }
+        /* spacer ท้ายการ์ด */
+        var sp = document.createElement('tr'); sp.className = 'ly-sp'; sp.innerHTML = '<td colspan="' + (headTr ? headTr.cells.length : 20) + '"></td>';
+        var last = zrows[zrows.length - 1]; last.parentNode.insertBefore(sp, last.nextSibling);
+      };
+      for(var i = 0; i < rows.length; i++){
+        var tr = rows[i];
+        if(tr.classList.contains('t2-zband')){
+          flush();
+          var znm = tr.querySelector('.znm'), k = zoneKey((znm && znm.textContent) || tr.textContent), C = ZC[k] || ZC.oth;
+          tr.classList.add('ly-zh', 'ly-z-' + k); tr.style.setProperty('--lyc', C[0]); tr.style.setProperty('--lyb', C[1]); tr.style.setProperty('--lybg', C[2]);
+          var zk = tr.querySelector('.zkind'); if(zk) zk.style.display = 'none';   /* owner "ตัดคำว่า โซน ออก" */
+          if(!first){ var sp0 = document.createElement('tr'); sp0.className = 'ly-sp'; sp0.innerHTML = '<td colspan="' + (headTr ? headTr.cells.length : 20) + '"></td>'; tr.parentNode.insertBefore(sp0, tr); }
+          first = false; zone = {tr:tr, k:k}; zrows = []; continue;
+        }
+        if(tr.classList.contains('t2-pband')){ flush(); zone = null; zrows = []; continue; }
+        if(zone) zrows.push(tr);
+      }
+      flush();
+    }
+  }
 
   var queued = false;
   function queue(){ if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(function(){ queued = false; pass(); }); }
