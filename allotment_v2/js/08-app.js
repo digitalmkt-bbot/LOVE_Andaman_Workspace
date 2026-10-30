@@ -80023,6 +80023,13 @@ function pjPrint(){
    /* §pjHideIdle · กล่อง Not available แบบย่อ · เหลือหัวกล่องอย่างเดียว ไม่มีรายชื่อ
       ไม่ยืดเต็มแถว ปล่อยที่ที่เหลือให้กล่องอื่น */
    +'.fb.dn.slim{flex:0 0 auto;min-width:0}'
+   /* §pjFit2 (2026-10-30) · owner "ซ้อนกัน" · 8 ลำ = บอร์ดสองตาราง (brd2) กว้างกว่ากล่องที่ flex แบ่งให้
+      ตารางล้นออกขวาไปทับกล่อง Not available · เมื่อบอร์ดเป็นสองตาราง ให้กินเต็มแถว
+      แล้วกล่อง Ready / Not available ลงไปอยู่แถวถัดไปเคียงกัน · กันล้นไว้อีกชั้นด้วย overflow */
+   +'.fb.pg{overflow:hidden}'
+   +'.fleet .fb.pg:has(.brd2){flex:1 1 100%}'
+   +'.fleet:has(.brd2) .fb.ok,.fleet:has(.brd2) .fb.dn{flex:1 1 260px}'
+   +'.fleet:has(.brd2) .fb.dn.slim{flex:0 0 auto}'
    +'.fb.dn.slim .fb-h{margin-bottom:0}'
    +'.fb-h{display:flex;align-items:baseline;gap:7px;margin-bottom:3px;'
      +'font-size:'+(fs-1)+'px;font-weight:800;color:#2C3A52}'
