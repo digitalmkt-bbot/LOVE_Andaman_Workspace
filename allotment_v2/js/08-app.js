@@ -72372,7 +72372,9 @@ function pk3CSS(S){
   S+' .pk3-bc button:hover{background:rgba(255,255,255,.4)}',
   S+' .pk3-add{height:30px;padding:0 12px;border-radius:8px;border:1px dashed #9AA3C7;background:#fff;color:#0C5E8E;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer}',
   S+' .pk3-add.on,'+S+' .pk3-add:hover{background:#EEF4FB;border-style:solid}',
-  S+' .pk3-menu{position:absolute;left:16px;top:38px;z-index:30;width:330px;max-width:calc(100% - 32px);background:#fff;border:1px solid #D9DEE9;border-radius:10px;box-shadow:0 10px 30px rgba(15,27,61,.16);padding:6px;display:flex;flex-direction:column}',
+  S+' .pk3-menu{position:absolute;left:16px;top:38px;z-index:30;width:330px;max-width:calc(100% - 32px);background:#fff;border:1px solid #D9DEE9;border-radius:10px;box-shadow:0 10px 30px rgba(15,27,61,.16);padding:6px;display:flex;flex-direction:column;max-height:min(62vh,480px);overflow-y:auto;overscroll-behavior:contain}',   /* §pkMenuScroll */
+  S+' .pk3-menu>button{flex:none}',
+  S+' .pc2-card:has(.pk3-menu){overflow:visible}',   /* §pkMenuScroll · การ์ดตัดเมนูที่ลอยออกนอกกรอบ · เปิดเมนูอยู่ก็อย่าตัด */
   S+' .pk3-menu .h{font-size:10.5px;font-weight:700;color:'+M+';padding:6px 8px 4px}',
   S+' .pk3-menu>button{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;border:none;background:#fff;border-radius:7px;cursor:pointer;text-align:left;font-family:inherit;font-size:12.5px;color:#1A2A44}',
   S+' .pk3-menu>button:hover{background:#F3FAFD}',
