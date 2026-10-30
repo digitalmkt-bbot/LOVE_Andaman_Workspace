@@ -5094,6 +5094,11 @@
       "kind": "json_text",
       "db_type": "text"
     },
+    "ops_turnback": {
+      "source": "ops.turnBack",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "pierpayments": {
       "source": "pierPayments",
       "kind": "json_text",
@@ -5400,6 +5405,11 @@
     },
     "ops_piernote": {
       "source": "trips[].ops.pierNote",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_turnback": {
+      "source": "trips[].ops.turnBack",
       "kind": "json_text",
       "db_type": "text"
     },
