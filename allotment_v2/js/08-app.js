@@ -77704,13 +77704,27 @@ function pjParkNeed(rt){
 }
 /* สองบรรทัดใต้ชื่อเรือ */
 function pjDocsHtml(boat, rt, date){
-  var line=function(lv, name, extra){
-    return '<div class="pj-dl '+lv.k+'"><span class="nm">'+poE(name)+(extra||'')+'</span>'
-      +'<span class="vl">'+poE(lv.txt)+'</span></div>';
+  /* §pjDocFt (2026-10-30) · owner "ปรับเป็น Popup อยู่บน card เรือ · แบบป้ายลอยในหน้า By trip compact"
+     ของเดิมสองแถวเต็มความกว้างใต้ชื่อเรือ กินที่หัวการ์ด ~80px ทุกใบ
+     ตอนนี้เป็นป้ายเล็กลอยคร่อมขอบบนของการ์ด (ทรงเดียวกับ .btc-ft) · ย่อ = ชื่อสั้น + จำนวนวัน
+     ชี้เมาส์ = ขยายเป็นข้อความเต็มเหมือนของเดิม · สีระดับเดิมทุกระดับ (x d1 d2 d3 d4 renew none) */
+  var SHORT=function(lv){
+    var t=String(lv.txt||'');
+    if(lv.k==='none') return /ไม่ระบุ/.test(t)?'ไม่ระบุวัน':'ไม่มีใบ';
+    if(lv.k==='renew') return 'กำลังต่ออายุ';
+    var m=/เกิน\s*(\d+)\s*วัน/.exec(t); if(m) return 'เกิน '+m[1]+' วัน';
+    m=/เหลือ\s*(-?\d+)\s*วัน/.exec(t); if(m) return m[1]+' วัน';
+    return t; };
+  var ICON={x:'\u26D4 ', d1:'\u26A0 ', d2:'\u26A0 ', d3:'\u26A0 ', renew:'\u21BB ', none:'', d4:''};
+  var line=function(lv, name, extra, sn){
+    var ic=ICON[lv.k]||'';
+    return '<span class="pj-dl '+lv.k+'" title="'+poE(name+' · '+lv.txt)+'">'
+      +'<span class="s">'+ic+poE(sn||name)+' '+poE(SHORT(lv))+(extra||'')+'</span>'
+      +'<span class="x">'+ic+poE(name)+' · '+poE(lv.txt)+(extra||'')+'</span></span>';
   };
   var out='';
   // บรรทัด 1 · ใบอนุญาตใช้เรือ
-  out+=line(pjDocLv(pjDocFind(boat,'lic'), date), 'ใบอนุญาตใช้เรือ', '');
+  out+=line(pjDocLv(pjDocFind(boat,'lic'), date), 'ใบอนุญาตใช้เรือ', '', 'ใช้เรือ');
   // บรรทัด 2 · ใบเข้าเกาะของโปรแกรมวันนี้
   var need=(rt&&rt.id)?pjParkNeed(rt):[];
   if(!rt || !rt.id){
@@ -77721,25 +77735,23 @@ function pjDocsHtml(boat, rt, date){
     var held=PJ_PARK.map(function(p){ var d=pjDocFind(boat,p.doc); if(!d) return null;
         var lv=pjDocLv(d,date); lv._t=p.t; return lv; }).filter(Boolean);
     if(!held.length){
-      out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
-         +'<span class="vl">ไม่มีใบในระบบ</span></div>';
+      out+=line({k:'none',txt:'ไม่มีใบในระบบ'}, 'ใบเข้าเกาะ', '', 'ใบเข้าเกาะ');
     } else {
       held.sort(function(a,b){ return (RANK0[a.k]||9)-(RANK0[b.k]||9); });
       var w0=held[0];
-      out+=line(w0, 'ใบอนุญาต '+w0._t, (held.length>1?('<span class="pj-dmore">+'+(held.length-1)+'</span>'):''));
+      out+=line(w0, 'ใบอนุญาต '+w0._t, (held.length>1?('<span class="pj-dmore">+'+(held.length-1)+'</span>'):''), w0._t);
     }
   } else if(!need.length){
-    out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
-       +'<span class="vl">โปรแกรมนี้ไม่ต้องใช้ใบอุทยาน</span></div>';
+    /* §pjDocFt · โปรแกรมที่ไม่ต้องใช้ใบอุทยาน ไม่ต้องมีป้าย · ไม่มีอะไรให้ทำ */
   } else {
     // หลายใบ → เอาใบที่แย่ที่สุดขึ้นบรรทัด แล้วบอกจำนวนที่เหลือ
     var RANK={x:0,none:1,d1:2,renew:3,d2:4,d3:5,d4:6};
     var all=need.map(function(p){ var lv=pjDocLv(pjDocFind(boat,p.doc), date); lv._t=p.t; return lv; });
     all.sort(function(a,b){ return (RANK[a.k]||9)-(RANK[b.k]||9); });
     var w=all[0];
-    out+=line(w, 'ใบอนุญาต '+w._t, (all.length>1?('<span class="pj-dmore">+'+(all.length-1)+'</span>'):''));
+    out+=line(w, 'ใบอนุญาต '+w._t, (all.length>1?('<span class="pj-dmore">+'+(all.length-1)+'</span>'):''), w._t);
   }
-  return '<div class="pj-docs">'+out+'</div>';
+  return '<div class="pj-docs ft">'+out+'</div>';
 }
 /* สีประจำหมวดในการ์ด */
 var PJ_SEC={crew:{bg:'#EAF0F9',fg:'#1B4A87',bd:'#D3E0F2'},
@@ -77850,6 +77862,20 @@ function pjCSS(){
   +H+' .pj-dl.d4{background:#E9F4EE;color:#1D6A4C;border:1px solid #CDE6DA}'
   +H+' .pj-dl.renew{background:#E4EEF9;color:#17538F;border:1px solid #C3DBF2}'
   +H+' .pj-dl.none{background:rgba(255,255,255,.16);color:rgba(255,255,255,.86);border:1px dashed rgba(255,255,255,.42)}'
+  /* §pjDocFt · ป้ายลอยคร่อมขอบบนการ์ด · การ์ดต้องไม่ตัดของที่ล้นขอบ · มุมโค้งย้ายไปที่ลูกชิ้นแรก/ชิ้นสุดท้ายแทน */
+  +H+' .pj-strip{padding-top:13px}'
+  +H+' .bc{overflow:visible}'
+  +H+' .bc>.top{border-radius:12px 12px 0 0}'
+  +H+' .bc>:last-child{border-bottom-left-radius:12px;border-bottom-right-radius:12px}'
+  +H+' .pj-docs.ft{position:absolute;top:-9px;left:12px;right:12px;margin:0;display:flex;flex-direction:row;flex-wrap:nowrap;gap:5px;z-index:6;pointer-events:none}'
+  +H+' .pj-docs.ft .pj-dl{pointer-events:auto;display:inline-flex;align-items:center;min-height:0;font-size:10px;font-weight:700;line-height:17px;padding:0 7px;border-radius:9px;white-space:nowrap;box-shadow:0 2px 5px rgba(15,27,61,.18);cursor:default;gap:0;flex:none;max-width:none}'
+  +H+' .pj-docs.ft .pj-dl .x{display:none}'
+  +H+' .pj-docs.ft .pj-dl:hover{font-size:11px;line-height:20px;padding:0 10px;border-radius:10px;transform:translateY(-2px);z-index:8;position:relative}'
+  +H+' .pj-docs.ft .pj-dl:hover .s{display:none}'
+  +H+' .pj-docs.ft .pj-dl:hover .x{display:inline}'
+  +H+' .pj-docs.ft .pj-dl.x{background:#D92D20;color:#fff;border:0}'
+  +H+' .pj-docs.ft .pj-dl.none{background:#F4F5F7;color:#64748B;border:1px dashed #AAB3C2;box-shadow:none}'
+  +H+' .pj-docs.ft .pj-dmore{margin-left:3px}'
   /* กล่องผลตรวจใบอนุญาตคนขับ · สูงคงที่ ไม่งั้นใบที่มีปัญหาจะดันบรรทัดล่างเหลื่อม */
   +H+' .pj-licbox{height:58px;overflow:auto;border-bottom:1px solid #F4F5F8}'
   +H+' .pj-licbox .pl-res{border-bottom:none;padding:6px 15px;font-size:11px}'
