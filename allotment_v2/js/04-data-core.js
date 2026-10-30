@@ -10101,6 +10101,7 @@ function renderOp(){
   const host = document.getElementById('bop2-host');
   if(!host) return;
   host.innerHTML = bop2RenderShell();
+  try{ if(typeof wxAfterRender==='function') wxAfterRender(bop2GetDates()); }catch(e){ console.warn('[wx] after render', e.message); }   /* §wx */
 }
 
 function bop2RenderShell(){
@@ -10449,12 +10450,15 @@ function bop2RenderShell(){
         }).join('')}
         ${(() => { window._bop2FreeMemo = {}; return ''; })()}
         ${tublamuRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>TUB LAMU · ${tublamuRoutes.length} route${tublamuRoutes.length===1?'':'s'}</span></div>` : ''}
+        ${tublamuRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('tublamu', dates) : ''}
         ${tublamuRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
         ${tublamuRoutes.length ? bop2RenderFreeRow('tublamu', dates) : ''}
         ${panwaRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>VISIT PANWA · ${panwaRoutes.length} route${panwaRoutes.length===1?'':'s'}</span></div>` : ''}
+        ${panwaRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('panwa', dates) : ''}
         ${panwaRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
         ${panwaRoutes.length ? bop2RenderFreeRow('panwa', dates) : ''}
         ${ranongRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>RANONG · ${ranongRoutes.length} route${ranongRoutes.length===1?'':'s'}</span></div>` : ''}
+        ${ranongRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('ranong', dates) : ''}
         ${ranongRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
         ${ranongRoutes.length ? bop2RenderFreeRow('ranong', dates) : ''}
         ${(() => {
@@ -10493,6 +10497,7 @@ function bop2RenderShell(){
 
     <!-- §bopMock · Col 3 · แผงกองเรือ + รายการที่ต้องจัดเรือ -->
     <div style="display:flex;flex-direction:column;gap:13px">
+    ${typeof wxCardHtml==='function' ? wxCardHtml(_selDate, _bop2.pier==='all' ? null : [_bop2.pier]).replace('id="wx-card"', 'id="wx-card" data-piers="'+(_bop2.pier==='all' ? '' : _bop2.pier)+'"') : ''}
 
     <!-- Right: fleet calendar panel -->
     <div class="bo-card" style="padding:16px;align-self:start">

@@ -2538,6 +2538,120 @@ async function bbGuardOps(ops, who){
   }catch(e){ console.warn('[bbGuard] skipped —', e.message); return 0; }
 }
 
+
+// ══ §wx · Weather log per route point (2026-10-30) ═══════════════════════════════════════════
+// Owner: "การออกเรือสอดคล้องกับสภาพอากาศ · ควรเก็บประวัติว่าเรือเจอสภาพอากาศแบบไหนออกได้ แบบไหนออกไม่ได้
+//         เอามาเป็นตัวช่วยตัดสินใจ · แต่ละเส้นทางใช้พยากรณ์ไม่เหมือนกัน เพราะเดินทางคนละเส้นทาง"
+// One forecast point per route group (weather/points.json), never the Phuket land forecast: what stops a
+// boat is wave height + period + direction at sea on the way, not rain in town.
+// Three snapshots per point per date in operation_schemas.weather_obs (kind):
+//   fc17 = forecast for D taken ~17:00 D-1 (what the office saw when cancelling ahead)
+//   fc05 = forecast for D taken ~05:00 D   (what the pier saw at departure)
+//   hist = the day as the model analysed it afterwards (backfillable, from June onward)
+// Both forecasts are kept separately: a forecast changes overnight and we must know which one a
+// decision was made on. Source: Open-Meteo marine + forecast endpoints, no key, free.
+// Nothing here touches the app blob; the client reads /api/weather. Fetch failures only log.
+const WX_POINTS_FILE = path.join(ROOT, 'weather', 'points.json');
+function wxPoints(){
+  try{ const j = JSON.parse(fs.readFileSync(WX_POINTS_FILE, 'utf8')); return Array.isArray(j.points) ? j.points : []; }
+  catch(e){ return []; }
+}
+function wxBkk(d){   // {ymd, hour} in Asia/Bangkok for a Date
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false }).formatToParts(d || new Date());
+  const g = k => (p.find(x => x.type === k) || {}).value;
+  return { ymd: `${g('year')}-${g('month')}-${g('day')}`, hour: Number(g('hour')) % 24 };
+}
+function wxAddDays(ymd, n){ const d = new Date(ymd + 'T12:00:00+07:00'); d.setUTCDate(d.getUTCDate() + n); return wxBkk(d).ymd; }
+async function wxGetJson(url){
+  const r = await fetch(url, { headers:{ 'User-Agent':'loveandaman-rsvn/1.0' } });
+  if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + url.split('?')[0]);
+  return r.json();
+}
+// One day of hourly data for a point; works for past and future dates (Open-Meteo blends archive + forecast).
+async function wxFetchDay(pt, ymd){
+  const base = `latitude=${pt.lat}&longitude=${pt.lon}&timezone=Asia%2FBangkok&start_date=${ymd}&end_date=${ymd}`;
+  const [m, w] = await Promise.all([
+    wxGetJson(`https://marine-api.open-meteo.com/v1/marine?${base}&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height`),
+    wxGetJson(`https://api.open-meteo.com/v1/forecast?${base}&wind_speed_unit=kn&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation`)
+  ]);
+  const H = { time: (m.hourly && m.hourly.time) || [] };
+  ['wave_height','wave_period','wave_direction','swell_wave_height','swell_wave_period','swell_wave_direction','wind_wave_height'].forEach(k => { H[k] = (m.hourly && m.hourly[k]) || []; });
+  ['wind_speed_10m','wind_gusts_10m','wind_direction_10m','precipitation'].forEach(k => { H[k] = (w.hourly && w.hourly[k]) || []; });
+  return H;
+}
+// Summary over the point's sailing window (hours [h0,h1]): the numbers the card shows and similarity uses.
+function wxSummarize(H, pt){
+  const h0 = (pt.hours && pt.hours[0]) || 6, h1 = (pt.hours && pt.hours[1]) || 15;
+  const idx = []; (H.time || []).forEach((t, i) => { const h = Number(String(t).slice(11, 13)); if(h >= h0 && h <= h1) idx.push(i); });
+  const pick = k => idx.map(i => H[k] && H[k][i]).filter(v => typeof v === 'number');
+  const max = a => a.length ? Math.max.apply(null, a) : null;
+  const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+  const circMean = a => { if(!a.length) return null; let x = 0, y = 0; a.forEach(d => { x += Math.cos(d * Math.PI / 180); y += Math.sin(d * Math.PI / 180); }); return (Math.round(Math.atan2(y, x) * 180 / Math.PI) + 360) % 360; };
+  const wave = pick('wave_height'), iMax = wave.length ? wave.indexOf(Math.max.apply(null, wave)) : -1;
+  const per = pick('wave_period');
+  const r1 = v => v == null ? null : Math.round(v * 10) / 10;
+  return {
+    hours:[h0, h1],
+    wave:r1(max(wave)), waveMean:r1(mean(wave)),
+    per:r1(iMax >= 0 && per[iMax] != null ? per[iMax] : mean(per)), perMin:r1(per.length ? Math.min.apply(null, per) : null),
+    dir:circMean(pick('wave_direction')),
+    swell:r1(max(pick('swell_wave_height'))), swellPer:r1(mean(pick('swell_wave_period'))), swellDir:circMean(pick('swell_wave_direction')),
+    windWave:r1(max(pick('wind_wave_height'))),
+    wind:r1(max(pick('wind_speed_10m'))), gust:r1(max(pick('wind_gusts_10m'))), windDir:circMean(pick('wind_direction_10m')),
+    rain:r1(pick('precipitation').reduce((s, v) => s + v, 0))
+  };
+}
+async function wxStore(pt, ymd, kind){
+  if(!pool) return null;
+  const H = await wxFetchDay(pt, ymd);
+  const S = wxSummarize(H, pt);
+  await pool.query(
+    `INSERT INTO operation_schemas.weather_obs (point_id, date, kind, taken_at, hourly, summary)
+     VALUES ($1,$2,$3,now(),$4,$5)
+     ON CONFLICT (point_id, date, kind) DO UPDATE SET taken_at=now(), hourly=EXCLUDED.hourly, summary=EXCLUDED.summary`,
+    [pt.id, ymd, kind, JSON.stringify(H), JSON.stringify(S)]);
+  return S;
+}
+async function wxHas(ptId, ymd, kind){
+  const r = await pool.query('SELECT 1 FROM operation_schemas.weather_obs WHERE point_id=$1 AND date=$2 AND kind=$3', [ptId, ymd, kind]);
+  return r.rowCount > 0;
+}
+// Scheduler · checked every 10 min against Bangkok time · each slot runs once per day (guarded by wxHas).
+//   17:00–18:59 D-1 → fc17 for tomorrow · 05:00–06:59 → fc05 for today · 02:00–03:59 → hist for D-2 and D-3
+let _wxBusy = false;
+async function wxTick(){
+  if(!pool || _wxBusy) return; _wxBusy = true;
+  try{
+    const { ymd, hour } = wxBkk(); const P = wxPoints();
+    const jobs = [];
+    if(hour >= 17 && hour < 19) jobs.push([wxAddDays(ymd, 1), 'fc17']);
+    if(hour >= 5  && hour < 7)  jobs.push([ymd, 'fc05']);
+    if(hour >= 2  && hour < 4)  jobs.push([wxAddDays(ymd, -2), 'hist'], [wxAddDays(ymd, -3), 'hist']);
+    for(const [d, kind] of jobs) for(const pt of P){
+      try{ if(await wxHas(pt.id, d, kind)) continue; await wxStore(pt, d, kind); console.log(`[wx] ${kind} ${pt.id} ${d}`); }
+      catch(e){ console.warn(`[wx] ${kind} ${pt.id} ${d} failed: ${e.message}`); }
+    }
+  } finally { _wxBusy = false; }
+}
+if(pool){ setInterval(() => { wxTick().catch(e => console.warn('[wx] tick', e.message)); }, 10 * 60 * 1000).unref(); setTimeout(() => wxTick().catch(()=>{}), 20000); }
+// Backfill · hist for a date range, every point, skipping rows that exist · runs in the background, polled by GET.
+const _wxBf = { running:false, done:0, skipped:0, failed:0, total:0, from:'', to:'', last:'', startedAt:null, finishedAt:null, errors:[] };
+async function wxBackfill(from, to){
+  if(_wxBf.running) return;
+  Object.assign(_wxBf, { running:true, done:0, skipped:0, failed:0, total:0, from, to, last:'', startedAt:new Date().toISOString(), finishedAt:null, errors:[] });
+  const P = wxPoints(); const days = []; for(let d = from; d <= to; d = wxAddDays(d, 1)) days.push(d);
+  _wxBf.total = days.length * P.length;
+  try{
+    for(const d of days) for(const pt of P){
+      try{
+        if(await wxHas(pt.id, d, 'hist')){ _wxBf.skipped++; continue; }
+        await wxStore(pt, d, 'hist'); _wxBf.done++; _wxBf.last = pt.id + ' ' + d;
+        await new Promise(r => setTimeout(r, 250));   // be polite to the free API
+      }catch(e){ _wxBf.failed++; if(_wxBf.errors.length < 10) _wxBf.errors.push(pt.id + ' ' + d + ': ' + e.message); await new Promise(r => setTimeout(r, 1500)); }
+    }
+  } finally { _wxBf.running = false; _wxBf.finishedAt = new Date().toISOString(); }
+}
+
 const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
   const q = (req.url||'').split('?')[1]||'';
@@ -2637,6 +2751,46 @@ const server = http.createServer((req, res) => {
   }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
+  // ───── §wx · weather log ─────
+  if(u === '/api/weather/points'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    return J(res,200,{points:wxPoints()});
+  }
+  if(u === '/api/weather'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    const qp=new URLSearchParams(q);
+    const from=String(qp.get('from')||''), to=String(qp.get('to')||from), ptId=String(qp.get('point')||'');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return J(res,400,{error:'from/to=YYYY-MM-DD required'});
+    const full = qp.get('hourly') === '1';
+    const args=[from,to]; let where='date BETWEEN $1 AND $2'; if(ptId){ args.push(ptId); where+=' AND point_id=$3'; }
+    pool.query(`SELECT point_id,date,kind,taken_at,summary${full?',hourly':''} FROM operation_schemas.weather_obs WHERE ${where} ORDER BY date,point_id,kind`, args)
+      .then(r=>J(res,200,{rows:r.rows}))
+      .catch(e=>J(res,500,{error:e.message}));
+    return;
+  }
+  if(u === '/api/weather/backfill'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(req.method === 'POST'){
+      if(s.role!=='admin' && s.role!=='manager') return J(res,403,{error:'admin only'});
+      if(!pool) return J(res,503,{error:'no database'});
+      const qp=new URLSearchParams(q);
+      const from=String(qp.get('from')||'2026-06-01'), to=String(qp.get('to')||wxAddDays(wxBkk().ymd,-1));
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from>to) return J(res,400,{error:'bad range'});
+      if(_wxBf.running) return J(res,409,Object.assign({error:'already running'},_wxBf));
+      wxBackfill(from,to).catch(e=>console.warn('[wx] backfill',e.message));
+      return J(res,202,Object.assign({started:true},_wxBf));
+    }
+    return J(res,200,_wxBf);
+  }
+  if(u === '/api/weather/fetch' && req.method === 'POST'){   // on-demand snapshot: ?date=&kind=fc05|fc17|hist
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    const qp=new URLSearchParams(q); const date=String(qp.get('date')||''), kind=String(qp.get('kind')||'fc05');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(fc05|fc17|hist)$/.test(kind)) return J(res,400,{error:'date + kind required'});
+    (async()=>{ const out={}; for(const pt of wxPoints()){ try{ out[pt.id]=await wxStore(pt,date,kind); }catch(e){ out[pt.id]={error:e.message}; } } J(res,200,{date,kind,points:out}); })();
+    return;
+  }
   // ───── DATA (require login) ─────
   if(u === '/api/load'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'});

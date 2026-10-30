@@ -1,0 +1,10 @@
+{
+  "_doc": "§wx · one forecast point per route group, placed AT SEA on the way, not at the pier or Phuket town. match = regex on route name (case-insensitive) within the same pier; a point with no match is the pier's default. hours = sailing window used for the daily summary (max wave / wind inside it). warn/risk = wave height (m) thresholds for the colour on the Boat Operation card; wind = gust (kt) that also turns it red. These are starting values — tune them from the history page once a season of decisions is in.",
+  "points": [
+    { "id": "similan", "name": "สิมิลัน · กลางทางจากทับละมุ", "pier": "tublamu", "lat": 8.75, "lon": 97.95, "match": "similan|สิมิลัน|tratato|tiger", "hours": [6, 15], "warn": 1.5, "risk": 2.0, "wind": 20 },
+    { "id": "surin",   "name": "สุรินทร์ · หน้าเกาะพระทอง",   "pier": "tublamu", "lat": 9.10, "lon": 98.05, "match": "surin|สุรินทร์",                 "hours": [6, 15], "warn": 1.8, "risk": 2.3, "wind": 20 },
+    { "id": "phiphi",  "name": "พีพี · กลางอ่าวจากพันวา",      "pier": "panwa",   "lat": 7.78, "lon": 98.55, "match": "phi phi|พีพี|whale|bamboo|khai|maiton", "hours": [7, 16], "warn": 1.2, "risk": 1.6, "wind": 20 },
+    { "id": "phangnga","name": "อ่าวพังงา · กระบี่",           "pier": "panwa",   "lat": 8.05, "lon": 98.60, "match": "krabi|phang|james|กระบี่|พังงา",  "hours": [7, 16], "warn": 1.2, "risk": 1.6, "wind": 22 },
+    { "id": "ranong",  "name": "ระนอง · ปากน้ำไปเกาะ",         "pier": "ranong",  "lat": 9.85, "lon": 98.35, "match": "",                               "hours": [7, 16], "warn": 1.5, "risk": 2.0, "wind": 20 }
+  ]
+}
