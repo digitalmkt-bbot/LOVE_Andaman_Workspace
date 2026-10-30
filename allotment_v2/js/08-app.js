@@ -78165,6 +78165,7 @@ function pjCSS(){
   +H+'.sk .pj-hd2 .dt .now{height:30px;border:none;border-radius:9px;background:#EEF2FF;color:#4F46E5;font:700 12px inherit;font-family:inherit;padding:0 10px;cursor:pointer}'
   +H+'.sk .pj-hd2 .dt .cp{height:30px;border:none;border-radius:9px;background:#ECFDF5;color:#047857;font:700 12px inherit;font-family:inherit;padding:0 9px;cursor:pointer;white-space:nowrap}'
   +H+'.sk .pj-hd2 .dt .cp:disabled{opacity:.45;cursor:default}'
+  +H+'.sk .pj-hd2 .dt .cp.wb{background:#EEF2FF;color:#3730A3}'   /* §pjWbAll */
   +H+'.sk .pj-hd2 .dt .pj-wsw{display:flex;padding:2px;border-radius:9px}'
   +H+'.sk .pj-hd2 .dt .pj-wsw button{padding:4px 8px;font-size:12px;border-radius:7px;white-space:nowrap}'
   +H+'.sk .pj-hd2 .dt .pr{height:30px;border:none;border-radius:9px;background:#0F172A;color:#fff;font:700 12px inherit;font-family:inherit;padding:0 11px;cursor:pointer;white-space:nowrap}'
@@ -78917,6 +78918,44 @@ function pjCopyYday(pier){
     +'\n\nถ้าต้องการทับลำที่ข้ามไป ให้กดแก้ไขที่ท้ายการ์ดของลำนั้นก่อน');
   pjKeep(function(){ renderPierJob(); });
 }
+/* ══ §pjWbAll (2026-10-30) · ปุ่มเดียว ใส่สีสายรัดล่าสุดของแต่ละลำลงใบวันนี้ ══
+   owner: "สีริสแบนด์ให้โคลนมาจากวันก่อนหน้าได้ไหม"
+   §pjWbCarry สืบทอดให้ดูอยู่แล้วแต่ย้อนแค่ 14 วันและไม่เขียนลงใบ · พอทีมไม่ได้ตั้งสีนานกว่านั้น
+   ใบใหม่ก็ว่างทั้งแถว · ปุ่มนี้เขียนจริง (ใบจะนับว่า "ถูกแตะ" แล้ว) จึงทำเฉพาะลำที่ออกเรือวันนี้
+   และยังไม่มีสีของตัวเอง · ข้ามใบที่ล็อกแล้ว · ย้อนหลังไกลกว่า (90 วัน) เพราะเรือบางลำไม่ได้ออกทุกวัน
+   สีเป็นของ "ลำ" ไม่ใช่ของ "วัน" · จึงดูของลำเดียวกันเท่านั้น (เหตุผลเดียวกับ §pjWbCarry) */
+var PJ_WB_BACK_ALL=90;
+function pjWbLast(date,bid,back){
+  var d=new Date(date+'T12:00:00');
+  for(var i=0;i<(back||PJ_WB_BACK_ALL);i++){
+    d.setDate(d.getDate()-1);
+    var ds=poYMD(d), o=pjRaw(ds,bid);
+    if(o && (String(o.wbc||'').trim() || String(o.wb||'').trim()))
+      return {c:String(o.wbc||''), t:String(o.wb||''), from:ds};
+  }
+  return null;
+}
+function pjWbCarryAll(pier){
+  if(!poCanEdit()) return;
+  var all=pjAllBoats(_poDate,pier||_poPier)||[], n=0, has=0, none=0, lock=0, lines=[];
+  all.forEach(function(B){
+    if(!B || !B._st || B._st.k!=='run') return;            /* เฉพาะลำที่ออกเรือวันนี้ */
+    var own=pjRaw(_poDate,B.bid);
+    if(own && (String(own.wbc||'').trim() || String(own.wb||'').trim())){ has++; return; }
+    if(pjOf(_poDate,B.bid).lock){ lock++; return; }
+    var W=pjWbLast(_poDate,B.bid);
+    if(!W){ none++; lines.push(((B.boat&&B.boat.name)||B.bid)+': no colour in last '+PJ_WB_BACK_ALL+' days'); return; }
+    pjSet(_poDate,B.bid,{wb:W.t,wbc:W.c});
+    n++; lines.push(((B.boat&&B.boat.name)||B.bid)+': '+(W.t||W.c)+' (from '+W.from+')');
+  });
+  var msg='Wristband colours applied to '+n+' boat'+(n===1?'':'s');
+  if(has) msg+='\n'+has+' already set today (kept)';
+  if(lock) msg+='\n'+lock+' locked sheet'+(lock===1?'':'s')+' skipped';
+  if(none) msg+='\n'+none+' with no previous colour';
+  if(lines.length) msg+='\n\n'+lines.join('\n');
+  alert(msg);
+  pjKeep(function(){ renderPierJob(); });
+}
 /* จัดไกด์ · ใช้หน้าเดิม แล้วรีเฟรชกลับมาที่ใบงาน */
 function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} }
 /* §gjCard (2026-09-05) · พิมพ์ใบงานไกด์ของลำนี้ได้จากท้ายการ์ด ไม่ต้องข้ามไปหน้าเช็คอิน
@@ -79443,6 +79482,8 @@ function renderPierJob(pier){
           +'<button class="now" onclick="pjToday()">วันนี้</button>'
           +'<i class="sep"></i>'
           +'<button class="cp" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+' title="คัดลอกคนจากเมื่อวาน">&#8634;<span class="tx"> คัดลอกเมื่อวาน</span></button>'
+          /* §pjWbAll · ใส่สีสายรัดล่าสุดของทุกลำที่ออกเรือวันนี้ (ที่ยังไม่มีสี) */
+          +'<button class="cp wb" onclick="pjWbCarryAll(\''+P.k+'\')"'+(ro?' disabled':'')+' title="ใส่สีสายรัดข้อมือล่าสุดของแต่ละลำ (ย้อนหลังไม่เกิน 90 วัน) ลงใบวันนี้ · เฉพาะลำที่ออกเรือและยังไม่ได้ตั้งสี · ไม่ทับลำที่ตั้งแล้วหรือล็อกแล้ว">&#9673;<span class="tx"> สีสายรัดล่าสุด</span></button>'
           +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
             +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+(_pjW===n?' ลำ':'')+'</button>'; }).join('')
           +'</div>'
