@@ -28,8 +28,8 @@ function wxBest(ptId, date){
 function wxKindTxt(k){ return k==='hist' ? 'ข้อมูลจริง (วิเคราะห์หลังวัน)' : k==='fc05' ? 'พยากรณ์ 05:00 วันออกเรือ' : 'พยากรณ์ 17:00 วันก่อน'; }
 function wxLevel(pt, S){
   if(!S || S.wave==null) return 'none';
-  if(S.wave >= (pt.risk||2) || (S.gust!=null && S.gust >= (pt.wind||20))) return 'risk';
-  if(S.wave >= (pt.warn||1.5)) return 'warn';
+  if(S.wave >= (pt.risk||2)) return 'risk';
+  if(S.wave >= (pt.warn||1.5) || (S.gust!=null && S.gust >= (pt.wind||25))) return 'warn';
   return 'ok';
 }
 var WX_LV = { risk:['#FDF1F0','#A32D2D','เสี่ยง'], warn:['#FFF8EC','#854F0B','ระวัง'], ok:['#E1F5EE','#0F6E56','ปกติ'], none:['transparent','#B9BDC7',''] };
@@ -104,37 +104,48 @@ function wxCardHtml(date, piers){
 }
 function wxCardBody(date, piers){
   var dt = new Date(date+'T12:00:00'); var MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  var head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:13px">สภาพทะเล · '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><span style="flex:1"></span>'
-    + '<button type="button" class="bo-btn" style="padding:4px 10px;font-size:10px" onclick="wxFetchNow(\''+date+'\')">ดึงพยากรณ์ตอนนี้</button></div>';
+  var head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:13px">สภาพทะเล · '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><span style="flex:1"></span>'
+    + '<button type="button" class="bo-btn icon" title="ดึงพยากรณ์ตอนนี้" aria-label="ดึงพยากรณ์ตอนนี้" onclick="wxFetchNow(\''+date+'\')" style="width:26px;height:26px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg></button></div>';
   if(!WX.pts) return head+'<div style="font-size:11px;color:#6B7785">กำลังโหลด…</div>';
   var P = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
-  if(!P.length) return head+'<div style="font-size:11px;color:#6B7785">ยังไม่ได้ตั้งจุดพยากรณ์ของท่านี้ (weather/points.json)</div>';
+  if(!P.length) return head+'<div style="font-size:11px;color:#6B7785">ยังไม่ได้ตั้งจุดพยากรณ์ของท่านี้</div>';
+  var canDecide = date <= wxAddDays(wxToday(), 1);
   var body = P.map(function(pt){
+    var short = wxE(pt.name.split(' · ')[0]);
     var b = wxBest(pt.id, date);
-    if(!b || b.S.wave==null) return '<div style="padding:9px 0;border-top:1px solid #EEF1F5"><b style="font-size:12px">'+wxE(pt.name)+'</b><div style="font-size:11px;color:#6B7785">ยังไม่มีข้อมูลวันนี้ · พยากรณ์ดึงอัตโนมัติ 17:00 วันก่อน และ 05:00 เช้า</div></div>';
+    if(!b || b.S.wave==null) return '<div style="padding:8px 0;border-top:1px solid #EEF1F5;display:flex;align-items:center;gap:8px"><b style="font-size:12px;flex:1">'+short+'</b><span style="font-size:10.5px;color:#9B9088">ยังไม่มีข้อมูล</span></div>';
     var S=b.S, lv=wxLevel(pt,S), c=WX_LV[lv];
     var sim = wxSimilar(pt, S, date), nRan=sim.filter(function(x){ return x.oc.k==='ran'; }).length, nCx=sim.filter(function(x){ return x.oc.k==='cx'; }).length, nRough=sim.filter(function(x){ return x.oc.k==='rough'||x.oc.k==='bumpy'; }).length, nPart=sim.length-nRan-nCx-nRough;
-    var oc = wxOutcome(pt.id, date);
-    return '<div style="padding:10px 0;border-top:1px solid #EEF1F5">'
-      + '<div style="display:flex;align-items:center;gap:8px"><b style="font-size:12px;flex:1">'+wxE(pt.name)+'</b><span style="font-size:10px;font-weight:700;background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:6px">'+c[2]+'</span></div>'
-      + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px">'
-      +   '<div><div style="font-size:9.5px;color:#6B7785">คลื่น</div><b style="font-family:\'DM Mono\',monospace;font-size:17px;color:'+c[1]+'">'+S.wave+'<span style="font-size:10px"> m</span></b><div style="font-size:9.5px;color:#6B7785">คาบ '+S.per+' s · '+wxDirTxt(S.dir)+'</div></div>'
-      +   '<div><div style="font-size:9.5px;color:#6B7785">swell</div><b style="font-family:\'DM Mono\',monospace;font-size:17px">'+(S.swell==null?'—':S.swell)+'<span style="font-size:10px"> m</span></b><div style="font-size:9.5px;color:#6B7785">'+(S.swellPer!=null?(S.swellPer+' s · '+wxDirTxt(S.swellDir)):'')+'</div></div>'
-      +   '<div><div style="font-size:9.5px;color:#6B7785">ลม</div><b style="font-family:\'DM Mono\',monospace;font-size:17px">'+(S.wind==null?'—':S.wind)+'<span style="font-size:10px"> kt</span></b><div style="font-size:9.5px;color:#6B7785">กระโชก '+(S.gust==null?'—':S.gust)+' · '+wxDirTxt(S.windDir)+'</div></div>'
-      +   '<div><div style="font-size:9.5px;color:#6B7785">ฝน '+S.hours[0]+'–'+S.hours[1]+' น.</div><b style="font-family:\'DM Mono\',monospace;font-size:17px">'+(S.rain==null?'—':S.rain)+'<span style="font-size:10px"> mm</span></b></div>'
-      + '</div>'
-      + '<div style="font-size:9.5px;color:#9B9088;margin-top:4px">'+wxKindTxt(b.kind)+(oc?(' · วันนี้: <b style="color:'+wxOutColor(oc.k)+'">'+wxE(oc.t)+'</b>'):'')+'</div>'
-      + (sim.length ? ('<div style="margin-top:8px;background:'+c[0]+';border-radius:9px;padding:8px 10px">'
-          + '<div style="font-size:11px;font-weight:700;color:'+c[1]+'">'+sim.length+' วันที่คล้ายที่สุด: ออกปกติ '+nRan+(nRough?(' · ออกแล้วโยน/แรง '+nRough):'')+' · ยกเลิก '+nCx+(nPart?(' · บางส่วน '+nPart):'')+'</div>'
-          + '<div style="font-size:10.5px;color:'+c[1]+';margin-top:3px;line-height:1.5">'+sim.map(function(x){ var d2=new Date(x.d+'T12:00:00'); return d2.getDate()+' '+MON[d2.getMonth()]+' <span style="font-family:\'DM Mono\',monospace">'+x.S.wave+'m/'+x.S.per+'s</span> <b style="color:'+wxOutColor(x.oc.k)+'">'+wxE(x.oc.t)+'</b>'; }).join(' · ')+'</div></div>')
-        : '<div style="font-size:10.5px;color:#9B9088;margin-top:6px">ยังไม่มีวันที่คล้ายกันในประวัติ · กด "ดึงย้อนหลัง" ด้านล่างเพื่อเติมข้อมูลตั้งแต่ มิ.ย.</div>')
-      + (date <= wxToday() || date === (typeof wxAddDays==='function' ? wxAddDays(wxToday(),1) : date) ? wxDecisionHtml(pt, date) : '')
+    var oc = wxOutcome(pt.id, date), dec = WX.dec[pt.id+'|'+date] || {};
+    var simTip = sim.map(function(x){ var d2=new Date(x.d+'T12:00:00'); return d2.getDate()+' '+MON[d2.getMonth()]+' '+x.S.wave+'m/'+x.S.per+'s → '+x.oc.t; }).join('\n');
+    var simTxt = sim.length
+      ? ('<span title="'+wxE(simTip)+'" style="cursor:help;border-bottom:1px dotted '+c[1]+'">'+sim.length+' วันคล้ายกัน: <b>ปกติ '+nRan+'</b>'+(nRough?(' · <b>โยน/แรง '+nRough+'</b>'):'')+(nCx?(' · <b>ยกเลิก '+nCx+'</b>'):'')+(nPart?(' · บางส่วน '+nPart):'')+'</span>')
+      : '<span style="color:#9B9088">ยังไม่มีประวัติ</span>';
+    return '<div style="padding:9px 0;border-top:1px solid #EEF1F5">'
+      /* line 1 · name · level · big wave */
+      + '<div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+wxE(pt.name)+'">'+short+'</b>'
+      +   '<span style="font-size:9.5px;font-weight:700;background:'+c[0]+';color:'+c[1]+';padding:1px 7px;border-radius:5px">'+c[2]+'</span>'
+      +   '<b style="font-family:\'DM Mono\',monospace;font-size:20px;line-height:1;color:'+c[1]+'">'+S.wave+'<span style="font-size:10px;font-weight:600"> m</span></b></div>'
+      /* line 2 · the rest in one grey line */
+      + '<div style="font-size:10.5px;color:#6B7785;margin-top:3px;font-variant-numeric:tabular-nums">คาบ '+S.per+'s '+wxDirTxt(S.dir)+' · swell '+(S.swell==null?'—':S.swell)+'m · ลม '+(S.wind==null?'—':Math.round(S.wind))+' กระโชก '+(S.gust==null?'—':Math.round(S.gust))+' kt '+wxDirTxt(S.windDir)+' · ฝน '+(S.rain==null?'—':S.rain)+' mm'
+      +   '<span style="color:#B9BDC7"> · '+(b.kind==='hist'?'จริง':b.kind==='fc05'?'พยากรณ์ 05:00':'พยากรณ์ 17:00')+'</span></div>'
+      /* line 3 · history + today's outcome */
+      + '<div style="font-size:10.5px;color:'+c[1]+';margin-top:4px">'+simTxt+(oc?('<span style="color:#6B7785"> · วันนี้: </span><b style="color:'+wxOutColor(oc.k)+'">'+wxE(oc.t)+'</b>'):'')+'</div>'
+      /* line 4 · decision · one select + reason, only around today */
+      + (canDecide ? ('<div style="display:flex;gap:5px;margin-top:6px;align-items:center">'
+          + '<select onchange="wxDecide(\''+pt.id+'\',\''+date+'\',this.value)" style="height:26px;border:1px solid '+(dec.decision?'#1A2A33':'#D7DBE2')+';border-radius:7px;padding:0 6px;font:600 10.5px inherit;background:#fff;color:#1A2A33;max-width:150px">'
+          +   '<option value=""'+(dec.decision?'':' selected')+'>บันทึกการตัดสินใจ…</option>'
+          +   WX_DEC.map(function(d){ return '<option value="'+d[0]+'"'+(dec.decision===d[0]?' selected':'')+'>'+d[1]+'</option>'; }).join('')
+          + '</select>'
+          + '<input type="text" id="wx-why-'+wxE(pt.id)+'" value="'+wxE(dec.reason||'')+'" placeholder="เหตุผล" onchange="wxDecide(\''+pt.id+'\',\''+date+'\',(this.previousElementSibling||{}).value||\'\')" style="flex:1;min-width:0;height:26px;border:1px solid #D7DBE2;border-radius:7px;padding:0 7px;font:10.5px inherit">'
+          + '</div>'
+          + (dec.decision ? ('<div style="font-size:9.5px;color:#9B9088;margin-top:3px">'+wxE(dec.by_user||'')+' · '+(dec.at?String(dec.at).slice(11,16):'')+'</div>') : '')) : '')
       + '</div>';
   }).join('');
   var bf = WX.bf;
-  var foot = '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #EEF1F5;font-size:10px;color:#6B7785">'
-    + (bf && bf.running ? ('<span>ดึงย้อนหลัง… '+bf.done+'/'+bf.total+(bf.failed?(' · ผิดพลาด '+bf.failed):'')+'</span>') : (bf && bf.finishedAt ? ('<span>ย้อนหลังเสร็จ · ใหม่ '+bf.done+' · มีแล้ว '+bf.skipped+(bf.failed?(' · ผิดพลาด '+bf.failed):'')+'</span>') : '<span>ประวัติ: คลื่นจริงย้อนหลัง + ผลจากใบจอง (ออก / ยกเลิกเพราะอากาศ)</span>'))
-    + '<span style="flex:1"></span><button type="button" class="bo-btn" style="padding:4px 10px;font-size:10px" onclick="wxBackfill()">ดึงย้อนหลัง</button></div>';
+  var foot = '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px solid #EEF1F5;font-size:9.5px;color:#9B9088">'
+    + (bf && bf.running ? ('<span>ดึงย้อนหลัง… '+bf.done+'/'+bf.total+'</span>') : (bf && bf.finishedAt ? ('<span>ย้อนหลังเสร็จ · ใหม่ '+bf.done+' · มีแล้ว '+bf.skipped+(bf.failed?(' · ผิดพลาด '+bf.failed):'')+'</span>') : '<span>กรอบประในตาราง = พยากรณ์ · ทึบ = ข้อมูลจริง</span>'))
+    + '<span style="flex:1"></span><button type="button" class="bo-btn" style="padding:3px 9px;font-size:9.5px" onclick="wxBackfill()">ดึงย้อนหลัง</button></div>';
   return head+body+foot;
 }
 /* ── patch in place (no full re-render) ── */
