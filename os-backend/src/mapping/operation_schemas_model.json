@@ -4621,6 +4621,10 @@
         "type": "text"
       },
       {
+        "name": "ops_turnback",
+        "type": "text"
+      },
+      {
         "name": "pierpayments",
         "type": "text"
       },
@@ -4877,6 +4881,10 @@
       },
       {
         "name": "ops_piernote",
+        "type": "text"
+      },
+      {
+        "name": "ops_turnback",
         "type": "text"
       },
       {
