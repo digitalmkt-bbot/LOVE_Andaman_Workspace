@@ -10436,7 +10436,6 @@ function bop2RenderShell(){
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
       </div>
       ${typeof tcxBelowBanner==='function'?tcxBelowBanner(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):''}
-      ${typeof wxStripHtml==='function' ? wxStripHtml(_selDate, _bop2.pier==='all' ? null : [_bop2.pier]) : ''}
       <div style="overflow-x:auto">
       <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="position:relative;--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
         <div class="bop2-cell bop2-cell-h">Route</div>

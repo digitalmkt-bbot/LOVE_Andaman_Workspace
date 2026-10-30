@@ -218,6 +218,26 @@ var WX_CSS = '<style>'
   + '.wx-ft{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FAFBFC;border-top:1px solid #EEF1F5;font-size:9.5px;color:#64748B;flex-wrap:wrap}'
   + '#wx-strip .wx-sg{display:grid;row-gap:2px;align-items:center;font-variant-numeric:tabular-nums}'
   + '#wx-strip .wx-sg>span{min-width:0}'
+  + '.wx-chip{height:24px;padding:0 10px;border-radius:999px;border:1.5px dashed #CBD5E1;background:#fff;color:#64748B;font:700 10.5px inherit;cursor:pointer;white-space:nowrap;flex:none}'
+  + '.wx-chip:hover{border-color:#1683C7;color:#1683C7}'
+  + '#wx-decmenu .wx-mi{width:100%;display:flex;align-items:center;gap:8px;padding:7px 8px;border:0;background:transparent;border-radius:8px;font:600 12px "DM Sans","IBM Plex Sans Thai",sans-serif;text-align:left;cursor:pointer}'
+  + '#wx-decmenu .wx-mi:hover{background:#F1F5F9}#wx-decmenu .wx-mi.on{background:#F8FAFC;font-weight:800}'
+  + '#wx-decmenu .dot{width:8px;height:8px;border-radius:4px;flex:none}'
+  + '#wx-decmenu input{height:30px;border:1px solid #E2E8F0;border-radius:8px;padding:0 9px;font:11.5px "DM Sans","IBM Plex Sans Thai",sans-serif}'
+  + '#wx-decmenu .wx-mb{height:28px;padding:0 12px;border-radius:8px;border:0;background:#1683C7;color:#fff;font:700 11px "DM Sans","IBM Plex Sans Thai",sans-serif;cursor:pointer}'
+  + '#wx-decmenu .wx-mb.ghost{background:#fff;color:#64748B;border:1px solid #E2E8F0}'
+  + '#wx-pop{position:fixed;inset:0;z-index:10000;background:rgba(9,16,40,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:"DM Sans","IBM Plex Sans Thai",sans-serif;color:#0F1B3D}'
+  + '#wx-pop .wx-pbox{width:min(1400px,100%);max-height:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column}'
+  + '#wx-pop .wx-pbody{overflow:auto;flex:1;min-height:0}'
+  + '#wx-pop .wx-pgrp{display:flex;gap:3px;background:rgba(255,255,255,.12);padding:3px;border-radius:999px}'
+  + '#wx-pop .wx-pseg{height:26px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:#fff;font:600 11px inherit;cursor:pointer;white-space:nowrap}'
+  + '#wx-pop .wx-pseg.on{background:#fff;color:#0E3B5C;font-weight:800}'
+  + '#wx-pop .wx-sg{display:grid;align-items:center;font-variant-numeric:tabular-nums}'
+  + '.wx-dbar{display:flex;align-items:center;gap:9px;margin-top:5px;padding:7px 9px;border-radius:10px;border:1px solid #E2E8F0;background:#F8FAFC;font:inherit;text-align:left;cursor:pointer;width:100%}'
+  + '.wx-dbar>span:first-child{width:24px;height:24px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none}'
+  + '.wx-dbar b{font-size:11.5px}.wx-dbar i{font-style:normal;font-size:9.5px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}'
+  + '.wx-dbar.empty{border:1.5px dashed #CBD5E1;color:#64748B;font-size:11px;font-weight:700;justify-content:flex-start}'
+  + '.wx-dbar.empty>span:first-child{background:#E2E8F0;color:#64748B}'
   + '</style>';
 function wxHeadHtml(date, sub, right, compact){
   var dt = new Date(date+'T12:00:00'), MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
@@ -225,7 +245,7 @@ function wxHeadHtml(date, sub, right, compact){
     + '<div style="flex:1;min-width:0"><b style="white-space:nowrap">สภาพทะเล · '+(compact?'':WD[dt.getDay()]+' ')+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>'+sub+'</i></div>'+right+'</div>';
 }
 function wxCardBody(date, piers){
-  var expBtn = '<button type="button" class="wx-hb" onclick="wxToggleExp()" title="'+(WX.exp?'ย่อแถบรายชั่วโมง':'ดูรายชั่วโมงเหนือตาราง')+'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(WX.exp?'<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>':'<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>')+'</svg>'+(WX.exp?'ย่อ':'ขยาย')+'</button>'
+  var expBtn = '<button type="button" class="wx-hb ic" title="ดูรายชั่วโมงทุกเส้นทาง" aria-label="ดูรายชั่วโมงทุกเส้นทาง" onclick="wxOpenPop(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>'
     + '<button type="button" class="wx-hb ic" title="ดึงพยากรณ์ตอนนี้" aria-label="ดึงพยากรณ์ตอนนี้" onclick="wxFetchNow(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg></button>';
   var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
   var kinds = {}; P0.forEach(function(p){ var b=wxBest(p.id,date); if(b) kinds[b.kind]=1; });
@@ -248,15 +268,7 @@ function wxCardBody(date, piers){
         + hrs.map(function(x){ return '<span title="'+(x.h<10?'0':'')+x.h+':00 · คลื่น '+(x.wave==null?'—':x.wave)+' m · ลม '+(x.wind==null?'—':Math.round(x.wind))+' kt" style="height:8px;border-radius:2px;background:'+wxWaveC(pt,x.wave)[2]+'"></span>'; }).join('')
         + '</div><div style="display:flex;justify-content:space-between;font-size:8.5px;color:#94A3B8;margin-top:1px"><span>'+(hrs[0].h<10?'0':'')+hrs[0].h+'</span><span>'+(hrs[hrs.length-1].h<10?'0':'')+hrs[hrs.length-1].h+' น.</span></div></div>'
       : '<div style="flex:1;font-size:9px;color:#CBD5E1">…</div>';
-    var dec = WX.dec[pt.id+'|'+date] || {}, decD = dec.decision ? (WX_DEC.filter(function(d){ return d[0]===dec.decision; })[0]||[]) : null, oc = wxOutcome(pt.id, date);
-    var decRow = canDecide
-      ? '<div class="wx-dc"><select aria-label="บันทึกการตัดสินใจ" onchange="wxDecide(\''+pt.id+'\',\''+date+'\',this.value)" style="border:1px '+(decD?'solid '+decD[2]:'dashed #CBD5E1')+';color:'+(decD?decD[2]:'#64748B')+'">'
-          + '<option value="">+ ตัดสินใจ…</option>'
-          + WX_DEC.map(function(d){ return '<option value="'+d[0]+'"'+(dec.decision===d[0]?' selected':'')+'>'+d[1]+'</option>'; }).join('')+'</select>'
-          + '<input type="text" id="wx-why-'+wxE(pt.id)+'" value="'+wxE(dec.reason||'')+'" placeholder="เหตุผล (ไม่บังคับ)" onchange="wxDecide(\''+pt.id+'\',\''+date+'\',(this.previousElementSibling||{}).value||\'\')">'
-          + (dec.by_user ? '<span style="font-size:9px;color:#94A3B8;white-space:nowrap" title="บันทึกโดย">'+wxE(dec.by_user)+' '+(dec.at?String(dec.at).slice(11,16):'')+'</span>' : '')
-          + '</div>'
-      : ((decD || oc) ? '<div style="margin-top:6px;font-size:10px;font-weight:700;color:'+(decD?decD[2]:wxOutColor(oc.k))+'">'+wxE(decD?decD[1]:oc.t)+(dec.reason?(' <span style="font-weight:400;color:#64748B">· '+wxE(dec.reason)+'</span>'):'')+'</div>' : '');
+    var decRow = wxDecChip(pt, date);
     return '<div class="wx-rw" style="--lc:'+lc+'">'
       + '<div style="display:flex;align-items:center;gap:8px">'+wxSkySvg(sky, 28)
       +   '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px"><b style="font-size:13.5px;white-space:nowrap" title="'+wxE(pt.name)+'">'+short+'</b><span class="wx-pl" style="background:'+pill[0]+';color:'+pill[1]+'">'+pill[2]+'</span></div>'
@@ -282,6 +294,7 @@ function wxCardBody(date, piers){
 /* ── expanded hourly strip · lives above the Boat Operation grid ── */
 function wxStripHtml(date, piers){ return '<div id="wx-strip" data-date="'+wxE(date)+'" data-piers="'+wxE((piers||[]).join(','))+'" style="margin-bottom:12px">'+wxStripBody(date, piers)+'</div>'; }
 function wxStripBody(date, piers){
+  return '';   /* §wx6 · replaced by the floating popup (wxOpenPop) */
   if(!WX.exp || !WX.pts) return '';
   var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
   if(!WX.hrLoad[date]) wxLoadHr(date);
@@ -319,6 +332,7 @@ function wxPatch(){
     document.querySelectorAll('[data-wx]').forEach(function(el){ var k=el.getAttribute('data-wx').split('|'); var pt=(WX.pts||[]).filter(function(p){ return p.id===k[0]; })[0]; if(pt) el.innerHTML=wxCellHtml(pt,k[1]); });
     /* rows rendered before points were known are empty placeholders: a full re-render fills them */
     var ph = document.querySelector('[data-wx-pier]'); if(ph && WX.pts && typeof renderOp==='function' && !WX._rerendered){ WX._rerendered=true; renderOp(); return; }
+    if(WX.pop && typeof wxPopRender==='function') wxPopRender();   /* §wx6 */
     var st = document.getElementById('wx-strip'); if(st){ var sp=st.getAttribute('data-piers'); st.innerHTML=wxStripBody(st.getAttribute('data-date'), sp?sp.split(','):null); }   /* §wx5 */
     var card = document.getElementById('wx-card'); if(card){ var date=(typeof _bop2!=='undefined' && _bop2.selDate) || wxToday(); var piers=card.getAttribute('data-piers'); card.innerHTML=wxCardBody(date, piers?piers.split(','):null); }
   }catch(e){ try{ console.warn('[wx] patch', e.message); }catch(_){ } }
@@ -421,8 +435,8 @@ function wxDecisionHtml(pt, date){
     + (dec.decision ? '<button type="button" class="bo-btn" style="padding:0 10px;font-size:10px;height:26px" onclick="wxDecide(\''+pt.id+'\',\''+date+'\',\''+dec.decision+'\')">บันทึกเหตุผล</button><button type="button" class="bo-btn" style="padding:0 8px;font-size:10px;height:26px" title="ลบการตัดสินใจ" onclick="wxDecide(\''+pt.id+'\',\''+date+'\',\'\')">✕</button>' : '')
     + '</div></div>';
 }
-function wxDecide(ptId, date, code){
-  var inp = document.getElementById('wx-why-'+ptId); var reason = inp ? inp.value : '';
+function wxDecide(ptId, date, code, why){
+  var inp = document.getElementById('wx-why-'+ptId); var reason = (why != null) ? why : (inp ? inp.value : '');
   wxFetch('/api/weather/decision', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pointId:ptId, date:date, decision:code, reason:reason }) })
     .then(function(j){ var k=ptId+'|'+date; if(!code) delete WX.dec[k]; else WX.dec[k]={ point_id:ptId, date:date, decision:code, reason:reason, by_user:j.by, at:j.at }; _wxOutIdx=null; wxPatch(); })
     .catch(function(e){ alert('Save failed: '+e.message); });
@@ -452,4 +466,142 @@ function wxAfterDR(ds){
   pp.then(function(){ return need ? wxFetch('/api/weather/log?from='+ds+'&to='+ds).then(function(j){ (j.reports||[]).forEach(function(r){ WX.rep[r.date+'|'+r.boat_id]=r; }); (j.decisions||[]).forEach(function(r){ WX.dec[r.point_id+'|'+r.date]=r; }); WX.rep.__loadedDay=ds; }) : null; })
     .then(function(){ document.querySelectorAll('[data-wxrep]').forEach(function(el){ var k=el.getAttribute('data-wxrep').split('|'); el.outerHTML=wxSeaCell(k[0],k[1],el.getAttribute('data-dis')==='1'); }); })
     .catch(function(){});
+}
+
+/* ══ §wx6 · decision chip + menu (mockup 7B) · hourly popup (mockup 8 with 7D bars) · 2026-10-30 ═══
+   Owner: "ตามแนะนำ" → card uses the chip + pop-up menu, the expanded view is a floating popup whose left
+   column shows each route's decision as a coloured bar (click it to change). */
+function wxDecMeta(code){ var d = WX_DEC.filter(function(x){ return x[0]===code; })[0]; return d || null; }
+var WX_DEC_IC = { ran_all:'✓', ran_part:'◐', cx_us:'✕', cx_port:'⚓', cx_park:'⛔', reroute:'⇄' };
+var WX_DEC_BG = { ran_all:['#ECFDF5','#A7F3D0'], ran_part:['#FFFBEB','#FDE68A'], cx_us:['#FEF2F2','#FECACA'], cx_port:['#F1F5F9','#CBD5E1'], cx_park:['#F1F5F9','#CBD5E1'], reroute:['#EFF6FF','#BFDBFE'] };
+/* B · chip under a card row */
+function wxDecChip(pt, date){
+  var dec = WX.dec[pt.id+'|'+date] || {}, m = dec.decision ? wxDecMeta(dec.decision) : null;
+  var canDecide = date <= wxAddDays(wxToday(), 1);
+  if(!canDecide && !m) return '';
+  var chip = m
+    ? '<button type="button" class="wx-chip" '+(canDecide?'onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"':'disabled')+' style="background:'+m[2]+';border-color:'+m[2]+';color:#fff">'+(WX_DEC_IC[m[0]]||'')+' '+m[1]+(canDecide?' ▾':'')+'</button>'
+    : '<button type="button" class="wx-chip" onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')">ตัดสินใจ ▾</button>';
+  return '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;min-width:0">'+chip
+    + (dec.reason ? '<span style="font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="'+wxE(dec.reason)+'">“'+wxE(dec.reason)+'”</span>' : '')
+    + (dec.by_user ? '<span style="margin-left:auto;font-size:9px;color:#94A3B8;white-space:nowrap">'+wxE(dec.by_user)+' '+(dec.at?String(dec.at).slice(11,16):'')+'</span>' : '')
+    + '</div>';
+}
+/* D · bar in the popup's left column */
+function wxDecBar(pt, date){
+  var dec = WX.dec[pt.id+'|'+date] || {}, m = dec.decision ? wxDecMeta(dec.decision) : null;
+  var canDecide = date <= wxAddDays(wxToday(), 1);
+  if(!m) return canDecide
+    ? '<button type="button" class="wx-dbar empty" onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"><span>+</span>บันทึกว่าวันนี้ออกหรือไม่</button>'
+    : '<div class="wx-dbar empty" style="cursor:default"><span>–</span>ไม่ได้บันทึก</div>';
+  var bg = WX_DEC_BG[m[0]] || ['#F8FAFC','#E2E8F0'];
+  return '<button type="button" class="wx-dbar" '+(canDecide?'onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"':'disabled')+' style="background:'+bg[0]+';border-color:'+bg[1]+'">'
+    + '<span style="background:'+m[2]+'">'+(WX_DEC_IC[m[0]]||'')+'</span><span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;background:none;width:auto;height:auto;border-radius:0">'
+    + '<b style="color:'+m[2]+'">'+m[1]+'</b><i>'+(dec.reason?('“'+wxE(dec.reason)+'” · '):'')+wxE(dec.by_user||'')+' '+(dec.at?String(dec.at).slice(11,16):'')+'</i></span></button>';
+}
+/* the menu · one floating panel at a time */
+function wxDecMenuClose(){ var m = document.getElementById('wx-decmenu'); if(m) m.remove(); document.removeEventListener('mousedown', wxDecMenuOut, true); }
+function wxDecMenuOut(e){ var m = document.getElementById('wx-decmenu'); if(m && !m.contains(e.target)) wxDecMenuClose(); }
+function wxDecMenu(btn, ptId, date){
+  var was = document.getElementById('wx-decmenu'); if(was && was.getAttribute('data-k') === ptId+'|'+date){ wxDecMenuClose(); return; }
+  wxDecMenuClose();
+  var pt = (WX.pts||[]).filter(function(p){ return p.id===ptId; })[0] || { name:ptId };
+  var dec = WX.dec[ptId+'|'+date] || {};
+  var dt = new Date(date+'T12:00:00');
+  var el = document.createElement('div'); el.id = 'wx-decmenu'; el.setAttribute('data-k', ptId+'|'+date);
+  el.innerHTML = WX_CSS + '<div style="font-size:10px;color:#94A3B8;padding:4px 8px 6px">ผลการตัดสินใจ · '+wxE(pt.name.split(' · ')[0])+' '+dt.getDate()+'/'+(dt.getMonth()+1)+'</div>'
+    + WX_DEC.map(function(d){ var on = dec.decision===d[0];
+        return '<button type="button" class="wx-mi'+(on?' on':'')+'" style="color:'+d[2]+'" data-code="'+d[0]+'"><span class="dot" style="background:'+d[2]+'"></span>'+d[1]+(on?'<span style="margin-left:auto">✓</span>':'')+'</button>'; }).join('')
+    + '<div style="border-top:1px solid #EEF1F5;margin-top:4px;padding:7px 6px 3px"><label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:9.5px;color:#94A3B8">เหตุผล (ไม่บังคับ)</span>'
+    + '<input type="text" id="wx-decwhy" value="'+wxE(dec.reason||'')+'" placeholder="เช่น คลื่นเกิน 2.5 ม. ช่วงบ่าย"></label>'
+    + '<div style="display:flex;gap:6px;margin-top:7px">'
+    + (dec.decision ? '<button type="button" class="wx-mb ghost" data-act="clear">ล้าง</button>' : '')
+    + '<button type="button" class="wx-mb" data-act="save" style="margin-left:auto">'+(dec.decision?'บันทึกเหตุผล':'ปิด')+'</button></div></div>';
+  document.body.appendChild(el);
+  var r = btn.getBoundingClientRect(), W = 250;
+  var left = Math.min(window.innerWidth - W - 10, Math.max(10, r.right - W));
+  var top = r.bottom + 6; if(top + 330 > window.innerHeight) top = Math.max(10, r.top - 336);
+  el.style.cssText = 'position:fixed;z-index:10050;left:'+left+'px;top:'+top+'px;width:'+W+'px;background:#fff;border-radius:12px;box-shadow:0 14px 36px rgba(15,27,61,.25);border:1px solid #E2E8F0;padding:6px;font-family:"DM Sans","IBM Plex Sans Thai",sans-serif';
+  el.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    var why = (document.getElementById('wx-decwhy')||{}).value || '';
+    if(b.getAttribute('data-code')){ wxDecide(ptId, date, b.getAttribute('data-code'), why); wxDecMenuClose(); return; }
+    var act = b.getAttribute('data-act');
+    if(act === 'clear'){ wxDecide(ptId, date, '', ''); wxDecMenuClose(); return; }
+    if(act === 'save'){ if(dec.decision && why !== (dec.reason||'')) wxDecide(ptId, date, dec.decision, why); wxDecMenuClose(); }
+  });
+  el.querySelector('#wx-decwhy').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); el.querySelector('[data-act="save"]').click(); } if(e.key==='Escape') wxDecMenuClose(); });
+  setTimeout(function(){ document.addEventListener('mousedown', wxDecMenuOut, true); }, 0);
+}
+/* ── popup ── */
+WX.pop = null;   /* {date, pier} while open */
+function wxOpenPop(date){
+  var p = (typeof _bop2!=='undefined' && _bop2.pier && _bop2.pier!=='all') ? _bop2.pier : '';
+  WX.pop = { date:date || wxToday(), pier:p };
+  var ov = document.getElementById('wx-pop');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'wx-pop'; document.body.appendChild(ov);
+    ov.addEventListener('mousedown', function(e){ if(e.target === ov) wxClosePop(); });
+    document.addEventListener('keydown', wxPopKey); }
+  wxPopRender();
+}
+function wxPopKey(e){ if(e.key === 'Escape' && WX.pop && !document.getElementById('wx-decmenu')) wxClosePop(); }
+function wxClosePop(){ WX.pop = null; wxDecMenuClose(); var ov = document.getElementById('wx-pop'); if(ov) ov.remove(); document.removeEventListener('keydown', wxPopKey); }
+function wxPopDay(n){ if(!WX.pop) return; WX.pop.date = wxAddDays(WX.pop.date, n); wxPopRender(); }
+function wxPopPier(p){ if(!WX.pop) return; WX.pop.pier = p; wxPopRender(); }
+function wxPopRender(){
+  var ov = document.getElementById('wx-pop'); if(!ov || !WX.pop) return;
+  var date = WX.pop.date, today = wxToday();
+  if(!WX.hrLoad[date]) wxLoadHr(date);
+  if(!(WX.obs && Object.keys(WX.obs).some(function(k){ return WX.obs[k][date]; })) && !WX['_pl'+date]){ WX['_pl'+date]=1; wxFetch('/api/weather?from='+date+'&to='+date).then(function(j){ wxIngest(j.rows); wxPopRender(); }).catch(function(){}); }
+  var dt = new Date(date+'T12:00:00'), MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+  var dPrev = new Date(wxAddDays(date,-1)+'T12:00:00'), dNext = new Date(wxAddDays(date,1)+'T12:00:00');
+  var piers = []; (WX.pts||[]).forEach(function(p){ if(piers.indexOf(p.pier)<0) piers.push(p.pier); });
+  var PN = { tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong' };
+  var seg = function(on, label, js){ return '<button type="button" class="wx-pseg'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
+  var head = '<div class="wx-hd" style="padding:14px 18px;gap:12px;flex-wrap:wrap">'
+    + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>'
+    + '<div><b style="font-size:16px">สภาพทะเลรายชั่วโมง · '+WD[dt.getDay()]+' '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>จุดพยากรณ์กลางทะเลของแต่ละเส้นทาง · ลูกศร = ลมพัดไปทาง · /5s = คาบคลื่น</i></div>'
+    + '<div class="wx-pgrp">'+seg(false,'‹ '+dPrev.getDate(),'wxPopDay(-1)')+seg(true,(date===today?'วันนี้ ':'')+dt.getDate(),'')+seg(false,dNext.getDate()+' ›','wxPopDay(1)')+'</div>'
+    + '<div class="wx-pgrp">'+seg(!WX.pop.pier,'ทุกท่า','wxPopPier(\'\')')+piers.map(function(p){ return seg(WX.pop.pier===p, PN[p]||p, 'wxPopPier(\''+p+'\')'); }).join('')+'</div>'
+    + '<button type="button" class="wx-hb ic" style="margin-left:auto;width:34px;height:34px" aria-label="ปิด" onclick="wxClosePop()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+  var rows = wxPopRows(date, WX.pop.pier ? [WX.pop.pier] : null);
+  var foot = '<div class="wx-ft" style="padding:10px 18px"><span>คลื่น:</span>'
+    + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#D1FAE5"></span>ปกติ</span>'
+    + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#FEF3C7"></span>ระวัง</span>'
+    + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#FED7AA"></span>สูง</span>'
+    + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#FECACA"></span>เสี่ยง</span>'
+    + '<span style="color:#B91C1C">คาบตัวแดง = สั้น โยนกว่าความสูงบอก</span><span style="flex:1"></span><span>Esc หรือคลิกนอกกรอบเพื่อปิด</span></div>';
+  var keepScroll = ov.querySelector('.wx-pbody'), sT = keepScroll ? keepScroll.scrollTop : 0;
+  ov.innerHTML = WX_CSS + '<div class="wx-pbox">'+head+'<div class="wx-pbody">'+rows+'</div>'+foot+'</div>';
+  var nb = ov.querySelector('.wx-pbody'); if(nb && sT) nb.scrollTop = sT;
+}
+function wxPopRows(date, piers){
+  if(!WX.pts) return '<div style="padding:20px;color:#94A3B8">กำลังโหลด…</div>';
+  var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
+  return P0.map(function(pt){
+    var short = wxE(pt.name.split(' · ')[0]), b = wxBest(pt.id, date), hrs = wxHours(pt, date);
+    if(!b || b.S.wave == null) return '<div style="display:flex;border-top:1px solid #EEF1F5;padding:12px 18px;font-size:11.5px;color:#94A3B8"><b style="color:#0F1B3D;margin-right:8px">'+short+'</b>ยังไม่มีข้อมูลวันนี้</div>';
+    var S = b.S, lv = wxLevel(pt, S), vd = wxVerdict(pt, S, date);
+    var lc = lv==='risk' ? '#DC2626' : lv==='warn' ? '#F59E0B' : '#10B981';
+    var pill = lv==='risk' ? ['#FEE2E2','#B91C1C','เสี่ยง'] : lv==='warn' ? ['#FEF3C7','#B45309','ระวัง'] : ['#D1FAE5','#047857','ออกได้'];
+    var nb = 0; try{ var day=(typeof TRIPS!=='undefined'&&TRIPS[date])||{}; var rids=wxRoutesOf(pt).map(function(r){ return r.id; }); Object.keys(day).forEach(function(bid){ if(day[bid] && rids.indexOf(day[bid].route)>=0) nb++; }); }catch(_){ }
+    var left = '<div style="width:250px;flex:none;padding:12px 16px;display:flex;flex-direction:column;gap:5px;border-left:5px solid '+lc+';background:#FBFCFD">'
+      + '<div style="display:flex;align-items:center;gap:7px"><b style="font-size:15px">'+short+'</b><span class="wx-pl" style="background:'+pill[0]+';color:'+pill[1]+'">'+pill[2]+'</span></div>'
+      + '<span style="font-size:10.5px;color:#64748B">'+wxE(pt.name.split(' · ')[1]||'')+(nb?(' · '+nb+' ลำ'):'')+'</span>'
+      + '<span title="'+wxE(vd.tip)+'" style="font-size:11px;font-weight:700;color:'+vd.c+';cursor:help">'+vd.t+'</span>'
+      + '<span style="font-size:10.5px;color:#64748B">'+wxE(wxDayTxt(pt,S,hrs))+'</span>'
+      + wxDecBar(pt, date) + '</div>';
+    if(!hrs || !hrs.length) return '<div style="display:flex;border-top:1px solid #EEF1F5">'+left+'<div style="flex:1;padding:16px;font-size:11.5px;color:#94A3B8">กำลังโหลดรายชั่วโมง…</div></div>';
+    var n = hrs.length, lab = 'font-size:10px;color:#64748B;display:flex;align-items:center;gap:3px;white-space:nowrap';
+    var nowH = date === wxToday() ? new Date().getHours() : -1;
+    var rad = function(i){ return i===0?'7px 0 0 7px':i===n-1?'0 7px 7px 0':'0'; };
+    var g = '<div class="wx-sg" style="flex:1;min-width:0;padding:10px 16px;grid-template-columns:64px repeat('+n+',minmax(0,1fr));row-gap:3px">'
+      + '<span style="font-size:9.5px;color:#94A3B8">เวลา</span>' + hrs.map(function(x){ return '<span style="text-align:center;font-size:11px;font-weight:700;color:'+(x.h===nowH?'#DC2626':'#64748B')+'">'+(x.h<10?'0':'')+x.h+'</span>'; }).join('')
+      + '<span></span>' + hrs.map(function(x){ return '<span style="display:flex;justify-content:center">'+wxSkySvg(wxHrSky(x),24)+'</span>'; }).join('')
+      + '<span style="'+lab+'">'+wxIco('wave','#0EA5E9',12)+'คลื่น m</span>' + hrs.map(function(x,i){ var c=wxWaveC(pt,x.wave); return '<span style="text-align:center;font:600 13px \'DM Mono\',monospace;padding:5px 0;background:'+c[0]+';color:'+c[1]+';border-radius:'+rad(i)+'">'+(x.wave==null?'—':x.wave.toFixed(1))+'<span style="font-size:9px;font-weight:500;color:'+((x.per!=null&&x.per<=5)?'#B91C1C':'#94A3B8')+'"> /'+(x.per==null?'—':Math.round(x.per*10)/10)+'s</span></span>'; }).join('')
+      + '<span style="'+lab+'">'+wxIco('wind','#14B8A6',12)+'ลม kt</span>' + hrs.map(function(x,i){ return '<span style="display:flex;align-items:center;justify-content:center;gap:3px;font:600 12.5px \'DM Mono\',monospace;padding:4px 0;background:'+wxWindBg(x.wind||0)+';border-radius:'+rad(i)+'"><svg width="11" height="11" viewBox="0 0 24 24" style="transform:rotate('+(((x.dir||0)+180)%360)+'deg)" aria-hidden="true"><path d="M12 3l6 16-6-4-6 4z" fill="#5B6B8C"/></svg>'+(x.wind==null?'—':Math.round(x.wind))+'<span style="font-size:9px;font-weight:500;color:#64748B">'+(x.gust==null?'':Math.round(x.gust))+'</span></span>'; }).join('')
+      + '<span style="'+lab+'">'+wxIco('rain','#2563EB',12)+'ฝน mm</span>' + hrs.map(function(x){ return '<span style="text-align:center;font:600 11px \'DM Mono\',monospace;color:#2563EB">'+(x.rain>=0.1?Math.round(x.rain*10)/10:'')+'</span>'; }).join('')
+      + '</div>';
+    return '<div style="display:flex;border-top:1px solid #EEF1F5">'+left+g+'</div>';
+  }).join('');
 }
