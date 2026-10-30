@@ -34,9 +34,11 @@ function load(opts = {}) {
   window.pxAnalysis = () => 'legacy-analysis';
   window.pxClose = () => 'legacy-close';
   window.pxRan = () => 'legacy-ran';
-  const ctx = { window, console, document: { getElementById: () => null }, Number, String, Object, Array, JSON, Date, Promise, Math, encodeURIComponent, setTimeout, confirm: () => true };
+  window.pxOvSave = () => 'legacy-override';
+  const alerts = [];
+  const ctx = { window, console, document: { getElementById: () => null }, Number, String, Object, Array, JSON, Date, Promise, Math, encodeURIComponent, setTimeout, isFinite, confirm: () => true, alert: (m) => alerts.push(m) };
   vm.runInNewContext(SOURCE, ctx);
-  return { window, calls, writes, c: window.__laOpsCostingCompat };
+  return { window, calls, writes, alerts, c: window.__laOpsCostingCompat };
 }
 
 const serverTrip = {
@@ -200,6 +202,36 @@ test('costing reads come from the server cache and plan writes send POST, PATCH 
   window.ctWrite('cost_plans', [window.ctRead('cost_plans')[1]]);
   await new Promise((r) => setTimeout(r, 10));
   assert.ok(calls.find((x) => x[0] === 'DELETE' && x[1] === '/v1/costing/plans/p_srv1'));
+});
+
+test('§pxOvr: a typed cost goes to the server, empty removes it, a bad number never leaves the browser, and a server line marked override reads as legacy\'s o', async () => {
+  const { window, calls, writes, alerts } = load();
+  let painted = 0; window.renderTripPL = () => { painted += 1; };
+  await window.pxOvSave('b1', 'fuel', '1,500');
+  await window.pxOvSave('b1', 'fuel', '');
+  const puts = calls.filter((x) => x[0] === 'PUT');
+  eq(puts.map((x) => [x[1], x[2]]), [
+    ['/v1/trip-actuals/2026-10-12/b1/cost-override', { line_id: 'fuel', amount: 1500 }],
+    ['/v1/trip-actuals/2026-10-12/b1/cost-override', { line_id: 'fuel', amount: null }],
+  ]);
+  assert.deepEqual([writes.length, painted], [2, 2]);
+  await window.pxOvSave('b1', 'fuel', 'abc');
+  await window.pxOvSave('b1', 'fuel', '-5');
+  assert.equal(calls.filter((x) => x[0] === 'PUT').length, 2, 'not sent');
+  assert.deepEqual([alerts.length, painted], [2, 4]);
+
+  const legacy = load({ enabled: false }).window;
+  assert.equal(legacy.pxOvSave('b1', 'fuel', '1'), 'legacy-override');
+
+  const refused = load({ call: () => { throw Object.assign(new Error('closed'), { code: 'trip_closed' }); } });
+  let failed = 0, repainted = 0;
+  refused.window.laOps.fail = () => { failed += 1; };
+  refused.window.renderTripPL = () => { repainted += 1; };
+  await refused.window.pxOvSave('b1', 'fuel', '10');
+  assert.deepEqual([failed, repainted, refused.writes.length], [1, 1, 0], 'a refusal repaints the old number');
+
+  const trip = load().c.legacyTrip({ rows: [{ id: 'fuel', group: 'Fuel', label: 'Fuel', actual: 1500, use: 1500, source: 'override' }], pax: {}, upsell: {}, longtail: {}, fuel_price: {} });
+  assert.deepEqual([trip.rows[0].src, trip.rows[0].real], ['o', 1500]);
 });
 
 test('close and ran post to the server trip-actuals commands', async () => {

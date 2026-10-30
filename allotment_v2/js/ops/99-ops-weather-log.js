@@ -8,6 +8,10 @@
      POST /api/weather/fetch?date&kind    → POST /v1/weather/fetch?date&kind     (needs operations)
      POST /api/weather/backfill?from      → POST /v1/weather/backfill?from       (needs operations)
      GET  /api/weather/backfill           → GET  /v1/weather/backfill            (the poll)
+     GET  /api/weather/log?from&to        → GET  /v1/weather/log?from&to         (§wx2, migration 589)
+     POST /api/weather/decision           → POST /v1/weather/decision            (needs operations, fleet or pier; its JSON body goes as it is)
+     POST /api/weather/turnback           → POST /v1/weather/turnback            (same)
+     POST /api/weather/report             → POST /v1/weather/report              (same)
    So this only re-routes wxFetch; nothing is mapped. A refusal rejects with the server's message, which is what
    12-weather.js already does with a legacy error: wxLoad logs it and the card stays empty (no toast, no loop),
    the fetch and backfill buttons alert it. Not in ops mode, or a path that is not a weather one: legacy's wxFetch.
@@ -21,7 +25,7 @@
 
   /* '/api/weather/fetch?date=…' → '/v1/weather/fetch?date=…'; null for anything else */
   function opsPath(url){
-    var m = /^\/api\/weather(\/(?:points|fetch|backfill))?(\?.*)?$/.exec(String(url == null ? '' : url));
+    var m = /^\/api\/weather(\/(?:points|fetch|backfill|log|decision|turnback|report))?(\?.*)?$/.exec(String(url == null ? '' : url));
     return m ? '/v1/weather' + (m[1] || '') + (m[2] || '') : null;
   }
 
@@ -29,7 +33,8 @@
     var p = opsPath(url);
     if(!p || !(O.enabled && O.enabled())) return orig.apply(this, arguments);
     var method = String((opt && opt.method) || 'GET').toUpperCase();
-    return method === 'GET' ? O.get(p) : O.call(method, p);
+    if(method === 'GET') return O.get(p);
+    return (opt && opt.body) ? O.call(method, p, JSON.parse(opt.body)) : O.call(method, p);
   };
   w.__opsWx = true; w.__orig = orig; w.opsPath = opsPath;
   window.wxFetch = w;
