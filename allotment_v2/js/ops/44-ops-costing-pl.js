@@ -453,18 +453,19 @@
   }
   /* §rentDay / §rentRoute · the daily charter deal: server `day` {on, amount, vat, from, to, owner_pays[], routes{}} <-> legacy
      `R.day` {on, amt, vat, from, to, ex{}, rt{}}, keys in ctRentDayBlank's order so an untouched record compares equal.
-     No `day` from the server (a backend from before migration 584) reads as ctRentDayBlank. */
+     No `day` from the server (a backend from before migration 584) reads as ctRentDayBlank.
+     §rentTyp (lk-inbox 2026-10-29): a route at 0 keeps its row ("= ตั้งต้น", priced as the default); only × (ctRentRtDel) removes it. */
   var DAY_EX_DEFAULT = ['fuel', 'cap', 'crew', 'dep'];
   function dayFromServer(d){
     var ex = {}, rt = {};
     ((d && d.owner_pays) || DAY_EX_DEFAULT).forEach(function(id){ ex[id] = 1; });
-    Object.keys((d && d.routes) || {}).forEach(function(id){ var a = n(d.routes[id]); if(a > 0) rt[id] = a; });
+    Object.keys((d && d.routes) || {}).forEach(function(id){ rt[id] = Math.max(0, n(d.routes[id])); });
     return { on:d && d.on ? 1 : 0, amt:(d && n(d.amount)) || 0, vat:d && d.vat ? 1 : 0, from:(d && d.from) || '', to:(d && d.to) || '', ex:ex, rt:rt };
   }
   function dayToServer(D){
     var ex = [], rt = {};
     Object.keys(D.ex || {}).forEach(function(id){ if(D.ex[id]) ex.push(id); });
-    Object.keys(D.rt || {}).forEach(function(id){ var a = n(D.rt[id]); if(a > 0) rt[id] = a; });
+    Object.keys(D.rt || {}).forEach(function(id){ rt[id] = Math.max(0, n(D.rt[id])); });
     return { on:!!D.on, amount:Math.max(0, n(D.amt)), vat:!!D.vat, from:D.from || null, to:D.to || null, owner_pays:ex, routes:rt };
   }
   /* a deal that says nothing: what a backend without `day` would be told about it */

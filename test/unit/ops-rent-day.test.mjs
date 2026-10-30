@@ -71,7 +71,7 @@ test('ctRentSet day.*: each edit saves the whole deal through PUT /v1/costing/bo
   const P = puts(rt);
   assert.equal(P.length, 5);
   assert.deepEqual(P[0].day, { on: true, amount: 38000, vat: false, from: null, to: null, owner_pays: ['fuel', 'cap', 'crew', 'dep'], routes: { r12: 45000, r11: 40000 } });
-  assert.deepEqual(P[1].day.routes, { r11: 40000 }, 'a cleared route has no price of its own');
+  assert.deepEqual(P[1].day.routes, { r12: 0, r11: 40000 }, '§rentTyp: a cleared route keeps its row at 0 (the default price); only × removes it');
   assert.deepEqual(P[2].day.owner_pays, ['cap', 'crew', 'dep']);
   assert.equal(P[3].day.from, '2066-01-01');
   assert.equal(P[4].day.vat, true);

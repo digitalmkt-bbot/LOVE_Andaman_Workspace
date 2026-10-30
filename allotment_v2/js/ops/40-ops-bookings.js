@@ -294,6 +294,15 @@
     if(typeof n === 'string') return { t: n, at: '', by: '' };
     return { t: String(n.t != null ? n.t : (n.text || '')), at: n.at || '', by: n.by || '' };
   }
+  /* §turnBack · the server's turn_back (migration 586) → legacy's ops.turnBack {at, hm, by, reason, note, pax, money{kind,pct,amt,note,by,at}, editedAt} */
+  function turnBackFrom(t){
+    if(!t || typeof t !== 'object') return null;
+    var m = t.money || {};
+    var r = { at: t.at || '', hm: t.hm || '', by: t.by || '', reason: t.reason || 'other', note: t.note || '', pax: +t.pax || 0,
+      money: { kind: m.kind || 'pending', pct: m.pct != null ? +m.pct : null, amt: m.amt != null ? +m.amt : null, note: m.note || '', by: m.by || '', at: m.at || '' } };
+    if(t.edited_at) r.editedAt = t.edited_at;
+    return r;
+  }
   function operationsFrom(x){
     x = x || {};
     var r = { boatId: x.boat_id || x.boatId || null,
@@ -302,6 +311,8 @@
       pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
       returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
       pierNote: pierNoteFrom(x.pier_note || x.pierNote), checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
+    var tb = turnBackFrom(x.turn_back);
+    if(tb) r.turnBack = tb;
     /* check-in state: same mapping as the write path (36-ops-day-actions applyServerCheckins) -> pierCheckin / vanCheckin */
     if(O.applyCheckins) O.applyCheckins(r, x);
     var vs = vanSplitsFrom(r.vanParts);
@@ -1115,7 +1126,7 @@
 
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
-  O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
+  O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, turnBackFrom: turnBackFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
                  reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
 
   /* The cancel dialog's reasons (BKV2_CANCEL_REASONS) are the server's list: GET /v1/cancel-categories
