@@ -79677,7 +79677,8 @@ function pjAlignSecs(){
        ดันด้วยการแทรกช่องว่าง "ก่อน" หัวข้อ จึงไม่ต้องวัดความสูงของทั้งกลุ่ม */
     var CANON=['crew','guide','lang','kit','cust','note'];
     CANON.forEach(function(K, ki){
-      if(ki>=CANON.length-1) return;   /* กลุ่มสุดท้ายไม่ต้องดัน · ช่องหมายเหตุยืดเองอยู่แล้ว */
+      /* §pjAlign3 (2026-10-30) · owner "ระยะไม่ตรงกัน" · แถว Wristband ตัดบรรทัดได้แล้ว (§pjWide)
+         การ์ดที่แถวนั้นสูงขึ้นทำให้หัว NOTE ของแต่ละใบไม่ตรงกัน · เดิมข้ามกลุ่มสุดท้าย · ตอนนี้ดันทุกกลุ่มรวม NOTE */
       var row=[];
       cards.forEach(function(c){
         var h=Array.prototype.filter.call(c.children, function(e){
