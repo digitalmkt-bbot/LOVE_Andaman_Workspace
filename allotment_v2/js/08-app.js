@@ -84791,7 +84791,18 @@ function pc2CSS3(S){
     '.btc-tg button{border:0;background:transparent;font:inherit;font-size:11.5px;font-weight:700;color:#5B6275;padding:3px 11px;border-radius:12px;cursor:pointer;letter-spacing:0}',
     '.btc-tg button.on{background:#16265C;color:#fff}',
     /* ---------- §btLayer · การ์ดซ้อน (body.btl) ---------- */
-    'body.btl #view-booking .t2-mtbl tr.ly-sp td{height:14px;padding:0!important;border:0!important;background:#fff!important;box-shadow:none!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-sp td{height:16px;padding:0!important;border:0!important;background:#fff!important;box-shadow:none!important}',
+    /* §btLayer2 · ตารางเยื้อง 10px ให้การ์ดลอยจากขอบ · หัวคอลัมน์บนสุดซ่อน (มีในการ์ดแล้ว) · แถวหัวทริป/ล็อก กินเต็มเหมือนเดิม */
+    'body.btl #view-booking table.t2-mtbl{width:calc(100% - 20px)!important;margin:0 10px}',
+    'body.btl #view-booking table.t2-mtbl>thead{display:none}',
+    'body.btl #view-booking .t2-mtbl tr.t2-pband>td{border-bottom:2px solid #E6E8EE!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-zh>td{border-width:2px!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in>td{border-right-color:#EEF0F4}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in>td:first-child{border-left:2px solid var(--lyb)!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in>td:last-child{border-right:2px solid var(--lyb)!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-last>td{border-bottom:2px solid var(--lyb)!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-in[data-grp]>td{background:#F7F8FB!important;border-top:1px solid #E6E8EE!important}',
+    'body.btl #view-booking .t2-mtbl tr.ly-cols>td{background:#FAFBFC!important}',
     'body.btl #view-booking .t2-mtbl tr.ly-zh td{background:var(--lybg)!important;border:1.5px solid var(--lyb)!important;border-bottom:0!important;border-radius:12px 12px 0 0;padding:9px 12px!important;box-shadow:none!important}',
     'body.btl #view-booking .t2-mtbl tr.ly-zh .zw{display:flex;align-items:center;gap:10px}',
     'body.btl #view-booking .t2-mtbl tr.ly-zh .znm{font-size:15px!important;font-weight:800!important;color:var(--lyc)!important}',
@@ -85519,7 +85530,7 @@ function pc2CSS3(S){
   function zoneKey(txt){ var t = String(txt || '').toLowerCase();
     if(/phuket|ภูเก็ต/.test(t)) return 'pk'; if(/khao\s*lak|เขาหลัก/.test(t)) return 'kl'; if(/ranong|ระนอง/.test(t)) return 'rn';
     if(/own|มาเอง|no transfer|self|ไม่มีรถ/.test(t)) return 'own'; if(/charter|เหมา/.test(t)) return 'ch'; return 'oth'; }
-  var ZC = { pk:['#1E3A8A','#C9D4EE','#F4F6FC'], kl:['#1F6B46','#CFE3D6','#F3F9F5'], rn:['#0E5E73','#C7E0E8','#F0F8FA'], own:['#5B289A','#DDD6EE','#F7F5FC'], ch:['#8A3E05','#F0D5B8','#FDF6EE'], oth:['#3E4658','#D9DEE9','#F6F7FA'] };
+  var ZC = { pk:['#1E3A8A','#AFC0E6','#E9EEF8'], kl:['#1F6B46','#B7D6C2','#E6F2EA'], rn:['#0E5E73','#A9CFDA','#E4F2F6'], own:['#5B289A','#CFC2E6','#EFE9F8'], ch:['#8A3E05','#E6C39A','#FBF0E2'], oth:['#3E4658','#C9D0DC','#EEF0F4'] };   /* §btLayer2 · เข้มขึ้นให้เห็นเป็นการ์ด */
   function layer(root){
     var tbs = root.querySelectorAll('table.t2-mtbl:not(.ly-done)');
     for(var ti = 0; ti < tbs.length; ti++){
