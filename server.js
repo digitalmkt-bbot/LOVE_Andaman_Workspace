@@ -2572,11 +2572,11 @@ async function wxFetchDay(pt, ymd){
   const base = `latitude=${pt.lat}&longitude=${pt.lon}&timezone=Asia%2FBangkok&start_date=${ymd}&end_date=${ymd}`;
   const [m, w] = await Promise.all([
     wxGetJson(`https://marine-api.open-meteo.com/v1/marine?${base}&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height`),
-    wxGetJson(`https://api.open-meteo.com/v1/forecast?${base}&wind_speed_unit=kn&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation`)
+    wxGetJson(`https://api.open-meteo.com/v1/forecast?${base}&wind_speed_unit=kn&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cloud_cover,weather_code`)
   ]);
   const H = { time: (m.hourly && m.hourly.time) || [] };
   ['wave_height','wave_period','wave_direction','swell_wave_height','swell_wave_period','swell_wave_direction','wind_wave_height'].forEach(k => { H[k] = (m.hourly && m.hourly[k]) || []; });
-  ['wind_speed_10m','wind_gusts_10m','wind_direction_10m','precipitation'].forEach(k => { H[k] = (w.hourly && w.hourly[k]) || []; });
+  ['wind_speed_10m','wind_gusts_10m','wind_direction_10m','precipitation','cloud_cover','weather_code'].forEach(k => { H[k] = (w.hourly && w.hourly[k]) || []; });
   return H;
 }
 // Summary over the point's sailing window (hours [h0,h1]): the numbers the card shows and similarity uses.
@@ -2598,7 +2598,9 @@ function wxSummarize(H, pt){
     swell:r1(max(pick('swell_wave_height'))), swellPer:r1(mean(pick('swell_wave_period'))), swellDir:circMean(pick('swell_wave_direction')),
     windWave:r1(max(pick('wind_wave_height'))),
     wind:r1(max(pick('wind_speed_10m'))), gust:r1(max(pick('wind_gusts_10m'))), windDir:circMean(pick('wind_direction_10m')),
-    rain:r1(pick('precipitation').reduce((s, v) => s + v, 0))
+    rain:r1(pick('precipitation').reduce((s, v) => s + v, 0)),
+    cloud:(a => a.length ? Math.round(mean(a)) : null)(pick('cloud_cover')),   // §wx4 · % mean over the window
+    code:max(pick('weather_code'))                                             // §wx4 · worst WMO code (95+ = thunder)
   };
 }
 async function wxStore(pt, ymd, kind){
