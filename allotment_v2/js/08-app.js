@@ -78237,6 +78237,43 @@ function pjCSS(){
   +H+'.sk .pj-wsw button{border-radius:9px;padding:5px 11px;font:600 11.5px inherit;color:#64748B}'
   +H+'.sk .pj-wsw button.on{background:#fff;color:#0F172A;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.07)}'
   +H+'.sk .pj-strip::-webkit-scrollbar-track{background:#E2E5EA}'
+  /* §pjTight (2026-10-30) · owner "ไล่ทีละส่วน ให้กระชับขึ้น" · ข้อมูลเท่าเดิม การ์ดเตี้ยลงราวครึ่ง */
+  /* 1 แถบสถานะ */
+  +H+'.sk .stbar{min-height:0;padding-top:6px;padding-bottom:6px}'
+  +H+'.sk .pj-std,'+H+'.sk .pj-stmeta,'+H+'.sk .pj-sub{white-space:nowrap}'
+  +H+'.sk .pj-lb{padding:4px 10px;font-size:11.5px;border-radius:7px}'
+  /* 2 หัวหมวด · จำนวนคน + ปุ่มเพิ่ม ลอยทับขวาของแถบหัว (แถวตามหลังหัวหมวดทันที) */
+  +H+'.sk .pj-gh{height:26px}'
+  +H+'.sk .pj-slotn{position:relative;z-index:2;height:26px;margin-top:-26px;padding:0 10px 0 0;display:flex;align-items:center;justify-content:flex-end;gap:8px;pointer-events:none;text-align:right}'
+  +H+'.sk .pj-slotn>*{pointer-events:auto}'
+  +H+'.sk .pj-slotn .pj-sn{font-size:10px;font-weight:700;letter-spacing:0;color:#8A93A3;text-transform:none}'
+  +H+'.sk .pj-slotn .pj-addw{padding:0;border:0;background:none;gap:0}'
+  +H+'.sk .pj-slotn .pj-addn{display:none}'
+  +H+'.sk .pj-slotn .pj-addb{font-size:10.5px;padding:1px 8px;line-height:16px;border-radius:6px;border-style:solid;background:#fff}'
+  +H+'.sk .pj-slotn .pj-pop.pj-addp{left:auto;right:0;top:24px}'
+  /* 3 แถวคน · เตี้ยลง · ▾ กับ × ขึ้นเฉพาะตอนชี้เมาส์ที่แถว */
+  +H+'.sk .pj-rw{min-height:25px;padding-top:1px;padding-bottom:1px;gap:6px}'
+  +H+'.sk .pj-rw select{-webkit-appearance:none;appearance:none;padding-top:2px;padding-bottom:2px}'
+  +H+'.sk .pj-rw:hover select:not(:disabled),'+H+'.sk .pj-rw select:focus{-webkit-appearance:auto;appearance:auto}'
+  +H+'.sk .pj-rw .pj-rx{opacity:0}'
+  +H+'.sk .pj-rw:hover .pj-rx{opacity:1}'
+  +H+'.sk .pj-addw{padding:4px 15px}'
+  /* 4 ใบอนุญาตลูกเรือ · ชิปบรรทัดเดียว */
+  +H+'.sk .pj-licbox{height:auto;overflow:visible;display:flex;flex-wrap:wrap;gap:4px;padding:5px 12px 6px}'
+  +H+'.sk .pj-licbox .pl-res.pj-lc{display:inline-block;padding:1px 7px;border-radius:6px;font-size:10.5px;line-height:1.5;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;cursor:default}'
+  +H+'.sk .pj-licbox .pj-licnone{padding:2px 3px}'
+  /* 6 ภาษา + ครัว · หัวหมวดบรรทัดเดียว มีของอยู่ในแถบ */
+  +H+'.sk .pj-gh.pj-ln{height:auto;min-height:30px;padding:3px 12px;gap:6px;letter-spacing:0;text-transform:none;font-size:11px}'
+  +H+'.sk .pj-gh.pj-ln .lk{width:44px;flex:none;font-size:10px;font-weight:800;letter-spacing:.04em}'
+  +H+'.sk .pj-gh.pj-ln .pj-lgb{font-size:11px;padding:1px 9px}'
+  +H+'.sk .pj-gh.pj-ln .pj-noneb{font-size:10.5px;font-weight:600}'
+  +H+'.sk .pj-kitn.pj-kit1{position:relative;flex:1;min-width:0;padding:2px 8px;border-radius:7px;gap:6px}'
+  +H+'.sk .pj-kit1 b{font-size:12px;flex:0 1 auto}'
+  +H+'.sk .pj-kit1 u{text-decoration:none;font-size:10.5px;font-weight:600;color:#8A93A3;white-space:nowrap;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}'
+  +H+'.sk .pj-kit1 .pr{margin-left:auto}'
+  +H+'.sk .pj-kit1 select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}'
+  +H+'.sk .pj-kit1 select:disabled{cursor:default}'
+  +H+'.sk .pj-kit1:hover{filter:brightness(.97)}'
   +H+'.sk .pj-idle,'+H+'.sk .pj-empty{border-radius:20px;border-color:#F1F5F9;box-shadow:0 10px 30px -5px rgba(0,0,0,.04)}';
 }
 
@@ -79103,11 +79140,11 @@ function pjCard(B, pier, ro){
             var left=goGuides().filter(function(g){
               return g.active!==false && !taken[g.id]; }).length;
             var aid='pjga_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
-            out+='<div class="pj-addw">'
+            var addH='<div class="pj-addw">'   /* §pjTight */
               +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')"'+(left?'':' disabled')
                 +' title="'+(left?'เพิ่มช่องไกด์ หรือช่อง ผช.ไกด์ / สตาฟ'
                               :'ทุกคนในทะเบียนไกด์ลงลำนี้หมดแล้ว — เพิ่มคนใหม่ได้ที่ปุ่ม จัดไกด์ › ทะเบียนไกด์')+'">'
-                +'&#65291; เพิ่มคน</button>'
+                +'&#65291; เพิ่ม</button>'
               +'<span class="pj-addn">'+(left?('เหลือ '+left+' คนในทะเบียน'):'ทะเบียนหมดแล้ว')+'</span>'
               +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
                 /* §gdLb · ชื่อในเมนูต้องเป็นชื่อที่ตั้งทับไว้ ไม่ใช่ชื่อตั้งต้น
@@ -79122,7 +79159,7 @@ function pjCard(B, pier, ro){
                   +' · เลือกกลุ่มให้ถูกก่อน เพราะกลุ่มเป็นตัวกำหนดว่าจะเห็นใครในช่องเลือก</div>'
               +'</div></div>';
             /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
-            return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
+            return '<div class="pj-slotn"><span class="pj-sn">'+(gd.length+tr.length+(+GF.other||0))+' คน</span>'+(addH||'')+'</div>'
               +out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
           })(); };
   /* §pjInk2 (2026-10-14) · owner's screenshot (Tub Lamu, 5th card): boat colour near white → name, time and
@@ -79263,10 +79300,11 @@ function pjCard(B, pier, ro){
        var out=shown.map(function(x){
          return pjSlotRow(pier,bid,KIND,x[0],x[1],pjSlotVal(J,x[0]),SUB[x[0]],x[2],lro,B.boat);
        }).join('');
+       var addH='';   /* §pjTight · ปุ่มเพิ่มคนย้ายขึ้นไปอยู่บนแถบหัวหมวด */
        if(!lro && rest.length){
          var aid='pja_'+bid;
-         out+='<div class="pj-addw">'
-           +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')">&#65291; เพิ่มคน</button>'
+         addH+='<div class="pj-addw">'
+           +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')" title="เหลือ '+rest.length+' ช่อง">&#65291; เพิ่ม</button>'
            +'<span class="pj-addn">เหลือ '+rest.length+' ช่อง</span>'
            +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
            + rest.map(function(x){
@@ -79274,7 +79312,7 @@ function pjCard(B, pier, ro){
                  +poE(pjSlotLb(KIND,x[0],x[1],bid))+'</button>'; }).join('')
            +'</div></div>';
        }
-       return '<div class="pj-slotn">'+nMan+' คน</div>'+out;
+       return '<div class="pj-slotn"><span class="pj-sn">'+nMan+' คน</span>'+addH+'</div>'+out;
      })()
    + '<div class="pj-licbox">'+(function(){ try{
        // §pjAll · ลำที่ไม่ได้ออก ไม่ต้องเตือนใบอนุญาต · ไม่มีใครต้องคุมเรือ
@@ -79282,19 +79320,23 @@ function pjCard(B, pier, ro){
        var ids=[J.cap,J.asst].concat(J.crew||[]);
        var R=plCheckBoat(bid,ids);
        if(!R || !R.length) return '<div class="pj-licnone">ยังไม่ได้ตั้งทะเบียนประเภทใบอนุญาต</div>';
+       /* §pjTight · ชิปบรรทัดเดียว · "ใบกัปตันครบ · ชื่อคน · ชั้นหนึ่ง" ชื่อซ้ำกับแถวข้างบน → ตัดชื่อออก ชี้เมาส์เห็นเต็ม */
        return R.map(function(r){
-         return '<div class="pl-res '+(r.lv==='ok'?'ok':(r.lv==='warn'?'warn':'bad'))+'"><b>'
-           +(r.lv==='ok'?'&#10003;':(r.lv==='warn'?'&#9888;':'&#9940;'))+'</b> '+poE(r.t)+'</div>';
+         var t=String(r.t||''), pt=t.split(' \u00b7 ');
+         var sh=(pt.length>=3)?(pt[0]+' \u00b7 '+pt.slice(2).join(' \u00b7 ')):t;
+         return '<span class="pl-res pj-lc '+(r.lv==='ok'?'ok':(r.lv==='warn'?'warn':'bad'))+'" title="'+poE(t)+'"><b>'
+           +(r.lv==='ok'?'&#10003;':(r.lv==='warn'?'&#9888;':'&#9940;'))+'</b> '+poE(sh)+'</span>';
        }).join('');
      }catch(_){ return ''; } })()+'</div>'
    + (going
       ? ( gdSec()
         /* §pjKit · ภาษาที่ลูกค้าขอ · เป็นของที่ไกด์กับหน้าท่าต้องเห็นก่อนออกเรือ
            อยู่เป็นบรรทัดสุดท้ายของกลุ่มไกด์แล้วถูกมองข้ามตลอด */
-        + pjSecHd('ภาษาที่ลูกค้าขอ','lang')
+        /* §pjTight · ภาษา = หัวหมวดบรรทัดเดียว ชิปอยู่ในแถบหัวเลย · ยังเป็น .pj-gh[data-sec=lang] (ใช้จัดแนว + โหมด lite) */
         + (function(){
-            var nd=Object.keys(pax.langs||{});
-            return '<div class="pj-langbox">'
+            var nd=Object.keys(pax.langs||{}), S=PJ_SEC.lang;
+            return '<div class="pj-gh pj-ln" data-sec="lang" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'
+              +'<span class="lk">\u0e20\u0e32\u0e29\u0e32</span>'
               +(nd.length
                  ? nd.map(function(L){ return '<span class="pj-lgb">'+poE(L)+'</span>'; }).join('')
                  : '<span class="pj-noneb">ไม่มีคำขอภาษาในวันนี้</span>')
@@ -79302,7 +79344,6 @@ function pjCard(B, pier, ro){
           })()
         /* §mealTrip · ร้านอาหารของลำนี้วันนี้ · ค่าเริ่มต้นมาจากเส้นทาง กดเปลี่ยนเฉพาะวันนี้ได้
            §pjKit · ชื่อร้านต้องอ่านออกจากระยะไกล · ครัวใช้ใบนี้จัดของ ไม่ได้มานั่งอ่านทีละบรรทัด */
-        + pjSecHd('ครัว · ร้านอาหาร','kit')
         + (function(){
             var raw=mvTripRaw(_poDate,bid), V=mvForTrip(_poDate,bid,B.rid);
             var col=pjMvCol(V?V.id:''), nm=V?(V.name||V.id):'';
@@ -79313,14 +79354,17 @@ function pjCard(B, pier, ro){
                   +poE(x.name||x.id)+' · '+(+x.priceAd||0)+'/'+(+x.priceCh||0)+'</option>'; }).join('')
               +'<option value="-"'+(raw==='-'?' selected':'')+'>ไม่มีอาหารวันนี้</option>'
               +'</select>';
-            return '<div class="pj-kit">'
-              +'<div class="pj-kitn" style="background:'+col[1]+';border-color:'+col[0]+'33">'
+            /* §pjTight · หัวหมวด "ครัว" กับก้อนร้าน + ตัวเลือก อยู่บรรทัดเดียว · คลิกก้อนร้าน = เมนูเลือกร้านเดิม (select โปร่งใสทับอยู่) */
+            var SK2=PJ_SEC.kit;
+            return '<div class="pj-gh pj-ln" data-sec="kit" style="--bg:'+SK2.bg+';--fg:'+SK2.fg+';--bd:'+SK2.bd+'">'
+              +'<span class="lk">\u0e04\u0e23\u0e31\u0e27</span>'
+              +'<div class="pj-kitn pj-kit1" style="background:'+col[1]+';border-color:'+col[0]+'55">'
                 +'<i style="background:'+col[0]+'"></i>'
                 +'<b style="color:'+col[0]+'">'+(nm?poE(nm):(raw==='-'?'ไม่มีอาหารวันนี้':'ยังไม่ได้ตั้งร้าน'))+'</b>'
+                +'<u>'+(raw===''?'\u00b7 ตามเส้นทาง':(raw==='-'?'':'\u00b7 วันนี้'))+(lro?'':' \u25BE')+'</u>'
                 +(V?('<span class="pr">'+(+V.priceAd||0)+' / '+(+V.priceCh||0)+' ฿</span>'):'')
-                +(raw&&raw!=='-'?'<span class="pj-tag" title="เปลี่ยนเฉพาะวันนี้ · ไม่กระทบค่าปกติของเส้นทาง">วันนี้</span>':'')
+                +sel
               +'</div>'
-              +'<div class="pj-kitsel">'+sel+'</div>'
             +'</div>';
           })() )
       /* §pjWork · ลำที่ไม่ได้ออก · ช่องนี้เปลี่ยนเป็น "งานที่ทำวันนี้" */
