@@ -34242,6 +34242,21 @@ function pxCSS(){ return ''
    +'text-align:center;text-transform:none;font-size:10.5px;letter-spacing:0;line-height:1.35;'
    +'vertical-align:bottom;padding:9px 8px 8px}'
  +'#trippl-host table.sum th.rth i{display:block;width:26px;height:4px;border-radius:999px;margin:0 auto 6px}'
+ /* §agFit · พอดีจอ · คอลัมน์เส้นทางแบ่งที่ที่เหลือเท่า ๆ กัน · เส้นคั่นระหว่างท่า */
+ +'#trippl-host table.sum.agmx{table-layout:fixed;width:100%}'
+ +'#trippl-host table.sum.agmx th.rth{min-width:0;max-width:none;font-size:10px;padding:6px 3px 7px;overflow-wrap:break-word}'
+ +'#trippl-host table.sum.agmx th.rth i{width:20px;margin-bottom:4px}'
+ +'#trippl-host table.sum.agmx th.pgh{text-align:center;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pc,#334155);padding:6px 4px 4px;border-bottom:2px solid var(--pc,#CBD5E1);background:#F8FAFC}'
+ +'#trippl-host table.sum.agmx tr.pgr th[rowspan]{vertical-align:bottom}'
+ +'#trippl-host table.sum.agmx .pst{border-left:2px solid #CBD5E1!important}'
+ +'#trippl-host table.sum.agmx td.mx > div{padding:6px 2px;margin:2px 0}'
+ +'#trippl-host table.sum.agmx td.mx b{font-size:12px}'
+ +'#trippl-host table.sum.agmx td.mx small{font-size:9.5px}'
+ +'#trippl-host table.sum.agmx td.mx u{font-size:9px;white-space:normal;line-height:1.15}'
+ +'#trippl-host table.sum.agmx td.stk{overflow:hidden}'
+ +'#trippl-host table.sum.agmx td.stk .bn,#trippl-host table.sum.agmx td.stk .bn>div{min-width:0;overflow:hidden}'
+ +'#trippl-host table.sum.agmx td.stk .bn b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}'
+ +'#trippl-host table.sum.agmx td.netc,#trippl-host table.sum.agmx th{overflow:hidden}'
  +'#trippl-host td.mx{padding:0;border-left:2px solid #fff;border-right:2px solid #fff}'
  +'#trippl-host td.mx > div{padding:9px 8px;text-align:center;border-radius:8px;margin:2px 0}'
  +'#trippl-host td.mx b{display:block;font-size:12.5px;font-weight:800;line-height:1.25}'
@@ -35474,7 +35489,16 @@ function pxAnalysis(e){
   /* §agMx · เอเจนต์ × เส้นทาง · เอเจนต์คนเดียวกันกำไรคนละเรื่องในแต่ละเส้นทาง
      ตัวเลขรวมของเขาจึงกลบเส้นทางที่ขาดทุนไว้ · คอลัมน์เรียงตามหัวคน เส้นทางหลักอยู่ติดชื่อ */
   var AGN_TOP=_px.agAll ? Math.max(1,AL.length) : 15;   /* §agAll */
-  var RCOL=RL.slice().sort(function(a,b){ return b.pax-a.pax; });
+  /* §agFit (2026-10-30) · owner "ปรับให้พอดีกับหน้า และเรียงตามท่าเรือ ตามเส้นทางที่วาง"
+     เดิมเรียงตามหัวคน · ตอนนี้จับกลุ่มตามท่า (ลำดับเดียวกับหน้าใบงานเรือ) แล้วเรียงตามลำดับเส้นทางในทะเบียน */
+  var _agPI=function(k){ try{ var R=(typeof getRoute==='function')?getRoute(k):null;
+      var pk=(R&&R.pier)||'', pi=(typeof PO_PIERS!=='undefined')?PO_PIERS.map(function(x){ return x.k; }).indexOf(pk):-1;
+      var ri=-1; if(typeof ROUTES!=='undefined') for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i] && ROUTES[i].id===k){ ri=i; break; } }
+      return { pk:pk, pi:(pi<0?99:pi), ri:(ri<0?9999:ri) }; }catch(_){ return {pk:'',pi:99,ri:9999}; } };
+  var RCOL=RL.slice().map(function(r){ r._po=_agPI(r.k); return r; }).sort(function(a,b){
+    return (a._po.pi-b._po.pi) || (a._po.ri-b._po.ri) || (b.pax-a.pax); });
+  RCOL.forEach(function(r,i){ r._pst=(i>0 && RCOL[i-1]._po.pk!==r._po.pk); });
+  var _agPst=function(h,r){ return r._pst ? h.replace('<td class="mx','<td class="mx pst') : h; };
   var mxStep=Math.max(1, +tgt||130);
   function pxMxCls(v){
     if(v>=3*mxStep) return 'd3p';
@@ -35572,7 +35596,7 @@ function pxAnalysis(e){
       +'<b>'+e(g.name)+'</b><small>'+(g.b2c?'Direct \u00b7 no commission':'Agent')
       +' \u00b7 '+g.n+' booking'+(g.n===1?'':'s')+'</small></div></div></td>'
       +'<td class="c"><span class="num n">'+g.pax+'</span></td>'
-      +RCOL.map(function(r){ return pxMxCell(RS[r.k], r.name, r); }).join('')
+      +RCOL.map(function(r){ return _agPst(pxMxCell(RS[r.k], r.name, r), r); }).join('')
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'\u2212':'+')+pxN(Math.abs(g.nph))+'</span></td>'
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
@@ -35581,10 +35605,18 @@ function pxAnalysis(e){
         +(loss?'Below cost':(g.nph<(tgt||130)?'Thin':'Strong'))+'</span></td></tr>';
   }).join('');
   var mxHead=RCOL.map(function(r){
-    return '<th class="rth"><i style="background:'+e(r.color)+'"></i>'+e(r.name)+'</th>'; }).join('');
+    return '<th class="rth'+(r._pst?' pst':'')+'"><i style="background:'+e(r.color)+'"></i>'+e(r.name)+'</th>'; }).join('');
+  /* §agFit · แถวหัวท่าเรือเหนือชื่อเส้นทาง */
+  var mxPier=(function(){ var out=[], cur=null;
+    RCOL.forEach(function(r){ if(!cur || cur.pk!==r._po.pk){ cur={pk:r._po.pk, n:0}; out.push(cur); } cur.n++; });
+    return out.map(function(g,i){
+      var P=(typeof PO_PIERS!=='undefined')?PO_PIERS.filter(function(x){ return x.k===g.pk; })[0]:null;
+      var _sk=(typeof pjSkin==='function'&&g.pk)?pjSkin(g.pk):null; var nm=(_sk&&_sk.name)?_sk.name:P?(String(P.t||P.n||'').split('\u00b7')[0].trim()||P.n):(g.pk||'Other');
+      return '<th class="pgh'+(i?' pst':'')+'" colspan="'+g.n+'"'+(P&&P.c?(' style="--pc:'+P.c+'"'):'')+'>'+e(nm)+'</th>'; }).join(''); })();
   var mxFoot=RCOL.map(function(r){
-    return pxMxCell({pax:r.pax, rev:r.rev, cost:r.cost}, r.name, r, true); }).join('');
+    return _agPst(pxMxCell({pax:r.pax, rev:r.rev, cost:r.cost}, r.name, r, true), r); }).join('');
   var mxWide=430+118*RCOL.length;
+  var mxMin=400+60*RCOL.length;   /* §agFit · ต่ำกว่านี้ค่อยเลื่อนแนวนอน */
   /* เส้นทางที่ทั้งบริษัทขาดทุน · เอาไว้เขียนสรุปใต้ตาราง */
   var mxBad=RCOL.filter(function(r){ return r.nph<0; });
 
@@ -35854,10 +35886,13 @@ function pxAnalysis(e){
         +(_px.agAll?'ย่อกลับเหลือ 15 อันดับแรก':'ดูครบทุกเจ้า')+'">'
         +(_px.agAll?('ทั้งหมด '+AL.length+' agents'):('top '+Math.min(AGN_TOP,AL.length)+' of '+AL.length+' agents'))
         +'</span></div></div>'   /* §agAll */
-      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+mxWide+'px">'
-      +'<thead><tr><th class="l stk" style="min-width:212px">Agent</th><th class="c">Pax</th>'
-      +mxHead
-      +'<th>Net / pax</th><th>Total net</th><th class="c">Status</th></tr></thead><tbody>'+agRows
+      +'<div class="twrap"><div class="tscroll"><table class="sum agmx" style="min-width:'+mxMin+'px">'
+      +'<colgroup><col style="width:176px"><col style="width:50px">'+RCOL.map(function(){ return '<col>'; }).join('')
+      +'<col style="width:74px"><col style="width:88px"><col style="width:84px"></colgroup>'
+      +'<thead><tr class="pgr"><th class="l stk" rowspan="2">Agent</th><th class="c" rowspan="2">Pax</th>'
+      +mxPier
+      +'<th rowspan="2">Net / pax</th><th rowspan="2">Total net</th><th class="c" rowspan="2">Status</th></tr>'
+      +'<tr>'+mxHead+'</tr></thead><tbody>'+agRows
       /* §agAll · เดิมเป็นบรรทัดเทาที่กดไม่ได้ · ทำให้กดได้ แล้วมีทางย่อกลับด้วย */
       +(AL.length>AGN_TOP
         ?('<tr class="agmore" onclick="pxAgAll()"><td class="l stk">\u2026 '
