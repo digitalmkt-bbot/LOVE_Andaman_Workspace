@@ -10558,16 +10558,13 @@ function bop2RenderShell(){
         }).join('')}
         ${(() => { window._bop2FreeMemo = {}; return ''; })()}
         ${tublamuRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>TUB LAMU · ${tublamuRoutes.length} route${tublamuRoutes.length===1?'':'s'}</span></div>` : ''}
-        ${tublamuRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('tublamu', dates) : ''}
-        ${tublamuRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${tublamuRoutes.map(r => (typeof wxRowFor==='function' ? wxRowFor(r, dates, tublamuRoutes) : '') + bop2RenderHeatmapRow(r, dates)).join('')}
         ${tublamuRoutes.length ? bop2RenderFreeRow('tublamu', dates) : ''}
         ${panwaRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>VISIT PANWA · ${panwaRoutes.length} route${panwaRoutes.length===1?'':'s'}</span></div>` : ''}
-        ${panwaRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('panwa', dates) : ''}
-        ${panwaRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${panwaRoutes.map(r => (typeof wxRowFor==='function' ? wxRowFor(r, dates, panwaRoutes) : '') + bop2RenderHeatmapRow(r, dates)).join('')}
         ${panwaRoutes.length ? bop2RenderFreeRow('panwa', dates) : ''}
         ${ranongRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>RANONG · ${ranongRoutes.length} route${ranongRoutes.length===1?'':'s'}</span></div>` : ''}
-        ${ranongRoutes.length && typeof wxRowHtml==='function' ? wxRowHtml('ranong', dates) : ''}
-        ${ranongRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${ranongRoutes.map(r => (typeof wxRowFor==='function' ? wxRowFor(r, dates, ranongRoutes) : '') + bop2RenderHeatmapRow(r, dates)).join('')}
         ${ranongRoutes.length ? bop2RenderFreeRow('ranong', dates) : ''}
         ${(() => {
           /* §bopColMark · กรอบครอบทั้งคอลัมน์ ตั้งแต่หัววันที่ถึงแถวสุดท้าย

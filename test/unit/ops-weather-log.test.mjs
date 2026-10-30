@@ -9,8 +9,8 @@ const SOURCE = fs.readFileSync('allotment_v2/js/ops/99-ops-weather-log.js', 'utf
 // answers: 'METHOD /path' → value | Error.
 function runtime({ enabled = true, answers = {} } = {}) {
   const legacy = [], calls = [];
-  const respond = (method, path) => {
-    calls.push(method + ' ' + path);
+  const respond = (method, path, body) => {
+    calls.push(method + ' ' + path + (body === undefined ? '' : ' ' + JSON.stringify(body)));
     const a = answers[method + ' ' + path];
     return a instanceof Error ? Promise.reject(a) : Promise.resolve(a === undefined ? {} : a);
   };
@@ -19,7 +19,7 @@ function runtime({ enabled = true, answers = {} } = {}) {
     laOps: {
       enabled: () => enabled,
       get: (p) => respond('GET', p),
-      call: (method, p, body) => { assert.equal(body, undefined, 'no body: everything is in the query'); return respond(method, p); },
+      call: (method, p, body) => respond(method, p, body),
     },
   };
   window.window = window;
@@ -46,6 +46,25 @@ test('wxFetch\'s legacy paths go to /v1/weather with their query, the method kep
     'GET /v1/weather/backfill',
   ]);
   assert.deepEqual(rt.legacy, [], 'legacy server.js is never asked in ops mode');
+});
+
+test('§wx2: the decision log reads and writes /v1/weather with 12-weather.js\'s JSON body, and hands back the server\'s answer', async () => {
+  const log = { decisions: [{ point_id: 'phiphi' }], reports: [] };
+  const rt = runtime({ answers: { 'GET /v1/weather/log?from=2026-10-01&to=2026-10-31': log, 'POST /v1/weather/decision': { ok: true, by: 'ops', at: 'now' } } });
+  const post = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const wx = rt.window.wxFetch;
+  assert.deepEqual(JSON.parse(JSON.stringify(await wx('/api/weather/log?from=2026-10-01&to=2026-10-31'))), log);
+  const saved = await wx('/api/weather/decision', post({ pointId: 'phiphi', date: '2026-10-31', decision: 'ran_part', reason: 'swell' }));
+  assert.equal(saved.by, 'ops');
+  await wx('/api/weather/turnback', post({ pointId: 'phiphi', date: '2026-10-31', list: [{ bid: 'b1' }] }));
+  await wx('/api/weather/report', post({ date: '2026-10-31', boatId: 'b1', sea: 3 }));
+  assert.deepEqual(rt.calls, [
+    'GET /v1/weather/log?from=2026-10-01&to=2026-10-31',
+    'POST /v1/weather/decision {"pointId":"phiphi","date":"2026-10-31","decision":"ran_part","reason":"swell"}',
+    'POST /v1/weather/turnback {"pointId":"phiphi","date":"2026-10-31","list":[{"bid":"b1"}]}',
+    'POST /v1/weather/report {"date":"2026-10-31","boatId":"b1","sea":3}',
+  ]);
+  assert.deepEqual(rt.legacy, []);
 });
 
 test('a refusal rejects with the server\'s message, so 12-weather.js logs it (card stays empty) or alerts it (buttons)', async () => {

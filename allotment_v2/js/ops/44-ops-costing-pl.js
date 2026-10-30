@@ -54,7 +54,7 @@
   function clearAll(){ S.day = {}; S.mday = {}; S.an = {}; S.rent = {}; }
 
   /* ── server trip → the legacy trip object the renderers read ─────────────── */
-  var SRC = { actual:'r', plan:'p', formula:'f', pending:'w' };
+  var SRC = { actual:'r', plan:'p', formula:'f', pending:'w', override:'o' };
   function legacyTrip(t){
     t = t || {};
     var px = t.pax || {}, up = t.upsell || {}, lt = t.longtail || {};
@@ -356,6 +356,18 @@
     if(t.ran){ if(!confirm('Mark this boat as "did not sail"? Its cost goes back to 0.')) return; return tripCommand(bid, 'not-ran'); }
     if(!confirm('Confirm this boat sailed with no passengers?\n\n' + t.name + ' · ' + (t.route.name || '') + '\nCost counted if it sailed: ' + Math.round(t.wouldCost).toLocaleString() + ' THB')) return;
     return tripCommand(bid, 'ran');
+  });
+  /* §pxOvr · one cost line typed for this boat on this day (migration 590). Empty removes it; the server refuses a closed trip.
+     Either way the table repaints, so the cell's input goes and a refused number does not stay on screen. */
+  wrap('pxOvSave', function(orig, bid, id, val){
+    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('accounting')) return;
+    var raw = String(val == null ? '' : val).replace(/,/g, '').trim(), amount = raw === '' ? null : +raw;
+    if(amount !== null && (!isFinite(amount) || amount < 0)){ alert('Please enter a number (0 or more).'); window.renderTripPL(); return; }
+    var date = window._px.date;
+    return O.queue(function(){ return O.call('PUT', '/v1/trip-actuals/' + encodeURIComponent(date) + '/' + encodeURIComponent(bid) + '/cost-override', { line_id:id, amount:amount }); }).then(function(){
+      clearAll(); O.wrote('trip-pl'); window.renderTripPL();
+    }, function(e){ O.fail('Cost not saved', e); window.renderTripPL(); });
   });
 
   /* ══ Costing: template / plans / rented boats ══════════════════════════════ */
