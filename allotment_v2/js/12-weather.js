@@ -89,6 +89,9 @@ function wxOutcomeIndex(){
   var idx = {};
   B.forEach(function(b){
     var st = b.status||''; var cx = (st==='cancelled'||st==='rejected'); var wx = st==='cancelled_weather';
+    /* §wxFix · cancelled_weather is the status of EVERY trip-level cancel (§tripCxl) · only the weather reason
+       is a sea outcome · "ไม่ถึงคุ้มทุน" / "ไม่มีเรือ" / อื่นๆ count as plain cancels */
+    if(wx && typeof tcxBkReason==='function'){ var why = 'weather'; try{ why = tcxBkReason(b) || 'weather'; }catch(_){ } if(why!=='weather'){ wx = false; cx = true; } }
     (b.trips||[]).forEach(function(t){
       var pid = rp[t.routeId]; if(!pid || !t.date) return;
       var k = pid+'|'+t.date, o = idx[k] = idx[k] || { ok:0, wx:0 };
@@ -451,8 +454,11 @@ function wxOutcome(ptId, date){
     if(bd.rep && bd.rep.flags) (bd.rep.flags||[]).forEach(function(f){ if(flags.indexOf(f)<0) flags.push(f); });
     if(bd.est && (fuelMax==null || bd.est.pct > fuelMax)) fuelMax = bd.est.pct;
   });
-  if(base.wx && !base.ok) return { k:'cx', t:'ยกเลิก (ใบจอง)', n:base.wx, src:'bk' };
+  var dc = dec && dec.decision;   /* §wxFix · a recorded ran_all / ran_part beats the booking inference */
+  if(base.wx && !base.ok && dc!=='ran_all' && dc!=='ran_part') return { k:'cx', t:'ยกเลิก (ใบจอง)', n:base.wx, src:'bk' };
   var t = base.wx ? 'ออกบางส่วน' : 'ออก', k = base.wx ? 'part' : 'ran', src='bk';
+  if(dc==='ran_all'){ t = 'ออกทุกลำ'; k = 'ran'; src = 'dec'; }
+  else if(dc==='ran_part'){ t = 'ออกบางลำ'; k = 'part'; src = 'dec'; }
   if(seaMax){ t += ' · กัปตัน '+seaMax+' '+WX_SEA[seaMax]; src='rep'; if(seaMax>=3) k = seaMax>=4 ? 'rough' : 'bumpy'; }
   else if(fuelMax!=null && fuelMax >= 20){ t += ' · น้ำมัน +'+fuelMax+'%'; src='est'; k = fuelMax >= 35 ? 'rough' : 'bumpy'; }
   else if(fuelMax!=null){ src='est'; }
