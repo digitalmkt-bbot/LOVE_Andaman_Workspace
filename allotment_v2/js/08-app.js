@@ -33646,6 +33646,15 @@ function pxTrip(date, bid){
     }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
+    /* §pxOvr (2026-10-30) · owner "รายละเอียดค่าใช้จ่ายรายลำ ให้ User Override ได้เลย แต่เป็นแค่ของวันนั้น ๆ"
+       เก็บใน trip_actuals['วันที่::ลำ'].ovr[บรรทัด] = {amt,by,at} · ที่เดียวกับปิดยอด/ออกจริง → ไม่แตะแผนของเส้นทาง ไม่ลามไปวันอื่น
+       ตัวเลขที่กรอก = ช่อง "Used" ที่เห็น (หลังหัก VAT ซื้อแล้ว) · ทับทุกชั้น (สูตร · แผน · ของจริงจากหน้าอื่น) */
+    var _ov=(A.ovr && A.ovr[r.id]) || null;
+    if(_ov && _ov.amt!=null && isFinite(+_ov.amt)){
+      var _was=(real!=null)?real:est;
+      real=+_ov.amt; src='o';
+      why='แก้เอง เฉพาะวันนี้'+((_ov.by&&_ov.by!=='—')?(' · '+_ov.by):'')+' · เดิม ฿'+Math.round(_was||0).toLocaleString()+(why?(' ('+why+')'):'');
+    }
     return { id:r.id, g:r.g, l:r.l, vat:!!r.vat, est:est, real:real, why:why, src:src,
              gross:(a?a.amt:null), use:(real!=null?real:est) };
   });
@@ -33770,6 +33779,35 @@ function pxRan(bid){
     +'ไม่มีผู้โดยสารและไม่มีใบจองเลย · ถ้าออกจริงจะคิดต้นทุน '+pxN(t.wouldCost)+' ฿\n\n'
     +'ต้นทุนก้อนนี้จะถูกนับรวมในยอดของวันและของเดือนทันที')) return;
   taSet(date,bid,{ran:1}); renderTripPL();
+}
+/* §pxOvr · แก้ตัวเลขรายบรรทัดของลำนี้ วันนี้ · ว่าง = กลับไปใช้ค่าเดิม */
+function pxOvEdit(ev, el, bid, id){
+  try{ if(ev){ ev.stopPropagation(); ev.preventDefault(); } }catch(_){}
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!el || el.querySelector('input')) return;
+  var cur=String(el.textContent||'').replace(/[^0-9.\-]/g,'');
+  el.innerHTML='<input class="pxov-i" type="text" inputmode="decimal" value="'+cur+'">';
+  var inp=el.firstChild, done=false;
+  var fin=function(save){ if(done) return; done=true; if(save) pxOvSave(bid,id,inp.value); else renderTripPL(); };
+  inp.addEventListener('click', function(e2){ e2.stopPropagation(); });
+  inp.addEventListener('keydown', function(e2){ if(e2.key==='Enter'){ e2.preventDefault(); fin(true); } else if(e2.key==='Escape'){ fin(false); } });
+  inp.addEventListener('blur', function(){ fin(true); });
+  inp.focus(); try{ inp.select(); }catch(_){}
+}
+function pxOvSave(bid, id, val){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var date=_px.date, A=(taGet(date,bid)||{});
+  if(A.closed){ alert('This trip is closed. Reopen it before changing costs.'); return; }
+  var O=Object.assign({}, A.ovr||{});
+  var raw=String(val==null?'':val).replace(/,/g,'').trim();
+  if(raw===''){ delete O[id]; }
+  else{
+    var n=+raw;
+    if(!isFinite(n) || n<0){ alert('Please enter a number (0 or more).'); renderTripPL(); return; }
+    O[id]={ amt:Math.round(n), by:(typeof ckMe==='function')?ckMe():'', at:new Date().toISOString() };
+  }
+  taSet(date,bid,{ ovr:(Object.keys(O).length?O:null) });
+  renderTripPL();
 }
 function pxShift(n){ var d=new Date(_px.date+'T12:00:00'); d.setDate(d.getDate()+n);
   _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderTripPL(); }
@@ -34124,6 +34162,12 @@ function pxCSS(){ return ''
  +'#trippl-host .src.p{background:#DBEAFE;color:#1D4ED8}'
  +'#trippl-host .src.r{background:#D1FAE5;color:#047857}'
  +'#trippl-host .src.w{background:#FEF3C7;color:#B45309}'
+ /* §pxOvr */
+ +'#trippl-host .src.o{background:#EDE9FE;color:#6D28D9}'
+ +'#trippl-host .pxov{cursor:pointer;border-bottom:1px dashed #A5B4CB;border-radius:3px;padding:0 2px}'
+ +'#trippl-host .pxov:hover{background:#EEF2FF;border-bottom-color:#6D28D9}'
+ +'#trippl-host .pxov-i{width:84px;font:inherit;font-weight:700;text-align:right;border:1px solid #6D28D9;border-radius:5px;padding:1px 5px;outline:none;background:#fff}'
+ +'#trippl-host .pxov-x{border:none;background:none;color:#6D28D9;cursor:pointer;font-size:12px;padding:0 3px;line-height:1}'
  +'#trippl-host .cstot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;'
    +'background:#F8FAFC;border:1px solid var(--pl2);border-radius:9px;margin:8px 0 0}'
  +'#trippl-host .cstot .nm{font-size:11.5px;font-weight:700;color:var(--pi)}'
@@ -34301,7 +34345,7 @@ function pxGroups(t){
   t.rows.forEach(function(r){ if(by[r.g]===undefined){ by[r.g]=0; ord.push(r.g); } by[r.g]+=r.use; });
   return ord.filter(function(g){ return Math.round(by[g])!==0; })
             .map(function(g){ return { g:g, v:by[g], c:pxGColor(g),
-              real:t.rows.some(function(r){ return r.g===g && r.src==='r'; }) }; });
+              real:t.rows.some(function(r){ return r.g===g && (r.src==='r'||r.src==='o'); }) }; });
 }
 /* §gridRows · ลำดับหมวดต้นทุนที่ "ทุกลำในวันนั้นใช้ร่วมกัน"
    ต้องเป็นชุดเดียวกันทุกคอลัมน์ ไม่งั้นแถวในกริดจะเลื่อนไม่ตรงกัน
@@ -34312,7 +34356,7 @@ function pxGOrd(D){
   D.forEach(function(t){ (t.rows||[]).forEach(function(r){ if(!seen[r.g]){ seen[r.g]=1; out.push(r.g); } }); });
   return out;
 }
-var PX_SRCT={ f:'Formula', p:'Plan', r:'Actual', w:'Pending' };
+var PX_SRCT={ f:'Formula', p:'Plan', r:'Actual', w:'Pending', o:'Override' };   /* §pxOvr */
 var PX_CHEV='<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" '
   +'stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
 /* ค่าที่จะไปอยู่ใน onclick="...('X')" · กันทั้งฝั่ง JS และฝั่ง HTML attribute */
@@ -34337,7 +34381,12 @@ function pxCostPane(t, g, lines, e){
     if(r.why) whys.push('<div><b>'+e(r.l)+'</b> \u00b7 '+e(r.why)+'</div>');
     return '<tr><td class="l"><span class="ln">'+e(r.l)+'</span></td>'
       +'<td>'+ec+'</td>'
-      +'<td><span class="amt n">'+pxN(r.use)+'</span> <span class="src '+e(r.src)+'">'
+      /* §pxOvr · คลิกตัวเลข = แก้ของวันนี้ · ปิดยอดแล้ว / ไม่ได้ออก แก้ไม่ได้ */
+      +'<td>'+((t.closed||t.noSail)
+          ? '<span class="amt n">'+pxN(r.use)+'</span>'
+          : '<span class="amt n pxov" title="Click to override this line for this day only" onclick="pxOvEdit(event,this,\''+pxQ(t.bid)+'\',\''+pxQ(r.id)+'\')">'+pxN(r.use)+'</span>'
+            +(r.src==='o'?'<button class="pxov-x" title="Remove override" onclick="pxOvSave(\''+pxQ(t.bid)+'\',\''+pxQ(r.id)+'\',\'\')">\u21BA</button>':''))
+        +' <span class="src '+e(r.src)+'">'
         +(PX_SRCT[r.src]||'')+'</span></td>'
       +'<td><span class="n">'+pxN(r.use/pax)+'</span></td></tr>';
   }).join('');
