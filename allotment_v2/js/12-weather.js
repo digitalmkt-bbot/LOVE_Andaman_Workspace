@@ -55,14 +55,25 @@ function wxAfterRender(dates){
   wxLoad(from, to);
 }
 /* ── grid row ── */
+/* §wx7 · the wave row sits directly above the first route that uses its forecast point
+   (owner: "คลื่น เอาไปแทรกไว้บนหัว variant นั้นๆ") · list = the routes shown under this pier, in order */
+function wxRowFor(route, dates, list){
+  if(!WX.pts){ return (list && list[0]===route) ? '<div class="bop2-cell" style="grid-column:1/-1;padding:0;min-height:0" data-wx-pier="'+wxE(route.pier||'')+'"></div>' : ''; }
+  var pt = wxPtFor(route); if(!pt) return '';
+  for(var i=0;i<(list||[]).length;i++){ if(list[i]===route) break; var p2=wxPtFor(list[i]); if(p2 && p2.id===pt.id) return ''; }
+  return wxRowOne(pt, dates);
+}
 function wxRowHtml(pier, dates){
   var P = WX.pts ? wxPtsOf(pier) : null;
   if(!P) return '<div class="bop2-cell" style="grid-column:1/-1;padding:0;min-height:0" data-wx-pier="'+wxE(pier)+'"></div>';
-  return P.map(function(pt){
-    return '<div class="bop2-cell bop2-cell-route" style="font-size:10px;color:#6B7785;font-weight:600;min-height:26px;padding:2px 8px" title="'+wxE(pt.name)+' · จุดพยากรณ์กลางทะเล">'
+  return P.map(function(pt){ return wxRowOne(pt, dates); }).join('');
+}
+function wxRowOne(pt, dates){
+  {
+    return '<div class="bop2-cell bop2-cell-route" style="font-size:10px;color:#0E7490;font-weight:700;min-height:24px;padding:6px 8px 0;align-items:flex-end" title="'+wxE(pt.name)+' · จุดพยากรณ์กลางทะเล">'
       +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:5px;flex:none"><path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 6c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>คลื่น · '+wxE(pt.name.split(' · ')[0])+'</div>'
-      + dates.map(function(d){ return '<div class="bop2-cell" style="min-height:26px;padding:2px" data-wx="'+wxE(pt.id)+'|'+d+'">'+wxCellHtml(pt,d)+'</div>'; }).join('');
-  }).join('');
+      + dates.map(function(d){ return '<div class="bop2-cell" style="min-height:24px;padding:4px 2px 0" data-wx="'+wxE(pt.id)+'|'+d+'">'+wxCellHtml(pt,d)+'</div>'; }).join('');
+  }
 }
 function wxCellHtml(pt, date){
   var b = wxBest(pt.id, date); if(!b || b.S.wave==null) return '<span style="color:#D5D8E0;font-size:10px">·</span>';
