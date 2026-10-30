@@ -93,6 +93,7 @@ function wxOutcomeIndex(){
       var pid = rp[t.routeId]; if(!pid || !t.date) return;
       var k = pid+'|'+t.date, o = idx[k] = idx[k] || { ok:0, wx:0 };
       if(wx) o.wx++; else if(!cx) o.ok++;
+      if(!cx && !wx){ var tbe = wxTbPier(b, t); if(tbe) (o.tb = o.tb || []).push(tbe); }   /* §wxTb */
     });
   });
   _wxOutIdx = idx; _wxOutSig = sig; return idx;
@@ -237,6 +238,19 @@ var WX_CSS = '<style>'
   + '#wx-decmenu input{height:30px;border:1px solid #E2E8F0;border-radius:8px;padding:0 9px;font:11.5px "DM Sans","IBM Plex Sans Thai",sans-serif}'
   + '#wx-decmenu .wx-mb{height:28px;padding:0 12px;border-radius:8px;border:0;background:#1683C7;color:#fff;font:700 11px "DM Sans","IBM Plex Sans Thai",sans-serif;cursor:pointer}'
   + '#wx-decmenu .wx-mb.ghost{background:#fff;color:#64748B;border:1px solid #E2E8F0}'
+  + '.wx-tb{display:flex;align-items:center;gap:4px;font-size:10px;color:#7A4300;background:#FFF7ED;border:1px solid #FED7AA;border-radius:7px;padding:2px 7px;white-space:nowrap;overflow:hidden;min-width:0}'
+  + '.wx-tb i{font-style:normal;color:#9A6B3F;overflow:hidden;text-overflow:ellipsis;min-width:0}.wx-tb .src{margin-left:auto;font-size:8.5px;color:#B08458;flex:none;padding-left:4px}'
+  + '#wx-decmenu .wx-tbsec{border-top:1px solid #EEF1F5;margin-top:6px;padding:7px 6px 3px}'
+  + '#wx-decmenu .wx-tbh{display:flex;align-items:center;font-size:10.5px;font-weight:800;color:#7A4300;margin-bottom:5px}'
+  + '#wx-decmenu .wx-tbr{display:flex;align-items:center;gap:5px;font-size:10.5px;padding:4px 6px;border-radius:7px;background:#FFF7ED;margin-bottom:3px}'
+  + '#wx-decmenu .wx-tbr .x{margin-left:auto;border:0;background:none;color:#A32D2D;cursor:pointer;font-size:12px;padding:0 2px}'
+  + '#wx-decmenu .wx-tbf{display:none;flex-direction:column;gap:6px;margin-top:4px;padding:8px;border:1px solid #FED7AA;border-radius:9px;background:#FFFBF5}'
+  + '#wx-decmenu .wx-tbf.on{display:flex}'
+  + '#wx-decmenu .wx-tbf select,#wx-decmenu .wx-tbf input{height:28px;border:1px solid #E2E8F0;border-radius:7px;padding:0 7px;font:12px "DM Sans","IBM Plex Sans Thai",sans-serif;background:#fff;min-width:0}'
+  + '#wx-decmenu .wx-tbo{display:grid;grid-template-columns:1fr 1fr;gap:4px}'
+  + '#wx-decmenu .wx-tbo button{height:26px;border:1px solid #E2E8F0;border-radius:7px;background:#fff;font:600 11px "DM Sans","IBM Plex Sans Thai",sans-serif;cursor:pointer;color:#475569}'
+  + '#wx-decmenu .wx-tbo button.on{border-color:#C2410C;background:#FFEDD5;color:#9A3412}'
+  + '#wx-decmenu .wx-tbadd{width:100%;height:28px;border:1.5px dashed #FDBA74;border-radius:8px;background:#fff;color:#C2410C;font:700 11px "DM Sans","IBM Plex Sans Thai",sans-serif;cursor:pointer}'
   + '#wx-pop{position:fixed;inset:0;z-index:10000;background:rgba(9,16,40,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:"DM Sans","IBM Plex Sans Thai",sans-serif;color:#0F1B3D}'
   + '#wx-pop .wx-pbox{width:min(1400px,100%);max-height:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column}'
   + '#wx-pop .wx-pbody{overflow:auto;flex:1;min-height:0}'
@@ -431,7 +445,13 @@ function wxOutcome(ptId, date){
   else if(fuelMax!=null && fuelMax >= 20){ t += ' · น้ำมัน +'+fuelMax+'%'; src='est'; k = fuelMax >= 35 ? 'rough' : 'bumpy'; }
   else if(fuelMax!=null){ src='est'; }
   if(flags.length) t += ' · ' + flags.map(function(f){ var x=WX_FLAGS.filter(function(y){ return y[0]===f; })[0]; return x?x[1]:f; }).join(', ');
-  return { k:k, t:t, n:base.ok, src:src, sea:seaMax, fuelPct:fuelMax };
+  var tbl = wxTbList(ptId, date, base.tb);   /* §wxTb · ⛵ เรือตีกลับ */
+  if(tbl.length){
+    t += ' · ⛵ ตีกลับ '+tbl.length+' ลำ ('+tbl.map(function(e){ return (WX_TB[e.reason]||WX_TB.other)[0]; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+')';
+    if(k==='ran' && tbl.some(function(e){ return e.reason==='sea' || e.reason==='guest'; })) k = 'bumpy';
+    if(k==='bumpy' && tbl.some(function(e){ return e.reason==='sea'; })) k = 'rough';
+  }
+  return { k:k, t:t, n:base.ok, src:src, sea:seaMax, fuelPct:fuelMax, tb:tbl };
 }
 function wxOutColor(k){ return k==='cx' ? '#A32D2D' : k==='rough' ? '#A32D2D' : k==='bumpy' ? '#854F0B' : k==='part' ? '#854F0B' : '#0F6E56'; }
 /* ── decision block in the card ── */
@@ -449,7 +469,10 @@ function wxDecisionHtml(pt, date){
 function wxDecide(ptId, date, code, why){
   var inp = document.getElementById('wx-why-'+ptId); var reason = (why != null) ? why : (inp ? inp.value : '');
   wxFetch('/api/weather/decision', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pointId:ptId, date:date, decision:code, reason:reason }) })
-    .then(function(j){ var k=ptId+'|'+date; if(!code) delete WX.dec[k]; else WX.dec[k]={ point_id:ptId, date:date, decision:code, reason:reason, by_user:j.by, at:j.at }; _wxOutIdx=null; wxPatch(); })
+    .then(function(j){ var k=ptId+'|'+date, old=WX.dec[k]||{};
+      if(!code){ if(wxTbArr(old.turnbacks).length){ old.decision=null; old.reason=null; } else delete WX.dec[k]; }
+      else WX.dec[k]=Object.assign({}, old, { point_id:ptId, date:date, decision:code, reason:reason, by_user:j.by, at:j.at });
+      _wxOutIdx=null; wxPatch(); })
     .catch(function(e){ alert('Save failed: '+e.message); });
 }
 /* ── captain's sea report · cell in the daily log (ใบงานเรือ) ── */
@@ -489,26 +512,26 @@ var WX_DEC_BG = { ran_all:['#ECFDF5','#A7F3D0'], ran_part:['#FFFBEB','#FDE68A'],
 function wxDecChip(pt, date){
   var dec = WX.dec[pt.id+'|'+date] || {}, m = dec.decision ? wxDecMeta(dec.decision) : null;
   var canDecide = date <= wxAddDays(wxToday(), 1);
-  if(!canDecide && !m) return '';
+  if(!canDecide && !m) return wxTbLines(pt, date);
   var chip = m
     ? '<button type="button" class="wx-chip" '+(canDecide?'onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"':'disabled')+' style="background:'+m[2]+';border-color:'+m[2]+';color:#fff">'+(WX_DEC_IC[m[0]]||'')+' '+m[1]+(canDecide?' ▾':'')+'</button>'
     : '<button type="button" class="wx-chip" onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')">ตัดสินใจ ▾</button>';
   return '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;min-width:0">'+chip
     + (dec.reason ? '<span style="font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="'+wxE(dec.reason)+'">“'+wxE(dec.reason)+'”</span>' : '')
     + (dec.by_user ? '<span style="margin-left:auto;font-size:9px;color:#94A3B8;white-space:nowrap">'+wxE(dec.by_user)+' '+(dec.at?String(dec.at).slice(11,16):'')+'</span>' : '')
-    + '</div>';
+    + '</div>' + wxTbLines(pt, date);
 }
 /* D · bar in the popup's left column */
 function wxDecBar(pt, date){
   var dec = WX.dec[pt.id+'|'+date] || {}, m = dec.decision ? wxDecMeta(dec.decision) : null;
   var canDecide = date <= wxAddDays(wxToday(), 1);
-  if(!m) return canDecide
+  if(!m) return (canDecide
     ? '<button type="button" class="wx-dbar empty" onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"><span>+</span>บันทึกว่าวันนี้ออกหรือไม่</button>'
-    : '<div class="wx-dbar empty" style="cursor:default"><span>–</span>ไม่ได้บันทึก</div>';
+    : '<div class="wx-dbar empty" style="cursor:default"><span>–</span>ไม่ได้บันทึก</div>') + wxTbLines(pt, date);
   var bg = WX_DEC_BG[m[0]] || ['#F8FAFC','#E2E8F0'];
   return '<button type="button" class="wx-dbar" '+(canDecide?'onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"':'disabled')+' style="background:'+bg[0]+';border-color:'+bg[1]+'">'
     + '<span style="background:'+m[2]+'">'+(WX_DEC_IC[m[0]]||'')+'</span><span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;background:none;width:auto;height:auto;border-radius:0">'
-    + '<b style="color:'+m[2]+'">'+m[1]+'</b><i>'+(dec.reason?('“'+wxE(dec.reason)+'” · '):'')+wxE(dec.by_user||'')+' '+(dec.at?String(dec.at).slice(11,16):'')+'</i></span></button>';
+    + '<b style="color:'+m[2]+'">'+m[1]+'</b><i>'+(dec.reason?('“'+wxE(dec.reason)+'” · '):'')+wxE(dec.by_user||'')+' '+(dec.at?String(dec.at).slice(11,16):'')+'</i></span></button>' + wxTbLines(pt, date);
 }
 /* the menu · one floating panel at a time */
 function wxDecMenuClose(){ var m = document.getElementById('wx-decmenu'); if(m) m.remove(); document.removeEventListener('mousedown', wxDecMenuOut, true); }
@@ -527,14 +550,17 @@ function wxDecMenu(btn, ptId, date){
     + '<input type="text" id="wx-decwhy" value="'+wxE(dec.reason||'')+'" placeholder="เช่น คลื่นเกิน 2.5 ม. ช่วงบ่าย"></label>'
     + '<div style="display:flex;gap:6px;margin-top:7px">'
     + (dec.decision ? '<button type="button" class="wx-mb ghost" data-act="clear">ล้าง</button>' : '')
-    + '<button type="button" class="wx-mb" data-act="save" style="margin-left:auto">'+(dec.decision?'บันทึกเหตุผล':'ปิด')+'</button></div></div>';
+    + '<button type="button" class="wx-mb" data-act="save" style="margin-left:auto">'+(dec.decision?'บันทึกเหตุผล':'ปิด')+'</button></div></div>'
+    + wxTbMenuHtml(ptId, date);
   document.body.appendChild(el);
-  var r = btn.getBoundingClientRect(), W = 250;
+  var r = btn.getBoundingClientRect(), W = 290;
   var left = Math.min(window.innerWidth - W - 10, Math.max(10, r.right - W));
-  var top = r.bottom + 6; if(top + 330 > window.innerHeight) top = Math.max(10, r.top - 336);
-  el.style.cssText = 'position:fixed;z-index:10050;left:'+left+'px;top:'+top+'px;width:'+W+'px;background:#fff;border-radius:12px;box-shadow:0 14px 36px rgba(15,27,61,.25);border:1px solid #E2E8F0;padding:6px;font-family:"DM Sans","IBM Plex Sans Thai",sans-serif';
+  el.style.cssText = 'position:fixed;z-index:10050;left:'+left+'px;top:0;width:'+W+'px;max-height:'+(window.innerHeight-20)+'px;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 14px 36px rgba(15,27,61,.25);border:1px solid #E2E8F0;padding:6px;font-family:"DM Sans","IBM Plex Sans Thai",sans-serif';
+  var wxPlace = function(){ var h = el.offsetHeight, top = r.bottom + 6; if(top + h > window.innerHeight - 10) top = Math.max(10, Math.min(r.top - h - 6, window.innerHeight - h - 10)); el.style.top = top+'px'; };
+  wxPlace();
   el.addEventListener('click', function(e){
     var b = e.target.closest('button'); if(!b) return;
+    if(wxTbMenuClick(b, el, ptId, date)){ wxPlace(); return; }   /* §wxTb */
     var why = (document.getElementById('wx-decwhy')||{}).value || '';
     if(b.getAttribute('data-code')){ wxDecide(ptId, date, b.getAttribute('data-code'), why); wxDecMenuClose(); return; }
     var act = b.getAttribute('data-act');
@@ -543,6 +569,109 @@ function wxDecMenu(btn, ptId, date){
   });
   el.querySelector('#wx-decwhy').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); el.querySelector('[data-act="save"]').click(); } if(e.key==='Escape') wxDecMenuClose(); });
   setTimeout(function(){ document.addEventListener('mousedown', wxDecMenuOut, true); }, 0);
+}
+/* ══ §wxTb (2026-10-30) · ⛵ เรือตีกลับ ═════════════════════════════════════
+   "เรือตีกลับเพราะ ลค เป็น สว แล้วไม่ไหว · เขียนเลยก็ได้ เรือลำไหนตีกลับเพราะอะไร"
+   Two sources, merged per boat:
+   · pier check-in's ⛵ ออกเรือแล้วกลับเข้าท่า (ops.turnBack on each booking) · read live, never copied
+   · the office's own entry here (weather_decision.turnbacks) · boat + time + reason + note
+   The route still counts as "ออก" (boats left the pier) · the turn-back is what the sea did to it,
+   so history marks the day bumpy (guest couldn't take it) or rough (sea itself) instead of a clean run. */
+var WX_TB = { sea:['คลื่นลม','#A32D2D'], guest:['ลูกค้าไม่ไหว','#B45309'], boat:['เรือขัดข้อง','#475569'], other:['อื่นๆ','#475569'] };
+var WX_TB_PIER = { weather:'sea', guest:'guest', boat:'boat', other:'other' };
+function wxTbArr(x){ if(typeof x==='string'){ try{ x=JSON.parse(x); }catch(_){ x=null; } } return Array.isArray(x) ? x : []; }
+function wxBoatNm(bid){ var b = (typeof getBoat==='function' ? getBoat(bid) : null) || {}; return b.name || bid || '—'; }
+function wxTbPier(b, t){
+  var tb = (typeof tbOf==='function') ? tbOf(b, t.date) : null; if(!tb) return null;
+  var O = {}; try{ O = ((typeof bkOpsRead==='function') ? bkOpsRead(b, t.date) : b.ops) || {}; }catch(_){ }
+  var bid = O.boatId || t.charterBoatId || ((Array.isArray(O.boatSplits) && O.boatSplits[0]) ? O.boatSplits[0].boatId : '') || '';
+  return { bid:bid, hm:tb.hm||'', reason:WX_TB_PIER[tb.reason]||'other', note:tb.note||'', pax:+tb.pax||0, by:tb.by||'' };
+}
+/* merged list for one point-day · pre = pier entries already indexed (history); else read live (the day on screen) */
+function wxTbList(ptId, date, pre){
+  var pier = pre;
+  if(!pier){
+    pier = []; var pt = (WX.pts||[]).filter(function(p){ return p.id===ptId; })[0];
+    var rids = pt ? wxRoutesOf(pt).map(function(r){ return r.id; }) : [];
+    (typeof SB_BOOKINGS!=='undefined' ? SB_BOOKINGS : []).forEach(function(b){
+      var st = b.status||''; if(st==='cancelled'||st==='rejected'||st==='cancelled_weather') return;
+      (b.trips||[]).forEach(function(t){ if(t.date!==date || rids.indexOf(t.routeId)<0) return; var e = wxTbPier(b, t); if(e) pier.push(e); });
+    });
+  }
+  var by = {}, out = [];
+  pier.forEach(function(x){
+    var k = x.bid || '__'; var e = by[k];
+    if(!e){ e = by[k] = { bid:x.bid, hm:x.hm, reason:x.reason, note:x.note, pax:0, nb:0, src:'pier', by:x.by }; out.push(e); }
+    e.pax += x.pax; e.nb++; if(x.hm && (!e.hm || x.hm < e.hm)) e.hm = x.hm; if(!e.note && x.note) e.note = x.note;
+  });
+  wxTbArr((WX.dec[ptId+'|'+date]||{}).turnbacks).forEach(function(m, i){
+    var e = by[m.bid];
+    if(e){ e.man = i; if(m.hm) e.hm = m.hm; if(m.reason) e.reason = m.reason; if(m.note) e.note = m.note; e.src = 'both'; }
+    else { e = by[m.bid] = { bid:m.bid, hm:m.hm||'', reason:m.reason||'other', note:m.note||'', pax:0, nb:0, src:'man', man:i, by:m.by||'' }; out.push(e); }
+  });
+  out.sort(function(a,b){ return (a.hm||'99') < (b.hm||'99') ? -1 : 1; });
+  return out;
+}
+function wxTbTip(e){ var r = WX_TB[e.reason]||WX_TB.other;
+  return wxBoatNm(e.bid)+' ตีกลับ'+(e.hm?(' '+e.hm):'')+' · '+r[0]+(e.pax?(' · '+e.pax+' คน'):'')+(e.note?(' · '+e.note):'')
+    + ' · '+(e.src==='man'?'บันทึกจากหน้านี้':e.src==='both'?'ท่าเรือ + หน้านี้':'จากเช็คอินท่าเรือ ('+e.nb+' ใบ)')+(e.by?(' · '+e.by):''); }
+function wxTbLines(pt, date){
+  var L = wxTbList(pt.id, date); if(!L.length) return '';
+  return '<div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">' + L.map(function(e){ var r = WX_TB[e.reason]||WX_TB.other;
+    return '<div class="wx-tb" title="'+wxE(wxTbTip(e))+'"><span>⛵</span><b>'+wxE(e.bid?wxBoatNm(e.bid):'ไม่ระบุลำ')+'</b>ตีกลับ'+(e.hm?(' '+wxE(e.hm)):'')
+      + ' · <b style="color:'+r[1]+'">'+r[0]+'</b>'+(e.pax?(' · '+e.pax+' คน'):'')+(e.note?('<i>· '+wxE(e.note)+'</i>'):'')
+      + '<span class="src">'+(e.src==='man'?'':'ท่าเรือ')+'</span></div>'; }).join('') + '</div>';
+}
+/* boats on this point that day first, then the rest of the fleet */
+function wxTbBoatOpts(ptId, date){
+  var pt = (WX.pts||[]).filter(function(p){ return p.id===ptId; })[0];
+  var rids = pt ? wxRoutesOf(pt).map(function(r){ return r.id; }) : [];
+  var day = (typeof TRIPS!=='undefined' && TRIPS[date]) || {}, on = [];
+  Object.keys(day).forEach(function(bid){ if(day[bid] && rids.indexOf(day[bid].route) >= 0) on.push(bid); });
+  var all = (typeof BOATS!=='undefined' ? BOATS : []).filter(function(b){ return b && b.id && on.indexOf(b.id) < 0 && !b.archived; });
+  var o = function(bid){ return '<option value="'+wxE(bid)+'">'+wxE(wxBoatNm(bid))+'</option>'; };
+  return '<option value="">— เลือกลำ —</option>'
+    + (on.length ? '<optgroup label="วิ่งเส้นนี้วันนี้">'+on.map(o).join('')+'</optgroup>' : '')
+    + (all.length ? '<optgroup label="ลำอื่น">'+all.map(function(b){ return o(b.id); }).join('')+'</optgroup>' : '');
+}
+function wxTbMenuHtml(ptId, date){
+  var L = wxTbList(ptId, date);
+  return '<div class="wx-tbsec"><div class="wx-tbh">⛵ เรือตีกลับ'+(L.length?(' · '+L.length+' ลำ'):'')+'</div>'
+    + L.map(function(e){ var r = WX_TB[e.reason]||WX_TB.other;
+        return '<div class="wx-tbr" title="'+wxE(wxTbTip(e))+'"><b>'+wxE(e.bid?wxBoatNm(e.bid):'ไม่ระบุลำ')+'</b>'+(e.hm?wxE(e.hm):'')+' · <span style="color:'+r[1]+';font-weight:700">'+r[0]+'</span>'
+          + (e.man!=null ? '<button type="button" class="x" data-tbdel="'+e.man+'" title="ลบรายการนี้">✕</button>' : '<span style="margin-left:auto;font-size:9px;color:#B08458">ท่าเรือ</span>') + '</div>'; }).join('')
+    + '<button type="button" class="wx-tbadd" data-tbact="open">+ เพิ่มเรือตีกลับ</button>'
+    + '<div class="wx-tbf" id="wx-tbf">'
+    +   '<div style="display:flex;gap:6px"><select id="wx-tbboat" style="flex:1">'+wxTbBoatOpts(ptId, date)+'</select><input id="wx-tbhm" type="time" style="width:92px" title="เวลาที่ตีกลับ"></div>'
+    +   '<div class="wx-tbo">'+Object.keys(WX_TB).map(function(k){ return '<button type="button" data-tbr="'+k+'"'+(k==='guest'?' class="on"':'')+'>'+WX_TB[k][0]+'</button>'; }).join('')+'</div>'
+    +   '<input id="wx-tbnote" type="text" placeholder="เช่น ลค. สูงอายุไม่ไหว คลื่น ~1.5 ม.">'
+    +   '<div style="display:flex;gap:6px"><button type="button" class="wx-mb ghost" data-tbact="cancel">ยกเลิก</button><button type="button" class="wx-mb" data-tbact="add" style="margin-left:auto">บันทึก</button></div>'
+    + '</div>'
+    + '<div style="font-size:9px;color:#94A3B8;margin-top:5px;line-height:1.4">ถ้าท่าเรือกด ⛵ กลับเข้าท่า ในหน้าเช็คอินไว้แล้ว จะขึ้นที่นี่เอง · เส้นนี้ยังนับว่า "ออก"</div></div>';
+}
+/* returns true when the click belonged to the turn-back section */
+function wxTbMenuClick(b, el, ptId, date){
+  var f = el.querySelector('#wx-tbf');
+  if(b.hasAttribute('data-tbr')){ Array.prototype.forEach.call(el.querySelectorAll('[data-tbr]'), function(x){ x.classList.toggle('on', x===b); }); return true; }
+  if(b.hasAttribute('data-tbdel')){
+    var list = wxTbArr((WX.dec[ptId+'|'+date]||{}).turnbacks).slice(); list.splice(+b.getAttribute('data-tbdel'), 1);
+    wxTbSave(ptId, date, list); wxDecMenuClose(); return true; }
+  var act = b.getAttribute('data-tbact'); if(!act) return false;
+  if(act === 'open'){ f.classList.add('on'); b.style.display = 'none'; var s = el.querySelector('#wx-tbboat'); if(s) s.focus(); return true; }
+  if(act === 'cancel'){ f.classList.remove('on'); var a = el.querySelector('[data-tbact="open"]'); if(a) a.style.display = ''; return true; }
+  if(act === 'add'){
+    var bid = el.querySelector('#wx-tbboat').value; if(!bid){ el.querySelector('#wx-tbboat').focus(); return true; }
+    var on = el.querySelector('[data-tbr].on'); var reason = on ? on.getAttribute('data-tbr') : 'other';
+    var list = wxTbArr((WX.dec[ptId+'|'+date]||{}).turnbacks).filter(function(x){ return x.bid !== bid; });
+    list.push({ bid:bid, hm:el.querySelector('#wx-tbhm').value||'', reason:reason, note:el.querySelector('#wx-tbnote').value.trim() });
+    wxTbSave(ptId, date, list); wxDecMenuClose(); return true; }
+  return false;
+}
+function wxTbSave(ptId, date, list){
+  wxFetch('/api/weather/turnback', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pointId:ptId, date:date, list:list }) })
+    .then(function(j){ var k = ptId+'|'+date; var d = WX.dec[k] || (WX.dec[k] = { point_id:ptId, date:date });
+      d.turnbacks = j.list || list; if(!d.decision && !wxTbArr(d.turnbacks).length) delete WX.dec[k]; _wxOutIdx = null; wxPatch(); })
+    .catch(function(e){ alert('Save failed: '+e.message); });
 }
 /* ── popup ── */
 WX.pop = null;   /* {date, pier} while open */

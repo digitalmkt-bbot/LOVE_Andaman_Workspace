@@ -2791,7 +2791,7 @@ const server = http.createServer((req, res) => {
     const qp=new URLSearchParams(q); const from=String(qp.get('from')||''), to=String(qp.get('to')||from);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return J(res,400,{error:'from/to=YYYY-MM-DD required'});
     Promise.all([
-      pool.query('SELECT point_id,date,decision,reason,by_user,at FROM operation_schemas.weather_decision WHERE date BETWEEN $1 AND $2',[from,to]),
+      pool.query('SELECT point_id,date,decision,reason,by_user,at,turnbacks FROM operation_schemas.weather_decision WHERE date BETWEEN $1 AND $2',[from,to]),
       pool.query('SELECT date,boat_id,sea,flags,note,by_user,at FROM operation_schemas.weather_report WHERE date BETWEEN $1 AND $2',[from,to])
     ]).then(([a,b])=>J(res,200,{decisions:a.rows,reports:b.rows})).catch(e=>J(res,500,{error:e.message}));
     return;
@@ -2803,12 +2803,34 @@ const server = http.createServer((req, res) => {
     readBody(req, body=>{ let b={}; try{ b=JSON.parse(body); }catch(e){}
       const pid=String(b.pointId||''), date=String(b.date||''), dec=String(b.decision||''), reason=String(b.reason||'').slice(0,500);
       if(!pid || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return J(res,400,{error:'pointId + date required'});
-      if(!dec){ return pool.query('DELETE FROM operation_schemas.weather_decision WHERE point_id=$1 AND date=$2',[pid,date]).then(()=>J(res,200,{ok:true,deleted:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(!dec){ /* §wxTb · clearing the decision keeps any เรือตีกลับ list on the row */
+        return pool.query('UPDATE operation_schemas.weather_decision SET decision=NULL, reason=NULL WHERE point_id=$1 AND date=$2',[pid,date])
+          .then(()=>pool.query("DELETE FROM operation_schemas.weather_decision WHERE point_id=$1 AND date=$2 AND decision IS NULL AND (turnbacks IS NULL OR turnbacks='[]'::jsonb)",[pid,date]))
+          .then(()=>J(res,200,{ok:true,deleted:true})).catch(e=>J(res,500,{error:e.message})); }
       if(!/^(ran_all|ran_part|cx_us|cx_port|cx_park|reroute)$/.test(dec)) return J(res,400,{error:'bad decision'});
       pool.query(`INSERT INTO operation_schemas.weather_decision (point_id,date,decision,reason,by_user,at) VALUES ($1,$2,$3,$4,$5,now())
                   ON CONFLICT (point_id,date) DO UPDATE SET decision=EXCLUDED.decision, reason=EXCLUDED.reason, by_user=EXCLUDED.by_user, at=now()`,
                  [pid,date,dec,reason,s.name||s.username||''])
         .then(()=>J(res,200,{ok:true,by:s.name||s.username||'',at:new Date().toISOString()})).catch(e=>J(res,500,{error:e.message}));
+    }); return;
+  }
+  if(u === '/api/weather/turnback' && req.method === 'POST'){   // §wxTb · ⛵ เรือตีกลับ list for a point-day (replaces the list)
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(s.edit===false) return J(res,403,{error:'view only'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{ let b={}; try{ b=JSON.parse(body); }catch(e){}
+      const pid=String(b.pointId||''), date=String(b.date||'');
+      if(!pid || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return J(res,400,{error:'pointId + date required'});
+      const who=s.name||s.username||'';
+      const list=(Array.isArray(b.list)?b.list:[]).slice(0,30).map(x=>({
+        bid:String((x&&x.bid)||'').slice(0,60), hm:/^\d{2}:\d{2}$/.test(String((x&&x.hm)||''))?String(x.hm):'',
+        reason:/^(sea|guest|boat|other)$/.test(String((x&&x.reason)||''))?String(x.reason):'other',
+        note:String((x&&x.note)||'').slice(0,300), by:String((x&&x.by)||who).slice(0,80), at:String((x&&x.at)||new Date().toISOString()).slice(0,40)
+      })).filter(x=>x.bid);
+      pool.query(`INSERT INTO operation_schemas.weather_decision (point_id,date,turnbacks,by_user,at) VALUES ($1,$2,$3,$4,now())
+                  ON CONFLICT (point_id,date) DO UPDATE SET turnbacks=EXCLUDED.turnbacks`,[pid,date,JSON.stringify(list),who])
+        .then(()=>list.length?null:pool.query("DELETE FROM operation_schemas.weather_decision WHERE point_id=$1 AND date=$2 AND decision IS NULL",[pid,date]))
+        .then(()=>J(res,200,{ok:true,list})).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
   if(u === '/api/weather/report' && req.method === 'POST'){
