@@ -75930,7 +75930,7 @@ var PA_PAY_DEF={
   PP:{x:1, d:0,   f:0},
   WS:{x:1, d:0,   f:0},
   'WS-LT':{x:0, d:50, f:0},   // §paLtSplit · ค่าหางยาวของวัน WS · แยกออกจาก WS · วันนับเท่ากับวัน WS
-  'SR-IS':{x:1, d:100, f:0},  // §paSrIsl · เกาะสุรินทร์ · เบี้ยเที่ยว + 100 บาทต่อเที่ยว
+  SR:{x:1, d:100, f:0},       // §paSrPay · สุรินทร์ · เบี้ยเที่ยว + 100 บาทต่อเที่ยว
   OV:{x:2, d:0,   f:0},
   N: {x:0, d:200, f:0}
 };
@@ -75969,21 +75969,19 @@ function paEnsureWsLt(){
     if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
   }catch(_){}
 }
-/* §paSrIsl (2026-10-31) · รหัส SR-IS = ประจำเกาะสุรินทร์ · เบี้ยเที่ยว + 100 บาทต่อเที่ยว
-   ทะเบียนรหัสเป็นของรวมทุกท่า (ไม่แยกท่า) · คนวางตารางเลือกรหัสนี้ลงช่องวันเอง · เติมครั้งเดียว (PIER_CFG.srIslSeed)
-   ลบทิ้งแล้วไม่เด้งกลับ · สูตรที่เซฟไว้แล้วแต่ยังไม่มี SR-IS ก็เติมให้ ไม่แตะรหัสอื่น */
-function paEnsureSrIsl(){
+/* §paSrPay (2026-10-31) · สุรินทร์ (รหัสเส้นทาง SR ที่ตารางเติมให้เองจากใบงานเรือ) = เบี้ยเที่ยว + 100 บาทต่อเที่ยว
+   ไปสองวัน = สองเที่ยว = +200 เอง เพราะนับวันละรหัส · เติมกฎให้สูตรที่เซฟไว้แล้วครั้งเดียว (PIER_CFG.srPaySeed)
+   ถ้าสูตรมีกฎ SR อยู่แล้วไม่ทับ · ถอดรหัส SR-IS ที่เคยเติมไว้ผิด (srIslSeed) ออกด้วย ไม่แตะรหัสอื่น */
+function paEnsureSrPay(){
   try{
-    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length || PIER_CFG.srIslSeed) return;
-    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()==='SR-IS'; });
-    if(!has){
-      var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
-      PIER_CODES.push({id:'c_srisl', code:'SR-IS', label:'เกาะสุรินทร์',
-                       color:'#3B6D11', bg:'#EFF7EA', kind:'work', ord:mx+1, active:true, userColor:1});
+    if(PIER_CFG.srPaySeed) return;
+    if(PIER_CFG.srIslSeed){
+      if(Array.isArray(PIER_CODES)) PIER_CODES=PIER_CODES.filter(function(c){ return String(c.code||'').trim().toUpperCase()!=='SR-IS'; });
+      if(PIER_CFG.payRules && typeof PIER_CFG.payRules==='object') delete PIER_CFG.payRules['SR-IS'];
     }
     var R=PIER_CFG.payRules;
-    if(R && typeof R==='object' && Object.keys(R).length && !R['SR-IS']) R['SR-IS']={x:1, d:100, f:0};
-    PIER_CFG.srIslSeed=1;
+    if(R && typeof R==='object' && Object.keys(R).length && !R.SR) R.SR={x:1, d:100, f:0};
+    PIER_CFG.srPaySeed=1;
     if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
   }catch(_){}
 }
@@ -76169,7 +76167,7 @@ function paRowTotal(w, cnt){ cnt=cnt||{}; return w + (cnt.OFF||0) + (cnt.PH||0);
 
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureSrIsl(); paEnsureLtSplit(); paEnsureNoteMig(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureSrPay(); paEnsureLtSplit(); paEnsureNoteMig(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
