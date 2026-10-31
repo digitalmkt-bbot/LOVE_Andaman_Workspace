@@ -22,10 +22,10 @@ function wxRoutesOf(pt){ return (typeof ROUTES!=='undefined'?ROUTES:[]).filter(f
 function wxBest(ptId, date){
   var o = (WX.obs[ptId]||{})[date]; if(!o) return null;
   var past = date < wxToday();
-  var k = past ? (o.hist ? 'hist' : (o.fc05 ? 'fc05' : 'fc17')) : (o.fc05 ? 'fc05' : (o.fc17 ? 'fc17' : 'hist'));
+  var k = past ? (o.hist ? 'hist' : o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : 'fc') : (o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : o.fc ? 'fc' : 'hist');   /* §wx5d · fc = rolling outlook */
   return o[k] ? { kind:k, S:o[k].summary||{}, at:o[k].taken_at } : null;
 }
-function wxKindTxt(k){ return k==='hist' ? 'ข้อมูลจริง (วิเคราะห์หลังวัน)' : k==='fc05' ? 'พยากรณ์ 05:00 วันออกเรือ' : 'พยากรณ์ 17:00 วันก่อน'; }
+function wxKindTxt(k){ return k==='hist' ? 'ข้อมูลจริง (วิเคราะห์หลังวัน)' : k==='fc05' ? 'พยากรณ์ 05:00 วันออกเรือ' : k==='fc' ? 'พยากรณ์ล่วงหน้า (อัปเดตทุก 6 ชม.)' : 'พยากรณ์ 17:00 วันก่อน'; }
 function wxLevel(pt, S){
   if(!S || S.wave==null) return 'none';
   if(S.wave >= (pt.risk||2)) return 'risk';
@@ -155,6 +155,14 @@ function wxLoadHr(date){
     .catch(function(e){ WX.hrLoad[date] = 0; try{ console.warn('[wx] hourly', e.message); }catch(_){ } })
     .then(function(){ wxPatch(); });
 }
+function wxLoadHrRange(from, to){   /* §wx5d · one request for the 5-day view */
+  var need = []; for(var d = from; d <= to; d = wxAddDays(d, 1)) if(!WX.hrLoad[d]) need.push(d);
+  if(!need.length) return; need.forEach(function(d){ WX.hrLoad[d] = 1; });
+  wxFetch('/api/weather?from='+need[0]+'&to='+need[need.length-1]+'&hourly=1')
+    .then(function(j){ (j.rows||[]).forEach(function(r){ var k=r.point_id+'|'+r.date; (WX.hr[k]=WX.hr[k]||{})[r.kind]=r.hourly; }); wxIngest(j.rows); })
+    .catch(function(e){ need.forEach(function(d){ WX.hrLoad[d] = 0; }); try{ console.warn('[wx] hourly', e.message); }catch(_){ } })
+    .then(function(){ wxPatch(); });
+}
 function wxHours(pt, date){
   var b = wxBest(pt.id, date); if(!b) return null;
   var H = (WX.hr[pt.id+'|'+date]||{})[b.kind]; if(!H || !H.time) return null;
@@ -162,7 +170,8 @@ function wxHours(pt, date){
   H.time.forEach(function(t, i){ var h = +String(t).slice(11,13); if(h < h0 || h > h1) return;
     out.push({ h:h, wave:(H.wave_height||[])[i], per:(H.wave_period||[])[i], wdir:(H.wave_direction||[])[i],
                wind:(H.wind_speed_10m||[])[i], gust:(H.wind_gusts_10m||[])[i], dir:(H.wind_direction_10m||[])[i],
-               rain:(H.precipitation||[])[i], cloud:(H.cloud_cover||[])[i], code:(H.weather_code||[])[i] }); });
+               rain:(H.precipitation||[])[i], cloud:(H.cloud_cover||[])[i], code:(H.weather_code||[])[i],
+               temp:(H.temperature_2m||[])[i], feels:(H.apparent_temperature||[])[i] }); });   /* §wx5d */
   return out;
 }
 function wxHrSky(x){
@@ -378,10 +387,11 @@ function wxPatch(){
   }catch(e){ try{ console.warn('[wx] patch', e.message); }catch(_){ } }
 }
 function wxFetchNow(date){
-  var kind = date < wxToday() ? 'hist' : 'fc05';
-  wxFetch('/api/weather/fetch?date='+date+'&kind='+kind, {method:'POST'})
+  /* §wx5d · a past day → re-analyse that day · today or later → refresh the whole outlook (today..+5) */
+  var url = date < wxToday() ? '/api/weather/fetch?date='+date+'&kind=hist' : '/api/weather/fetch?outlook=1';
+  wxFetch(url, {method:'POST'})
     .then(function(j){ var bad=Object.keys(j.points||{}).filter(function(k){ return j.points[k] && j.points[k].error; }); if(bad.length) alert('Weather fetch failed for '+bad.map(function(k){ return k+': '+j.points[k].error; }).join(' | '));
-      WX.rangeKey=''; WX.histLoaded=false; WX._rerendered=false; var d=(typeof _bop2!=='undefined' && typeof bop2GetDates==='function')?bop2GetDates():[date]; wxLoad(d[0], d[d.length-1]); })
+      WX.rangeKey=''; WX.histLoaded=false; WX._rerendered=false; WX.hrLoad={}; WX.hr={}; var d=(typeof _bop2!=='undefined' && typeof bop2GetDates==='function')?bop2GetDates():[date]; wxLoad(d[0], d[d.length-1]); })
     .catch(function(e){ alert('Weather fetch failed: '+e.message); });
 }
 function wxBackfill(){
@@ -798,7 +808,8 @@ function wxHistRender(ov){
 WX.pop = null;   /* {date, pier} while open */
 function wxOpenPop(date){
   var p = (typeof _bop2!=='undefined' && _bop2.pier && _bop2.pier!=='all') ? _bop2.pier : '';
-  WX.pop = { date:date || wxToday(), pier:p };
+  var v = WX.popView || 'days'; try{ v = localStorage.getItem('la_wx_pview') || v; }catch(_){ }
+  WX.pop = { date:date || wxToday(), pier:p, view:(date && date < wxToday()) ? 'day' : v };   /* §wx5d · 5-day outlook by default */
   var ov = document.getElementById('wx-pop');
   if(!ov){ ov = document.createElement('div'); ov.id = 'wx-pop'; document.body.appendChild(ov);
     ov.addEventListener('mousedown', function(e){ if(e.target === ov) wxClosePop(); });
@@ -809,11 +820,15 @@ function wxPopKey(e){ if(e.key === 'Escape' && WX.pop && !document.getElementByI
 function wxClosePop(){ WX.pop = null; wxDecMenuClose(); var ov = document.getElementById('wx-pop'); if(ov) ov.remove(); document.removeEventListener('keydown', wxPopKey); }
 function wxPopDay(n){ if(!WX.pop) return; WX.pop.date = wxAddDays(WX.pop.date, n); wxPopRender(); }
 function wxPopPier(p){ if(!WX.pop) return; WX.pop.pier = p; wxPopRender(); }
+function wxPopView(v){ if(!WX.pop) return; WX.pop.view = v; WX.popView = v; try{ localStorage.setItem('la_wx_pview', v); }catch(_){ } wxPopRender(); }
+function wxPopGo(date){ if(!WX.pop) return; WX.pop.date = date; WX.pop.view = 'day'; wxPopRender(); }
 function wxPopRender(){
   var ov = document.getElementById('wx-pop'); if(!ov || !WX.pop) return;
   if(WX.pop.mode === 'hist') return wxHistRender(ov);   /* §wxHist */
-  var date = WX.pop.date, today = wxToday();
-  if(!WX.hrLoad[date]) wxLoadHr(date);
+  var date = WX.pop.date, today = wxToday(), five = WX.pop.view === 'days';
+  if(five){ var dTo = wxAddDays(date, 4); wxLoadHrRange(date, dTo);
+    if(!WX['_pl5'+date+dTo]){ WX['_pl5'+date+dTo]=1; wxFetch('/api/weather?from='+date+'&to='+dTo).then(function(j){ wxIngest(j.rows); wxPopRender(); }).catch(function(){}); } }
+  else if(!WX.hrLoad[date]) wxLoadHr(date);
   if(!(WX.obs && Object.keys(WX.obs).some(function(k){ return WX.obs[k][date]; })) && !WX['_pl'+date]){ WX['_pl'+date]=1; wxFetch('/api/weather?from='+date+'&to='+date).then(function(j){ wxIngest(j.rows); wxPopRender(); }).catch(function(){}); }
   var dt = new Date(date+'T12:00:00'), MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
   var dPrev = new Date(wxAddDays(date,-1)+'T12:00:00'), dNext = new Date(wxAddDays(date,1)+'T12:00:00');
@@ -822,11 +837,14 @@ function wxPopRender(){
   var seg = function(on, label, js){ return '<button type="button" class="wx-pseg'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
   var head = '<div class="wx-hd" style="padding:14px 18px;gap:12px;flex-wrap:wrap">'
     + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>'
-    + '<div><b style="font-size:16px">สภาพทะเลรายชั่วโมง · '+WD[dt.getDay()]+' '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>จุดพยากรณ์กลางทะเลของแต่ละเส้นทาง · ลูกศร = ลมพัดไปทาง · /5s = คาบคลื่น</i></div>'
+    + (five
+        ? '<div><b style="font-size:16px">พยากรณ์ทะเล 5 วัน · '+dt.getDate()+' '+MON[dt.getMonth()]+' – '+(function(){ var e=new Date(wxAddDays(date,4)+'T12:00:00'); return e.getDate()+' '+MON[e.getMonth()]; })()+'</b><i>ช่วงออกเรือ ทุก 3 ชม. · กดหัววันเพื่อดูรายชั่วโมง · อัปเดตทุก 6 ชม.</i></div>'
+        : '<div><b style="font-size:16px">สภาพทะเลรายชั่วโมง · '+WD[dt.getDay()]+' '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>จุดพยากรณ์กลางทะเลของแต่ละเส้นทาง · ลูกศร = ลมพัดไปทาง · /5s = คาบคลื่น</i></div>')
+    + '<div class="wx-pgrp">'+seg(five,'5 วัน','wxPopView(\'days\')')+seg(!five,'รายชั่วโมง','wxPopView(\'day\')')+'</div>'
     + '<div class="wx-pgrp">'+seg(false,'‹ '+dPrev.getDate(),'wxPopDay(-1)')+seg(true,(date===today?'วันนี้ ':'')+dt.getDate(),'')+seg(false,dNext.getDate()+' ›','wxPopDay(1)')+'</div>'
     + '<div class="wx-pgrp">'+seg(!WX.pop.pier,'ทุกท่า','wxPopPier(\'\')')+piers.map(function(p){ return seg(WX.pop.pier===p, PN[p]||p, 'wxPopPier(\''+p+'\')'); }).join('')+'</div>'
     + '<button type="button" class="wx-hb ic" style="margin-left:auto;width:34px;height:34px" aria-label="ปิด" onclick="wxClosePop()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
-  var rows = wxPopRows(date, WX.pop.pier ? [WX.pop.pier] : null);
+  var rows = five ? wxPopDays(date, WX.pop.pier ? [WX.pop.pier] : null) : wxPopRows(date, WX.pop.pier ? [WX.pop.pier] : null);
   var foot = '<div class="wx-ft" style="padding:10px 18px"><span>คลื่น:</span>'
     + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#D1FAE5"></span>ปกติ</span>'
     + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#FEF3C7"></span>ระวัง</span>'
@@ -836,6 +854,48 @@ function wxPopRender(){
   var keepScroll = ov.querySelector('.wx-pbody'), sT = keepScroll ? keepScroll.scrollTop : 0;
   ov.innerHTML = WX_CSS + '<div class="wx-pbox">'+head+'<div class="wx-pbody">'+rows+'</div>'+foot+'</div>';
   var nb = ov.querySelector('.wx-pbody'); if(nb && sT) nb.scrollTop = sT;
+}
+/* §wx5d · five days side by side (Windy-style) · per point: day headers, then hours at a 3-h step inside the
+   sailing window · rows: sky · temp · feels like · rain · wave · wind · gust · wind dir */
+function wxPopDays(from, piers){
+  if(!WX.pts) return '<div style="padding:20px;color:#94A3B8">กำลังโหลด…</div>';
+  var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
+  var days = []; for(var i = 0; i < 5; i++) days.push(wxAddDays(from, i));
+  var today = wxToday(), tmr = wxAddDays(today, 1), nowH = new Date().getHours();
+  var MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  var dLbl = function(d){ var x = new Date(d+'T12:00:00'); return (d===today?'วันนี้ · ':d===tmr?'พรุ่งนี้ · ':'')+WD[x.getDay()]+' '+x.getDate()+' '+MON[x.getMonth()]; };
+  var lab = 'font-size:10px;color:#64748B;display:flex;align-items:center;gap:3px;white-space:nowrap;padding-left:2px';
+  var mono = "font:600 12px 'DM Mono',monospace;text-align:center;padding:4px 0;";
+  return P0.map(function(pt){
+    var short = wxE(pt.name.split(' · ')[0]);
+    var h0 = (pt.hours||[6,15])[0], h1 = (pt.hours||[6,15])[1], hours = []; for(var h = h0; h <= h1; h += 3) hours.push(h);
+    var nh = hours.length, cols = days.length * nh;
+    var left = '<div style="width:170px;flex:none;padding:12px 14px;display:flex;flex-direction:column;gap:4px;background:#FBFCFD;border-right:1px solid #EEF1F5">'
+      + '<b style="font-size:15px">'+short+'</b><span style="font-size:10.5px;color:#64748B">'+wxE(pt.name.split(' · ')[1]||'')+'</span>'
+      + '<span style="font-size:10px;color:#94A3B8">ช่วงออกเรือ '+(h0<10?'0':'')+h0+'–'+h1+' น.</span></div>';
+    /* per day: hourly list (1-h) → pick the 3-h steps */
+    var D = days.map(function(d){ var b = wxBest(pt.id, d), hrs = wxHours(pt, d) || []; var pick = hours.map(function(h){ return hrs.filter(function(x){ return x.h===h; })[0] || null; }); return { d:d, b:b, S:b?b.S:null, hrs:hrs, pick:pick }; });
+    var cell = function(i){ return 'border-left:'+(i % nh === 0 ? '2px solid #E2E8F0' : '0')+';'; };
+    var heads = D.map(function(x, i){ var lv = x.S ? wxLevel(pt, x.S) : 'none'; var pill = lv==='risk' ? ['#FEE2E2','#B91C1C','เสี่ยง'] : lv==='warn' ? ['#FEF3C7','#B45309','ระวัง'] : lv==='ok' ? ['#D1FAE5','#047857','ออกได้'] : ['#F1F5F9','#94A3B8','—'];
+        var dec = WX.dec[pt.id+'|'+x.d], m = dec && dec.decision ? wxDecMeta(dec.decision) : null;
+        return '<button type="button" onclick="wxPopGo(\''+x.d+'\')" title="ดูรายชั่วโมง '+x.d+'" style="grid-column:span '+nh+';display:flex;align-items:center;justify-content:center;gap:6px;height:28px;margin:0 2px 2px '+(i?'2px':'0')+';border:0;border-radius:8px;background:'+(x.d===today?'#EFF6FF':'#F8FAFC')+';font:700 11px inherit;color:#0F1B3D;cursor:pointer">'
+          + dLbl(x.d)+'<span class="wx-pl" style="background:'+pill[0]+';color:'+pill[1]+'">'+pill[2]+(x.S&&x.S.wave!=null?(' '+x.S.wave+' m'):'')+'</span>'
+          + (m ? '<span title="'+wxE(m[1])+'" style="width:16px;height:16px;border-radius:8px;background:'+m[2]+';color:#fff;font-size:9px;display:inline-flex;align-items:center;justify-content:center">'+(WX_DEC_IC[m[0]]||'')+'</span>' : '')+'</button>'; }).join('');
+    var row = function(label, fn){ return '<span style="'+lab+'">'+label+'</span>' + D.map(function(x){ return x.pick.map(function(c, i){ return '<span style="'+cell(i)+(c?'':'color:#CBD5E1;text-align:center;font-size:10px')+'">'+(c ? fn(c, x) : (x.hrs.length?'':'…'))+'</span>'; }).join(''); }).join(''); };
+    var g = '<div class="wx-sg" style="flex:1;min-width:0;padding:8px 14px 10px;grid-template-columns:72px repeat('+cols+',minmax(0,1fr));row-gap:2px">'
+      + '<span></span>' + heads
+      + row('เวลา', function(c, x){ return '<span style="display:block;text-align:center;font-size:11px;font-weight:700;color:'+(x.d===today && c.h===nowH ? '#DC2626' : '#64748B')+'">'+(c.h<10?'0':'')+c.h+'</span>'; })
+      + row('', function(c){ return '<span style="display:flex;justify-content:center">'+wxSkySvg(wxHrSky(c),22)+'</span>'; })
+      + row('อุณหภูมิ °C', function(c){ return '<span style="display:block;'+mono+'font-size:12.5px">'+(c.temp==null?'—':Math.round(c.temp)+'°')+'</span>'; })
+      + row('รู้สึกเหมือน', function(c){ return '<span style="display:block;'+mono+'font-weight:500;color:#64748B;padding:1px 0">'+(c.feels==null?'—':Math.round(c.feels)+'°')+'</span>'; })
+      + row(wxIco('rain','#2563EB',12)+'ฝน mm', function(c){ var r = +c.rain||0; return '<span style="display:block;'+mono+'font-size:11px;color:#2563EB;background:'+(r>=0.1?'rgba(37,99,235,'+Math.min(0.25,0.06+r*0.03)+')':'transparent')+';border-radius:5px">'+(r>=0.1?Math.round(r*10)/10:'')+'</span>'; })
+      + row(wxIco('wave','#0EA5E9',12)+'คลื่น m', function(c){ var w = wxWaveC(pt, c.wave); return '<span style="display:block;'+mono+'font-size:12.5px;background:'+w[0]+';color:'+w[1]+';border-radius:5px">'+(c.wave==null?'—':c.wave.toFixed(1))+'<span style="font-size:8.5px;font-weight:500;color:'+((c.per!=null&&c.per<=5)?'#B91C1C':'#94A3B8')+'"> /'+(c.per==null?'—':Math.round(c.per))+'s</span></span>'; })
+      + row(wxIco('wind','#14B8A6',12)+'ลม kt', function(c){ return '<span style="display:block;'+mono+'background:'+wxWindBg(c.wind||0)+';border-radius:5px">'+(c.wind==null?'—':Math.round(c.wind))+'</span>'; })
+      + row('กระโชก kt', function(c){ var g = c.gust||0; return '<span style="display:block;'+mono+'font-weight:500;color:'+(g>=(pt.wind||25)?'#B91C1C':'#475569')+';background:'+(g>=20?'rgba(245,158,11,.18)':'transparent')+';border-radius:5px">'+(c.gust==null?'—':Math.round(c.gust))+'</span>'; })
+      + row('ทิศลม', function(c){ return '<span style="display:flex;justify-content:center;padding:2px 0" title="ลมพัดไปทาง '+wxDirTxt(((c.dir||0)+180)%360)+'"><svg width="13" height="13" viewBox="0 0 24 24" style="transform:rotate('+(((c.dir||0)+180)%360)+'deg)" aria-hidden="true"><path d="M12 3l6 16-6-4-6 4z" fill="#5B6B8C"/></svg></span>'; })
+      + '</div>';
+    return '<div style="display:flex;border-top:1px solid #EEF1F5">'+left+g+'</div>';
+  }).join('');
 }
 function wxPopRows(date, piers){
   if(!WX.pts) return '<div style="padding:20px;color:#94A3B8">กำลังโหลด…</div>';

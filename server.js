@@ -2572,11 +2572,11 @@ async function wxFetchDay(pt, ymd){
   const base = `latitude=${pt.lat}&longitude=${pt.lon}&timezone=Asia%2FBangkok&start_date=${ymd}&end_date=${ymd}`;
   const [m, w] = await Promise.all([
     wxGetJson(`https://marine-api.open-meteo.com/v1/marine?${base}&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height`),
-    wxGetJson(`https://api.open-meteo.com/v1/forecast?${base}&wind_speed_unit=kn&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cloud_cover,weather_code`)
+    wxGetJson(`https://api.open-meteo.com/v1/forecast?${base}&wind_speed_unit=kn&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cloud_cover,weather_code,temperature_2m,apparent_temperature`)
   ]);
   const H = { time: (m.hourly && m.hourly.time) || [] };
   ['wave_height','wave_period','wave_direction','swell_wave_height','swell_wave_period','swell_wave_direction','wind_wave_height'].forEach(k => { H[k] = (m.hourly && m.hourly[k]) || []; });
-  ['wind_speed_10m','wind_gusts_10m','wind_direction_10m','precipitation','cloud_cover','weather_code'].forEach(k => { H[k] = (w.hourly && w.hourly[k]) || []; });
+  ['wind_speed_10m','wind_gusts_10m','wind_direction_10m','precipitation','cloud_cover','weather_code','temperature_2m','apparent_temperature'].forEach(k => { H[k] = (w.hourly && w.hourly[k]) || []; });   // §wx5d · temp + feels-like
   return H;
 }
 // Summary over the point's sailing window (hours [h0,h1]): the numbers the card shows and similarity uses.
@@ -2600,7 +2600,8 @@ function wxSummarize(H, pt){
     wind:r1(max(pick('wind_speed_10m'))), gust:r1(max(pick('wind_gusts_10m'))), windDir:circMean(pick('wind_direction_10m')),
     rain:r1(pick('precipitation').reduce((s, v) => s + v, 0)),
     cloud:(a => a.length ? Math.round(mean(a)) : null)(pick('cloud_cover')),   // §wx4 · % mean over the window
-    code:max(pick('weather_code'))                                             // §wx4 · worst WMO code (95+ = thunder)
+    code:max(pick('weather_code')),                                            // §wx4 · worst WMO code (95+ = thunder)
+    temp:r1(max(pick('temperature_2m'))), feels:r1(max(pick('apparent_temperature')))   // §wx5d
   };
 }
 async function wxStore(pt, ymd, kind){
@@ -2621,10 +2622,27 @@ async function wxHas(ptId, ymd, kind){
 // Scheduler · checked every 10 min against Bangkok time · each slot runs once per day (guarded by wxHas).
 //   17:00–18:59 D-1 → fc17 for tomorrow · 05:00–06:59 → fc05 for today · 02:00–03:59 → hist for D-2 and D-3
 let _wxBusy = false;
+/* §wx5d · kind 'fc' = rolling outlook, today..+5, refreshed every ~6 h (fc05 / fc17 stay frozen snapshots of what the
+   office decided on) · returns the dates it (re)fetched */
+const WX_OUTLOOK_DAYS = 5;
+async function wxStale(ptId, ymd, kind, maxH){
+  const r = await pool.query('SELECT taken_at FROM operation_schemas.weather_obs WHERE point_id=$1 AND date=$2 AND kind=$3', [ptId, ymd, kind]);
+  return !r.rowCount || (Date.now() - new Date(r.rows[0].taken_at).getTime()) > maxH * 3600e3;
+}
+async function wxOutlook(force){
+  const { ymd } = wxBkk(); const P = wxPoints(); const out = {};
+  for(let n = 0; n <= WX_OUTLOOK_DAYS; n++){ const d = wxAddDays(ymd, n);
+    for(const pt of P){
+      try{ if(!force && !(await wxStale(pt.id, d, 'fc', 5))) continue; await wxStore(pt, d, 'fc'); (out[d] = out[d] || []).push(pt.id); }
+      catch(e){ console.warn(`[wx] fc ${pt.id} ${d} failed: ${e.message}`); (out[d] = out[d] || []).push(pt.id + ':' + e.message); }
+    } }
+  return out;
+}
 async function wxTick(){
   if(!pool || _wxBusy) return; _wxBusy = true;
   try{
     const { ymd, hour } = wxBkk(); const P = wxPoints();
+    if(hour % 6 === 5) { try{ await wxOutlook(false); }catch(e){ console.warn('[wx] outlook', e.message); } }   // 05 · 11 · 17 · 23
     const jobs = [];
     if(hour >= 17 && hour < 19) jobs.push([wxAddDays(ymd, 1), 'fc17']);
     if(hour >= 5  && hour < 7)  jobs.push([ymd, 'fc05']);
@@ -2848,11 +2866,20 @@ const server = http.createServer((req, res) => {
         .then(()=>J(res,200,{ok:true,by:s.name||s.username||'',at:new Date().toISOString()})).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
-  if(u === '/api/weather/fetch' && req.method === 'POST'){   // on-demand snapshot: ?date=&kind=fc05|fc17|hist
+  if(u === '/api/weather/fetch' && req.method === 'POST'){   // on-demand snapshot: ?date=&kind=fc05|fc17|fc|hist · or ?outlook=1 (today..+5 as 'fc', plus today's fc05 / tomorrow's fc17 if missing)
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     const qp=new URLSearchParams(q); const date=String(qp.get('date')||''), kind=String(qp.get('kind')||'fc05');
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(fc05|fc17|hist)$/.test(kind)) return J(res,400,{error:'date + kind required'});
+    if(qp.get('outlook')==='1'){   // §wx5d
+      (async()=>{ try{
+        const { ymd } = wxBkk(); const P = wxPoints(); const snap = {};
+        for(const [d, k] of [[ymd,'fc05'],[wxAddDays(ymd,1),'fc17']]) for(const pt of P){ try{ if(await wxHas(pt.id, d, k)) continue; await wxStore(pt, d, k); (snap[d+' '+k] = snap[d+' '+k] || []).push(pt.id); }catch(e){} }
+        const fc = await wxOutlook(true);
+        J(res,200,{ok:true, from:ymd, to:wxAddDays(ymd, WX_OUTLOOK_DAYS), fc, snap});
+      }catch(e){ J(res,500,{error:e.message}); } })();
+      return;
+    }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(fc05|fc17|fc|hist)$/.test(kind)) return J(res,400,{error:'date + kind required'});
     (async()=>{ const out={}; for(const pt of wxPoints()){ try{ out[pt.id]=await wxStore(pt,date,kind); }catch(e){ out[pt.id]={error:e.message}; } } J(res,200,{date,kind,points:out}); })();
     return;
   }
