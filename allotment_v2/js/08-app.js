@@ -76014,15 +76014,11 @@ function paDeptKey(st, pier){
   if(S.length){ var ok=S.some(function(x){ return x.id===(st&&st.sect); }); return 's:'+(ok?st.sect:''); }
   return 'r:'+(String((st&&st.role)||'').trim()||'ไม่ระบุตำแหน่ง');
 }
+/* §paDept2 · ลำดับ/ชื่อแผนก = หัวกลุ่มในตารางการทำงาน (paGroups) · คนในกลุ่มเรียงตามตาราง */
+function paDeptGk(G, pier){ return paSects(pier).length ? ('s:'+(G.id||'')) : ('r:'+G.t); }
 function paDeptList(pier){
-  var S=paSects(pier), out=[], seen={};
-  var staff=(PIER_STAFF||[]).filter(function(x){ return x.pier===pier && x.active!==false; });
-  if(S.length){
-    S.forEach(function(x){ out.push({k:'s:'+x.id, t:x.name||'(ไม่มีชื่อ)'}); });
-    out.push({k:'s:', t:'UNASSIGNED'});
-  } else staff.forEach(function(x){ var k=paDeptKey(x,pier); if(!seen[k]){ seen[k]=1; out.push({k:k, t:k.slice(2)}); } });
-  out.forEach(function(d){ d.n=staff.filter(function(x){ return paDeptKey(x,pier)===d.k; }).length; });
-  return out.filter(function(d){ return d.n; });
+  return paGroups(pier).map(function(G){ return {k:paDeptGk(G,pier), t:G.t, n:G.rows.length, rows:G.rows}; })
+    .filter(function(d){ return d.n; });
 }
 function paPayDeptOff(pier, k){ var m=PIER_CFG && PIER_CFG.payNoDept; return !!(m && m[pier] && m[pier][k]); }
 function paPayStaffOff(sid){ var st=paStaffById(sid); return st ? paPayDeptOff(st.pier, paDeptKey(st, st.pier)) : false; }
@@ -76170,14 +76166,19 @@ function paPayOpen(){
           +'<div style="flex-basis:100%;color:#6E7684">ติ๊กออก = คนในแผนกนั้นไม่ได้เบี้ยเที่ยว (ยอดเงินเป็น \u2014 ไม่ขึ้นเตือน) · เบี้ยเวรกลางคืนยังคิดตามปกติ</div></div>'; })()
       +'<table class="pl-t" id="pa-pay-staff"><thead><tr><th>ชื่อ</th><th>ตำแหน่ง</th><th style="width:110px">มาตรฐาน</th>'
       +RC.map(function(c){ return '<th style="width:86px">'+poE(c)+'</th>'; }).join('')+'</tr></thead><tbody>'
-      +staff.map(function(s){ var v=paPayRate(s.id), dk=paDeptKey(s,_poPier), dOff=paPayDeptOff(_poPier,dk);
+      +paDeptList(_poPier).map(function(G){ var gOff=paPayDeptOff(_poPier,G.k);
+        return '<tr class="pa-pgh" data-dept="'+poE(G.k)+'"'+(gOff?' style="display:none;opacity:.45"':'')+'>'
+          +'<td colspan="'+(3+RC.length)+'" style="background:#EEF2F8;color:#16265C;font-size:11.5px;font-weight:800;letter-spacing:.04em;padding:7px 10px">'
+          +poE(G.t)+' <span style="color:#8B93A1;font-weight:600">· '+G.n+' คน</span>'
+          +'<span class="pa-offtag" style="'+(gOff?'':'display:none;')+'margin-left:8px;font-size:10.5px;font-weight:700;color:#8A5A00;background:#FBF1DC;border-radius:5px;padding:1px 6px">ไม่มีเบี้ยเที่ยว</span></td></tr>'
+      +G.rows.map(function(s){ var v=paPayRate(s.id), dk=G.k, dOff=gOff;
         return '<tr data-dept="'+poE(dk)+'"'+(dOff?' style="display:none;opacity:.45"':'')+'><td>'+poE(s.name||s.nick||s.id)+(s.nick&&s.name?' <span style="color:#8B93A1">('+poE(s.nick)+')</span>':'')
           +'<span class="pa-offtag" style="'+(dOff?'':'display:none;')+'margin-left:6px;font-size:10.5px;font-weight:700;color:#8A5A00;background:#FBF1DC;border-radius:5px;padding:1px 6px">ไม่มีเบี้ยเที่ยว</span></td>'
           +'<td>'+poE(s.role||'')+'</td>'
           +'<td><input class="pl-f pa-pay-rate" type="number" min="0" step="any" data-sid="'+poE(s.id)+'" value="'+(v==null?'':v)+'"></td>'
           +RC.map(function(c){ var w=paPayRateRt(s.id,c);
             return '<td><input class="pl-f pa-pay-rrt" type="number" min="0" step="any" data-sid="'+poE(s.id)+'" data-code="'+poE(c)+'" value="'+(w==null?'':w)+'" placeholder="'+(v==null?'':v)+'" style="width:76px"></td>'; }).join('')
-          +'</tr>'; }).join('')
+          +'</tr>'; }).join(''); }).join('')
       +'</tbody></table>'; })()
     +'</div>';
   poModal('เบี้ยเที่ยว · สูตรคิดเงิน', body,
