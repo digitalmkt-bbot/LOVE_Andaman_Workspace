@@ -3392,7 +3392,19 @@ const server = http.createServer((req, res) => {
       // ('2026-08-04::b10' > '2026-08-04').
       pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt('boat_capovr')}
                   WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [dateFrom, dateTo]),
-    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes, seasonRes, ovrRes, capOvrRes]) => {
+      // §charterBooking · boats held by live charter bookings. Same rule as /v1/availability and the staff
+      // app (baCharterBoatMap): a held boat is chartered even when its Boat-Op row still says 'normal'.
+      // r5 / 1 Nov 2026: Romeo held by a charter, this endpoint sold its seats (71 vs the app's 37).
+      pool.query(
+        `SELECT t.date AS date, t.idx, t.charterboatid, t.ops_boatid AS trip_boat, t.ops_boatsplits AS trip_splits,
+                b.ops_boatid AS bk_boat, b.ops_boatsplits AS bk_splits
+         FROM ${fqt('sb_bookings__trips')} t
+         JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+         WHERE t.bookingmode = 'charter' AND t.date >= $1 AND t.date <= $2
+           AND b.status != ALL($3::text[])`,
+        [dateFrom, dateTo, CANCELLED]),
+    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes, seasonRes, ovrRes, capOvrRes, chRes]) => {
+      const heldByCharter = new Set(b2cV1.charterBoatsOf(chRes.rows).map(x => x.date + '|' + x.boat_id));
       const bookedMap = {}, lockedMap = {};
       for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
       for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
@@ -3436,7 +3448,7 @@ const server = http.createServer((req, res) => {
         const trow = tripsByDate[dk] || {};
         let capacity = 0, deployed = 0, capOverridden = false;
         for (const bid of boatIds) {
-          if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter') {
+          if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter' && !heldByCharter.has(dk + '|' + bid)) {
             const c = capFor(bid, dk);
             if (c !== (boatCap[bid] || 0)) capOverridden = true;
             capacity += c; deployed++;

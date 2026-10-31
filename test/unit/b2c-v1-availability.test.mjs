@@ -233,3 +233,29 @@ test('no database or the wrong backend is 503', async () => {
   });
   assert.equal(r, 503);
 });
+
+// r5, 1 Nov 2026: Romeo's Boat-Op row said 'normal' but a charter booking held it (ops_boatid), so the
+// staff app sold 37 and this API sold 71.
+test('a boat held by a charter booking is chartered even when its Boat-Op row says normal', () => {
+  const charterBoats = v1.charterBoatsOf([
+    { date: DAY, idx: 0, charterboatid: null, trip_boat: null, trip_splits: null, bk_boat: 'b2', bk_splits: null },
+  ]);
+  assert.deepEqual(charterBoats, [{ date: DAY, boat_id: 'b2' }]);
+  const day = one({
+    trips: [{ key: DAY, b1_route: 'r10', b1_type: 'normal', b2_route: 'r10', b2_type: 'normal' }],
+    demand: [{ date: DAY, routeid: 'r10', booked: 8, charter: 4 }],
+    charterBoats,
+  });
+  assert.equal(day.available_seats, 22);               // b1 (30) - 8, b2 is out of the pool
+  assert.equal(day.deployments.find(d => d.boat_id === 'b2').chartered, true);
+});
+
+test('charter boat ids: splits win, later trips read the trip row, charterboatid is the fallback', () => {
+  const ids = v1.charterBoatsOf([
+    { date: DAY, idx: 0, bk_splits: JSON.stringify([{ boatId: 'b1' }, { boatId: 'b2' }, { boatId: 'b1' }]), bk_boat: 'b9' },
+    { date: DAY, idx: 1, trip_boat: 'b3', bk_boat: 'b9' },
+    { date: DAY, idx: 0, charterboatid: 'b4' },
+    { date: DAY, idx: 0, bk_splits: '{not json' },
+  ]).map(x => x.boat_id);
+  assert.deepEqual(ids, ['b1', 'b2', 'b3', 'b4']);
+});

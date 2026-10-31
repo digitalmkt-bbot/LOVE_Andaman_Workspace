@@ -23,6 +23,10 @@
  *     A boat added after the mapping has NO wide column, so reading those alone never sees it. Same
  *     rule as v_seat_availability (migration 020). /api/b2c/availability still reads the wide columns
  *     only, so this endpoint and that one disagree on such a boat, and this one is right.
+ *   · chartered boats: a Boat-Op row typed 'charter' OR a boat a live charter booking holds that day
+ *     (ops_boatsplits, else ops_boatid, else charterboatid). The staff app (baCharterBoatMap) already
+ *     reads it that way; reading the row type alone sold a held boat's seats (r5, 1 Nov 2026: Romeo).
+ *     Overnight-hold days between a charter's out and return dates are NOT covered here yet.
  *   · seats per boat: the day's override, clamped to registered seats (licensepax, else cap), as the
  *     view does.
  *   · booked / charter pax: the view's `demand` CTE. The trip date goes through f_trip_date_iso,
@@ -92,8 +96,10 @@ function calendarOf(seasons, overrides) {
 }
 
 /** Boats deployed per `date|route`: trips__boat wins, the wide columns serve only the pairs it lacks. */
-function deploymentsOf({ boats, trips, tripBoats, capOverrides }) {
+function deploymentsOf({ boats, trips, tripBoats, capOverrides, charterBoats = [] }) {
   const boatOf = {}, override = {}, plans = {};
+  // §charterBooking · a boat a charter booking holds that day is chartered, whatever its Boat-Op row says.
+  const heldByCharter = new Set(charterBoats.map(r => r.date + '|' + r.boat_id));
   for (const b of boats) boatOf[b.id] = b;
   for (const r of capOverrides) if (r.cap != null && !isNaN(Number(r.cap))) override[r.k] = Number(r.cap);
   const plan = (date, boatId, route, type) => { plans[date + '|' + boatId] = { date, boatId, route, type }; };
@@ -110,12 +116,30 @@ function deploymentsOf({ boats, trips, tripBoats, capOverrides }) {
     const seats = boatSeats(boat, override[date + '::' + boatId]);
     (byDay[date + '|' + route] = byDay[date + '|' + route] || []).push({
       boat_id: boatId, capacity: seats.sellable, licensed: seats.licensed,
-      license_pax: Number(boat.licensepax) || null, chartered: type === 'charter',
+      license_pax: Number(boat.licensepax) || null,
+      chartered: type === 'charter' || heldByCharter.has(date + '|' + boatId),
       trip_type: TRIP_TYPES.includes(type) ? type : 'normal',
     });
   }
   for (const list of Object.values(byDay)) list.sort((a, b) => a.boat_id.localeCompare(b.boat_id));
   return byDay;
+}
+
+/** (date, boat) pairs held by charter bookings. Mirrors the client's bkBoatIdsOn: splits win, then the single boat. */
+function charterBoatsOf(rows) {
+  const out = [];
+  const splitIds = v => {
+    let list = v;
+    if (typeof v === 'string') { try { list = JSON.parse(v); } catch (e) { return []; } }
+    return Array.isArray(list) ? list.map(x => x && x.boatId).filter(Boolean) : [];
+  };
+  for (const r of rows) {
+    const first = Number(r.idx) === 0;
+    let ids = splitIds(first ? r.bk_splits : r.trip_splits);
+    if (!ids.length) { const one = (first ? r.bk_boat : r.trip_boat) || r.charterboatid; if (one) ids = [one]; }
+    for (const id of new Set(ids)) out.push({ date: r.date, boat_id: id });
+  }
+  return out;
 }
 
 /** One entry per route-day, date first and then routes as given. No database in here, so it is testable. */
@@ -162,7 +186,7 @@ async function readDays(pool, { fqt, qic }, routes, from, to, excludeBookingId, 
              + COALESCE(t.pax_chd_fr,0) + COALESCE(t.pax_chd_th,0)
              + COALESCE(t.pax_inf_fr,0) + COALESCE(t.pax_inf_th,0)
              + COALESCE(t.pax_foc,0)    + COALESCE(t.pax_foc_fr,0) + COALESCE(t.pax_foc_th,0)`;
-  const [demand, locks, boats, trips, tripBoats, capOverrides, seasons, overrides] = await Promise.all([
+  const [demand, locks, boats, trips, tripBoats, capOverrides, seasons, overrides, charterTrips] = await Promise.all([
     // A B2C order is one ops row per line, b2c_<order>_<line>, so excluding the order takes them all.
     // left() rather than LIKE: `_` is a LIKE wildcard, so 'b2c_BK-1_%' would also match BK-10.
     pool.query(
@@ -204,10 +228,21 @@ async function readDays(pool, { fqt, qic }, routes, from, to, excludeBookingId, 
     pool.query(`SELECT routes_id, ${qic('key')} AS k, ${qic('value')} AS v
                 FROM ${fqt('routes__overrides')}
                 WHERE routes_id = ANY($1) AND ${qic('key')} >= $2 AND ${qic('key')} <= $3`, [routeIds, from, to]),
+    // Boats held by live charter bookings. The first trip of a booking keeps its ops on the booking row,
+    // later ones on the trip row (client bkOpsRead). Not filtered by route: the boat is held either way.
+    pool.query(
+      `SELECT ${tripDate} AS date, t.idx, t.charterboatid, t.ops_boatid AS trip_boat, t.ops_boatsplits AS trip_splits,
+              b.ops_boatid AS bk_boat, b.ops_boatsplits AS bk_splits
+       FROM ${fqt('sb_bookings__trips')} t
+       JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+       WHERE t.bookingmode = 'charter' AND ${tripDate} >= $1 AND ${tripDate} <= $2
+         AND b.status <> ALL($3::text[])`,
+      [from, to, SEAT_RELEASING]),
   ]);
   return buildDays({
     routes, demand: demand.rows, locks: locks.rows, boats: boats.rows, trips: trips.rows, tripBoats: tripBoats.rows,
     capOverrides: capOverrides.rows, seasons: seasons.rows, overrides: overrides.rows,
+    charterBoats: charterBoatsOf(charterTrips.rows),
   }, eachDate(from, to));
 }
 
@@ -268,5 +303,5 @@ function handle(req, res, query, ctx) {
 module.exports = {
   matches, handle,
   // exported for tests
-  buildDays, boatSeats, calendarOf, deploymentsOf, isIsoDate,
+  buildDays, charterBoatsOf, boatSeats, calendarOf, deploymentsOf, isIsoDate,
 };
