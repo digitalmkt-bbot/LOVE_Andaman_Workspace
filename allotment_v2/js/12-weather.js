@@ -855,8 +855,8 @@ function wxPopRender(){
     + '<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:3px;background:#FECACA"></span>เสี่ยง</span>'
     + '<span style="color:#B91C1C">คาบตัวแดง = สั้น โยนกว่าความสูงบอก</span><span style="flex:1"></span><span>Esc หรือคลิกนอกกรอบเพื่อปิด</span></div>';
   var keepScroll = ov.querySelector('.wx-pbody'), sT = keepScroll ? keepScroll.scrollTop : 0;
-  ov.innerHTML = WX_CSS + '<div class="wx-pbox"'+(five?' style="width:100%;max-width:none"':'')+'>'+head+'<div class="wx-pbody">'+rows+'</div>'+foot+'</div>';
-  ov.style.padding = five ? '12px' : '';
+  ov.innerHTML = WX_CSS + '<div class="wx-pbox"'+(five?' style="width:min(1720px,100%)"':'')+'>'+head+'<div class="wx-pbody">'+rows+'</div>'+foot+'</div>';
+  ov.style.padding = five ? '20px' : '';   /* owner: "ไม่ต้องเต็มจอขนาดนั้น" */
   var nb = ov.querySelector('.wx-pbody'); if(nb && sT) nb.scrollTop = sT;
 }
 /* §wx5d · five days side by side (Windy-style) · per point: day headers, then hours at a 3-h step inside the
