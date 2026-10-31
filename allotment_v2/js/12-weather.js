@@ -841,7 +841,7 @@ function wxPopRender(){
   var head = '<div class="wx-hd" style="padding:14px 18px;gap:12px;flex-wrap:wrap">'
     + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>'
     + (five
-        ? '<div><b style="font-size:16px">พยากรณ์ทะเล 5 วัน · '+dt.getDate()+' '+MON[dt.getMonth()]+' – '+(function(){ var e=new Date(wxAddDays(date,4)+'T12:00:00'); return e.getDate()+' '+MON[e.getMonth()]; })()+'</b><i>ทั้งวัน ทุก 3 ชม. · สีเหลืองอ่อน = ช่วงออกเรือ · กดหัววันเพื่อดูรายชั่วโมง · อัปเดตทุก 3 ชม.</i></div>'
+        ? '<div><b style="font-size:16px">พยากรณ์ทะเล 5 วัน · '+dt.getDate()+' '+MON[dt.getMonth()]+' – '+(function(){ var e=new Date(wxAddDays(date,4)+'T12:00:00'); return e.getDate()+' '+MON[e.getMonth()]; })()+'</b><i>ทั้งวัน ทุก 3 ชม. · ฟ้าเทา = กลางคืน · เหลืองอ่อน = ช่วงออกเรือ · กดหัววันเพื่อดูรายชั่วโมง · อัปเดตทุก 3 ชม.</i></div>'
         : '<div><b style="font-size:16px">สภาพทะเลรายชั่วโมง · '+WD[dt.getDay()]+' '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>จุดพยากรณ์กลางทะเลของแต่ละเส้นทาง · ลูกศร = ลมพัดไปทาง · /5s = คาบคลื่น</i></div>')
     + '<div class="wx-pgrp">'+seg(five,'5 วัน','wxPopView(\'days\')')+seg(!five,'รายชั่วโมง','wxPopView(\'day\')')+'</div>'
     + '<div class="wx-pgrp">'+seg(false,'‹ '+dPrev.getDate(),'wxPopDay(-1)')+seg(true,(date===today?'วันนี้ ':'')+dt.getDate(),'')+seg(false,dNext.getDate()+' ›','wxPopDay(1)')+'</div>'
@@ -859,47 +859,83 @@ function wxPopRender(){
   ov.style.padding = five ? '20px' : '';   /* owner: "ไม่ต้องเต็มจอขนาดนั้น" */
   var nb = ov.querySelector('.wx-pbody'); if(nb && sT) nb.scrollTop = sT;
 }
-/* §wx5d · five days side by side (Windy-style) · per point: day headers, then hours at a 3-h step inside the
-   sailing window · rows: sky · temp · feels like · rain · wave · wind · gust · wind dir */
+/* §wx5d · five days side by side (mockup board 9) · per point: name column · label column · five bordered day
+   blocks, each 8 columns 01…22 · rows เวลา · ท้องฟ้า · อุณหภูมิ · ฝน · คลื่น · ลม · กระโชก · ทิศลม · วิเคราะห์ (auto) */
+var WX_PT_C = { similan:'#0EA5E9', surin:'#14B8A6', phiphi:'#8B5CF6', phangnga:'#F97316', ranong:'#EC4899' };
+var WX_5R = [['เวลา',18],['',32],['อุณหภูมิ °C',22],['ฝน mm',24],['คลื่น m',24],['ลม kt',22],['กระโชก kt',22],['ทิศลม',20],['วิเคราะห์',46]];
+function wxGustBg(g){ return g == null ? 'transparent' : g < 8 ? '#E9F6FF' : g < 10 ? '#BFE7FF' : g < 12 ? '#86D4F5' : g < 15 ? '#9EE39E' : g < 20 ? '#FDE68A' : '#FCA5A5'; }
+/* two lines the office would write itself · from the sailing-window hours + what similar days did */
+function wxAnalyse(pt, date, S, hrs){
+  if(!S || S.wave == null) return null;
+  var lv = wxLevel(pt, S), h0 = (pt.hours||[6,15])[0], h1 = (pt.hours||[6,15])[1];
+  var win = (hrs||[]).filter(function(x){ return x.h >= h0 && x.h <= h1; });
+  var wv = win.map(function(x){ return x.wave; }).filter(function(v){ return v != null; });
+  var lo = wv.length ? Math.min.apply(null, wv) : S.wave, hi = wv.length ? Math.max.apply(null, wv) : S.wave;
+  var head = lv==='risk' ? 'เสี่ยง' : lv==='warn' ? 'ระวัง' : 'ออกได้';
+  var waveTxt = 'คลื่น '+(hi - lo >= 0.2 ? lo.toFixed(1)+'–'+hi.toFixed(1) : hi.toFixed(1))+' ม.';
+  var hiH = win.filter(function(x){ return x.wave != null && x.wave >= (pt.warn||1.5); }).map(function(x){ return x.h; });
+  var when = ''; if(hiH.length && hiH.length < win.length){ var a = hiH[0], b = hiH[hiH.length-1]; when = (a >= 12 ? ' ช่วงบ่าย' : b <= 10 ? ' ช่วงเช้า' : ' ช่วง '+(a<10?'0':'')+a+'–'+b+' น.'); }
+  var l1 = head+' · '+waveTxt+when;
+  if(lv==='ok'){ l1 += (S.wind != null && S.wind < 10) ? ' ลมเบา' : (S.code >= 95 ? ' มีฝนฟ้าคะนอง' : S.rain >= 5 ? ' ฝนตก' : ' ทะเลเรียบ'); }
+  var p2 = [];
+  var rainH = (hrs||[]).filter(function(x){ return (x.rain||0) >= 0.5; }).map(function(x){ return x.h; });
+  if(rainH.length){ var ra = rainH[0], rb = rainH[rainH.length-1];
+    p2.push((rb < h0 ? 'ฝนช่วงเช้ามืด หมดก่อนเรือออก' : ra > h1 ? 'ฝนหลังเรือกลับ' : 'ฝน '+(ra<10?'0':'')+ra+'–'+rb+' น. ระหว่างเดินทาง')+(S.code >= 95 ? ' มีฟ้าคะนอง' : '')); }
+  var sp = win.filter(function(x){ return x.per != null && x.per <= 5; });
+  if(sp.length >= 2 && hi >= 1.2) p2.push('คาบสั้น ≤ 5 วิ'+(sp[0].h >= 12 ? ' หลังเที่ยง' : '')+' โยนกว่าตัวเลข');
+  if(S.gust != null && S.gust >= (pt.wind||25)) p2.push('ลมกระโชก '+Math.round(S.gust)+' kt');
+  else if(S.gust != null && S.gust >= 15) p2.push('กระโชกถึง '+Math.round(S.gust)+' kt');
+  var sim = wxSimilar(pt, S, date), n = sim.length;
+  if(n >= 2){ var cx = sim.filter(function(x){ return x.oc.k==='cx'; }).length, bad = sim.filter(function(x){ return x.oc.k==='rough' || x.oc.k==='bumpy' || x.oc.k==='part'; }).length, tb = sim.filter(function(x){ return (x.oc.tb||[]).length; }).length;
+    p2.push(cx >= n/2 ? 'วันคล้ายกัน ยกเลิก '+cx+' ใน '+n : (bad + cx) >= n/2 ? 'วันคล้ายกัน ออกได้แต่โยน '+bad+' ใน '+n+(tb?(' · ตีกลับ '+tb):'')+(cx?(' · ยกเลิก '+cx):'') : 'ที่ผ่านมา '+(n - cx - bad)+' ใน '+n+' วันแบบนี้ออกปกติ'+(tb?(' · ตีกลับ '+tb):'')); }
+  else p2.push('ยังไม่มีวันคล้ายกันในประวัติ');
+  if(lv==='warn' && (sp.length >= 2 || hi >= 1.7)) p2.push('เตือนลูกค้าสูงอายุ/เมาเรือ');
+  if(lv==='risk' && date > wxToday()) p2.push('ตัดสินใจรอบ 17:00 วันก่อน');
+  return { lv:lv, l1:l1, l2:p2.join(' · ') };
+}
 function wxPopDays(from, piers){
   if(!WX.pts) return '<div style="padding:20px;color:#94A3B8">กำลังโหลด…</div>';
   var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
   var days = []; for(var i = 0; i < 5; i++) days.push(wxAddDays(from, i));
-  var today = wxToday(), tmr = wxAddDays(today, 1), nowH = new Date().getHours();
-  var MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD = ['อา','จ','อ','พ','พฤ','ศ','ส'];
-  var dLbl = function(d){ var x = new Date(d+'T12:00:00'); return (d===today?'วันนี้ · ':d===tmr?'พรุ่งนี้ · ':'')+WD[x.getDay()]+' '+x.getDate()+' '+MON[x.getMonth()]; };
-  var lab = 'font-size:10px;color:#64748B;display:flex;align-items:center;gap:3px;white-space:nowrap;padding-left:2px';
-  var mono = "font:600 12px 'DM Mono',monospace;text-align:center;padding:4px 0;";
+  var today = wxToday(), tmr = wxAddDays(today, 1), nowH = new Date().getHours(), hours = [1,4,7,10,13,16,19,22];
+  var MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], WD = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+  var dLbl = function(d){ var x = new Date(d+'T12:00:00'); return WD[x.getDay()]+' '+x.getDate()+' '+MON[x.getMonth()]; };
+  var AC = { ok:['#D1FAE5','#047857','#10B981'], warn:['#FEF3C7','#B45309','#F59E0B'], risk:['#FEE2E2','#B91C1C','#DC2626'], none:['#F1F5F9','#94A3B8','#CBD5E1'] };
+  var R = function(i){ return 'height:'+WX_5R[i][1]+'px;'; };
+  var labels = '<div style="width:74px;flex:none;padding-top:10px"><div style="height:26px"></div>' + WX_5R.map(function(r){ return '<div style="'+'height:'+r[1]+'px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10.5px;color:#64748B;white-space:nowrap">'+r[0]+'</div>'; }).join('') + '</div>';
   return P0.map(function(pt){
-    var short = wxE(pt.name.split(' · ')[0]);
-    var h0 = (pt.hours||[6,15])[0], h1 = (pt.hours||[6,15])[1], hours = [1,4,7,10,13,16,19,22];   /* whole day, like the reference */
-    var nh = hours.length, cols = days.length * nh;
-    var left = '<div style="width:150px;flex:none;padding:12px 12px;display:flex;flex-direction:column;gap:4px;background:#FBFCFD;border-right:1px solid #EEF1F5">'
-      + '<b style="font-size:15px">'+short+'</b><span style="font-size:10.5px;color:#64748B">'+wxE(pt.name.split(' · ')[1]||'')+'</span>'
-      + '<span style="font-size:10px;color:#94A3B8">ช่วงออกเรือ '+(h0<10?'0':'')+h0+'–'+h1+' น. <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#FFF8E6;border:1px solid #FDE68A;vertical-align:-1px"></span></span></div>';
-    /* per day: full hourly list → pick the 3-h steps */
-    var D = days.map(function(d){ var b = wxBest(pt.id, d), hrs = wxHours(pt, d, true) || []; var pick = hours.map(function(h){ return hrs.filter(function(x){ return x.h===h; })[0] || null; }); return { d:d, b:b, S:b?b.S:null, hrs:hrs, pick:pick }; });
-    var cell = function(i){ var h = hours[i], inWin = h >= h0 - 1 && h <= h1 + 1, night = h < 6 || h >= 19;
-      return 'border-left:'+(i === 0 ? '2px solid #E2E8F0' : '0')+';background:'+(inWin ? '#FFFBEB' : night ? '#EEF2F9' : 'transparent')+';'; };
-    var heads = D.map(function(x, i){ var lv = x.S ? wxLevel(pt, x.S) : 'none'; var pill = lv==='risk' ? ['#FEE2E2','#B91C1C','เสี่ยง'] : lv==='warn' ? ['#FEF3C7','#B45309','ระวัง'] : lv==='ok' ? ['#D1FAE5','#047857','ออกได้'] : ['#F1F5F9','#94A3B8','—'];
-        var dec = WX.dec[pt.id+'|'+x.d], m = dec && dec.decision ? wxDecMeta(dec.decision) : null;
-        return '<button type="button" onclick="wxPopGo(\''+x.d+'\')" title="ดูรายชั่วโมง '+x.d+'" style="grid-column:span '+nh+';display:flex;align-items:center;justify-content:center;gap:6px;height:28px;margin:0 2px 2px '+(i?'2px':'0')+';border:0;border-radius:8px;background:'+(x.d===today?'#EFF6FF':'#F8FAFC')+';font:700 11px inherit;color:#0F1B3D;cursor:pointer">'
-          + dLbl(x.d)+'<span class="wx-pl" style="background:'+pill[0]+';color:'+pill[1]+'">'+pill[2]+(x.S&&x.S.wave!=null?(' '+x.S.wave+' m'):'')+'</span>'
-          + (m ? '<span title="'+wxE(m[1])+'" style="width:16px;height:16px;border-radius:8px;background:'+m[2]+';color:#fff;font-size:9px;display:inline-flex;align-items:center;justify-content:center">'+(WX_DEC_IC[m[0]]||'')+'</span>' : '')+'</button>'; }).join('');
-    var row = function(label, fn){ return '<span style="'+lab+'">'+label+'</span>' + D.map(function(x){ return x.pick.map(function(c, i){ return '<span style="'+cell(i)+'padding:1px 1px;'+(c?'':'color:#CBD5E1;text-align:center;font-size:10px')+'">'+(c ? fn(c, x) : (x.hrs.length?'':'…'))+'</span>'; }).join(''); }).join(''); };
-    var g = '<div class="wx-sg" style="flex:1;min-width:0;padding:8px 14px 10px;grid-template-columns:68px repeat('+cols+',minmax(0,1fr));row-gap:0">'
-      + '<span></span>' + heads
-      + row('เวลา', function(c, x){ return '<span style="display:block;text-align:center;font-size:11px;font-weight:700;color:'+(x.d===today && c.h===nowH ? '#DC2626' : '#64748B')+'">'+(c.h<10?'0':'')+c.h+'</span>'; })
-      + row('', function(c){ return '<span style="display:flex;justify-content:center">'+wxSkySvg(wxHrSky(c),22)+'</span>'; })
-      + row('อุณหภูมิ °C', function(c){ return '<span style="display:block;'+mono+'font-size:12.5px">'+(c.temp==null?'—':Math.round(c.temp)+'°')+'</span>'; })
-      + row('รู้สึกเหมือน', function(c){ return '<span style="display:block;'+mono+'font-weight:500;color:#64748B;padding:1px 0">'+(c.feels==null?'—':Math.round(c.feels)+'°')+'</span>'; })
-      + row(wxIco('rain','#2563EB',12)+'ฝน mm', function(c){ var r = +c.rain||0; return '<span style="display:block;'+mono+'font-size:11px;color:#2563EB;background:'+(r>=0.1?'rgba(37,99,235,'+Math.min(0.25,0.06+r*0.03)+')':'transparent')+';border-radius:5px">'+(r>=0.1?Math.round(r*10)/10:'')+'</span>'; })
-      + row(wxIco('wave','#0EA5E9',12)+'คลื่น m', function(c){ var w = wxWaveC(pt, c.wave); return '<span style="display:block;'+mono+'font-size:12.5px;background:'+w[0]+';color:'+w[1]+';border-radius:5px">'+(c.wave==null?'—':c.wave.toFixed(1))+'<span style="font-size:8.5px;font-weight:500;color:'+((c.per!=null&&c.per<=5)?'#B91C1C':'#94A3B8')+'"> /'+(c.per==null?'—':Math.round(c.per))+'s</span></span>'; })
-      + row(wxIco('wind','#14B8A6',12)+'ลม kt', function(c){ return '<span style="display:block;'+mono+'background:'+wxWindBg(c.wind||0)+';border-radius:5px">'+(c.wind==null?'—':Math.round(c.wind))+'</span>'; })
-      + row('กระโชก kt', function(c){ var g = c.gust||0; return '<span style="display:block;'+mono+'font-weight:500;color:'+(g>=(pt.wind||25)?'#B91C1C':'#475569')+';background:'+(g>=20?'rgba(245,158,11,.18)':'transparent')+';border-radius:5px">'+(c.gust==null?'—':Math.round(c.gust))+'</span>'; })
-      + row('ทิศลม', function(c){ return '<span style="display:flex;justify-content:center;padding:2px 0" title="ลมพัดไปทาง '+wxDirTxt(((c.dir||0)+180)%360)+'"><svg width="13" height="13" viewBox="0 0 24 24" style="transform:rotate('+(((c.dir||0)+180)%360)+'deg)" aria-hidden="true"><path d="M12 3l6 16-6-4-6 4z" fill="#5B6B8C"/></svg></span>'; })
-      + '</div>';
-    return '<div style="display:flex;border-top:1px solid #EEF1F5">'+left+g+'</div>';
+    var short = wxE(pt.name.split(' · ')[0]), h0 = (pt.hours||[6,15])[0], h1 = (pt.hours||[6,15])[1];
+    var left = '<div style="width:140px;flex:none;padding:14px 10px 10px 12px;background:#F8FAFC;border-right:1px solid #E2E8F0;border-left:6px solid '+(WX_PT_C[pt.id]||'#64748B')+'">'
+      + '<b style="font-size:16px;display:block">'+short+'</b><span style="font-size:10.5px;color:#64748B;display:block">'+wxE(pt.name.split(' · ')[1]||'')+'</span>'
+      + '<span style="font-size:10px;color:#94A3B8">ช่วงออกเรือ '+(h0<10?'0':'')+h0+'–'+h1+' น.</span></div>';
+    var blocks = days.map(function(d){
+      var b = wxBest(pt.id, d), S = b ? b.S : null, hrs = wxHours(pt, d, true) || [];
+      var pick = hours.map(function(h){ return hrs.filter(function(x){ return x.h===h; })[0] || null; });
+      var lv = S ? wxLevel(pt, S) : 'none', ac = AC[lv];
+      var dec = WX.dec[pt.id+'|'+d], m = dec && dec.decision ? wxDecMeta(dec.decision) : null;
+      var an = S ? wxAnalyse(pt, d, S, hrs) : null;
+      var cellBg = function(h){ return (h >= h0 - 1 && h <= h1 + 1) ? '#FFFBEB' : (h < 6 || h >= 19) ? '#EEF2F9' : '#fff'; };
+      var row = function(i, fn){ return '<div style="display:grid;grid-template-columns:repeat(8,1fr);'+R(i)+'">' + pick.map(function(c, k){ var h = hours[k];
+          return '<div style="background:'+cellBg(h)+';display:flex;align-items:center;justify-content:center;position:relative;min-width:0'+(d===today && h===nowH-((nowH-1)%3) ? ';box-shadow:inset 2px 0 0 #E8907A' : '')+'">'+(c ? fn(c, h) : (hrs.length ? '' : '<span style="color:#CBD5E1;font-size:10px">…</span>'))+'</div>'; }).join('') + '</div>'; };
+      var head = '<button type="button" onclick="wxPopGo(\''+d+'\')" title="ดูรายชั่วโมง" style="width:100%;height:26px;border:0;border-bottom:1px solid #CBD5E1;background:#fff;display:flex;align-items:center;gap:7px;padding:0 10px;font:700 12.5px inherit;color:#1F2937;cursor:pointer;text-align:left">'
+        + dLbl(d)+'<span style="width:9px;height:9px;border-radius:5px;background:'+ac[2]+';flex:none"></span>'
+        + (d===today ? '<span style="font-size:10px;color:#2563EB;font-weight:700">วันนี้</span>' : d===tmr ? '<span style="font-size:10px;color:#64748B">พรุ่งนี้</span>' : '')
+        + (S && S.wave!=null ? '<span style="margin-left:auto;font:600 10.5px \'DM Mono\',monospace;color:'+ac[1]+'">'+S.wave+' m</span>' : '')
+        + (m ? '<span title="'+wxE(m[1])+'" style="width:16px;height:16px;border-radius:8px;background:'+m[2]+';color:#fff;font-size:9px;display:inline-flex;align-items:center;justify-content:center;flex:none">'+(WX_DEC_IC[m[0]]||'')+'</span>' : '')+'</button>';
+      var body = row(0, function(c){ return '<span style="font-size:11px;color:#4B5563">'+c.h+'</span>'; })
+        + row(1, function(c){ return wxSkySvg(wxHrSky(c), 26); })
+        + row(2, function(c){ return '<b style="font-size:13px">'+(c.temp==null?'—':Math.round(c.temp)+'°')+'</b>'; })
+        + row(3, function(c){ var r = +c.rain||0; return (r>=0.1 ? '<span style="position:absolute;left:0;right:0;bottom:0;height:'+Math.min(100, 25+r*15)+'%;background:#CFE6FA;opacity:.8"></span><span style="position:relative;font-size:11px;color:#1D4ED8;font-weight:600">'+(Math.round(r*10)/10)+'</span>' : ''); })
+        + row(4, function(c){ var w = wxWaveC(pt, c.wave); return '<span style="width:calc(100% - 2px);line-height:22px;text-align:center;border-radius:4px;background:'+w[0]+';color:'+w[1]+';font:600 11.5px \'DM Mono\',monospace;white-space:nowrap;letter-spacing:-.3px">'+(c.wave==null?'—':c.wave.toFixed(1))+'<span style="font-size:8px;font-weight:500;color:'+((c.per!=null&&c.per<=5)?'#B91C1C':'#94A3B8')+'"> /'+(c.per==null?'—':Math.round(c.per))+'s</span></span>'; })
+        + row(5, function(c){ return '<b style="font-size:13px">'+(c.wind==null?'—':Math.round(c.wind))+'</b>'; })
+        + row(6, function(c){ return '<span style="width:100%;line-height:20px;text-align:center;background:'+wxGustBg(c.gust)+';font-size:11.5px;color:'+((c.gust||0)>=(pt.wind||25)?'#B91C1C':'#1F2937')+'">'+(c.gust==null?'—':Math.round(c.gust))+'</span>'; })
+        + row(7, function(c){ return '<svg width="14" height="14" viewBox="0 0 24 24" style="transform:rotate('+(((c.dir||0)+180)%360)+'deg)"><title>ลมพัดไปทาง '+wxDirTxt(((c.dir||0)+180)%360)+'</title><path d="M12 2l7 18-7-4-7 4z" fill="#4F6B95"/></svg>'; })
+        + '<div style="'+R(8)+'padding:3px 4px 0">'+(an ? '<div style="height:40px;background:'+AC[an.lv][0]+';border-radius:7px;padding:4px 8px 4px 20px;position:relative;line-height:1.45;overflow:hidden" title="'+wxE(an.l1+' — '+an.l2)+'"><span style="position:absolute;left:7px;top:8px;width:8px;height:8px;border-radius:4px;background:'+AC[an.lv][2]+'"></span>'
+            + '<div style="font-size:11px;font-weight:700;color:'+AC[an.lv][1]+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+wxE(an.l1)+'</div><div style="font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+wxE(an.l2)+'</div></div>'
+            : '<div style="height:40px;border:1px dashed #E2E8F0;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#94A3B8">ยังไม่มีพยากรณ์</div>')+'</div>';
+      return '<div style="flex:1;min-width:0;border:2px solid #94A3B8;border-radius:6px;overflow:hidden;background:#fff">'+head+body+'</div>';
+    }).join('');
+    return '<div style="display:flex;border-top:8px solid #E8EDF4">'+left+labels+'<div style="flex:1;min-width:0;display:flex;gap:10px;padding:10px 12px 10px 0">'+blocks+'</div></div>';
   }).join('');
 }
 function wxPopRows(date, piers){
