@@ -2622,7 +2622,7 @@ async function wxHas(ptId, ymd, kind){
 // Scheduler · checked every 10 min against Bangkok time · each slot runs once per day (guarded by wxHas).
 //   17:00–18:59 D-1 → fc17 for tomorrow · 05:00–06:59 → fc05 for today · 02:00–03:59 → hist for D-2 and D-3
 let _wxBusy = false;
-/* §wx5d · kind 'fc' = rolling outlook, today..+5, refreshed every ~6 h (fc05 / fc17 stay frozen snapshots of what the
+/* §wx5d · kind 'fc' = rolling outlook, today..+5, refreshed every ~3 h (fc05 / fc17 stay frozen snapshots of what the
    office decided on) · returns the dates it (re)fetched */
 const WX_OUTLOOK_DAYS = 5;
 async function wxStale(ptId, ymd, kind, maxH){
@@ -2633,7 +2633,7 @@ async function wxOutlook(force){
   const { ymd } = wxBkk(); const P = wxPoints(); const out = {};
   for(let n = 0; n <= WX_OUTLOOK_DAYS; n++){ const d = wxAddDays(ymd, n);
     for(const pt of P){
-      try{ if(!force && !(await wxStale(pt.id, d, 'fc', 5))) continue; await wxStore(pt, d, 'fc'); (out[d] = out[d] || []).push(pt.id); }
+      try{ if(!force && !(await wxStale(pt.id, d, 'fc', 2))) continue; await wxStore(pt, d, 'fc'); (out[d] = out[d] || []).push(pt.id); }
       catch(e){ console.warn(`[wx] fc ${pt.id} ${d} failed: ${e.message}`); (out[d] = out[d] || []).push(pt.id + ':' + e.message); }
     } }
   return out;
@@ -2642,7 +2642,7 @@ async function wxTick(){
   if(!pool || _wxBusy) return; _wxBusy = true;
   try{
     const { ymd, hour } = wxBkk(); const P = wxPoints();
-    if(hour % 6 === 5) { try{ await wxOutlook(false); }catch(e){ console.warn('[wx] outlook', e.message); } }   // 05 · 11 · 17 · 23
+    if(hour % 3 === 2) { try{ await wxOutlook(false); }catch(e){ console.warn('[wx] outlook', e.message); } }   // §wxLatest · 02 05 08 11 14 17 20 23 · the card for today follows this
     const jobs = [];
     if(hour >= 17 && hour < 19) jobs.push([wxAddDays(ymd, 1), 'fc17']);
     if(hour >= 5  && hour < 7)  jobs.push([ymd, 'fc05']);

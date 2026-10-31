@@ -22,10 +22,13 @@ function wxRoutesOf(pt){ return (typeof ROUTES!=='undefined'?ROUTES:[]).filter(f
 function wxBest(ptId, date){
   var o = (WX.obs[ptId]||{})[date]; if(!o) return null;
   var past = date < wxToday();
-  var k = past ? (o.hist ? 'hist' : o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : 'fc') : (o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : o.fc ? 'fc' : 'hist');   /* §wx5d · fc = rolling outlook */
+  /* §wxLatest · today and ahead: the freshest forecast (fc, refreshed every 3 h) · fc05 / fc17 are kept only as the
+     record of what the office saw when it decided (history uses them) · past days: the analysed actual */
+  var k = past ? (o.hist ? 'hist' : o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : 'fc') : (o.fc ? 'fc' : o.fc05 ? 'fc05' : o.fc17 ? 'fc17' : 'hist');
   return o[k] ? { kind:k, S:o[k].summary||{}, at:o[k].taken_at } : null;
 }
-function wxKindTxt(k){ return k==='hist' ? 'ข้อมูลจริง (วิเคราะห์หลังวัน)' : k==='fc05' ? 'พยากรณ์ 05:00 วันออกเรือ' : k==='fc' ? 'พยากรณ์ล่วงหน้า (อัปเดตทุก 6 ชม.)' : 'พยากรณ์ 17:00 วันก่อน'; }
+function wxHM(iso){ if(!iso) return ''; var d = new Date(iso); if(isNaN(d)) return String(iso).slice(11,16); var h = d.getHours(), m = d.getMinutes(); return (h<10?'0':'')+h+':'+(m<10?'0':'')+m; }   /* local time, not UTC */
+function wxKindTxt(k){ return k==='hist' ? 'ข้อมูลจริง (วิเคราะห์หลังวัน)' : k==='fc05' ? 'พยากรณ์ 05:00 วันออกเรือ' : k==='fc' ? 'พยากรณ์ล่าสุด (อัปเดตทุก 3 ชม.)' : 'พยากรณ์ 17:00 วันก่อน'; }
 function wxLevel(pt, S){
   if(!S || S.wave==null) return 'none';
   if(S.wave >= (pt.risk||2)) return 'risk';
@@ -297,8 +300,8 @@ function wxCardBody(date, piers){
     + '<button type="button" class="wx-hb ic" title="ดูรายชั่วโมงทุกเส้นทาง" aria-label="ดูรายชั่วโมงทุกเส้นทาง" onclick="wxOpenPop(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>'
     + '<button type="button" class="wx-hb ic" title="ดึงพยากรณ์ตอนนี้" aria-label="ดึงพยากรณ์ตอนนี้" onclick="wxFetchNow(\''+date+'\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg></button>';
   var P0 = (WX.pts||[]).filter(function(p){ return !piers || !piers.length || piers.indexOf(p.pier)>=0; });
-  var kinds = {}; P0.forEach(function(p){ var b=wxBest(p.id,date); if(b) kinds[b.kind]=1; });
-  var sub = 'สรุปช่วงออกเรือ · '+(kinds.hist?'ข้อมูลจริง':kinds.fc05?'พยากรณ์ 05:00':kinds.fc17?'พยากรณ์ 17:00 วันก่อน':'ยังไม่มีข้อมูล');
+  var kinds = {}, fcAt = ''; P0.forEach(function(p){ var b=wxBest(p.id,date); if(b){ kinds[b.kind]=1; if(b.kind==='fc' && b.at > fcAt) fcAt = b.at; } });
+  var sub = 'สรุปช่วงออกเรือ · '+(kinds.hist?'ข้อมูลจริง':kinds.fc?('พยากรณ์ล่าสุด '+wxHM(fcAt)):kinds.fc05?'พยากรณ์ 05:00':kinds.fc17?'พยากรณ์ 17:00 วันก่อน':'ยังไม่มีข้อมูล');
   var head = WX_CSS + wxHeadHtml(date, sub, expBtn, true);
   if(!WX.pts) return head+'<div class="wx-rw" style="font-size:11px;color:#64748B">กำลังโหลด…</div>';
   if(!P0.length) return head+'<div class="wx-rw" style="font-size:11px;color:#64748B">ยังไม่ได้ตั้งจุดพยากรณ์ของท่านี้</div>';
@@ -488,7 +491,7 @@ function wxDecisionHtml(pt, date){
   var chips = WX_DEC.map(function(d){ var on = dec.decision===d[0];
     return '<button type="button" onclick="wxDecide(\''+pt.id+'\',\''+date+'\',\''+d[0]+'\')" style="height:24px;padding:0 9px;border-radius:12px;border:1px solid '+(on?d[2]:'#D7DBE2')+';background:'+(on?d[2]:'#fff')+';color:'+(on?'#fff':'#1A2A33')+';font:600 10px inherit;cursor:pointer">'+d[1]+'</button>'; }).join('');
   return '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #E3E7EE">'
-    + '<div style="font-size:9.5px;color:#6B7785;margin-bottom:5px">บันทึกการตัดสินใจ · '+wxE(pt.name.split(' · ')[0])+(dec.decision?(' · <b style="color:#1A2A33">'+wxDecTxt(dec.decision)+'</b> · '+wxE(dec.by_user||'')+' '+(dec.at?String(dec.at).slice(11,16):'')):'')+'</div>'
+    + '<div style="font-size:9.5px;color:#6B7785;margin-bottom:5px">บันทึกการตัดสินใจ · '+wxE(pt.name.split(' · ')[0])+(dec.decision?(' · <b style="color:#1A2A33">'+wxDecTxt(dec.decision)+'</b> · '+wxE(dec.by_user||'')+' '+wxHM(dec.at)):'')+'</div>'
     + '<div style="display:flex;gap:4px;flex-wrap:wrap">'+chips+'</div>'
     + '<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="wx-why-'+wxE(pt.id)+'" value="'+wxE(dec.reason||'')+'" placeholder="เหตุผล / สิ่งที่เห็น (ไม่บังคับ)" style="flex:1;height:26px;border:1px solid #D7DBE2;border-radius:7px;padding:0 8px;font:11px inherit">'
     + (dec.decision ? '<button type="button" class="bo-btn" style="padding:0 10px;font-size:10px;height:26px" onclick="wxDecide(\''+pt.id+'\',\''+date+'\',\''+dec.decision+'\')">บันทึกเหตุผล</button><button type="button" class="bo-btn" style="padding:0 8px;font-size:10px;height:26px" title="ลบการตัดสินใจ" onclick="wxDecide(\''+pt.id+'\',\''+date+'\',\'\')">✕</button>' : '')
@@ -546,7 +549,7 @@ function wxDecChip(pt, date){
     : '<button type="button" class="wx-chip" onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')">ตัดสินใจ ▾</button>';
   return '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;min-width:0">'+chip
     + (dec.reason ? '<span style="font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="'+wxE(dec.reason)+'">“'+wxE(dec.reason)+'”</span>' : '')
-    + (dec.by_user ? '<span style="margin-left:auto;font-size:9px;color:#94A3B8;white-space:nowrap">'+wxE(dec.by_user)+' '+(dec.at?String(dec.at).slice(11,16):'')+'</span>' : '')
+    + (dec.by_user ? '<span style="margin-left:auto;font-size:9px;color:#94A3B8;white-space:nowrap">'+wxE(dec.by_user)+' '+wxHM(dec.at)+'</span>' : '')
     + '</div>' + wxTbLines(pt, date);
 }
 /* D · bar in the popup's left column */
@@ -559,7 +562,7 @@ function wxDecBar(pt, date){
   var bg = WX_DEC_BG[m[0]] || ['#F8FAFC','#E2E8F0'];
   return '<button type="button" class="wx-dbar" '+(canDecide?'onclick="wxDecMenu(this,\''+pt.id+'\',\''+date+'\')"':'disabled')+' style="background:'+bg[0]+';border-color:'+bg[1]+'">'
     + '<span style="background:'+m[2]+'">'+(WX_DEC_IC[m[0]]||'')+'</span><span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;background:none;width:auto;height:auto;border-radius:0">'
-    + '<b style="color:'+m[2]+'">'+m[1]+'</b><i>'+(dec.reason?('“'+wxE(dec.reason)+'” · '):'')+wxE(dec.by_user||'')+' '+(dec.at?String(dec.at).slice(11,16):'')+'</i></span></button>' + wxTbLines(pt, date);
+    + '<b style="color:'+m[2]+'">'+m[1]+'</b><i>'+(dec.reason?('“'+wxE(dec.reason)+'” · '):'')+wxE(dec.by_user||'')+' '+wxHM(dec.at)+'</i></span></button>' + wxTbLines(pt, date);
 }
 /* the menu · one floating panel at a time */
 function wxDecMenuClose(){ var m = document.getElementById('wx-decmenu'); if(m) m.remove(); document.removeEventListener('mousedown', wxDecMenuOut, true); }
@@ -838,7 +841,7 @@ function wxPopRender(){
   var head = '<div class="wx-hd" style="padding:14px 18px;gap:12px;flex-wrap:wrap">'
     + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>'
     + (five
-        ? '<div><b style="font-size:16px">พยากรณ์ทะเล 5 วัน · '+dt.getDate()+' '+MON[dt.getMonth()]+' – '+(function(){ var e=new Date(wxAddDays(date,4)+'T12:00:00'); return e.getDate()+' '+MON[e.getMonth()]; })()+'</b><i>ทั้งวัน ทุก 3 ชม. · สีเหลืองอ่อน = ช่วงออกเรือ · กดหัววันเพื่อดูรายชั่วโมง · อัปเดตทุก 6 ชม.</i></div>'
+        ? '<div><b style="font-size:16px">พยากรณ์ทะเล 5 วัน · '+dt.getDate()+' '+MON[dt.getMonth()]+' – '+(function(){ var e=new Date(wxAddDays(date,4)+'T12:00:00'); return e.getDate()+' '+MON[e.getMonth()]; })()+'</b><i>ทั้งวัน ทุก 3 ชม. · สีเหลืองอ่อน = ช่วงออกเรือ · กดหัววันเพื่อดูรายชั่วโมง · อัปเดตทุก 3 ชม.</i></div>'
         : '<div><b style="font-size:16px">สภาพทะเลรายชั่วโมง · '+WD[dt.getDay()]+' '+dt.getDate()+' '+MON[dt.getMonth()]+'</b><i>จุดพยากรณ์กลางทะเลของแต่ละเส้นทาง · ลูกศร = ลมพัดไปทาง · /5s = คาบคลื่น</i></div>')
     + '<div class="wx-pgrp">'+seg(five,'5 วัน','wxPopView(\'days\')')+seg(!five,'รายชั่วโมง','wxPopView(\'day\')')+'</div>'
     + '<div class="wx-pgrp">'+seg(false,'‹ '+dPrev.getDate(),'wxPopDay(-1)')+seg(true,(date===today?'วันนี้ ':'')+dt.getDate(),'')+seg(false,dNext.getDate()+' ›','wxPopDay(1)')+'</div>'
