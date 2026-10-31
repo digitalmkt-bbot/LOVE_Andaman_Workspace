@@ -35,6 +35,7 @@ const osRepo  = require('./os-backend/src/mapping/os_repo.js');
 const apiProxy= require('./api-proxy.js');   // backend switch · inert unless API_PROXY_URL is set
 const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
 const b2cCat  = require('./b2c-catalog.js'); // B2C → ops programme catalog · inert unless B2C_API_KEY is set
+const b2cV1   = require('./b2c-v1-availability.js'); // GET /v1/availability · operation-backend's contract · inert unless B2C_API_KEY is set
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
@@ -3465,6 +3466,13 @@ const server = http.createServer((req, res) => {
       J(res, 200, { route: routeId, dateFrom, dateTo, dates, pricing });
     }).catch(e => J(res, 500, { error: e.message }));
     return;
+  }
+
+  // ───── GET /v1/availability (no session — same X-Api-Key as above) ─────
+  // operation-backend's call on operation-backend's contract, so Love Kingdom moves host and nothing
+  // else when bookings do. Not /api/v1: that is the REST surface, which can delete bookings.
+  if (b2cV1.matches(u)) {
+    return b2cV1.handle(req, res, q, { pool, fqt, qic, J, dataBackend: DATA_BACKEND });
   }
 
   // ───── B2C catalog API (no session — same X-Api-Key as availability above) ─────
