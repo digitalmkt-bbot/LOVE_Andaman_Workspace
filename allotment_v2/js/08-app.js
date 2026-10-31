@@ -5675,7 +5675,9 @@ function laBlobSave(){
 // so either area that legitimately writes this table can persist it.
 function acctCanEditBookings(){ return (typeof window.laCanEditArea!=='function') || window.laCanEditArea('operations') || window.laCanEditArea('accounting'); }
 function acctPersistBookings(){ if(!acctCanEditBookings()) return;
-  if(typeof baChMemoClear==='function') baChMemoClear();   // §boatSplit · ข้อมูลเปลี่ยนแล้ว แคชเรือเหมาต้องหมดอายุทันที
+  if(typeof baChMemoClear==='function') baChMemoClear();
+  if(typeof gscIdxClear==='function') gscIdxClear();   /* §gscIdx */
+  if(typeof tcxBanMemoClear==='function') tcxBanMemoClear();   /* §tcxLazy */   // §boatSplit · ข้อมูลเปลี่ยนแล้ว แคชเรือเหมาต้องหมดอายุทันที
   try{ laBlob().sb_bookings=SB_BOOKINGS; laBlobSave(); }catch(e){ console.warn('persist sb_bookings failed',e);} }
 
 const ACCT_PAID_STATES = ['cancelled','rejected','cancelled_weather'];
@@ -14694,6 +14696,8 @@ function ckGuard(){
   return false;
 }
 function ckPersist(){
+  if(typeof gscIdxClear==='function') gscIdxClear();   /* §gscIdx */
+  if(typeof tcxBanMemoClear==='function') tcxBanMemoClear();   /* §tcxLazy */
   if(!ckCanEdit()) return false;
   try{ if(typeof baChMemoClear === 'function') baChMemoClear(); }catch(_){}
   try{ laBlob().sb_bookings = SB_BOOKINGS; laBlobSave(); return true; }
@@ -40891,6 +40895,22 @@ function tcxBelowList(routes){
     (routes||[]).forEach(r=>{ try{ const st=(typeof getDayStatus==='function')?getDayStatus(r,ds):null; if(st&&st.type==='closed') return; }catch(_){}
       const x=tcxBelow(r.id,ds); if(x) out.push(x); }); }
   return out;
+}
+/* §tcxLazy (2026-10-31) · the banner costs ~0.45 s (pxTrip for every boat of the next 3 days) and was computed
+   inline on every Boat Operation render · now: a placeholder is painted first, the banner fills in right after
+   (setTimeout 0), and the result is kept for 20 s · any booking / check-in persist drops it (gscIdxClear hooks). */
+var _tcxBanMemo = null;
+function tcxBanMemoClear(){ _tcxBanMemo = null; }
+function tcxBelowBannerLazy(routes){
+  const ids = (routes||[]).map(r => r && r.id).join(',');
+  if(_tcxBanMemo && _tcxBanMemo.ids === ids && Date.now() - _tcxBanMemo.at < 20000) return _tcxBanMemo.html;
+  const id = 'tcx-ban-' + Date.now().toString(36);
+  setTimeout(function(){
+    let html = ''; try{ html = tcxBelowBanner(routes); }catch(_){ }
+    _tcxBanMemo = { ids:ids, at:Date.now(), html:html };
+    const el = document.getElementById(id); if(el) el.outerHTML = html;
+  }, 0);
+  return '<div id="'+id+'"></div>';
 }
 function tcxBelowBanner(routes){
   const L=tcxBelowList(routes); if(!L.length) return '';

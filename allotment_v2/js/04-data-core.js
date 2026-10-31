@@ -10435,7 +10435,7 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
       </div>
-      ${typeof tcxBelowBanner==='function'?tcxBelowBanner(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):''}
+      ${typeof tcxBelowBannerLazy==='function'?tcxBelowBannerLazy(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):(typeof tcxBelowBanner==='function'?tcxBelowBanner(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):'')}
       <div style="overflow-x:auto">
       <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="position:relative;--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
         <div class="bop2-cell bop2-cell-h">Route</div>
@@ -11201,9 +11201,39 @@ function bkIsCharterOvnLeg(bk, t){
         && (o.routeId||'')===(t.routeId||'') && (o.ovnReturnDate||'')===(t.date||'');
   });
 }
+/* §gscIdx (2026-10-31) · Boat Operation called getSeatsConsumed ~1,000× per render and each call walked all
+   9,000 bookings (≈1.1 s of a 2–7 s render). One pass builds seats per route|date; the index lives only for the
+   current synchronous tick (setTimeout 0 clears it) and is dropped on every persist, so nothing can go stale across
+   a user action. excludeBkId (booking editor) keeps the exact per-call path. */
+var _gscIdx = null;
+function gscIdxClear(){ _gscIdx = null; }
+function _gscIndex(){
+  if(_gscIdx) return _gscIdx;
+  const idx = {};
+  SB_BOOKINGS.forEach(bk => {
+    if(!bk || bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
+    if(!bkPendHoldsSeat(bk)) return;
+    if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
+      bk.trips.forEach(t => {
+        if(!t || !t.routeId || !t.date) return;
+        if(t.bookingMode === 'charter') return;
+        if(bkIsCharterOvnLeg(bk, t)) return;
+        let _seat = getTripPaxTotal(t);
+        if(typeof ckLostByType === 'function'){ const _L = ckLostByType(bk, t.date); if(_L && _L.total > 0) _seat = Math.max(0, _seat - _L.total); }
+        const k = t.routeId + '|' + t.date; idx[k] = (idx[k] || 0) + _seat;
+      });
+    } else if(bk.programId && bk.travelDate){
+      const p = bk.pax || {}; const k = bk.programId + '|' + bk.travelDate;
+      idx[k] = (idx[k] || 0) + (p.adult||0) + (p.child||0) + (p.infant||0);
+    }
+  });
+  _gscIdx = idx; setTimeout(gscIdxClear, 0);
+  return idx;
+}
 function getSeatsConsumed(routeId, dateStr, excludeBkId){
   if(!routeId || !dateStr) return 0;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
+  if(!excludeBkId) return _gscIndex()[routeId + '|' + dateStr] || 0;   /* §gscIdx */
   let total = 0;
   SB_BOOKINGS.forEach(bk => {
     if(excludeBkId && bk.id === excludeBkId) return;   // exclude the booking being edited (don't count its own seats against itself)
