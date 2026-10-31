@@ -8851,10 +8851,14 @@ function fcCell(b, ds, load, memo){
     c.k='run'; c.rid=r.id; c.rpier=r.pier||pier; c.color=r.color||'#94a3b8';
     c.routeFull=r.name||r.id;
     c.route=(typeof _calName==='function')?_calName(r):c.routeFull;
-    c.chr=!!(op.charterBookingId || op.type==='charter');
+    /* §fcChr (2026-10-31) · "Romeo เป็นไพรเวท ทำไมไปอยู่ปกติ" · a charter booking assigned to its boat through
+       ops.boatId (no trip.charterBoatId) never flips TRIPS to type 'charter' · baCharterBoatMapMemo already knows
+       it is a charter (same source getAllotment uses) → use it here too */
+    var _chBk = null; try{ if(typeof baCharterBoatMapMemo==='function') _chBk = baCharterBoatMapMemo(ds).get(b.id) || null; }catch(_){ }
+    c.chr=!!(op.charterBookingId || op.type==='charter' || _chBk);
     c.pax=(load[ds]&&load[ds][b.id])||0;
     if(c.chr){
-      try{ var bk=(SB_BOOKINGS||[]).find(function(z){ return z.id===op.charterBookingId; });
+      try{ var bk=(SB_BOOKINGS||[]).find(function(z){ return z.id===(op.charterBookingId||_chBk); });
            var a=bk&&bk.agentId&&typeof sbGetAgent==='function'?sbGetAgent(bk.agentId):null;
            c.ag=a?(a.code||a.name||''):((bk&&(bk.voucherRef||bk.code))||''); }catch(_){ c.ag=''; }
     }
