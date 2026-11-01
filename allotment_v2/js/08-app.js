@@ -56753,6 +56753,10 @@ function bkV2RenderTab2(){
       // Split a booking into one allocation row per van-split. Van Assign mode splits ALL splits; the
       // normal/read-only manifest also splits AUTO alt-pickup bookings (altSplitAuto) so รับหลายจุด shows
       // as a row per pickup point (same booking) — but NOT in Boat Assign mode (boat is per booking).
+      /* §chOwn (2026-11-01) · "อันนี้เป็นเดินทางเอง ทำไมเตือนให้จัดรถ" · ใบเหมาลำทุกใบอยู่โซน CHARTER
+         ไม่ว่าจะมีรถรับหรือไม่ · พอในโซนมีกรุ๊ปรถแล้ว ใบที่ตั้ง No Transfer ถูกนับเป็น "ยังไม่จัดรถ" ไปด้วย
+         อ่านโซนจริงของทริป (bkV2EffZone) · NoTransfer / NT = มาเองที่ท่า · ไม่ใช่งานรถ */
+      const _bkOwnRow=r=>{ try{ const z=r.charter ? ((typeof bkV2EffZone==='function' && r.t) ? bkV2EffZone(r.bk,r.t) : ((r.t&&r.t.zone)||r.bk.pickupZone||'')) : r.zone; return z==='NoTransfer'||z==='NT'; }catch(_){ return false; } };
       const _allocsOf=r=>{ const b=r.bk; const _o=bkOpsRead(b,date);
         /* §split rows · เดิมกางแถวเฉพาะโหมด Van หรือ split ที่มาจาก "รับหลายจุด" — split จาก "แยกคน"
            ถูกยุบเป็นแถวเดียวในหน้าปกติ คนอ่านเลยไม่เห็นว่าใครขึ้นคันไหน · ตอนนี้กางทุกแถว ยกเว้นโหมด Boat
@@ -56766,7 +56770,7 @@ function bkV2RenderTab2(){
         if((!boatMode || vanMode) && Array.isArray(_o.vanSplits) && _o.vanSplits.length){   /* §vanBoatBoth */ return _o.vanSplits.map((s,i)=>({r,idx:i,head:+s.pax||0,bd:bkSplitPax(s),g:+s.vanGroup||0,seq:+s.vanSeq||0,vanId:s.vanId||null,key:b.id+'@'+i,split:true,first:i===0,pick:{areaId:s.pickAreaId||'',hotel:s.pickHotel||'',zone:s.pickZone||'',who:s.altWho||'',main:!!s.main}})); } const _hasSp = Array.isArray(_o.vanSplits) && _o.vanSplits.length;
         const g  = _hasSp ? (+_o.vanSplits[0].vanGroup||0) : (+_o.vanGroup||0);
         const sq = _hasSp ? (+_o.vanSplits[0].vanSeq||0)   : (+_o.vanSeq||0);
-        return [{r,idx:-1,head:_pHead(r),g,seq:sq,vanId:_o.vanId||null,key:b.id,split:false,first:true}]; };
+        return [{r,idx:-1,head:_pHead(r),g,seq:sq,vanId:_o.vanId||null,key:b.id,split:false,first:true,own:(!_hasSp && _bkOwnRow(r))}]; };
       let alist=[]; list.forEach(r=>{ _allocsOf(r).forEach(a=>alist.push(a)); });
       /* §splitOwn · แถวมาเองออกจากโซนแม่ · โซน Own transportation รับแถวเหล่านั้นเข้ามา */
       const _spOf = a => (a.split && !a.bsplit && a.idx>=0) ? ((bkOpsRead(a.r.bk,date).vanSplits||[])[a.idx]||null) : null;
@@ -57146,7 +57150,7 @@ function bkV2RenderTab2(){
         const _rowStyle=_rgc?(vanMode?` style="background:${_rgc[0]};box-shadow:inset 4px 0 0 ${_rgc[1]}"`:` style="background:${_bkV2Soft(_rgc[0])}"`):(_selRow?' style="background:#EEF5FC"':(_bSelRow?' style="background:#E8F1FB;box-shadow:inset 5px 0 0 #185FA5"':(_boatRowStyle||_splitAccent)));
         const _ckLost=(!r.cxl && typeof ckLostByType==='function')?ckLostByType(bk,date):null;
         const _ckNsCls=(_ckLost && _ckLost.total>0)?' t2-cklost':'';   // §check-in · มีคนไม่ได้เดินทาง → ไฮไลต์แดง
-        const _unassignedCls=(_hasGroups && !a.g && !r.cxl)?' t2-unassigned':'';   // frame newly-added / not-yet-assigned bookings
+        const _unassignedCls=(_hasGroups && !a.g && !r.cxl && !a.own)?' t2-unassigned':'';   /* §chOwn · มาเองไม่ใช่ยังไม่จัดรถ */   // frame newly-added / not-yet-assigned bookings
         const _novanCls=(vanMode && a.g>0 && !_grpVan[a.g] && !r.cxl)?(' t2-novan'+(_novanLast[a.g]===a.key?' t2-novan-last':'')):'';   // red frame · group has no van picked yet (bottom border only on the last member → one big box, no internal lines)
         const _tbBadge=(typeof tbOf==='function' && tbOf(bk,date))?('<div class="t2-movedin" style="background:#FFF1DE;color:#7A4300;border-color:#F0C37A;cursor:pointer" onclick="event.stopPropagation();tbOpen(\''+esc(bk.id)+'\',\''+date+'\')" title="'+esc('ออกเรือแล้วกลับเข้าท่า · '+(TB_REASON[tbOf(bk,date).reason]||'')+(tbOf(bk,date).note?(' · '+tbOf(bk,date).note):'')+' · เงิน: '+tbMoneyLbl(tbOf(bk,date)))+'">&#9973; กลับเข้าท่า · '+esc(tbMoneyLbl(tbOf(bk,date)))+'</div>'):'';   /* §turnBack */
         const _movedBadge=(bk.rebook && bk.rebook.to===date)?`<div class="t2-movedin" title="Rescheduled from ${esc(bk.rebook.from)}${bk.rebook.reason==='weather'?' due to weather':(bk.reschedule&&bk.reschedule.reason?(' · '+esc(bk.reschedule.reason)):'')}">&#8617; Moved from ${esc(String(bk.rebook.from).slice(5))}${bk.rebook.reason==='weather'?' · weather':''}</div>`:'';   // shown in the Special-request column (its own line)
@@ -57257,7 +57261,9 @@ function bkV2RenderTab2(){
       let body='';
       /* §unBlock (2026-10-29) · owner "ปรับตัวที่ไม่ได้จัดรถให้เห็นชัดกว่านี้ ทั้ง Classic และ Compact · แถวแบบมุมโค้ง · เว้นช่องว่างบน-ล่าง · สีสดกว่านี้"
          หัว + แถวใบที่ยังไม่มีรถ = การ์ดเดียวกัน (มุมโค้ง 12px ขอบแดง ขีดซ้าย 6px) · spacer 16px ก่อนและหลัง · ปุ่มเข้าโหมดจัดรถ */
-      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g).length; const px=alist.filter(a=>!a.g).reduce((s,a)=>s+a.head,0);
+      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g&&!a.own).length; const px=alist.filter(a=>!a.g&&!a.own).reduce((s,a)=>s+a.head,0);
+        if(!n){ const on=alist.filter(a=>!a.g&&a.own), op=on.reduce((s,a)=>s+a.head,0);   /* §chOwn · เหลือแต่ใบมาเอง = หัวสีกลาง ไม่ใช่การ์ดแดง */
+          return `<tr class="t2-ownhd"><td colspan="${COLN}" style="background:#F5F2FB;box-shadow:inset 4px 0 0 #5B289A;padding:6px 12px;font-size:12px;color:#5B289A"><b>&#128694; ${laT('เดินทางเองที่ท่า')}</b> <span style="font-size:11px;opacity:.85">${on.length} booking · ${op} pax · ${laT('ไม่ต้องจัดรถ')}</span></td></tr>`; }
         return `<tr class="t2-unsp"><td colspan="${COLN}"></td></tr><tr class="t2-unhd"><td colspan="${COLN}"><span class="t">&#9888; ${laT('ยังไม่จัดรถ')}</span><span class="n">${n} booking · ${px} pax</span><span class="m">${laT('ลูกค้าจะไม่มีรถไปรับ — จับเข้ากลุ่มหรือเลือกรถก่อนปิดวัน')}</span>${vanMode?`<span class="h">${laT('เลือกรถในช่องรถของแถวด้านล่าง')}</span>`:`<button type="button" class="b" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">${laT('จัดรถให้ใบนี้')} &rarr;</button>`}</td></tr>`; };
       // Boat Assign · per-boat cluster header (mirrors the van group header · read-only · very light tint)
       const _boatHdrRow=(bid)=>{
