@@ -6648,128 +6648,288 @@ function renderBookingFlow(){
     </div>
   </div>`;
 }
+/* ══ §insBoat (2026-11-01) · หน้า Insurance ใหม่ · แยก เส้นทาง → เรือ · ตารางกระชับ ══
+   owner "วาดดีไซน์ ตารางหน้านี้ใหม่ทั้งหมด ขอแบบกระชับขึ้น แยกตามเรือด้วย" + "ดึงสีประจำเรือมาใช้" + สัญชาติเป็น dropdown
+   ที่เก็บเดิม (insurance_overrides · insSetField) ไม่เปลี่ยน · เรือ = bkOpsFor(b,ds).boatId · ไม่มีเรือ = กลุ่ม "ยังไม่จัดเรือ" ท้ายเส้นทาง
+   สัญชาติเก็บเป็นป้ายเต็ม "Thai · TH" (แบบเดียวกับฟอร์ม booking) · ใบพิมพ์จึงยังเขียนเต็มเหมือนเดิม · จอโชว์รหัส */
+let _insFilt='', _insFold={}, _insPrintBy='boat';
+const INS_NAT_TOP=['TH','RU','CN','IN','KR','GB','DE','US','AU','FR','IL','KZ'];
+function insNatAll(){ return (typeof bkV2AllNats==='function')?bkV2AllNats():[]; }
+function insNatCode(v){
+  v=String(v||'').trim(); if(!v) return '';
+  const ALL=insNatAll(), up=s=>String(s||'').toUpperCase();
+  const m=v.match(/·\s*([A-Za-z]{2,8})\s*$/);
+  if(m && ALL.some(n=>up(n.code)===up(m[1]))) return up(m[1]);
+  const lo=v.toLowerCase(); const n=ALL.find(n=>String(n.code).toLowerCase()===lo||String(n.name).toLowerCase()===lo);
+  if(n) return n.code;
+  if(/^(ไทย|thailand)$/i.test(v)) return 'TH';
+  return '';
+}
+function insBoatCap(bt){ return bt?(+(bt.capacity||bt.cap||bt.seats)||0):0; }
+function insBoatCol(bid){
+  if(!bid) return {fill:'#9AA0A6', bg:'#F1F0EB', text:'#5B616B'};
+  const c=(typeof getBoatColor==='function')?getBoatColor(bid):null;
+  const raw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
+  return {fill:(c&&c.fill)||raw, bg:(c&&c.bg&&c.bg!=='#F4F2EE')?c.bg:'#EEF4FB', text:(c&&c.text&&c.text!=='#666')?c.text:raw};
+}
+function insBoatsOf(g, ds){
+  const M={}, order=[];
+  g.bookings.forEach(b=>{
+    let bid=''; try{ const O=(typeof bkOpsFor==='function')?bkOpsFor(b,ds):null; bid=(O&&O.boatId)||''; }catch(_){}
+    const k=bid||'_none';
+    if(!M[k]){ const bt=(bid&&typeof getBoat==='function')?getBoat(bid):null;
+      M[k]={key:String(g.routeId)+'|'+k, rid:g.routeId, bid:bid, bt:bt, name:bt?(bt.name||bid):(bid||'ยังไม่จัดเรือ'), bookings:[]}; order.push(k); }
+    M[k].bookings.push(b);
+  });
+  return order.map(k=>M[k]).sort((a,b)=>((!a.bid)-(!b.bid)) || String(a.name).localeCompare(String(b.name)));
+}
+/* แถวของเรือหนึ่งลำ · ใช้ร่วมกันทั้งจอ ใบพิมพ์ และปุ่ม Review ทั้งลำ */
+function insBoatRows(bo, ds){
+  const out=[]; let pax=0, noAge=0, noNat=0, miss=0, done=0, rev=0;
+  bo.bookings.slice().sort((a,b)=>String(a.id||'').localeCompare(String(b.id||''))).forEach(b=>{
+    const pr=insBkPax(b);
+    const t=(b.trips||[]).find(t=>(t.date||'')===ds && t.routeId===bo.rid) || (b.trips||[]).find(t=>(t.date||'')===ds);
+    const hc=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):pr.length;
+    const gap=Math.max(0, hc-pr.length); miss+=gap;
+    pr.forEach((p,k)=>{
+      const sn=insSplitName(p.name);
+      const fn=insEff(b.id,p.key,'firstName',sn.f), ln=insEff(b.id,p.key,'lastName',sn.l);
+      const age=String(insEff(b.id,p.key,'age','')||'').trim();
+      const natV=insEff(b.id,p.key,'nat',insNatLabel(p.natCode));
+      const code=insNatCode(natV);
+      const o=insOv(b.id,p.key)||{};
+      const anyOv=insHas(b.id,p.key,'firstName')||insHas(b.id,p.key,'lastName')||insHas(b.id,p.key,'age')||insHas(b.id,p.key,'nat');
+      const ok=!!(age && code);
+      pax++; if(!age) noAge++; if(!code) noNat++; if(ok) done++; if(o.reviewed) rev++;
+      out.push({b:b, p:p, first:k===0, fn:fn, ln:ln, age:age, natV:natV, code:code, rev:!!o.reviewed, anyOv:anyOv, ok:ok, gapAfter:(k===pr.length-1)?gap:0});
+    });
+    if(!pr.length && gap) out.push({b:b, p:null, first:true, gapOnly:true, gapAfter:gap});
+  });
+  return {rows:out, pax:pax, noAge:noAge, noNat:noNat, miss:miss, done:done, rev:rev};
+}
+function insSetFilt(v){ _insFilt=String(v||''); renderInsurance(); }
+function insDomId(k){ return 'insb-'+String(k).replace(/[^A-Za-z0-9_-]/g,'_'); }
+function insFold(k){ _insFold[k]=!_insFold[k]; renderInsurance(); }
+function insJump(k){ if(_insFold[k]){ _insFold[k]=false; renderInsurance(); }
+  const el=document.getElementById(insDomId(k)); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
+function insReviewBoat(rid, bid){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  const g=insTripsForDate(_insDate).find(x=>String(x.routeId)===String(rid)); if(!g) return;
+  const bo=insBoatsOf(g,_insDate).find(x=>(x.bid||'')===(bid||'')); if(!bo) return;
+  const R=insBoatRows(bo,_insDate).rows.filter(r=>r.p);
+  const allOn=R.length && R.every(r=>r.rev);
+  const s=insEnsure();
+  R.forEach(r=>{ const k=insKey(r.b.id,r.p.key); const o=s[k]=s[k]||{}; o.reviewed=!allOn; o.at=Date.now(); });
+  insPersist(); renderInsurance();
+}
+function insAgeLive(el){
+  const v=String(el.value||'').replace(/[^0-9]/g,'').slice(0,3); if(v!==el.value) el.value=v;
+  el.style.borderColor=v?'#E2E0D8':'#EBA6A6'; el.style.background=v?'#fff':'#FFF5F5'; el.style.color=v?'#1F2937':'#A32D2D';
+}
+function insAgeKey(ev, el){
+  if(ev.key!=='Enter' && ev.key!=='ArrowDown' && ev.key!=='ArrowUp') return;
+  ev.preventDefault();
+  const L=[].slice.call(document.querySelectorAll('#insurance-host input.ins-age')); const i=L.indexOf(el);
+  const n=L[i+(ev.key==='ArrowUp'?-1:1)]; if(n){ n.focus(); n.select(); }
+}
+/* สัญชาติ · ป๊อปอัปเลือก พิมพ์ค้นได้ทั้งชื่อและรหัส · รายชื่อชุดเดียวกับฟอร์ม booking · ที่พบบ่อยขึ้นก่อน */
+function insNatClose(){ const d=document.getElementById('ins-natpop'); if(d) d.remove(); document.removeEventListener('mousedown', insNatOut, true); }
+function insNatOut(ev){ const d=document.getElementById('ins-natpop'); if(d && !d.contains(ev.target)) insNatClose(); }
+function insNatOpen(el, bkId, pk){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  insNatClose();
+  const r=el.getBoundingClientRect();
+  const d=document.createElement('div'); d.id='ins-natpop';
+  const top=(r.bottom+310>window.innerHeight)?Math.max(8,r.top-310):r.bottom+4;
+  d.style.cssText='position:fixed;z-index:9999;left:'+Math.max(8,Math.min(r.left-100, window.innerWidth-280))+'px;top:'+top+'px;width:270px;background:#fff;border:1px solid #D9DDE4;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:6px;font-family:inherit';
+  d.innerHTML='<input id="ins-natq" placeholder="ค้นหา เช่น th, czech" autocomplete="off" style="width:100%;box-sizing:border-box;border:1px solid #D9DDE4;border-radius:7px;padding:7px 9px;font-size:12.5px;font-family:inherit;margin-bottom:4px"><div id="ins-natl" style="max-height:260px;overflow:auto"></div>';
+  document.body.appendChild(d);
+  d._k=[bkId,pk]; d._a=0;
+  const q=d.querySelector('#ins-natq');
+  q.oninput=function(){ d._a=0; insNatList(); };
+  q.onkeydown=function(ev){
+    const L=d.querySelectorAll('.ins-nat-it');
+    if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ ev.preventDefault(); d._a=Math.max(0,Math.min(L.length-1,d._a+(ev.key==='ArrowDown'?1:-1))); insNatList(); }
+    else if(ev.key==='Enter'){ ev.preventDefault(); const it=L[d._a]||L[0]; if(it) insNatPick(it.getAttribute('data-c')); }
+    else if(ev.key==='Escape'){ insNatClose(); }
+  };
+  insNatList(); q.focus();
+  setTimeout(function(){ document.addEventListener('mousedown', insNatOut, true); }, 0);
+}
+function insNatList(){
+  const d=document.getElementById('ins-natpop'); if(!d) return;
+  const q=String(d.querySelector('#ins-natq').value||'').trim().toLowerCase();
+  const ALL=insNatAll();
+  const top=INS_NAT_TOP.map(c=>ALL.find(n=>n.code===c)).filter(Boolean);
+  const rest=ALL.filter(n=>INS_NAT_TOP.indexOf(n.code)<0);
+  let L=top.concat(rest);
+  if(q) L=L.filter(n=>String(n.name).toLowerCase().indexOf(q)>=0 || String(n.code).toLowerCase().indexOf(q)>=0)
+            .sort((a,b)=>((String(b.code).toLowerCase()===q)-(String(a.code).toLowerCase()===q)));
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  d.querySelector('#ins-natl').innerHTML = L.length ? L.slice(0,40).map((n,i)=>
+    '<div class="ins-nat-it" data-c="'+esc(n.code)+'" onmousedown="event.preventDefault();insNatPick(this.getAttribute(\'data-c\'))" style="display:flex;gap:10px;align-items:center;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;'+(i===d._a?'background:#EEF4FB':'')+'">'
+      +'<b style="min-width:34px;font-size:11.5px;color:#1B2A55">'+esc(n.code)+'</b><span>'+esc(n.name)+'</span></div>'
+    + (i===(top.length-1) && !q ? '<div style="border-top:1px solid #EEECE6;margin:3px 0"></div>' : '')).join('')
+    : '<div style="padding:8px;font-size:12px;color:#6B7280">ไม่พบ · เพิ่มสัญชาติใหม่ได้ที่ฟอร์ม booking</div>';
+  const a=d.querySelectorAll('.ins-nat-it')[d._a]; if(a) a.scrollIntoView({block:'nearest'});
+}
+function insNatPick(code){
+  const d=document.getElementById('ins-natpop'); if(!d) return;
+  const k=d._k; const lbl=(typeof bkV2NatDDLabel==='function' && bkV2NatDDLabel(code)) || code;
+  insSetField(k[0], k[1], 'nat', lbl); insNatClose(); renderInsurance();
+}
+
 function renderInsurance(){
   const host=document.getElementById('insurance-host'); if(!host) return;
+  insNatClose();
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ds=_insDate;
-  const dt=new Date(ds+'T00:00:00');
-  const dateLbl=isNaN(dt)?ds:dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-  const trips=insTripsShown(ds);   /* §insPier */
-  let totPax=0, totRev=0, totNoAge=0, totMissing=0;
-  const cards=trips.map(g=>{
-    g.bookings.sort((a,b)=>String(a.id||'').localeCompare(String(b.id||'')));
-    let tPax=0, tRev=0, tNoAge=0, tMiss=0;
-    let rowsHtml=''; let ri=0;
-    g.bookings.forEach(b=>{
-      const pr=insBkPax(b);
-      // expected head count for this trip vs listed names → travelers with no name entered (dropped at save · not insurable)
-      const _t=(b.trips||[]).find(t=>(t.date||'')===ds && t.routeId===g.routeId) || (b.trips||[]).find(t=>(t.date||'')===ds);
-      const _hc=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((_t&&_t.pax)||{}):pr.length;
-      if(_hc>pr.length) tMiss+=(_hc-pr.length);
-      pr.forEach(p=>{
-        const sn=insSplitName(p.name);
-        const fn=insEff(b.id,p.key,'firstName',sn.f);
-        const ln=insEff(b.id,p.key,'lastName',sn.l);
-        const ageV=insEff(b.id,p.key,'age','');
-        const natSrc=insNatLabel(p.natCode);
-        const natV=insEff(b.id,p.key,'nat',natSrc);
-        const rev=!!(insOv(b.id,p.key)||{}).reviewed;
-        const ageBlank=!(String(ageV).trim());
-        tPax++; if(rev)tRev++; if(ageBlank)tNoAge++;
-        const zt=ri%2?'#FAFAF7':'#FFFFFF'; ri++;
-        const dot=(field)=>`<span id="ins-dot-${field}-${e(b.id)}-${p.key}" title="override" style="display:${insHas(b.id,p.key,field)?'inline-block':'none'};width:7px;height:7px;border-radius:50%;background:#7F77DD;flex:none"></span>`;
-        const inp='padding:6px 8px;font-size:12px;width:100%;box-sizing:border-box;border:1px solid #DEDCD2;border-radius:7px;background:#fff;font-family:inherit';
-        const ageBox=ageBlank
-          ? `<div style="display:flex;align-items:center;gap:5px;border:1px solid #E24B4A;background:#FDECEC;border-radius:7px;padding:0 4px"><span style="color:#A32D2D;font-size:11px;padding-left:3px">!</span><input type="number" min="0" max="120" value="" placeholder="กรอก" oninput="insSetField('${e(b.id)}','${p.key}','age',this.value)" style="width:52px;border:0;background:transparent;font-size:12px;padding:6px 2px;text-align:center;font-family:inherit;color:#A32D2D"></div>`
-          : `<div style="display:flex;align-items:center;gap:4px;border:1px solid ${insHas(b.id,p.key,'age')?'#7F77DD':'#DEDCD2'};background:#fff;border-radius:7px;padding:0 6px"><input type="number" min="0" max="120" value="${e(ageV)}" oninput="insSetField('${e(b.id)}','${p.key}','age',this.value)" style="width:44px;border:0;background:transparent;font-size:12px;padding:6px 0;text-align:center;font-family:inherit;font-weight:700;color:#1B2A55">${dot('age')}</div>`;
-        const revCell=rev
-          ? `<button onclick="insToggleReviewed('${e(b.id)}','${p.key}')" style="display:inline-flex;align-items:center;gap:5px;background:#E1F5EE;color:#0F6E56;border:1px solid #B7E3D2;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; Reviewed</button>`
-          : `<button onclick="insToggleReviewed('${e(b.id)}','${p.key}')" style="display:inline-flex;align-items:center;gap:5px;background:#fff;color:#5F5E5A;border:1px solid #D6D4CA;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">Mark</button>`;
-        const anyOv=insHas(b.id,p.key,'firstName')||insHas(b.id,p.key,'lastName')||insHas(b.id,p.key,'age')||insHas(b.id,p.key,'nat');
-        rowsHtml+=`<div style="display:grid;grid-template-columns:32px 128px 1fr 1fr 118px 1.4fr 118px 30px;gap:0 10px;align-items:center;padding:7px 12px;background:${zt};border-top:0.5px solid #EEEDE6">
-          <div style="font-size:11px;color:#9a9a90;font-variant-numeric:tabular-nums">${ri}</div>
-          <div style="font-size:10.5px;color:#6a6a62">${e(b.voucherRef&&b.voucherRef!==p.name?b.voucherRef:(b.id||''))}${p.lead?' <span style="font-size:8.5px;font-weight:700;color:#0C447C;background:#E6F1FB;border-radius:4px;padding:1px 5px">lead</span>':''}</div>
-          <div style="display:flex;align-items:center;gap:5px"><input value="${e(fn)}" placeholder="First" oninput="insSetField('${e(b.id)}','${p.key}','firstName',this.value)" style="${inp}">${dot('firstName')}</div>
-          <div style="display:flex;align-items:center;gap:5px"><input value="${e(ln)}" placeholder="Last" oninput="insSetField('${e(b.id)}','${p.key}','lastName',this.value)" style="${inp}">${dot('lastName')}</div>
-          <div>${ageBox}</div>
-          <div style="display:flex;align-items:center;gap:5px"><input value="${e(natV)}" placeholder="Nationality" oninput="insSetField('${e(b.id)}','${p.key}','nat',this.value)" style="${inp}">${dot('nat')}</div>
-          <div style="text-align:center">${revCell}</div>
-          <div style="text-align:center">${anyOv?`<button onclick="insRevertRow('${e(b.id)}','${p.key}')" title="คืนค่าจาก Booking" style="border:0;background:transparent;color:#9a9a90;cursor:pointer;font-size:14px;padding:2px">&#8634;</button>`:''}</div>
-        </div>`;
+  const trips=insTripsShown(ds);
+  const F=_insFilt;
+  const G='32px 150px minmax(120px,210px) minmax(140px,250px) 60px 64px 44px minmax(0,1fr)';
+  const btn='border:1px solid #C7D6E6;background:#fff;color:#185FA5;border-radius:8px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap';
+  const pill=(bg,fg,t)=>`<span style="background:${bg};color:${fg};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">${t}</span>`;
+  let T={pax:0,noAge:0,noNat:0,miss:0,done:0,rev:0,boats:0};
+  let rail='', main='';
+  trips.forEach(g=>{
+    const boats=insBoatsOf(g,ds);
+    let rPax=0, rBk=g.bookings.length, boatHtml='', railB='';
+    boats.forEach(bo=>{
+      const S=insBoatRows(bo,ds); T.boats++;
+      T.pax+=S.pax; T.noAge+=S.noAge; T.noNat+=S.noNat; T.miss+=S.miss; T.done+=S.done; T.rev+=S.rev; rPax+=S.pax;
+      const col=insBoatCol(bo.bid), cap=insBoatCap(bo.bt), hc=S.pax+S.miss;
+      const did=insDomId(bo.key), fold=!!_insFold[bo.key];
+      const st=(S.pax && S.done===S.pax && !S.miss)?'#2E7D4F':(S.done?'#E3A008':'#D64545');
+      railB+=`<a onclick="insJump('${e(bo.key)}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;text-decoration:none">
+          <span style="width:10px;height:10px;border-radius:3px;background:${col.fill};flex:none"></span>
+          <span style="flex:1;font-weight:700;color:#1B2A55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(bo.name)}</span>
+          <span style="width:7px;height:7px;border-radius:50%;background:${st};flex:none" title="สถานะการกรอก"></span>
+          <span style="font-size:11px;color:#5B616B;font-variant-numeric:tabular-nums">${S.done}/${hc}</span></a>`;
+      /* แถวตามตัวกรอง */
+      let rowsHtml='', shown=0, i=0;
+      S.rows.forEach(r=>{
+        if(r.gapOnly){ if(!F||F==='name'){ shown++; rowsHtml+=gapRow(r); } return; }
+        i++;
+        const keep=!F || (F==='age'&&!r.age) || (F==='nat'&&!r.code) || (F==='name'&&r.gapAfter);
+        if(keep){ shown++;
+          const b=r.b, pk=r.p.key;
+          const natTxt=r.code || (String(r.natV||'').trim()?String(r.natV).trim():'?');
+          const natSty=r.code?'border:1px solid #E2E0D8;background:#fff;color:#334155':'border:1px solid #EBC58C;background:#FFF8EC;color:#8A5100';
+          const tick=r.rev?'background:#1F6B46;border:1px solid #1F6B46;color:#fff':(r.ok?'background:#E7F5EC;border:1px solid #9FD2B2;color:#1F6B46':'background:#fff;border:1px solid #D9DDE4;color:#C3C7CD');
+          const vch=(b.voucherRef&&b.voucherRef!==r.p.name)?b.voucherRef:(b.id||'');
+          const ag=(typeof sbGetAgent==='function'&&sbGetAgent(b.agentId))?(sbGetAgent(b.agentId).name||''):'';
+          rowsHtml+=`<div style="display:grid;grid-template-columns:${G};column-gap:8px;align-items:center;padding:0 14px;min-height:30px;border-bottom:1px solid #F3F2EE;${r.first?'border-top:1px solid #E2E0D8;':''}">
+            <span style="font-size:11px;color:#8A9099;font-variant-numeric:tabular-nums">${i}</span>
+            <span style="display:flex;flex-direction:column;line-height:1.2;min-width:0">${r.first?`<b style="font-size:11px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e(vch)}${r.p.lead?' <span style="font-size:8.5px;font-weight:700;color:#0C447C;background:#E6F1FB;border-radius:4px;padding:0 4px">lead</span>':''}</b><span style="font-size:10px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e(ag)}</span>`:''}</span>
+            <input class="ins-tx" value="${e(r.fn)}" placeholder="ชื่อ" oninput="insSetField('${e(b.id)}','${pk}','firstName',this.value)" style="border:1px solid transparent;background:transparent;border-radius:5px;padding:4px 6px;font-size:12.5px;font-family:inherit;color:#1F2937;min-width:0">
+            <input class="ins-tx" value="${e(r.ln)}" placeholder="นามสกุล" oninput="insSetField('${e(b.id)}','${pk}','lastName',this.value)" style="border:1px solid transparent;background:transparent;border-radius:5px;padding:4px 6px;font-size:12.5px;font-family:inherit;color:#1F2937;min-width:0">
+            <input class="ins-age" inputmode="numeric" value="${e(r.age)}" placeholder="–" oninput="insAgeLive(this);insSetField('${e(b.id)}','${pk}','age',this.value)" onkeydown="insAgeKey(event,this)" style="justify-self:center;width:46px;box-sizing:border-box;text-align:center;border-radius:6px;padding:3px 4px;font-size:12.5px;font-family:inherit;font-variant-numeric:tabular-nums;${r.age?'border:1px solid #E2E0D8;background:#fff;color:#1F2937':'border:1px solid #EBA6A6;background:#FFF5F5;color:#A32D2D'}">
+            <button onclick="insNatOpen(this,'${e(b.id)}','${pk}')" title="${e(r.natV||'เลือกสัญชาติ')}" style="justify-self:center;max-width:60px;min-width:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:6px;padding:2px 6px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;${natSty}">${e(natTxt)}</button>
+            <button onclick="insToggleReviewed('${e(b.id)}','${pk}')" title="${r.rev?'Review แล้ว · กดเพื่อยกเลิก':(r.ok?'ข้อมูลครบ · กดเพื่อ Review':'ยังไม่ครบ')}" style="justify-self:center;width:24px;height:24px;border-radius:6px;font-size:12px;cursor:pointer;padding:0;${tick}">&#10003;</button>
+            <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#6B7280;min-width:0">${r.anyOv?`<span style="width:7px;height:7px;border-radius:50%;background:#7F77DD;flex:none"></span><span style="white-space:nowrap">แก้ทับ</span><button onclick="insRevertRow('${e(b.id)}','${pk}')" title="คืนค่าจาก Booking" style="border:0;background:transparent;color:#6B7280;cursor:pointer;font-size:13px;padding:0 2px">&#8634;</button>`:''}</span>
+          </div>`;
+        }
+        if(r.gapAfter && (!F||F==='name')){ shown++; rowsHtml+=gapRow(r); }
       });
+      function gapRow(r){
+        return `<div style="display:grid;grid-template-columns:32px 150px minmax(0,1fr);column-gap:8px;align-items:center;padding:0 14px;min-height:26px;background:#FFF8EC;border-bottom:1px solid #F3F2EE;font-size:11.5px;color:#8A5100">
+          <span></span><span>${r.gapOnly?`<b style="font-size:11px;color:#334155">${e(r.b.voucherRef||r.b.id||'')}</b>`:''}</span>
+          <span>+ ยังไม่มีชื่อ ${r.gapAfter} คน · ประกันยังไม่ครอบคลุม <a onclick="bkV2OpenDetail('${e(r.b.id)}')" style="cursor:pointer;color:#185FA5;font-weight:700;margin-left:6px">เปิด booking</a></span></div>`;
+      }
+      if(F && !shown) return;   /* ตัวกรองแล้วไม่มีอะไรต้องทำ = ซ่อนลำ */
+      boatHtml+=`<section id="${did}" style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;overflow:hidden;margin-bottom:10px;scroll-margin-top:12px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 14px;background:${col.bg};border-left:5px solid ${col.fill};${fold?'':'border-bottom:1px solid #E7E5DD;'}">
+          <span style="font-size:14px;font-weight:800;color:${col.text}">${e(bo.name)}</span>
+          <span style="font-size:11.5px;color:#4B5160">${bo.bookings.length} booking · ${hc} คน${cap?(' / '+cap+' ที่'):''}</span>
+          ${S.noAge?pill('#FDECEC','#A32D2D','ขาดอายุ '+S.noAge):''}${S.miss?pill('#FFF1DB','#8A5100','ขาดชื่อ '+S.miss):''}${S.noNat?pill('#FFF1DB','#8A5100','ไม่มีสัญชาติ '+S.noNat):''}${(S.pax&&S.done===S.pax&&!S.miss)?pill('#E7F5EC','#1F6B46','ครบ'):''}
+          <span style="font-size:11px;color:#4B5160">review ${S.rev}/${S.pax}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+            <button onclick="insReviewBoat('${e(bo.rid)}','${e(bo.bid)}')" style="${btn}">&#10003; Review ทั้งลำ</button>
+            <button onclick="insPrint('${e(bo.rid)}','${e(bo.bid||'_none')}')" style="${btn}">&#128424; พิมพ์ลำนี้</button>
+            <button onclick="insFold('${e(bo.key)}')" title="${fold?'กาง':'พับ'}" style="border:0;background:transparent;color:#4B5160;cursor:pointer;font-size:13px;width:26px;height:26px">${fold?'&#9656;':'&#9662;'}</button>
+          </div>
+        </div>
+        ${fold?'':`<div style="overflow-x:auto"><div style="min-width:820px">
+          <div style="display:grid;grid-template-columns:${G};column-gap:8px;padding:5px 14px;font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">
+            <span>#</span><span>Booking</span><span>ชื่อ</span><span>นามสกุล</span><span style="text-align:center">อายุ</span><span style="text-align:center">สัญชาติ</span><span style="text-align:center">ครบ</span><span>หมายเหตุ</span></div>
+          ${rowsHtml||'<div style="padding:10px 14px;font-size:12px;color:#6B7280">ไม่มีรายชื่อ</div>'}
+        </div></div>`}
+      </section>`;
     });
-    totPax+=tPax; totRev+=tRev; totNoAge+=tNoAge; totMissing+=tMiss;
-    const pct=tPax>0?Math.round(tRev/tPax*100):0;
-    return `<div style="background:#fff;border:1px solid #E7E5DD;border-radius:14px;overflow:hidden;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-left:4px solid #185FA5;background:#F7FAFC;flex-wrap:wrap">
-        <div><div style="font-size:14px;font-weight:800;color:#1B2A55">${e(insRouteName(g.routeId))}</div><div style="font-size:11px;color:#8a8f93">${insPierCur()?'':(e(insPierLbl(insPierOf(g.routeId)))+' · ')}${e(dateLbl)} · ${g.bookings.length} booking</div></div>
-        <button onclick="insPrint('${e(g.routeId)}')" title="พิมพ์เฉพาะเส้นทางนี้" style="border:1px solid #C7D6E6;background:#fff;color:#185FA5;border-radius:8px;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#128424; พิมพ์เส้นทางนี้</button>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
-          <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#1B2A55;font-variant-numeric:tabular-nums">${tPax}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#9aa49c">pax</div></div>
-          <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:${tNoAge?'#A32D2D':'#0F6E56'};font-variant-numeric:tabular-nums">${tNoAge}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:${tNoAge?'#A32D2D':'#9aa49c'}">no age</div></div>
-          <div style="text-align:center" title="ผู้โดยสารที่ยังไม่ได้กรอกชื่อ (นับจากจำนวน pax เทียบกับรายชื่อ) — ประกันไม่ครบ"><div style="font-size:18px;font-weight:800;color:${tMiss?'#A05A1A':'#0F6E56'};font-variant-numeric:tabular-nums">${tMiss}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:${tMiss?'#A05A1A':'#9aa49c'}">missing name</div></div>
-          <div style="min-width:140px"><div style="display:flex;justify-content:space-between;font-size:10.5px;color:#6a6a62;margin-bottom:3px"><span>reviewed</span><span style="font-weight:700">${tRev} / ${tPax}</span></div><div style="height:7px;background:#EEECE4;border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#0F6E56"></div></div></div>
+    rail+=`<div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.03em;padding:8px 8px 3px">${e(insRouteName(g.routeId))}</div>${railB}`;
+    if(boatHtml) main+=`<div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 6px">
+        <h3 style="margin:0;font-size:14.5px;font-weight:800;color:#1B2A55">${e(insRouteName(g.routeId))}</h3>
+        <span style="font-size:11.5px;color:#6B7280">${insPierCur()?'':(e(insPierLbl(insPierOf(g.routeId)))+' · ')}${boats.length} ลำ · ${rPax} คน · ${rBk} booking</span>
+        <button onclick="insPrint('${e(g.routeId)}')" style="margin-left:auto;${btn}">&#128424; พิมพ์เส้นทางนี้</button></div>${boatHtml}`;
+  });
+  const seg=(v,l)=>`<button onclick="insSetFilt('${v}')" style="border:0;background:${F===v?'#fff':'transparent'};color:${F===v?'#1B2A55':'#5B616B'};box-shadow:${F===v?'0 1px 2px rgba(0,0,0,.12)':'none'};border-radius:7px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${l}</button>`;
+  const kp=(n,l,c)=>`<span style="color:${c};white-space:nowrap"><b style="font-size:18px;font-variant-numeric:tabular-nums">${n}</b> ${l}</span>`;
+  const pct=T.pax?Math.round(T.done/T.pax*100):0;
+  const pierNow=insPierCur();
+  host.innerHTML=`<div style="padding:4px 2px 30px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:34px;border-radius:9px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:17px">&#128737;</div>
+        <div><div style="font-size:18px;font-weight:800;color:#1B2A55">Insurance · passenger list</div><div style="font-size:12px;color:#6B7280">รีวิวอายุ + สัญชาติ · แก้ทับได้ · ไม่กระทบ Booking หลัก</div></div>
+      </div>
+      <div style="margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+        ${laDateBar(_insDate,'insDateShift','insToday','','insSetDate')}
+        ${insPierBar(_insDate,e)}
+        <div style="display:inline-flex;align-items:stretch;border-radius:9px;overflow:hidden;border:1px solid #185FA5">
+          <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของท่าที่เลือก" style="border:0;background:#185FA5;color:#fff;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์${pierNow?(' '+e(insPierLbl(pierNow))):'ทุกเส้นทาง'}</button>
+          <select onchange="_insPrintBy=this.value" title="รูปแบบใบพิมพ์" style="border:0;border-left:1px solid #4D86C0;background:#185FA5;color:#fff;font-size:12px;font-weight:700;font-family:inherit;padding:0 6px;cursor:pointer">
+            <option value="boat"${_insPrintBy==='boat'?' selected':''}>แยกตามเรือ</option><option value="route"${_insPrintBy==='route'?' selected':''}>ตามเส้นทาง</option></select>
         </div>
       </div>
-      <div style="overflow-x:auto"><div style="min-width:840px">
-        <div style="display:grid;grid-template-columns:32px 128px 1fr 1fr 118px 1.4fr 118px 30px;gap:0 10px;padding:8px 12px;border-bottom:1.5px solid #E5E2D8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#9a9a90">
-          <div>#</div><div>Booking</div><div>First name</div><div>Last name</div><div>Age</div><div>Nationality</div><div style="text-align:center">Reviewed</div><div></div>
-        </div>${rowsHtml}
-      </div></div>
-    </div>`;
-  }).join('');
-  const empty=`<div style="background:#fff;border:1px solid #E7E5DD;border-radius:14px;padding:40px;text-align:center;color:#9aa49c;font-size:13px">ไม่มีทริปในวันนี้</div>`;
-  const totPct=totPax>0?Math.round(totRev/totPax*100):0;
-  host.innerHTML=`<div style="max-width:100%;font-family:Manrope,-apple-system,system-ui,sans-serif">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;color:#185FA5;font-size:20px">&#128737;</div>
-        <div><div style="font-size:18px;font-weight:800;color:#1B2A55">Insurance · passenger list</div><div style="font-size:12px;color:#8a8f93">รีวิว อายุ + สัญชาติ ลูกค้าอีกรอบ · แก้ทับได้ · ไม่กระทบ Booking หลัก</div></div>
-      </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        ${laDateBar(_insDate,'insDateShift','insToday','','insSetDate')}
-        ${insPierBar(_insDate,e)}   <!-- §insPier -->
-        <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของท่าที่เลือก · หนึ่งเส้นทางต่อหนึ่งแผ่น" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์${insPierCur()?(' '+e(insPierLbl(insPierCur()))):'ทุกเส้นทาง'}</button>
-      </div>
     </div>
-    ${trips.length?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="flex:1;min-width:120px;background:#fff;border:1px solid #E7E5DD;border-radius:12px;padding:11px 15px"><div style="font-size:22px;font-weight:800;color:#1B2A55;font-variant-numeric:tabular-nums">${totPax}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9aa49c">total pax · ${trips.length} trip</div></div>
-      <div style="flex:1;min-width:120px;background:#fff;border:1px solid ${totNoAge?'#F0C9C9':'#E7E5DD'};border-radius:12px;padding:11px 15px"><div style="font-size:22px;font-weight:800;color:${totNoAge?'#A32D2D':'#0F6E56'};font-variant-numeric:tabular-nums">${totNoAge}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:${totNoAge?'#A32D2D':'#9aa49c'}">ยังไม่กรอกอายุ</div></div>
-      <div style="flex:1;min-width:120px;background:#fff;border:1px solid ${totMissing?'#EAD6B6':'#E7E5DD'};border-radius:12px;padding:11px 15px" title="ผู้โดยสารที่ยังไม่ได้กรอกชื่อ · ประกันไม่ครบจำนวนคน"><div style="font-size:22px;font-weight:800;color:${totMissing?'#A05A1A':'#0F6E56'};font-variant-numeric:tabular-nums">${totMissing}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:${totMissing?'#A05A1A':'#9aa49c'}">ยังไม่กรอกชื่อ</div></div>
-      <div style="flex:1.4;min-width:170px;background:#1F4D2C;border-radius:12px;padding:11px 15px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:22px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${totRev}/${totPax}</span><span style="font-size:11px;color:#9BB89B">reviewed ${totPct}%</span></div><div style="height:6px;background:rgba(255,255,255,.18);border-radius:4px;overflow:hidden;margin-top:8px"><div style="width:${totPct}%;height:100%;background:#C8F47C"></div></div></div>
-    </div>`:''}
-    ${cards||empty}
-    <div style="font-size:10.5px;color:#9aa49c;margin-top:6px;line-height:1.6"><span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px"><span style="width:8px;height:8px;border-radius:50%;background:#7F77DD"></span>แก้ทับแล้ว (override)</span>ข้อมูลที่แก้เก็บแยกสำหรับประกันเท่านั้น · ชื่อ/สัญชาติหลักใน Booking ไม่เปลี่ยน · &#8634; = คืนค่าจาก Booking</div>
+    ${trips.length?`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;background:#fff;border:1px solid #E7E5DD;border-radius:12px;padding:9px 16px;margin-bottom:12px;font-size:12.5px">
+      ${kp(T.pax,'คน · '+trips.length+' เส้นทาง · '+T.boats+' ลำ','#1B2A55')}<span style="width:1px;height:22px;background:#E7E5DD"></span>
+      ${kp(T.noAge,'ยังไม่มีอายุ',T.noAge?'#A32D2D':'#1F6B46')}${kp(T.miss,'ยังไม่มีชื่อ',T.miss?'#8A5100':'#1F6B46')}${kp(T.noNat,'ไม่มีสัญชาติ',T.noNat?'#8A5100':'#1F6B46')}
+      <span style="display:flex;align-items:center;gap:8px;min-width:190px">${kp(T.done,'ครบ','#1F6B46')}<span style="flex:1;height:6px;background:#ECEBE6;border-radius:4px;overflow:hidden;display:block"><span style="display:block;width:${pct}%;height:100%;background:#2E7D4F"></span></span></span>
+      <div style="margin-left:auto;display:inline-flex;background:#F1F0EB;border-radius:9px;padding:3px">${seg('','ทั้งหมด')}${seg('age','ขาดอายุ')}${seg('name','ขาดชื่อ')}${seg('nat','ขาดสัญชาติ')}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">
+      <nav style="flex:1 1 220px;max-width:240px;background:#fff;border:1px solid #E7E5DD;border-radius:12px;padding:6px;font-size:12.5px;position:sticky;top:8px;max-height:calc(100vh - 30px);overflow:auto">
+        ${rail}
+        <div style="font-size:10.5px;color:#6B7280;padding:8px;border-top:1px solid #EEECE6;margin-top:6px;line-height:1.5">ครบ (อายุ + สัญชาติ) / คนบนเรือ · คลิกเพื่อไปที่ลำ</div>
+      </nav>
+      <div style="flex:999 1 560px;min-width:0">${main||'<div style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;padding:24px;text-align:center;color:#6B7280;font-size:13px">ไม่มีรายการที่ต้องกรอกตามตัวกรองนี้ &#10003;</div>'}</div>
+    </div>
+    <div style="font-size:10.5px;color:#6B7280;margin-top:8px;line-height:1.6">อายุ: พิมพ์แล้วกด Enter ไปคนถัดไป · ✓ สีอ่อน = ข้อมูลครบ · ✓ สีเข้ม = Review แล้ว · <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#7F77DD"></span> แก้ทับ = เก็บแยกสำหรับประกันเท่านั้น ชื่อ/สัญชาติใน Booking ไม่เปลี่ยน</div>`
+    :`<div style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;padding:30px;text-align:center;color:#6B7280">ไม่มีทริปในวันที่เลือก</div>`}
   </div>`;
 }
-/* §insRoute · rid ว่าง = ทุกเส้นทาง (คนละแผ่น) · ใส่ rid = พิมพ์เฉพาะเส้นทางนั้น */
-function insPrint(rid){
+/* §insRoute · rid ว่าง = ทุกเส้นทางของท่าที่เลือก · ใส่ rid = เฉพาะเส้นทางนั้น
+   §insBoat · bid ใส่ = เฉพาะลำนั้น ('_none' = ยังไม่จัดเรือ) · ไม่ใส่ = ตาม _insPrintBy (แยกตามเรือ ลำละแผ่น / ตามเส้นทาง เส้นทางละแผ่น) */
+function insPrint(rid, bid){
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ds=_insDate; const dt=new Date(ds+'T00:00:00');
   const dateLbl=isNaN(dt)?ds:dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  let trips=insTripsShown(ds);   /* §insPier · พิมพ์ตามท่าที่เลือกบนจอ */
-  if(rid) trips=insTripsForDate(ds);
-  if(rid) trips=trips.filter(g=>String(g.routeId)===String(rid));
-  if(!trips.length && rid){ alert('ไม่พบเส้นทางนี้ในวันที่เลือก'); return; }
-  let body='';
-  trips.forEach(g=>{
-    g.bookings.sort((a,b)=>String(a.id||'').localeCompare(String(b.id||'')));
-    let rows=''; let i=0;
-    g.bookings.forEach(b=>{ insBkPax(b).forEach(p=>{ const sn=insSplitName(p.name); i++;
-      const fn=insEff(b.id,p.key,'firstName',sn.f); const ln=insEff(b.id,p.key,'lastName',sn.l);
-      const age=insEff(b.id,p.key,'age',''); const nat=insEff(b.id,p.key,'nat',insNatLabel(p.natCode));
-      rows+=`<tr><td class="c">${i}</td><td>${e(fn)}</td><td>${e(ln)}</td><td class="c">${e(age)||'-'}</td><td>${e(nat)||'-'}</td></tr>`; }); });
-    /* §insRoute · หนึ่งเส้นทาง = หนึ่งแผ่น · หัวใบซ้ำทุกแผ่น เพราะแต่ละแผ่นถูกยื่นแยกกัน
-       ยอดคนต่อท้ายตาราง · คนรับประกันนับหัวจากตรงนี้ ไม่ต้องไล่นับบรรทัด */
-    body+=`<section class="rt"><h1>Passenger list for insurance</h1>`
-      +`<div class="meta">Operation LOVE Andaman · ${e((typeof LA_PIER_NAME!=='undefined'&&LA_PIER_NAME[insPierOf(g.routeId)]&&LA_PIER_NAME[insPierOf(g.routeId)].en)||insPierLbl(insPierOf(g.routeId)))} · ${e(dateLbl)}</div>`   /* §insPier · ท่าอยู่บนหัวทุกแผ่น */
-      +`<h2>${e(insRouteName(g.routeId))}</h2>`
+  let trips=rid?insTripsForDate(ds).filter(g=>String(g.routeId)===String(rid)):insTripsShown(ds);
+  if(!trips.length && rid){ alert('Route not found on this date'); return; }
+  const byBoat=!!bid || _insPrintBy==='boat';
+  const pierEn=p=>(typeof LA_PIER_NAME!=='undefined'&&LA_PIER_NAME[p]&&LA_PIER_NAME[p].en)||insPierLbl(p);
+  const sheet=(g, title, sets)=>{
+    let rows='', i=0, nb=0;
+    sets.forEach(bo=>{ nb+=bo.bookings.length; insBoatRows(bo,ds).rows.forEach(r=>{ if(!r.p) return; i++;
+      rows+=`<tr><td class="c">${i}</td><td>${e(r.fn)}</td><td>${e(r.ln)}</td><td class="c">${e(r.age)||'-'}</td><td>${e(r.natV)||'-'}</td></tr>`; }); });
+    return `<section class="rt"><h1>Passenger list for insurance</h1>`
+      +`<div class="meta">Operation LOVE Andaman · ${e(pierEn(insPierOf(g.routeId)))} · ${e(dateLbl)}</div>`
+      +`<h2>${e(title)}</h2>`
       +`<table><thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead>`
       +`<tbody>${rows}</tbody></table>`
-      +`<div class="tot">รวม ${i} ท่าน · ${g.bookings.length} booking</div></section>`;
+      +`<div class="tot">รวม ${i} ท่าน · ${nb} booking</div></section>`;
+  };
+  let body='';
+  trips.forEach(g=>{
+    const boats=insBoatsOf(g,ds);
+    if(byBoat){
+      boats.filter(bo=>!bid || (bo.bid||'_none')===bid).forEach(bo=>{ body+=sheet(g, insRouteName(g.routeId)+' · Boat: '+(bo.bid?bo.name:'(not assigned)'), [bo]); });
+    } else body+=sheet(g, insRouteName(g.routeId), boats);
   });
   if(!body) body='<h1>Passenger list for insurance</h1><p>No trips on this date.</p>';
-  const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '):(insPierCur()?(insPierLbl(insPierCur())+' · '):''))+dateLbl;
+  const one=bid?insBoatsOf(trips[0],ds).find(bo=>(bo.bid||'_none')===bid):null;
+  const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '+(one?(one.name+' · '):'')):(insPierCur()?(insPierLbl(insPierCur())+' · '):''))+dateLbl;
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${e(ttl)}</title><style>`
    +`body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px}`
    +`h1{font-size:18px;margin:0 0 4px}`
@@ -6780,7 +6940,6 @@ function insPrint(rid){
    +`th{background:#eef3f8}.c{text-align:center}`
    +`.tot{font-size:12px;font-weight:700;color:#1B2A55}`
    +`.rt+.rt{margin-top:26px;border-top:1px dashed #bbb;padding-top:18px}`
-   /* หัวตารางซ้ำเมื่อเส้นทางเดียวยาวเกินหน้า · แถวไม่ถูกผ่ากลาง */
    +`@media print{@page{size:A4;margin:14mm}`
      +`.rt+.rt{break-before:page;page-break-before:always;margin-top:0;border-top:0;padding-top:0}`
      +`thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}}`
