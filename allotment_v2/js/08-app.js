@@ -30916,6 +30916,59 @@ function tsCSSv6(){
   return '@media screen{'+css.replace(/&/g,P)+'}'
     +'body.ts-printing #travelsum-host .ts-scr{display:none !important}';
 }
+/* ══ §tsAdd (2026-11-01) · Travel Summary · หมวด "เพิ่มหน้างาน" ══
+   owner "เพิ่มหน้างาน ของ Travel summary" · อ่านจาก ops.pierCheckin.adds (§paAdd) ไม่มีที่เก็บใหม่
+   บัญชีต้องเห็น 3 เรื่อง: เงินเก็บแล้วมีหลักฐานไหม · ใบที่ต้องแก้บิล agent · ชื่อที่ยังขาด
+   ยอดคน/เงินใน Manifest (หมวด 04) รวมอยู่แล้ว (คนอยู่ใน booking · เงินหน้าท่าอยู่ในของขายเพิ่ม) · หมวดนี้บอกที่มา */
+function tsAddSec(rows, date, e, money){
+  var L=[];
+  (rows||[]).forEach(function(r){ if(typeof paAddsOf!=='function') return;
+    paAddsOf(r.b,date).forEach(function(x){ if(x && !x.undone) L.push({r:r, x:x}); }); });
+  if(!L.length) return '';
+  var nPax=0, nPier=0, nBill=0, nName=0;
+  var body=L.map(function(o){
+    var b=o.r.b, x=o.x, n=paAddSum(x); nPax+=n;
+    var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    var boat=(typeof getBoat==='function'?getBoat(o.r.boat):null)||{};
+    var miss=(x.names||[]).filter(function(v){ return !String(v||'').trim(); }).length; nName+=miss;
+    var st='';
+    if(x.pay==='pier'){
+      nPier+=(+x.total||0);
+      var ex=(typeof SB_EXTRAS!=='undefined' && x.exId)?SB_EXTRAS.find(function(z){ return z && z.id===x.exId; }):null;
+      var slip=ex && Array.isArray(ex.slips) && ex.slips.length;
+      st=(x.method==='cash')?'<span class="ts-chip g">&#10003; เงินสด</span>'
+        :(slip?'<span class="ts-chip g">&#10003; มีสลิป</span>'
+              :('<span class="ts-chip a">&#9888; ยังไม่มีสลิป</span>'+(x.exId?(' <a class="ts-noprint" style="cursor:pointer;color:var(--bl700);font-weight:700" onclick="bkV2ExtraEditLoad(\''+e(x.exId)+'\',\''+e(b.id)+'\')">แนบ</a>'):'')));
+    } else if(x.pay==='agent'){
+      if(x.bill==='done') st='<span class="ts-chip g" title="'+e((x.billBy||'')+' '+(x.billAt||''))+'">&#10003; แก้บิลแล้ว</span>';
+      else { nBill++; st='<span class="ts-chip a">รอแก้บิล agent</span> <a class="ts-noprint" style="cursor:pointer;color:var(--bl700);font-weight:700" onclick="paAddBillDone(\''+e(b.id)+'\',\''+e(date)+'\',\''+e(x.id)+'\')">แก้แล้ว</a>'; }
+    } else st='<span class="ts-chip n">ฟรี'+(x.reason?(' · '+e(x.reason)):'')+'</span>';
+    return '<tr><td>'+e(boat.name||o.r.boat||'—')+'</td>'
+      +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span><div class="ts-tel">'+e((ag&&ag.name)||'')+'</div></td>'
+      +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div></td>'
+      +'<td class="c ts-mono" style="font-weight:800;color:#1F6B46">+'+n+'<div class="ts-tel">'+['ad','chd','inf','foc'].filter(function(k){ return +x.add[k]; }).map(function(k){ return k.toUpperCase()+' '+x.add[k]; }).join(' · ')+'</div></td>'
+      +'<td>'+(x.pay==='pier'?'เก็บหน้าท่า':(x.pay==='agent'?'เรียกเก็บ agent':'ฟรี'))+(x.total?(' <b class="ts-mono">'+money(x.total)+'</b>'):'')
+        +((x.unit&&(x.unit.ad||x.unit.chd)&&x.pay!=='foc')?('<div class="ts-tel">'+(x.add.ad?('AD '+money(x.unit.ad)):'')+(x.add.chd?(' · CHD '+money(x.unit.chd)):'')+(x.reason?(' · '+e(x.reason)):'')+'</div>'):'')+'</td>'
+      +'<td>'+st+'</td>'
+      +'<td>'+(miss?('<span class="ts-chip a">ขาด '+miss+' ชื่อ</span>'):'<span class="ts-chip g">ครบ</span>')+'</td>'
+      +'<td class="ts-tel">'+e(x.hm||'')+' · '+e(x.by||'')+'</td></tr>';
+  }).join('');
+  return '<div class="ts-sec ts-sadd"><div class="ts-sech"><div>'
+    +'<div class="ts-sect"><span class="ts-sn">&#65291;</span>เพิ่มหน้างาน &middot; '+L.length+' รายการ &middot; '+nPax+' คน</div>'
+    +'<div class="ts-secd">คนที่หน้าท่าเพิ่มเข้า booking วันนี้ · ยอดคนและเงินรวมอยู่ใน Manifest แล้ว หมวดนี้บอกที่มา'
+      +(nPier?(' · เก็บหน้าท่า <b>'+money(nPier)+'</b>'):'')+(nBill?(' · <b style="color:var(--am700)">รอแก้บิล agent '+nBill+' ใบ</b>'):'')
+      +(nName?(' · <b style="color:var(--rs700)">ชื่อยังขาด '+nName+'</b>'):'')+'</div></div></div>'
+    +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr><th>เรือ</th><th>Voucher</th><th>ลูกค้า</th><th class="c">เพิ่ม</th><th>เงิน</th><th>สถานะเงิน</th><th>ชื่อ</th><th>บันทึก</th></tr></thead>'
+    +'<tbody>'+body+'</tbody></table></div></div></div>';
+}
+function paAddBillDone(bkId, date, recId){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var O=bkOpsFor(b,date), L=(O.pierCheckin&&O.pierCheckin.adds)||[];
+  O.pierCheckin.adds=L.map(function(x){ return (x && x.id===recId) ? Object.assign({}, x, {bill:'done', billBy:ckMe(), billAt:new Date().toISOString()}) : x; });
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','แก้บิล agent แล้ว · รายการเพิ่มคนหน้างาน','Add pax');
+  ckPersist(); if(typeof tsAfter==='function') tsAfter(); else renderTravelSum();
+}
 function renderTravelSum(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var e=ckEsc, date=_tsDate, money=function(n){ return '฿'+Number(n||0).toLocaleString('en-US'); };
@@ -31367,7 +31420,7 @@ function renderTravelSum(){
   });
   var body='', prevRoute=null;
   /* §tsManSheet · เลขแถว · ยอดรวมท้ายกลุ่ม/ทั้งวัน · ตัวนับชิปกรอง */
-  var _mn=0, _gS=null, _dS={ad:0,chd:0,inf:0,foc:0,t:0,b:0,m:0,n:0}, _mc={pier:0,addon:0,sq:0,warn:0,cxl:0};
+  var _mn=0, _gS=null, _dS={ad:0,chd:0,inf:0,foc:0,t:0,b:0,m:0,n:0}, _mc={pier:0,addon:0,sq:0,warn:0,cxl:0,add:0};
   var _pxTd=function(v){ return '<td class="c ts-px'+(v?'':' zero')+'">'+(v||'·')+'</td>'; };
   var _sumRow=function(cls,label,S){
     return '<tr class="'+cls+' ts-scr ts-noprint"><td class="ts-rn"></td><td colspan="3" data-span="1-3">'+label+'</td>'
@@ -31447,6 +31500,8 @@ function renderTravelSum(){
     if(_aoH.indexOf('ts-ao ')>=0) _tags.push('addon');
     if(_sq) _tags.push('sq');
     if(_payH.indexOf('ยังไม่ตัดสิน')>=0) _tags.push('warn');
+    var _addN=0; try{ if(typeof paAddsLive==='function') paAddsLive(b,date).forEach(function(x){ _addN+=paAddSum(x); }); }catch(_){}   /* §tsAdd */
+    if(_addN) _tags.push('add');
     _tags.forEach(function(k){ _mc[k]++; });
     _mn++;
     body+='<tr data-tsman="'+_tags.join(' ')+'"'+(r.mvRow?' class="ts-cxlrow ts-mvrow"':(r.cxlRow?' class="ts-cxlrow"':''))+'>'
@@ -31455,7 +31510,8 @@ function renderTravelSum(){
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       + pxCell('ad') + pxCell('chd') + pxCell('inf') + pxCell('foc')
-      +'<td class="c ts-mono" style="font-weight:800">'+(r.cxlRow?('<span style="color:var(--rs700)">0</span> / '+r.booked):(r.travelled+' / '+r.booked))+'</td>'
+      +'<td class="c ts-mono" style="font-weight:800">'+(r.cxlRow?('<span style="color:var(--rs700)">0</span> / '+r.booked):(r.travelled+' / '+r.booked))
+        +(_addN?('<div class="ts-tel" style="color:#1F6B46;font-weight:800" title="จำนวนนี้รวมคนที่เพิ่มหน้างานแล้ว">＋'+_addN+' หน้างาน</div>'):'')+'</td>'
       +'<td style="max-width:168px">'
         +(r.ovnBack?('<div><span class="ts-chip" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน &middot; ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ &middot; ไม่คิดเงินซ้ำ">&#8617; OVN ขากลับ</span></div>'
              +(r.ovnOut?('<div class="ts-tel">ไปเมื่อ '+e((typeof ovnDayTh==='function')?ovnDayTh(r.ovnOut):r.ovnOut)+'</div>'):'')):'')
@@ -31525,9 +31581,10 @@ function renderTravelSum(){
   var manTools='<div class="ts-scr ts-noprint ts-mtools">'
     +'<label class="ts-msrch"><span>&#128269;</span><input type="text" value="'+e(_tsManQ)+'" placeholder="ค้นหา voucher · ชื่อลูกค้า · agent · โรงแรม" oninput="tsManQ(this.value)"></label>'
     +_chip('','ทั้งหมด',_mn)+_chip('pier','มีเงินเก็บหน้าท่า',_mc.pier)+_chip('addon','มี Add-on / อาหาร',_mc.addon)
-    +_chip('sq','คำขอพิเศษ',_mc.sq)+_chip('warn','ยังไม่ตัดสินหักบิล',_mc.warn)+_chip('cxl','ยกเลิก / เลื่อนวัน',_mc.cxl)
+    +(_mc.add?_chip('add','เพิ่มหน้างาน',_mc.add):'')+_chip('sq','คำขอพิเศษ',_mc.sq)+_chip('warn','ยังไม่ตัดสินหักบิล',_mc.warn)+_chip('cxl','ยกเลิก / เลื่อนวัน',_mc.cxl)
     +tsManColsHtml()
     +'</div>';
+  var addSec=(typeof tsAddSec==='function')?tsAddSec(everything, date, e, money):'';   /* §tsAdd */
   var manifest='<div class="ts-sec ts-s04"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · จุดรับและจุดส่งกลับ · '
@@ -31645,7 +31702,7 @@ function renderTravelSum(){
       +tsV6Overview({ nBk:all.length, booked:tBooked, trav:tTrav, ns:tNs, cxl:tCxl, pend:nPending, charge:charge, nPostpone:nPostpone,
                       target:sumTarget, nCollect:nCollect }, money)
       +'<div class="ts-printonly">'+kpis+'</div></div>'
-    +audit+cash+manifest+'</div>';
+    +audit+cash+addSec+manifest+'</div>';
   tsManApply();   /* §tsManSheet · ใช้คำค้น/ชิปที่ค้างอยู่กับตารางที่เพิ่งวาด */
 }
 
