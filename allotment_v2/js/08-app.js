@@ -6392,6 +6392,33 @@ function insSplitName(nm){ nm=String(nm||'').trim(); if(!nm) return {f:'',l:''};
 function insNatLabel(code){ if(!code) return ''; try{ return (typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(code):code; }catch(e){ return code; } }
 function insBkPax(b){ const rows=[]; rows.push({key:'lead', name:b.leadPax||'', natCode:b.leadNationality||'', lead:true}); (b.passengers||[]).forEach((p,i)=>{ rows.push({key:String(i), name:(p&&p.name)||'', natCode:(p&&p.nationality)||''}); }); return rows; }
 function insTripsForDate(ds){ const map={}; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(!b||b.status==='cancelled'||b.status==='cancelled_weather'||b.status==='rejected') return; const tr=(b.trips||[]).filter(t=>t && t.date===ds); if(!tr.length) return; const rid=tr[0].routeId; const g=map[rid]=map[rid]||{routeId:rid, bookings:[]}; if(g.bookings.indexOf(b)<0) g.bookings.push(b); }); return Object.values(map); }
+/* §insPier (2026-11-01) · กรองท่าเรือ · owner "ต้องเพิ่มการกรองท่าเรือ และเวลาพิมพ์ พิมพ์ออกเป็นของท่าเรือนั้นๆ"
+   ท่าของเส้นทาง = route.pier (ตัวเดียวกับหน้าอื่น) · '' = ทุกท่า · คนที่ผูกท่า (§pierScope) ล็อกท่าตัวเอง ไม่มีปุ่มสลับ
+   จอกับใบพิมพ์ใช้รายการเดียวกัน (insTripsShown) → เลือกท่าไหน พิมพ์ออกท่านั้น */
+let _insPier='';
+function insPierOf(rid){ const r=(typeof getRoute==='function')?getRoute(rid):null; return String((r&&r.pier)||'other'); }
+function insPierLbl(p){ return (typeof laPierName==='function')?laPierName(p):p; }
+function insPierRk(p){ return (typeof laPierRank==='function')?laPierRank(p):0; }
+function insPierLock(){ return (typeof laMyPier==='function' && laMyPier()) ? String(laMyPier()) : ''; }
+function insPierCur(){ return insPierLock() || _insPier || ''; }
+function insSetPier(p){ if(insPierLock()) return; _insPier=String(p||''); renderInsurance(); }
+function insTripsShown(ds){
+  const cur=insPierCur();
+  let L=insTripsForDate(ds);
+  if(cur) L=L.filter(g=>insPierOf(g.routeId)===cur);
+  return L.sort((a,b)=>insPierRk(insPierOf(a.routeId))-insPierRk(insPierOf(b.routeId)));   /* ทุกท่า = เรียงตามท่า · ในท่าเดียวกันคงลำดับเดิม */
+}
+function insPierBar(ds, e){
+  const lock=insPierLock(), cur=insPierCur();
+  const cnt={}; insTripsForDate(ds).forEach(g=>{ const p=insPierOf(g.routeId); let n=0; g.bookings.forEach(b=>{ n+=insBkPax(b).length; }); cnt[p]=(cnt[p]||0)+n; });
+  const ps=Object.keys(cnt).sort((a,b)=>insPierRk(a)-insPierRk(b));
+  const btn=(v,lbl,n)=>{ const on=(v===cur);
+    return `<button onclick="insSetPier('${e(v)}')" ${lock?'disabled':''} style="border:0;background:${on?'#fff':'transparent'};color:${on?'#1B2A55':'#6B7280'};box-shadow:${on?'0 1px 2px rgba(0,0,0,.12)':'none'};border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:${lock?'default':'pointer'};font-family:inherit;white-space:nowrap">${e(lbl)}${n!=null?` <span style="font-weight:600;color:#9aa49c">${n}</span>`:''}</button>`; };
+  if(lock) return `<div style="display:inline-flex;background:#F1F3F7;border-radius:9px;padding:3px">${btn(lock, insPierLbl(lock), cnt[lock]||0)}</div>`;
+  if(ps.length<2 && !cur) return '';
+  const tot=ps.reduce((a,p)=>a+cnt[p],0);
+  return `<div style="display:inline-flex;background:#F1F3F7;border-radius:9px;padding:3px" title="กรองท่าเรือ · ปุ่มพิมพ์จะพิมพ์เฉพาะท่าที่เลือก">${btn('','ทุกท่า',tot)}${ps.map(p=>btn(p,insPierLbl(p),cnt[p])).join('')}</div>`;
+}
 function insRouteName(rid){ const r=(typeof getRoute==='function')?getRoute(rid):null; if(!r) return rid||'-'; const f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null; return (r.name||(f?f.name:rid)); }
 // ── Booking Flow · incoming-bookings analytics (intake by day/week/month · market · sales · lead time · travel calendar) ──
 let _bfMode='month';
@@ -6627,7 +6654,7 @@ function renderInsurance(){
   const ds=_insDate;
   const dt=new Date(ds+'T00:00:00');
   const dateLbl=isNaN(dt)?ds:dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-  const trips=insTripsForDate(ds);
+  const trips=insTripsShown(ds);   /* §insPier */
   let totPax=0, totRev=0, totNoAge=0, totMissing=0;
   const cards=trips.map(g=>{
     g.bookings.sort((a,b)=>String(a.id||'').localeCompare(String(b.id||'')));
@@ -6675,7 +6702,7 @@ function renderInsurance(){
     const pct=tPax>0?Math.round(tRev/tPax*100):0;
     return `<div style="background:#fff;border:1px solid #E7E5DD;border-radius:14px;overflow:hidden;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-left:4px solid #185FA5;background:#F7FAFC;flex-wrap:wrap">
-        <div><div style="font-size:14px;font-weight:800;color:#1B2A55">${e(insRouteName(g.routeId))}</div><div style="font-size:11px;color:#8a8f93">${e(dateLbl)} · ${g.bookings.length} booking</div></div>
+        <div><div style="font-size:14px;font-weight:800;color:#1B2A55">${e(insRouteName(g.routeId))}</div><div style="font-size:11px;color:#8a8f93">${insPierCur()?'':(e(insPierLbl(insPierOf(g.routeId)))+' · ')}${e(dateLbl)} · ${g.bookings.length} booking</div></div>
         <button onclick="insPrint('${e(g.routeId)}')" title="พิมพ์เฉพาะเส้นทางนี้" style="border:1px solid #C7D6E6;background:#fff;color:#185FA5;border-radius:8px;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#128424; พิมพ์เส้นทางนี้</button>
         <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
           <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#1B2A55;font-variant-numeric:tabular-nums">${tPax}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#9aa49c">pax</div></div>
@@ -6701,7 +6728,8 @@ function renderInsurance(){
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         ${laDateBar(_insDate,'insDateShift','insToday','','insSetDate')}
-        <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของวันนี้ · หนึ่งเส้นทางต่อหนึ่งแผ่น" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์ทุกเส้นทาง</button>
+        ${insPierBar(_insDate,e)}   <!-- §insPier -->
+        <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของท่าที่เลือก · หนึ่งเส้นทางต่อหนึ่งแผ่น" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์${insPierCur()?(' '+e(insPierLbl(insPierCur()))):'ทุกเส้นทาง'}</button>
       </div>
     </div>
     ${trips.length?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
@@ -6719,7 +6747,8 @@ function insPrint(rid){
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ds=_insDate; const dt=new Date(ds+'T00:00:00');
   const dateLbl=isNaN(dt)?ds:dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  let trips=insTripsForDate(ds);
+  let trips=insTripsShown(ds);   /* §insPier · พิมพ์ตามท่าที่เลือกบนจอ */
+  if(rid) trips=insTripsForDate(ds);
   if(rid) trips=trips.filter(g=>String(g.routeId)===String(rid));
   if(!trips.length && rid){ alert('ไม่พบเส้นทางนี้ในวันที่เลือก'); return; }
   let body='';
@@ -6733,14 +6762,14 @@ function insPrint(rid){
     /* §insRoute · หนึ่งเส้นทาง = หนึ่งแผ่น · หัวใบซ้ำทุกแผ่น เพราะแต่ละแผ่นถูกยื่นแยกกัน
        ยอดคนต่อท้ายตาราง · คนรับประกันนับหัวจากตรงนี้ ไม่ต้องไล่นับบรรทัด */
     body+=`<section class="rt"><h1>Passenger list for insurance</h1>`
-      +`<div class="meta">Operation LOVE Andaman · ${e(dateLbl)}</div>`
+      +`<div class="meta">Operation LOVE Andaman · ${e((typeof LA_PIER_NAME!=='undefined'&&LA_PIER_NAME[insPierOf(g.routeId)]&&LA_PIER_NAME[insPierOf(g.routeId)].en)||insPierLbl(insPierOf(g.routeId)))} · ${e(dateLbl)}</div>`   /* §insPier · ท่าอยู่บนหัวทุกแผ่น */
       +`<h2>${e(insRouteName(g.routeId))}</h2>`
       +`<table><thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead>`
       +`<tbody>${rows}</tbody></table>`
       +`<div class="tot">รวม ${i} ท่าน · ${g.bookings.length} booking</div></section>`;
   });
   if(!body) body='<h1>Passenger list for insurance</h1><p>No trips on this date.</p>';
-  const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '):'')+dateLbl;
+  const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '):(insPierCur()?(insPierLbl(insPierCur())+' · '):''))+dateLbl;
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${e(ttl)}</title><style>`
    +`body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px}`
    +`h1{font-size:18px;margin:0 0 4px}`
