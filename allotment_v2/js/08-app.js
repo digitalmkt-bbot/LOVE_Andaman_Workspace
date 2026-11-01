@@ -21582,12 +21582,19 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
      ตัวเลขยังเห็น · ปุ่ม ↩ กดผิด ยังกดได้ (เป็นทางแก้ที่เก็บประวัติ) · −/+/No-show/CXL ต้องกด "แก้" ก่อน */
   if(!sheet){
     var _lbs='border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:9px;padding:5px 11px;font:700 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap';
-    if(on && !_pckMgOpen[b.id])
+    /* §pckLock2 (2026-11-01) · owner "ล็อก แต่เรายังกดได้อยู่ · เวลาเราเพี้ยนแล้ว"
+       ① ปุ่ม ✓ เวลาเช็คอิน ตอนล็อกยังกดได้ · กดทีหนึ่ง = ยกเลิกเช็คอิน กดอีกที = เช็คอินใหม่ด้วยเวลาตอนนี้ (08:15 → 09:56)
+          ล็อกแล้ว ✓ เป็นป้ายเฉย ๆ กดไม่ได้
+       ② ล็อกรายแถว (ใบแยกรถ ปลดแถวหนึ่งต้องไม่ปลดอีกแถว)
+       ③ ตอนปลดล็อก ปุ่มเขียนชัดว่า "กำลังแก้ · กดล็อก" สีเหลือง ไม่ใช่ 🔒 ที่อ่านเป็น "ล็อกอยู่" */
+    var _lk=b.id+'|'+kd;
+    var okShow=okBtn.replace(/onclick="[^"]*"/, 'onclick="event.stopPropagation()" style="cursor:default"').replace(/title="[^"]*"/, 'title="เช็คอินขึ้นเรือแล้ว · ล็อกอยู่ · จะแก้ต้องกด แก้ ก่อน"');
+    if(on && !_pckMgOpen[_lk])
       return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน · ล็อกอยู่ กด แก้ เพื่อปลดล็อก" style="opacity:.85"><span class="ck-n">'+actual+'</span></span>'
-        +undo+okBtn
-        +'<button class="pck-mgedit" style="'+_lbs+'" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
+        +undo+okShow
+        +'<button class="pck-mgedit" style="'+_lbs+'" onclick="event.stopPropagation();pckMgUnlock(\''+_lk+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL / ยกเลิกเช็คอิน">&#9998; แก้</button>';
     return stp+evs+undo+okBtn
-      +(on?'<button class="pck-mgedit on" style="'+_lbs+'" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ">&#128274; ล็อก</button>':'');
+      +(on?'<button class="pck-mgedit on" style="'+_lbs+';background:#FFF4D6;border-color:#E9C46A;color:#7A5200" onclick="event.stopPropagation();pckMgUnlock(\''+_lk+'\')" title="แก้เสร็จแล้ว กดเพื่อล็อกกลับ">&#128275; กำลังแก้ · กดล็อก</button>':'');
   }   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
 
   /* ══ §pckMgTight · โหมดตาราง · ช่องการจัดการกินความกว้าง 318px กับสูงสองบรรทัด
@@ -21611,7 +21618,8 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
     /* ล็อกคือ "แก้ไม่ได้" ไม่ใช่ "มองไม่เห็น" · ตัวเลขยังอ่านได้โดยไม่ต้องปลดล็อก */
     return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน · ล็อกอยู่ กดปุ่มแก้เพื่อปลดล็อก">'
         +'<span class="ck-n">'+actual+'<i>/'+r.booked+'</i></span></span>'
-      +okIco+'<button class="pck-mgedit ico" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998;</button>';
+      +okIco.replace(/onclick="[^"]*"/, 'onclick="event.stopPropagation()" style="cursor:default"')   /* §pckLock2 */
+      +'<button class="pck-mgedit ico" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998;</button>';
 
   return '<span class="pcs-numcol">'+stp2+evs2+'</span>'+okIco
     +(on?'<button class="pck-mgedit ico on" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ · กันกดโดนหลังเช็คอินแล้ว">&#128274;</button>':'');
