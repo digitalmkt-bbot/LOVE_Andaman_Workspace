@@ -15060,6 +15060,9 @@ function ckWrite(b, date, kind, val){
     var _h=(kind==='pier')?'pierCheckin':'vanCheckin';
     var _keep=(o[_h] && o[_h]._s) || null;
     if(_keep && val && typeof val==='object' && val._s===undefined) val._s=_keep;
+    /* §paAdd · บันทึก "เพิ่มคนหน้างาน" อยู่ในก้อนเดียวกัน · เขียนทับทั้งก้อนต้องพกไปด้วย */
+    var _adds=(o[_h] && o[_h].adds) || null;
+    if(_adds && val && typeof val==='object' && val.adds===undefined) val.adds=_adds;
     o[_h]=val;
   }
   return val;
@@ -15356,6 +15359,267 @@ function tbBoatRemove(){
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(x.b,'pier','ถอนรายการ "ออกเรือแล้วกลับเข้าท่า" (ทั้งลำ)','Turn-back'); });
   ckPersist(); ckReasonClose(); ckAfter('pier');
 }
+/* ══ §paAdd (2026-11-01) · ＋ เพิ่มคนหน้างาน ═══════════════════════════════════
+   owner: "จู่ ๆ บุคกิ้งนั้นมีเพิ่มหน้างาน ต้องทำยังไง" → mock ตกลงแล้ว · ปุ่มอยู่หัวเรือ (ไม่ใช่ทุกแถว)
+   กติกา
+   · กลุ่มเดียวกัน = เพิ่มเข้า booking เดิมจริง (trips[].pax) · ทุกหน้าจะได้ตัวเลขเดียวกัน (ครัว ใบงานไกด์ ค่าอุทยาน ทะเบียน P&L)
+   · ทุกครั้งมีบันทึกการแก้ เก็บใน ops.pierCheckin.adds[] (json_text มีคอลัมน์จริง · ops.<คีย์ใหม่> ถูกทิ้งตอนเซฟ)
+   · คนใหม่ (walk-in) = เปิดฟอร์มจองใหม่ agent Walk-in กรอกให้ล่วงหน้า · บันทึกแล้วจัดลงเรือลำนี้ให้เลย
+   · เงินต้องมีคำตอบ: เก็บหน้าท่า (ลง SB_EXTRAS = เงินหน้าท่า/ขายเพิ่ม เส้นทางเดิมที่ Travel Summary/P&L อ่านอยู่แล้ว)
+     · เรียกเก็บ agent (บันทึกไว้ให้ออฟฟิศแก้บิล) · ฟรี (ต้องมีเหตุผล)
+   · แก้ราคาจากค่าตั้งต้น / ให้ฟรี = ต้องมีสิทธิ์แก้ฝั่งบัญชี (accounting) + เหตุผล
+   · เกินที่นั่งของเรือ = บันทึกไม่ได้ · ใบที่แยกลงหลายลำ ให้ทำที่หน้า Booking
+   · ใบแยกรถ: คนที่เพิ่มไปอยู่กับจุดรับหลัก (vanSplits.main) · ถอนได้ (ย้อนจำนวน ชื่อ เงิน) แต่บันทึกยังอยู่ ══ */
+var _pa=null;
+function paTg(on){ return 'style="border:1px solid '+(on?'#1F5FA8':'#D0D5DD')+';background:'+(on?'#E8F0FB':'#fff')+';color:'+(on?'#1F5FA8':'#445')+';border-radius:7px;padding:4px 10px;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer"'; }
+var PA_K=['ad','chd','inf','foc'];
+function paMoneyCan(){ try{ return (typeof window.laCanEditArea!=='function') || window.laCanEditArea('accounting'); }catch(_){ return true; } }
+function paAddsOf(b, date){ try{ var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{}); var a=(O.pierCheckin&&O.pierCheckin.adds)||[]; return Array.isArray(a)?a:[]; }catch(_){ return []; } }
+function paAddsLive(b, date){ return paAddsOf(b,date).filter(function(x){ return x && !x.undone; }); }
+function paAddSum(x){ var n=0; PA_K.forEach(function(k){ n+=Math.max(0,+((x&&x.add)||{})[k]||0); }); return n; }
+function paUnitDefault(b, t){
+  var pb=ckPaxBreak(t.pax), pay=(pb.ad||0)+(pb.chd||0), amt=(typeof tsTripAmount==='function')?tsTripAmount(b,t):(+b.total||0);
+  return (pay>0 && amt>0) ? Math.round(amt/pay) : 0;
+}
+function paBoatOcc(bid, date){
+  var n=0; (typeof tbBoatRows==='function'?tbBoatRows(bid,date):[]).forEach(function(x){ n+=x.booked||0; }); return n;
+}
+function paAddOpen(bid){
+  if(!ckGuard()) return;
+  var date=_pckDate;
+  _pa={bid:bid, date:date, bk:'', walk:false, q:'', n:{ad:0,chd:0,inf:0,foc:0}, nat:'fr', names:[], pay:'pier', method:'cash',
+       price:{ad:0,chd:0}, priceDef:{ad:0,chd:0}, reason:''};
+  paAddPaint();
+}
+function paAddPick(id){
+  _pa.bk=id||''; _pa.walk=false;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===id; });
+  if(b){ var t=ckTripOn(b,_pa.date)||{}, u=paUnitDefault(b,t);
+    _pa.price={ad:u, chd:u}; _pa.priceDef={ad:u, chd:u};
+    _pa.nat=(String(b.leadNationality||'').toUpperCase()==='TH')?'th':'fr'; }
+  paAddPaint();
+}
+function paAddWalk(){ _pa.walk=true; _pa.bk=''; paAddPaint(); }
+function paAddN(k, d){ _pa.n[k]=Math.max(0, Math.min(60, (+_pa.n[k]||0)+d)); paAddPaint(); }
+function paAddSet(k, v){ _pa[k]=v; paAddPaint(); }
+function paAddPrice(k, v){ var x=+String(v).replace(/[^0-9.]/g,''); _pa.price[k]=isFinite(x)?Math.round(x):0; paAddPaint(true); }
+function paAddName(i, v){ _pa.names[i]=String(v||''); }
+function paAddPaint(keepFocus){
+  var S=_pa; if(!S) return;
+  var e=ckEsc, date=S.date, bid=S.bid;
+  var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
+  var rows=(typeof tbBoatRows==='function')?tbBoatRows(bid,date):[];
+  var q=String(S.q||'').toLowerCase();
+  var b=S.bk?(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bk; }):null, t=b?(ckTripOn(b,date)||{}):null;
+  var tot=0; PA_K.forEach(function(k){ tot+=+S.n[k]||0; });
+  while(S.names.length<tot) S.names.push(''); if(S.names.length>tot) S.names.length=tot;
+  var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0), occ=paBoatOcc(bid,date), over=cap>0 && (occ+tot)>cap;
+  var paying=(+S.n.ad||0)+(+S.n.chd||0);
+  var money=(S.pay==='foc')?0:((+S.n.ad||0)*(+S.price.ad||0)+(+S.n.chd||0)*(+S.price.chd||0));
+  var priceEdited=(S.pay!=='foc') && (S.price.ad!==S.priceDef.ad || S.price.chd!==S.priceDef.chd);
+  var needReason=(S.pay==='foc') || priceEdited;
+  var opt=function(on,click,t1,t2){ return '<button type="button" class="'+(on?'on':'')+'" onclick="'+click+'"><div class="o1">'+t1+'</div><div class="o2">'+t2+'</div></button>'; };
+  var step=function(n,title,body){ return '<div style="display:flex;gap:10px;margin-bottom:12px"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16265C;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">'+n+'</span><div style="flex:1;min-width:0"><div class="lb" style="margin-top:2px">'+title+'</div>'+body+'</div></div>'; };
+  /* 1 · ใคร */
+  var list=rows.filter(function(x){ if(!q) return true; var s=((x.b.leadPax||'')+' '+(x.b.voucherRef||'')+' '+(x.b.code||'')+' '+((typeof sbGetAgent==='function'&&sbGetAgent(x.b.agentId))?sbGetAgent(x.b.agentId).name:'')).toLowerCase(); return s.indexOf(q)>=0; })
+    .map(function(x){ var ag=(typeof sbGetAgent==='function')?sbGetAgent(x.b.agentId):null, on=(x.b.id===S.bk);
+      return '<button type="button" onclick="paAddPick(\''+e(x.b.id)+'\')" style="display:flex;width:100%;text-align:left;gap:8px;align-items:center;border:1.5px solid '+(on?'#0F6E56':'#EEECE6')+';background:'+(on?'#EEF8F3':'#fff')+';border-radius:9px;padding:6px 9px;margin-bottom:4px;font:inherit;font-size:12px;cursor:pointer">'
+        +'<b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e(x.b.leadPax||'—')+'</b>'
+        +'<span style="color:#8a8a82;white-space:nowrap">'+e((ag&&ag.name)||'')+' · '+e(x.b.voucherRef||x.b.code||'')+'</span>'
+        +'<span style="font-family:\'DM Mono\',monospace;color:#5F5E5A">'+x.booked+'</span></button>'; }).join('');
+  var s1='<div class="ck-bkopt" style="margin-bottom:6px">'
+      +opt(!S.walk, "paAddSet('walk',false)", 'กลุ่มเดียวกัน', 'เพื่อน/ญาติของใบที่อยู่บนเรือ · เพิ่มเข้าใบเดิม')
+      +opt(S.walk, 'paAddWalk()', 'คนใหม่ (walk-in)', 'ไม่เกี่ยวกับใบไหน · เปิดใบจองใหม่ให้')+'</div>'
+    +(S.walk ? '<div class="ck-fn">กดบันทึกแล้วจะเปิดฟอร์มจองใหม่ (agent Walk-in · ทริปนี้ · มาเองที่ท่า) กรอกจำนวนไว้ให้ · บันทึกใบแล้วจัดลงเรือลำนี้ให้อัตโนมัติ</div>'
+      : ('<input class="ck-inp" type="text" placeholder="ค้นชื่อลูกค้า · voucher · agent" value="'+e(S.q)+'" oninput="_pa.q=this.value;paAddPaint(\'q\')" id="pa-q">'
+        +'<div style="max-height:180px;overflow:auto;margin-top:6px">'+(list||'<div class="ck-fn">ไม่พบใบที่ตรงคำค้น</div>')+'</div>'));
+  var blockSplit=b && (typeof bkBoatSplits==='function') && (function(){ try{ var sp=bkBoatSplits(b,date); return sp && sp.length>1; }catch(_){ return false; } })();
+  /* 2 · จำนวน + ชื่อ */
+  var stp=function(k,l){ return '<div style="border:1px solid #E1E5EC;border-radius:10px;padding:6px;text-align:center"><div style="font-size:10px;font-weight:800;color:#8A93A3">'+l+'</div>'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:3px;font-weight:800;font-size:16px">'
+      +'<button type="button" onclick="paAddN(\''+k+'\',-1)" style="width:24px;height:24px;border:1px solid #D0D5DD;border-radius:6px;background:#fff;cursor:pointer">&minus;</button>'+(+S.n[k]||0)
+      +'<button type="button" onclick="paAddN(\''+k+'\',1)" style="width:24px;height:24px;border:1px solid #D0D5DD;border-radius:6px;background:#fff;cursor:pointer">+</button></div></div>'; };
+  var s2='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+stp('ad','AD')+stp('chd','CHD')+stp('inf','INF')+stp('foc','FOC')+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:8px;font-size:12px;align-items:center"><span style="color:#6B7280">สัญชาติ</span>'
+      +'<button type="button" '+paTg(S.nat==='fr')+' onclick="paAddSet(\'nat\',\'fr\')">ต่างชาติ</button>'
+      +'<button type="button" '+paTg(S.nat==='th')+' onclick="paAddSet(\'nat\',\'th\')">ไทย</button>'
+      +'<span style="color:#8a8a82;font-size:11px">· ค่าอุทยานคิดตามนี้</span></div>'
+    +(tot && !S.walk ? ('<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">'
+        +S.names.map(function(v,i){ return '<input class="ck-inp" type="text" placeholder="ชื่อ-นามสกุล คนที่ '+(i+1)+' (ใส่ทีหลังได้)" value="'+e(v)+'" oninput="paAddName('+i+',this.value)">'; }).join('')+'</div>') : '');
+  /* 3 · ที่นั่ง */
+  var w0=cap?Math.min(100,occ*100/cap):0, w1=cap?Math.max(0,Math.min(100-w0,tot*100/cap)):0;
+  var s3='<div style="display:flex;align-items:center;gap:10px;background:#F6F8FB;border-radius:10px;padding:8px 12px;font-size:12px">'
+    +'<span>'+e(boat.name||bid)+'</span><div style="flex:1;height:8px;border-radius:4px;background:#E3E7EE;position:relative;overflow:hidden">'
+    +'<i style="position:absolute;left:0;top:0;bottom:0;width:'+w0+'%;background:#1F6B4E"></i><i style="position:absolute;top:0;bottom:0;left:'+w0+'%;width:'+w1+'%;background:'+(over?'#D92D20':'#7FD3A6')+'"></i></div>'
+    +'<b>'+occ+' + '+tot+' = '+(occ+tot)+(cap?(' / '+cap):'')+'</b>'
+    +(over?'<span style="font-size:10.5px;font-weight:800;color:#A32D2D;background:#FDECEC;border-radius:6px;padding:2px 7px">เกินที่นั่ง</span>':(cap?'<span style="font-size:10.5px;font-weight:800;color:#1F6B46;background:#E6F4EA;border-radius:6px;padding:2px 7px">พอ</span>':''))+'</div>'
+    +(over?'<div class="ck-fn" style="color:#A32D2D">เกินความจุของเรือ · บันทึกไม่ได้ · ย้ายบางใบไปลำอื่นก่อน</div>':'');
+  /* 4 · เงิน */
+  var canM=paMoneyCan();
+  var s4='<div class="ck-bkopt">'
+      +opt(S.pay==='pier', "paAddSet('pay','pier')", 'เก็บหน้าท่า', 'เงินสด/โอน · ลงเป็นเงินหน้าท่าของใบนี้')
+      +opt(S.pay==='agent', "paAddSet('pay','agent')", 'เรียกเก็บ agent', 'ไม่เก็บที่ท่า · ออฟฟิศแก้บิล')
+      +opt(S.pay==='foc', canM?"paAddSet('pay','foc')":"alert('Only users with accounting edit rights can give FOC.')", 'ฟรี (FOC)', canM?'ต้องใส่เหตุผล':'เฉพาะผู้มีสิทธิ์บัญชี')+'</div>'
+    +(S.pay==='pier' ? ('<div style="display:flex;gap:6px;margin-top:6px;font-size:12px;align-items:center"><span style="color:#6B7280">รับเป็น</span>'
+        +'<button type="button" '+paTg(S.method==='cash')+' onclick="paAddSet(\'method\',\'cash\')">เงินสด</button>'
+        +'<button type="button" '+paTg(S.method==='transfer')+' onclick="paAddSet(\'method\',\'transfer\')">โอน (แนบสลิปทีหลังได้)</button></div>') : '')
+    +(S.pay!=='foc' && paying ? ('<div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;flex-wrap:wrap"><span>ราคา/คน</span>'
+        +((+S.n.ad||0)?('<label>AD ฿<input class="ck-inp" type="text" inputmode="numeric" style="width:84px;display:inline-block" value="'+(S.price.ad||'')+'" '+(canM?'':'disabled ')+'onchange="paAddPrice(\'ad\',this.value)"></label>'):'')
+        +((+S.n.chd||0)?('<label>CHD ฿<input class="ck-inp" type="text" inputmode="numeric" style="width:84px;display:inline-block" value="'+(S.price.chd||'')+'" '+(canM?'':'disabled ')+'onchange="paAddPrice(\'chd\',this.value)"></label>'):'')
+        +'<span style="color:#8a8a82;font-size:11px">ค่าตั้งต้น = เฉลี่ยต่อคนของใบเดิม'+(canM?' · แก้ได้ (ต้องใส่เหตุผล)':' · แก้ราคาต้องมีสิทธิ์บัญชี')+'</span>'
+        +'<b style="margin-left:auto;background:#16265C;color:#fff;border-radius:8px;padding:5px 12px">รวม ฿'+Math.round(money).toLocaleString()+'</b></div>') : '')
+    +(needReason ? ('<input class="ck-inp" id="pa-reason" type="text" style="margin-top:8px" placeholder="'+(S.pay==='foc'?'ฟรีเพราะอะไร (บังคับ)':'แก้ราคาเพราะอะไร (บังคับ)')+'" value="'+e(S.reason)+'" oninput="_pa.reason=this.value">') : '');
+  var ready=!S.walk ? (!!b && tot>0 && !over && !blockSplit) : (tot>0 && !over);
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var sy=0; try{ var ob=host.querySelector('.ck-db'); if(ob) sy=ob.scrollTop; }catch(_){}
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg" style="max-width:600px">'
+   +'  <div class="ck-dh"><div><div class="t1">＋ เพิ่มคนหน้างาน</div><div class="t2">'+e(boat.name||bid)+(b?(' · '+e(b.leadPax||'')+' · จองมา '+ckBookedPax(t)):'')+'</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   + step(1,'คนที่มาเพิ่มเป็นใคร', s1)
+   +(blockSplit?'<div class="ck-fn" style="color:#A32D2D;margin:-4px 0 10px 32px">ใบนี้แยกลงหลายลำ · เพิ่มคนต้องทำที่หน้า Booking</div>':'')
+   + step(2,'จำนวน'+(S.walk?'':' + ชื่อ'), s2)
+   + step(3,'ที่นั่งบนเรือ', s3)
+   +(S.walk?'':step(4,'เรื่องเงิน', s4))
+   +'  </div>'
+   +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
+   +'    <button class="k" '+(ready?'':'disabled style="opacity:.45;cursor:not-allowed" ')+'onclick="paAddSave()">'+(S.walk?'เปิดฟอร์มจองใหม่':'บันทึก')+'</button></div>'
+   +'</div></div>';
+  try{ var nb=host.querySelector('.ck-db'); if(nb) nb.scrollTop=sy; }catch(_){}
+  if(keepFocus==='q'){ try{ var qi=document.getElementById('pa-q'); if(qi){ qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); } }catch(_){} }
+}
+function paAddSave(){
+  var S=_pa; if(!S) return; if(!ckGuard()) return;
+  var date=S.date, bid=S.bid, tot=0; PA_K.forEach(function(k){ tot+=+S.n[k]||0; });
+  if(!tot){ alert('Add at least one person.'); return; }
+  var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):0;
+  if(cap>0 && paBoatOcc(bid,date)+tot>cap){ alert('Over the boat capacity - move a booking to another boat first.'); return; }
+  if(S.walk) return paAddWalkOpen();
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bk; }); if(!b){ alert('Pick a booking first.'); return; }
+  var t=ckTripOn(b,date); if(!t){ alert('This booking has no trip on this day.'); return; }
+  var priceEdited=(S.pay!=='foc') && (S.price.ad!==S.priceDef.ad || S.price.chd!==S.priceDef.chd);
+  if((S.pay==='foc' || priceEdited) && !paMoneyCan()){ alert('Only users with accounting edit rights can change the price or give FOC.'); return; }
+  var reason=String(S.reason||'').trim();
+  if((S.pay==='foc' || priceEdited) && !reason){ alert('Please enter the reason.'); return; }
+  var money=(S.pay==='foc')?0:((+S.n.ad||0)*(+S.price.ad||0)+(+S.n.chd||0)*(+S.price.chd||0));
+  if(S.pay!=='foc' && ((+S.n.ad||0)+(+S.n.chd||0))>0 && !(money>0)){ alert('Enter the price per person (or choose FOC).'); return; }
+  var sfx=(S.nat==='th')?'_th':'_fr', now=new Date().toISOString(), me=ckMe(), hm=ckNowHM();
+  /* จำนวนในใบ · ใบเก่าที่เก็บแบบไม่แยกสัญชาติ (ad) ก็ยังบวกถูก เพราะ ckPaxBreak รวมทุกแบบ */
+  t.pax=t.pax||{};
+  PA_K.forEach(function(k){ var d=+S.n[k]||0; if(d) t.pax[k+sfx]=(+t.pax[k+sfx]||0)+d; });
+  /* ชื่อ */
+  var names=S.names.map(function(v){ return String(v||'').trim(); });
+  if(!Array.isArray(b.passengers)) b.passengers=[];
+  var typ=[]; PA_K.forEach(function(k){ for(var i=0;i<(+S.n[k]||0);i++) typ.push(k.toUpperCase()); });
+  typ.forEach(function(ty,i){ b.passengers.push({name:names[i]||'', nationality:(S.nat==='th'?'TH':''), type:ty, foc:(ty==='FOC')}); });
+  /* ใบแยกรถ · คนเพิ่มไปอยู่จุดรับหลัก · ยอดขึ้นจริงของจุดนั้นตามไปด้วย */
+  var O=bkOpsFor(b,date), slot=null;
+  if(Array.isArray(O.vanSplits) && O.vanSplits.filter(Boolean).length>1){
+    var ix=0; O.vanSplits.forEach(function(x,i){ if(x && x.main && !ix) ix=i; });
+    var vs=O.vanSplits[ix]; PA_K.forEach(function(k){ vs[k]=(+vs[k]||0)+(+S.n[k]||0); }); vs.pax=(+vs.pax||0)+tot;
+    slot=ix; var sc=ckRead(b,date,'pier#'+ix);
+    if(sc && sc.actualPax!=null){ var nv=Object.assign({}, sc, {actualPax:(+sc.actualPax||0)+tot}); ckWrite(b,date,'pier#'+ix,nv); }
+  } else {
+    var pc=O.pierCheckin;
+    if(pc && pc.actualPax!=null){ pc.actualPax=(+pc.actualPax||0)+tot; pc.expected=(+pc.expected||0)+tot; }
+  }
+  /* เงิน */
+  var exId='';
+  if(S.pay==='pier' && money>0 && typeof SB_EXTRAS!=='undefined'){
+    exId=(typeof LA_UID==='function')?LA_UID('ex_'):('ex_'+Date.now().toString(36));
+    var paying=(+S.n.ad||0)+(+S.n.chd||0);
+    SB_EXTRAS.push({id:exId, bookingId:b.id, tripDate:date,
+      service:'เพิ่มคนหน้างาน · '+PA_K.filter(function(k){ return +S.n[k]; }).map(function(k){ return k.toUpperCase()+'×'+S.n[k]; }).join(' '),
+      qty:paying, unitPrice:Math.round(money/Math.max(1,paying)), total:Math.round(money), toCompany:Math.round(money), commission:0, seller:me,
+      method:S.method, feePct:0, fee:0, customerPaid:Math.round(money), slips:[], settle:'done', collectedAt:now, date:now});
+    if(typeof sbExtrasPersist==='function') sbExtrasPersist();
+  }
+  var rec={id:'pa_'+Date.now().toString(36), at:now, hm:hm, by:me, add:{ad:+S.n.ad||0, chd:+S.n.chd||0, inf:+S.n.inf||0, foc:+S.n.foc||0},
+           nat:S.nat, names:names, pay:S.pay, method:(S.pay==='pier'?S.method:''), unit:{ad:+S.price.ad||0, chd:+S.price.chd||0},
+           total:Math.round(money), reason:reason, exId:exId, slot:slot, bill:(S.pay==='agent'?'pending':'')};
+  O.pierCheckin=O.pierCheckin||{};
+  O.pierCheckin.adds=(Array.isArray(O.pierCheckin.adds)?O.pierCheckin.adds:[]).concat([rec]);
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','＋ เพิ่มคนหน้างาน '+tot+' คน ('+PA_K.filter(function(k){ return +S.n[k]; }).map(function(k){ return k.toUpperCase()+' '+S.n[k]; }).join(' · ')+')'
+      +' · '+(S.pay==='pier'?('เก็บหน้าท่า ฿'+Math.round(money).toLocaleString()):(S.pay==='agent'?('เรียกเก็บ agent ฿'+Math.round(money).toLocaleString()):'ฟรี'))+(reason?(' · '+reason):''),'Add pax');
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+}
+function paAddWalkOpen(){
+  var S=_pa; if(!S) return;
+  if(typeof bkV2NewBooking!=='function'){ alert('Booking form is not available'); return; }
+  var op=(typeof TRIPS!=='undefined' && TRIPS[S.date])?TRIPS[S.date][S.bid]:null, rid=(op&&op.route)||'';
+  var boat=(typeof getBoat==='function'?getBoat(S.bid):null)||{};
+  ckReasonClose();
+  try{ nav(document.querySelector('.nav-item[data-view="booking"]')); }catch(_){}
+  bkV2NewBooking(); var d=_bkV2.newBooking; if(!d) return;
+  d.agentId='a_walkin'; try{ if(typeof bkV2ApplyAgentRules==='function') bkV2ApplyAgentRules(sbGetAgent('a_walkin')); }catch(_){}
+  d.pickupSelf=true; d._pierBoat=S.bid; d.notes='เพิ่มหน้างาน · '+(boat.name||S.bid)+' · '+S.date;
+  var tr=d.trips[0]; if(tr){ tr.routeId=rid; tr.date=S.date; var sfx=(S.nat==='th')?'_th':'_fr'; PA_K.forEach(function(k){ tr.pax[k+sfx]=+S.n[k]||0; }); }
+  if(typeof bkV2SyncPassengers==='function') bkV2SyncPassengers();
+  _bkV2.tab='new'; if(typeof bkV2Render==='function') bkV2Render();
+}
+/* ป้ายบนแถว · คลิก = ดู/ถอน */
+function paAddChip(b, date, small){
+  var L=paAddsLive(b,date); if(!L.length) return '';
+  var n=0, warn=0; L.forEach(function(x){ n+=paAddSum(x); (x.names||[]).forEach(function(v){ if(!String(v||'').trim()) warn++; }); });
+  var x0=L[L.length-1];
+  return '<div style="text-align:right;margin-top:4px"><span onclick="event.stopPropagation();paAddView(\''+b.id+'\',\''+date+'\')" title="คลิกเพื่อดูรายละเอียด / ถอน" '
+    +'style="cursor:pointer;display:inline-block;font-size:10.5px;font-weight:800;color:#1F6B46;background:#E6F4EA;border:1px solid #B7DCC3;border-radius:6px;padding:2px 7px">＋'+n+' เพิ่มหน้างาน'
+    +(small?'':(' · '+ckEsc(x0.hm||'')+(x0.by?(' · '+ckEsc(x0.by)):'')))+'</span>'
+    +(warn?'<span style="display:inline-block;margin-left:4px;font-size:10.5px;font-weight:800;color:#A32D2D;background:#FDECEC;border:1px solid #F1BDBD;border-radius:6px;padding:2px 7px">&#9888; ยังไม่มีชื่อ '+warn+'</span>':'')
+    +'</div>';
+}
+function paAddView(bkId, date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var e=ckEsc, L=paAddsOf(b,date);
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var payL={pier:'เก็บหน้าท่า', agent:'เรียกเก็บ agent', foc:'ฟรี'};
+  var body=L.map(function(x,i){
+    return '<div style="border:1px solid #EEECE6;border-radius:10px;padding:9px 11px;margin-bottom:8px;'+(x.undone?'opacity:.5':'')+'">'
+      +'<div style="display:flex;gap:8px;align-items:center;font-size:12.5px"><b>＋'+paAddSum(x)+' คน</b><span style="color:#6B7280">'
+      +PA_K.filter(function(k){ return +x.add[k]; }).map(function(k){ return k.toUpperCase()+' '+x.add[k]; }).join(' · ')+' · '+(x.nat==='th'?'ไทย':'ต่างชาติ')+'</span>'
+      +'<span style="margin-left:auto;color:#6B7280;font-size:11px">'+e(x.hm||'')+' · '+e(x.by||'')+'</span></div>'
+      +'<div style="font-size:12px;margin-top:4px">'+e(payL[x.pay]||x.pay)+(x.total?(' ฿'+(+x.total).toLocaleString()):'')+(x.method?(' · '+(x.method==='cash'?'เงินสด':'โอน')):'')
+        +(x.bill==='pending'?' · <b style="color:#A32D2D">รอแก้บิล agent</b>':'')+(x.reason?(' · '+e(x.reason)):'')+'</div>'
+      +'<div style="font-size:11.5px;color:#5F5E5A;margin-top:3px">ชื่อ: '+((x.names||[]).map(function(v){ return v?e(v):'<span style="color:#A32D2D">(ยังไม่มีชื่อ)</span>'; }).join(' · ')||'—')+'</div>'
+      +(x.undone?('<div style="font-size:11px;color:#A32D2D;margin-top:3px">ถอนแล้ว · '+e(x.undone.hm||'')+' · '+e(x.undone.by||'')+'</div>')
+        :('<div style="display:flex;gap:6px;margin-top:6px">'+(x.exId?'<button class="ck-ev ck-ev-bk" onclick="ckReasonClose();bkV2ExtraEditLoad(\''+e(x.exId)+'\',\''+e(b.id)+'\')">แนบสลิป / แก้เงิน</button>':'')
+          +'<button class="ck-ev ck-ev-ns" onclick="paAddUndo(\''+e(b.id)+'\',\''+e(date)+'\','+i+')">ถอนรายการนี้</button></div>'))
+      +'</div>'; }).join('');
+  host.innerHTML='<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg">'
+   +'<div class="ck-dh"><div><div class="t1">＋ เพิ่มคนหน้างาน</div><div class="t2">'+e(b.leadPax||'')+' · '+e(b.voucherRef||b.code||b.id)+'</div></div><button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'<div class="ck-db">'+(body||'<div class="ck-fn">ไม่มีรายการ</div>')+'<div class="ck-fn">ชื่อที่ยังขาด ใส่ได้ที่หน้า Booking (รายชื่อผู้โดยสาร) · ถอน = คืนจำนวน ชื่อที่เพิ่ม และเงินหน้าท่าของรายการนี้</div></div>'
+   +'<div class="ck-df"><button class="c" onclick="ckReasonClose()">ปิด</button></div></div></div>';
+}
+function paAddUndo(bkId, date, i){
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var O=bkOpsFor(b,date), L=(O.pierCheckin&&O.pierCheckin.adds)||[], x=L[i]; if(!x || x.undone) return;
+  if(!confirm('Undo this on-site addition? The added people, names and the pier payment of this entry will be removed.')) return;
+  var t=ckTripOn(b,date)||{}, sfx=(x.nat==='th')?'_th':'_fr', tot=paAddSum(x);
+  t.pax=t.pax||{};
+  PA_K.forEach(function(k){ var d=+x.add[k]||0; if(!d) return;
+    var have=+t.pax[k+sfx]||0, take=Math.min(have,d); t.pax[k+sfx]=have-take;
+    if(take<d && t.pax[k]!=null) t.pax[k]=Math.max(0,(+t.pax[k]||0)-(d-take)); });
+  /* ชื่อที่เพิ่มอยู่ท้ายรายการ · เอาออกจากท้ายตามจำนวน ถ้ายังเป็นชื่อเดิม */
+  if(Array.isArray(b.passengers)){
+    var nm=(x.names||[]).slice().reverse(), k=b.passengers.length-1;
+    nm.forEach(function(v){ for(var j=k;j>=0;j--){ if(String(b.passengers[j].name||'').trim()===String(v||'').trim()){ b.passengers.splice(j,1); k=j-1; break; } } });
+  }
+  if(x.slot!=null && Array.isArray(O.vanSplits) && O.vanSplits[x.slot]){
+    var vs=O.vanSplits[x.slot]; PA_K.forEach(function(kk){ vs[kk]=Math.max(0,(+vs[kk]||0)-(+x.add[kk]||0)); }); vs.pax=Math.max(0,(+vs.pax||0)-tot);
+    var sc=ckRead(b,date,'pier#'+x.slot); if(sc && sc.actualPax!=null) ckWrite(b,date,'pier#'+x.slot,Object.assign({}, sc, {actualPax:Math.max(0,(+sc.actualPax||0)-tot)}));
+  } else if(O.pierCheckin && O.pierCheckin.actualPax!=null){
+    O.pierCheckin.actualPax=Math.max(0,(+O.pierCheckin.actualPax||0)-tot); if(O.pierCheckin.expected!=null) O.pierCheckin.expected=Math.max(0,(+O.pierCheckin.expected||0)-tot);
+  }
+  if(x.exId && typeof SB_EXTRAS!=='undefined'){ var ix=SB_EXTRAS.findIndex(function(z){ return z && z.id===x.exId; }); if(ix>=0){ SB_EXTRAS.splice(ix,1); if(typeof sbExtrasPersist==='function') sbExtrasPersist(); } }
+  var L2=(O.pierCheckin.adds||[]).slice(); L2[i]=Object.assign({}, x, {undone:{at:new Date().toISOString(), hm:ckNowHM(), by:ckMe()}}); O.pierCheckin.adds=L2;
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','ถอนรายการ "เพิ่มคนหน้างาน" '+tot+' คน','Add pax');
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+}
+
 function tbPick(k,v,el){ _tb[k]=v; var box=document.getElementById(k==='reason'?'tb-reason':'tb-money'); if(!box) return;
   Array.prototype.forEach.call(box.children,function(x){ x.classList.remove('on'); }); if(el) el.classList.add('on'); }
 function tbSave(){
@@ -22231,6 +22495,7 @@ function pckRowHtml(r, date, sheet){
      +(tally.cxl>0?'<div style="text-align:right"><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div style="text-align:right"><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
      +(tbOf(b,date)?('<div style="text-align:right;margin-top:4px;cursor:pointer" title="คลิกเพื่อแก้รายการของใบนี้ (สาเหตุ · เรื่องเงิน)" onclick="event.stopPropagation();tbOpen(\''+b.id+'\',\''+date+'\')">'+tbChip(tbOf(b,date),!!sheet)+'</div>'):'')   /* §turnBack · §tbBoat */
+     +((!(r.vsIdx>0) && typeof paAddChip==='function')?paAddChip(b,date,!!sheet):'')   /* §paAdd · ใบแยกรถโชว์แถวแรกแถวเดียว */
      +rsn
    +'</td>'
    +'</tr>';
@@ -24835,6 +25100,7 @@ function pckSheetBand(kind, key, rows, date, lvl){
        มุมมองการ์ดมีปุ่มนี้อยู่แล้ว · มุมมองตารางไม่มี ต้องเลื่อนไปกดที่แถบบนซึ่งพิมพ์ทุกลำ
        วางชิดขวาสุดของแถบหัวลำ ตรงคอลัมน์ "การจัดการ" ซึ่งเป็นเลนของปุ่มสั่งการอยู่แล้ว */
     +'</div>'
+    +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();paAddOpen(\''+e(key)+'\')" title="มีคนมาเพิ่มหน้างาน">&#65291; เพิ่มคน</button>'):'')   /* §paAdd */
     +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();tbBoatOpen(\''+e(key)+'\')" title="ออกเรือแล้วกลับเข้าท่า · บันทึกทั้งลำ">&#9973; กลับเข้าท่า</button>'):'')   /* §tbBoat · มุมมองตาราง */
     +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();pckGuideJobOrder(\''+e(key)+'\')"'
         +' title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'):'')
@@ -25767,7 +26033,8 @@ function renderPierCheckin(){
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         /* §tbBoat · ออกเรือแล้วกลับเข้าท่า · ทั้งลำ */
         +((B.rows||[]).some(function(r){ return r && !r.strand && !r._vd; })
-          ? '<button class="pck-jobbtn" onclick="event.stopPropagation();tbBoatOpen(\''+bid+'\')" title="ออกเรือแล้วกลับเข้าท่า · บันทึกทั้งลำครั้งเดียว · เลือกใบที่เกี่ยวข้องได้">&#9973; กลับเข้าท่า</button>' : '')
+          ? '<button class="pck-jobbtn" onclick="event.stopPropagation();paAddOpen(\''+bid+'\')" title="มีคนมาเพิ่มหน้างาน · เพิ่มเข้าใบเดิม หรือเปิดใบใหม่ (walk-in)">&#65291; เพิ่มคนหน้างาน</button>'   /* §paAdd */
+            +'<button class="pck-jobbtn" onclick="event.stopPropagation();tbBoatOpen(\''+bid+'\')" title="ออกเรือแล้วกลับเข้าท่า · บันทึกทั้งลำครั้งเดียว · เลือกใบที่เกี่ยวข้องได้">&#9973; กลับเข้าท่า</button>' : '')
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
         /* §travelReg · ใบยื่นเจ้าท่า · ออกต่อจากใบงานไกด์ ชุดคนเดียวกัน */
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckTravelReg(\''+bid+'\')" title="ทะเบียนรายชื่ออย่างเดียว · ท่าเทียบเรือวิสิษฐ์พันวา · A4 แนวตั้ง">&#128203; ทะเบียนอย่างเดียว</button>'
@@ -64094,6 +64361,11 @@ function bkV2CommitBooking(status){
      ที่นั่งไม่เคยกลับเข้าพูลระหว่างทาง จึงไม่มีช่องให้ใครแทรกเข้ามา */
   if(d._boatLockId && typeof bkV2BoatLockOnConvert==='function'){
     try{ bkV2BoatLockOnConvert(d._boatLockId, newBk); }catch(e){ console.warn('boat lock convert failed', e); }
+  }
+  /* §paAdd · ใบ walk-in ที่เปิดจากปุ่ม "เพิ่มคนหน้างาน" · จัดลงเรือลำที่กดมาให้เลย */
+  if(d._pierBoat && newBk.trips && newBk.trips[0]){
+    try{ var _pO=bkOpsFor(newBk, newBk.trips[0].date); _pO.boatId=d._pierBoat;
+         if(typeof bkV2AddHistory==='function') bkV2AddHistory(newBk,'pier','＋ เพิ่มหน้างาน (walk-in) · จัดลงเรือจากหน้าเช็คอินหน้าท่า','Add pax'); }catch(e){ console.warn('pier walk-in boat assign failed', e); }
   }
   if(typeof TRIPS !== 'undefined' && status !== 'quote'){
     newBk.trips.forEach(t => {
