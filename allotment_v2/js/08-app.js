@@ -73538,14 +73538,20 @@ function renderPierOffice(pier){
       +'</div>'
     +poXferBlock(ro)   /* §poXfer · ของโอนเข้ารอรับ / กำลังส่ง */
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
+    /* §poRepPart · อะไหล่ซ่อมหน้ากาก · ของในคลัง Fleet ที่ท่านี้ใช้ซ่อม */
+    +poRpCss()+'<div class="po-sec"><span class="n">3</span> อะไหล่ซ่อม'
+      +'<span class="chip">ซื้อผ่าน Memo · ใช้ตอนกด "ซ่อม✓"</span><span style="flex:1"></span>'
+      +(ro?'':'<button class="po-btn" onclick="poRpAddOpen()" title="เลือกอะไหล่จากคลังฝั่ง Fleet มาแสดงที่ท่านี้">&#65291; เพิ่มรายการ</button>')
+      +'</div>'
+    +poRepPartBlock(ro)
     /* §poShip3 · กอง 3 ของประจำเรือ · มีหน้าที่ของตัวเองบนหน้าหลัก */
-    +'<div class="po-sec"><span class="n">3</span> ของประจำเรือ · กองที่อยู่บนเรือ'
+    +'<div class="po-sec"><span class="n">4</span> ของประจำเรือ · กองที่อยู่บนเรือ'
       +'<span class="chip">'+(function(){ var A=poShipAll(_poPier); return A.length?(A.length+' ลำ · '+A.reduce(function(s2,x){ return s2+x.tot; },0)+' ชิ้น'):'ยังไม่มี'; })()+'</span>'
       +'<span style="flex:1"></span>'
       +(ro?'':'<button class="po-btn" onclick="poShipBoatPick()" title="ยกของจากคลังขึ้นเรือลำที่ยังไม่มีของประจำ">&#65291; ลงของประจำเรือลำใหม่</button>')
       +'</div>'
     +'<div class="po-card">'+poShipSection(ro)+'</div>'
-    +'<div class="po-sec"><span class="n">4</span> วงจรผ้าเช็ดตัว</div>'
+    +'<div class="po-sec"><span class="n">5</span> วงจรผ้าเช็ดตัว</div>'
     +poLaundryBlock(ro);
 }
 /* §poPrintAll · ใบสรุปเบิก-คืนรวมทุกลำของวันนั้น · A4 แนวนอน
@@ -75623,21 +75629,248 @@ function poUnshipSave(itemId, boatId){
   poPersist(); renderPierOffice(); poShipOpen(itemId);
 }
 
+/* ══ §poRepPart (2026-11-01) · อะไหล่ซ่อมหน้ากาก ════════════════════════════════════════════
+   owner: "เบิกซื้อตัวซ่อมมา … ต้องเรคคอร์ดด้วยว่า ซื้อมาเท่านี้ แล้วเอาไปใช้ตอนไหนบ้าง ซ่อมกับหน้ากากของเรือลำไหน"
+   ตัวอะไหล่อยู่ในคลังฝั่ง Fleet (FL_INVENTORY) ที่เดียว · ซื้อเข้าผ่าน Memo → รับของ เหมือนเดิม
+   หน้าเบิก-คืนแค่ "ใช้" · กดซ่อมเสร็จ → ตัดสต็อกที่คลังของท่า + ลงบันทึกเบิกของใช้ (FL_CONSUMABLE_LOGS)
+   เข้าเรือลำนั้น · จึงขึ้นในหน้าเบิกของใช้และต้นทุนเรือฝั่ง Fleet ด้วยโดยไม่ต้องกรอกซ้ำ
+   รายการที่โชว์ของแต่ละท่า = PIER_CFG.repairParts[ท่า] (เพิ่ม/เอาออกได้) · ครั้งแรกเติมจาก Memo ที่ชื่อมี "หน้ากาก" */
+var PO_RP_LOC={ tublamu:'คลัง Tub Lamu', panwa:'คลัง Visit Panwa', ranong:'คลัง Ranong' };
+var PO_RP_RX={ tublamu:/tub\s*la\s*m?u|tublamu|tubluma|ทับละมุ/i, panwa:/panwa|panda|พันวา/i, ranong:/ranong|ระนอง/i };
+function poRpLoc(pier){ return PO_RP_LOC[pier||_poPier]||('คลัง '+(pier||_poPier)); }
+function poRpLocOk(pier, loc){ var rx=PO_RP_RX[pier||_poPier]; return rx ? rx.test(String(loc||'')) : String(loc||'')===poRpLoc(pier); }
+function poRpInv(id){ return (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).filter(function(x){ return x && x.id===id; })[0]||null; }
+function poRpIds(pier){
+  pier=pier||_poPier;
+  if(!PIER_CFG || typeof PIER_CFG!=='object') return [];
+  var M=PIER_CFG.repairParts=(PIER_CFG.repairParts&&typeof PIER_CFG.repairParts==='object')?PIER_CFG.repairParts:{};
+  var S=PIER_CFG.repairPartsSeed=(PIER_CFG.repairPartsSeed&&typeof PIER_CFG.repairPartsSeed==='object')?PIER_CFG.repairPartsSeed:{};
+  if(!Array.isArray(M[pier])) M[pier]=[];
+  if(!S[pier] && !M[pier].length){   /* เติมครั้งเดียว · รายการจาก Memo ซ่อมหน้ากากที่มีของอยู่คลังท่านี้ */
+    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){ if(!/หน้ากาก|mask/i.test(String(m&&m.title||''))) return;
+      (m.items||[]).forEach(function(i){ var it=i&&i.invId&&poRpInv(i.invId); if(!it || M[pier].indexOf(it.id)>=0) return;
+        if((it.stocks||[]).some(function(s){ return poRpLocOk(pier, s.location); })) M[pier].push(it.id); }); });
+    S[pier]=1;
+  }
+  return M[pier].filter(function(id){ return !!poRpInv(id); });
+}
+/* ยอดของท่าเดียว · คงเหลือ = ทุกช่องสต็อกที่ชื่อคลังเป็นท่านี้ (ชื่อพิมพ์ไม่ตรงกันหลายแบบ) · ซื้อเข้า = ประวัติรับเข้าที่คลังนี้ */
+function poRpStat(it, pier){
+  pier=pier||_poPier;
+  var have=0; (it.stocks||[]).forEach(function(s){ if(poRpLocOk(pier, s.location)) have+=(+s.qty||0); });
+  var recv=0; (it.history||[]).forEach(function(h){ if(!h) return; if(h.type!=='receive' && h.type!=='in' && h.type!=='transfer-in') return;
+    var loc=h.location||((String(h.note||'').match(/@\s*(.+)$/)||[])[1]||''); if(poRpLocOk(pier, loc)) recv+=(+h.qty||0); });
+  var logs=(typeof FL_CONSUMABLE_LOGS!=='undefined'?FL_CONSUMABLE_LOGS:[]).filter(function(r){ return r && r.itemId===it.id && r.src==='pier_fix' && r.pier===pier; });
+  var used=logs.reduce(function(s,r){ return s+(+r.qty||0); },0);
+  var last=logs.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); })[0]||null;
+  return { have:have, recv:recv, used:used, last:last, logs:logs };
+}
+function poRpLow(it, st){ var mn=0; (it.stocks||[]).forEach(function(s){ if(poRpLocOk(_poPier, s.location)) mn=Math.max(mn, +s.minQty||0); });
+  if(!(st.recv>0 || st.used>0)) return false;   /* ยังไม่เคยซื้อเข้าคลังนี้ = ไม่ใช่ใกล้หมด */
+  var lim=Math.max(mn, Math.ceil((st.recv||st.have+st.used)*0.2)); return st.have<=lim; }
+function poRpDShort(ymd){ try{ var d=new Date(ymd+'T12:00:00'), M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return d.getDate()+' '+M[d.getMonth()]; }catch(_){ return ymd||''; } }
+function poRpBoatNm(id){ if(!id) return 'ของกลางท่า'; var b=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(x){ return x.id===id; })[0]; return b?(b.name||id):id; }
+
+/* ── ส่วนบนหน้าหลัก ── */
+function poRepPartBlock(ro){
+  var e=poE, ids=poRpIds(_poPier), ym=String(_poDate||'').slice(0,7);
+  if(!ids.length) return '<div class="po-card" style="padding:18px;font-size:12.5px;color:#64748B">ยังไม่มีอะไหล่ซ่อมของท่านี้'
+    +(ro?'':' · กด "＋ เพิ่มรายการ" แล้วเลือกจากคลัง (ของที่ซื้อผ่าน Memo และรับเข้าแล้ว)')+'</div>';
+  var rows=[], mCost=0, mFix=0, mBoats={}, nLow=0, buyCost=0;
+  ids.forEach(function(id){ var it=poRpInv(id), st=poRpStat(it,_poPier), low=poRpLow(it,st);
+    if(low) nLow++; buyCost+=st.recv*(+it.cost||0);
+    st.logs.forEach(function(r){ if(String(r.date).slice(0,7)!==ym) return; mCost+=(+r.cost||0); mBoats[r.boatId||'_']=1; });
+    var base=Math.max(st.recv, st.have+st.used, 1), pct=Math.max(0, Math.min(100, Math.round(st.have/base*100)));
+    var col=low?'#D97706':'#0F6E56';
+    rows.push('<div class="po-rp-r">'
+      +'<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+e(it.name)+'">'+e(it.name)+'</div>'
+        +'<div style="font-size:10.5px;color:#64748B">'+(it.partNo?('<span style="font-family:\'DM Mono\',monospace">'+e(it.partNo)+'</span> · '):'')+'฿'+(+it.cost||0).toLocaleString(undefined,{maximumFractionDigits:2})+' / '+e(it.unit||'หน่วย')+'</div></div>'
+      +'<span class="po-rp-n">'+st.recv+'</span>'
+      +'<span class="po-rp-n" style="color:#185FA5">'+st.used+'</span>'
+      +'<div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="flex:1;height:8px;border-radius:4px;background:#F1F2F5;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+'"></div></div>'
+        +'<b style="font:700 14px \'DM Mono\',monospace;color:'+(low?'#B45309':'#0F6E56')+'">'+st.have+'</b><span style="font-size:11px;color:#64748B">'+e(it.unit||'')+'</span></div>'
+      +'<div style="font-size:12px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(st.last?('<b>'+e(poRpBoatNm(st.last.boatId))+'</b> · '+poRpDShort(st.last.date)+' · '+st.last.qty+' '+e(it.unit||'')):'<span style="color:#94A3B8">ยังไม่เคยใช้</span>')+'</div>'
+      +'<span style="display:flex;gap:6px;justify-content:flex-end"><button class="po-go" onclick="poRpHist(\''+id+'\')">ประวัติ</button>'
+        +(ro?'':'<button class="po-go" title="เอาออกจากรายการของท่านี้ (ไม่ลบของในคลัง)" onclick="poRpRemove(\''+id+'\')">&times;</button>')+'</span>'
+      +'</div>');
+    mFix+=st.logs.filter(function(r){ return String(r.date).slice(0,7)===ym; }).length; });
+  var nB=Object.keys(mBoats).length;
+  var kp=function(l,v,s,warn){ return '<div class="po-rp-k'+(warn?' w':'')+'"><span>'+l+'</span><b>'+v+'</b>'+(s?('<i>'+s+'</i>'):'')+'</div>'; };
+  return '<div class="po-card" style="padding:0;overflow:hidden">'
+    +'<div class="po-rp-kg">'+kp('รายการอะไหล่', ids.length, 'คลัง '+e(poRpLoc(_poPier).replace(/^คลัง\s*/,'')))
+      +kp('ซื้อเข้ารวม', '฿'+Math.round(buyCost).toLocaleString(), 'จากประวัติรับของที่คลังนี้')
+      +kp('ใช้ไปเดือนนี้', '฿'+Math.round(mCost).toLocaleString(), mFix?(mFix+' ครั้ง · '+nB+' ลำ'):'ยังไม่มี')
+      +kp('ใกล้หมด', nLow, nLow?'เหลือไม่ถึง 20% ของที่ซื้อ':'ไม่มี', nLow>0)+'</div>'
+    +'<div class="po-rp-r h"><span>รายการ</span><span style="text-align:right">ซื้อเข้า</span><span style="text-align:right">ใช้ซ่อม</span><span>คงเหลือ</span><span>ใช้ล่าสุด</span><span></span></div>'
+    +rows.join('')+'</div>';
+}
+function poRpCss(){ var H='#po-host';
+  return '<style>'
+    +'.po-rp-kg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:14px 16px}'
+    +'.po-rp-k{border:1px solid #E8EBF0;border-radius:12px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}'
+    +'.po-rp-k span{font-size:11px;color:#64748B;font-weight:700}.po-rp-k b{font:700 21px "DM Mono",monospace;color:#0F172A}.po-rp-k i{font-style:normal;font-size:10.5px;color:#64748B}'
+    +'.po-rp-k.w{border-color:#F3D9A8;background:#FFFBF2}.po-rp-k.w b{color:#B45309}.po-rp-k.w span,.po-rp-k.w i{color:#92400E}'
+    +'.po-rp-r{display:grid;grid-template-columns:minmax(0,2.2fr) 80px 80px minmax(0,1.6fr) minmax(0,1.6fr) 120px;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid #F1F2F5}'
+    +'.po-rp-r.h{background:#F7F8FA;font-size:10.5px;font-weight:700;color:#64748B;padding:8px 16px}'
+    +'.po-rp-n{text-align:right;font:600 14px "DM Mono",monospace;color:#0F172A}'
+    +'@media (max-width:820px){.po-rp-kg{grid-template-columns:repeat(2,minmax(0,1fr))}.po-rp-r{grid-template-columns:minmax(0,1fr) 60px 60px;row-gap:6px}.po-rp-r>*:nth-child(n+4){grid-column:1/-1}}'
+    +'</style>'; }
+
+/* ── เพิ่ม / เอาออก ── */
+function poRpAddOpen(){
+  if(!poGuard()) return;
+  var body='<div style="font-size:12px;color:#64748B;margin-bottom:9px">เลือกจากคลังอะไหล่ฝั่ง Fleet · ของที่ซื้อผ่าน Memo จะอยู่ที่นี่หลังรับของ</div>'
+    +'<input id="po-rp-q" placeholder="ค้นชื่อ หรือรหัส เช่น DBZ, strap, หน้ากาก" oninput="poRpAddList()" style="width:100%;box-sizing:border-box;border:1px solid #D8D4CA;border-radius:9px;padding:9px 11px;font:500 13px inherit;font-family:inherit">'
+    +'<div id="po-rp-list" style="margin-top:10px;max-height:52vh;overflow:auto"></div>';
+  poModal('เพิ่มอะไหล่ซ่อม · '+poE(poPierName()), body, poBtn('ปิด','poModalClose()'), 620);
+  poRpAddList(); var q=document.getElementById('po-rp-q'); if(q) q.focus();
+}
+function poRpAddList(){
+  var el=document.getElementById('po-rp-list'); if(!el) return;
+  var q=String(poV('po-rp-q')||'').trim().toLowerCase(), have=poRpIds(_poPier), e=poE;
+  var L=(typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).filter(function(it){ if(!it || have.indexOf(it.id)>=0) return false;
+    var t=(String(it.name||'')+' '+String(it.partNo||'')+' '+String(it.category||'')).toLowerCase();
+    return q ? t.indexOf(q)>=0 : /mask|หน้ากาก|strap|snorkel|buckle|dbz/i.test(t); });
+  L.sort(function(a,b){ return poRpStat(b,_poPier).have-poRpStat(a,_poPier).have; });
+  el.innerHTML=L.slice(0,60).map(function(it){ var st=poRpStat(it,_poPier);
+    return '<div style="'+poRowCss()+'"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">'+e(it.name)+'</div>'
+      +'<div style="font-size:11px;color:#64748B">'+(it.partNo?e(it.partNo)+' · ':'')+'ที่ท่านี้ '+st.have+' '+e(it.unit||'')+'</div></div>'
+      +poBtn('เพิ่ม',"poRpAdd('"+it.id+"')",1)+'</div>'; }).join('')
+    || '<div style="padding:16px;color:#94A3B8;font-size:12.5px">'+(q?'ไม่พบรายการ':'พิมพ์เพื่อค้นหาในคลัง')+'</div>';
+}
+function poRpAdd(id){ if(!poGuard()) return; var L=poRpIds(_poPier); if(L.indexOf(id)<0) PIER_CFG.repairParts[_poPier].push(id); poPersist(); poRpAddList(); renderPierOffice(); }
+function poRpRemove(id){ if(!poGuard()) return; if(!confirm('เอารายการนี้ออกจากอะไหล่ซ่อมของท่านี้?\nของในคลังและประวัติการใช้ยังอยู่ครบ')) return;
+  poRpIds(_poPier); PIER_CFG.repairParts[_poPier]=PIER_CFG.repairParts[_poPier].filter(function(x){ return x!==id; }); poPersist(); renderPierOffice(); }
+
+/* ── ประวัติของอะไหล่หนึ่งรายการ ── */
+function poRpHist(id){
+  var it=poRpInv(id); if(!it) return; var st=poRpStat(it,_poPier), e=poE, u=e(it.unit||'');
+  var byB={}; st.logs.forEach(function(r){ var k=r.boatId||''; byB[k]=(byB[k]||0)+(+r.qty||0); });
+  var bk=Object.keys(byB).sort(function(a,b){ return byB[b]-byB[a]; }), mx=bk.length?byB[bk[0]]:1;
+  var cost=st.logs.reduce(function(s,r){ return s+(+r.cost||0); },0);
+  var dates=st.logs.map(function(r){ return r.date; }).sort(), wk=null;
+  if(dates.length>=2){ var span=Math.max(7,(new Date(dates[dates.length-1])-new Date(dates[0]))/864e5); wk=st.used/(span/7); }
+  var left='<div style="font-size:12px;font-weight:800;margin-bottom:9px">ใช้ไปกับเรือลำไหน</div>'
+    +(bk.length?bk.map(function(k){ return '<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:12px;margin-bottom:7px"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(poRpBoatNm(k))+'</b>'
+      +'<div style="height:9px;border-radius:5px;background:#F1F2F5"><div style="width:'+Math.round(byB[k]/mx*100)+'%;height:100%;border-radius:5px;background:#185FA5"></div></div><span style="text-align:right;font-family:\'DM Mono\',monospace">'+byB[k]+' '+u+'</span></div>'; }).join(''):'<div style="font-size:12px;color:#94A3B8">ยังไม่เคยใช้</div>')
+    +'<div style="margin-top:10px;border-top:1px dashed #DDE1E8;padding-top:9px;font-size:12px;line-height:1.7">ต้นทุนที่ใช้ไป <b>฿'+Math.round(cost).toLocaleString()+'</b>'
+    +(wk?('<br>เฉลี่ย <b>'+(Math.round(wk*10)/10)+' '+u+' / สัปดาห์</b><br><span style="color:'+(st.have/wk<2?'#B45309':'#0F6E56')+';font-weight:700">ที่เหลือพอใช้ราว '+Math.max(0,Math.round(st.have/wk))+' สัปดาห์</span>'):'')+'</div>';
+  /* ไทม์ไลน์ · ประวัติของชิ้นนั้นที่คลังท่านี้ · ใช้ซ่อม (มีเรือ) + รับเข้า + การเบิกอื่น */
+  var logBy={}; st.logs.forEach(function(r){ logBy[r.id]=r; });
+  var H=(it.history||[]).filter(function(h){ if(!h) return false; var loc=h.location||((String(h.note||'').match(/@\s*(.+)$/)||[])[1]||'');
+    return /receive|^in$|transfer|withdraw|adjust/.test(h.type||'') && (poRpLocOk(_poPier, loc) || (h.consumeId && logBy[h.consumeId])); })
+    .slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+  var row=function(h){ var r=h.consumeId?logBy[h.consumeId]:null, plus=/receive|^in$|transfer-in/.test(h.type||'') || (h.type==='adjust' && (+h.qty||0)>0);
+    var what=r?('<b>ซ่อม · '+e(poRpBoatNm(r.boatId))+'</b>'):(plus?'<b style="color:#0F6E56">รับเข้า</b>':'<b>เบิกออก</b>');
+    var note=r?(r.note||''):(h.note||'');
+    return '<div style="display:grid;grid-template-columns:96px 130px 64px minmax(0,1fr) 96px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F2F5;font-size:12.5px'+(plus?';background:#F2FAF6':'')+'">'
+      +'<span>'+poRpDShort(h.date)+' '+String(h.date||'').slice(0,4)+'</span><span>'+what+'</span>'
+      +'<span style="text-align:right;font-family:\'DM Mono\',monospace;color:'+(plus?'#0F6E56':'#B91C1C')+'">'+(plus?'+':'−')+Math.abs(+h.qty||0)+'</span>'
+      +'<span style="color:#4B5563;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+e(note)+'">'+e(note)+'</span><span>'+e((r&&r.by)||h.by||'')+'</span></div>'; };
+  var body='<div style="font-size:12px;color:#64748B;margin:-4px 0 12px">'+(it.partNo?('<span style="font-family:\'DM Mono\',monospace">'+e(it.partNo)+'</span> · '):'')+e(poRpLoc(_poPier))+' · ซื้อ '+st.recv+' · ใช้ซ่อม '+st.used+' · เหลือ '+st.have+' '+u+'</div>'
+    +'<div style="display:grid;grid-template-columns:260px minmax(0,1fr);border:1px solid #E8EBF0;border-radius:12px;overflow:hidden">'
+    +'<div style="padding:14px;background:#FBFCFD;border-right:1px solid #EEF0F4">'+left+'</div>'
+    +'<div style="min-width:0"><div style="display:grid;grid-template-columns:96px 130px 64px minmax(0,1fr) 96px;gap:10px;padding:8px 14px;background:#F7F8FA;border-bottom:1px solid #EEF0F4;font-size:10.5px;font-weight:700;color:#64748B"><span>วันที่</span><span>รายการ</span><span style="text-align:right">จำนวน</span><span>รายละเอียด</span><span>โดย</span></div>'
+    +(H.length?H.map(row).join(''):'<div style="padding:16px;color:#94A3B8;font-size:12.5px">ยังไม่มีประวัติที่คลังนี้</div>')+'</div></div>';
+  poModal('ประวัติ · '+e(it.name), body, poBtn('ปิด','poModalClose()'), 1000);
+}
+
+/* ── ซ่อมเสร็จ · เลือกเรือ + อะไหล่ที่ใช้ ── */
+var _poFix=null;
+function poPierBoats(pier){
+  var d=_poDate;
+  return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ if(!b || b.retired) return false;
+    var p=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,d):b.pier; return p===pier; })
+    .sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+}
 function poFixOpen(itemId){
   if(!poCanEdit()) return;
-  var it=poItem(itemId); if(!it) return; var b=poBal(itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u;   // §laDerived · ค่าสำรอง · ปุ่มต้องกดได้เสมอ
-  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ของที่ซ่อมเสร็จแล้วกลับเข้าคลังพร้อมใช้ · ถ้าซ่อมไม่ไหวให้ตัดทิ้งแทน</div>'
-    +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">'+poE(it.label)+' · รอซ่อม '+b.repair+' '+u+'</div>'
-    +'<div style="display:flex;gap:9px;align-items:center">'
-    +'<span style="font-size:12px">ซ่อมเสร็จ</span>'+poIn('pofix', b.repair, '', 70)
-    +'<span style="font-size:12px;margin-left:10px">ตัดทิ้ง</span>'+poIn('pofixw','0','',70)+'</div>';
-  poModal('ซ่อมเสร็จ · '+poE(it.label), body, poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poFixSave('"+itemId+"')",1), 520);
+  var it=poItem(itemId); if(!it) return; var b=poBal(itemId);
+  /* เรือตั้งต้น = ลำที่ส่งชิ้นนี้มาซ่อมล่าสุด */
+  var lastRep=(PIER_MOVES||[]).filter(function(m){ return m.itemId===itemId && (m.type==='repair'||m.type==='ship_repair') && m.boatId; })
+    .sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); })[0];
+  _poFix={ itemId:itemId, boat:lastRep?lastRep.boatId:'', parts:[], f:b.repair, w:0, note:'' };
+  poFixRender();
+}
+function poFixSync(){ if(!_poFix) return; _poFix.f=poNum(poV('pofix')); _poFix.w=poNum(poV('pofixw')); _poFix.note=poV('pofixn');
+  _poFix.parts.forEach(function(p,i){ p.q=poNum(poV('pofixp'+i)); }); }
+function poFixBoat(id){ poFixSync(); _poFix.boat=id; poFixRender(); }
+function poFixAddPart(id){ poFixSync(); if(id && !_poFix.parts.some(function(p){ return p.id===id; })) _poFix.parts.push({id:id,q:1}); poFixRender(); }
+function poFixDelPart(i){ poFixSync(); _poFix.parts.splice(i,1); poFixRender(); }
+function poFixCalc(){ if(!_poFix) return; poFixSync(); var cost=0;
+  _poFix.parts.forEach(function(p,i){ var it=poRpInv(p.id); if(!it) return; var st=poRpStat(it,_poPier), left=st.have-p.q;
+    cost+=p.q*(+it.cost||0);
+    var el=document.getElementById('pofixl'+i); if(el){ el.textContent=left+' / '+st.have+' '+(it.unit||''); el.style.color=left<0?'#B91C1C':'#0F6E56'; } });
+  var c=document.getElementById('pofixc'); if(c) c.innerHTML=poFixCostLine(cost);
+  var s=document.getElementById('pofixs'); if(s) s.textContent='บันทึก · ซ่อมเสร็จ '+_poFix.f+' ชิ้น'; }
+function poFixCostLine(cost){
+  if(!_poFix.parts.some(function(p){ return p.q>0; })) return '<span style="color:#64748B">ไม่ได้ใช้อะไหล่ · บันทึกแค่จำนวนที่ซ่อมเสร็จ</span>';
+  return '<b>ต้นทุนอะไหล่ ฿'+Math.round(cost).toLocaleString()+'</b> · ลงบันทึกเข้า <b>'+poE(poRpBoatNm(_poFix.boat))+'</b> · ขึ้นในหน้าเบิกของใช้และต้นทุนเรือฝั่ง Fleet ด้วย'; }
+function poFixRender(){
+  var S=_poFix; if(!S) return; var it=poItem(S.itemId); if(!it) return; var b=poBal(S.itemId), u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u, e=poE;
+  var chip=function(id,lbl,on,dash){ return '<button type="button" onclick="poFixBoat(\''+id+'\')" style="height:30px;padding:0 12px;border-radius:999px;font:600 12px inherit;font-family:inherit;cursor:pointer;'
+    +(on?'border:1.5px solid #16265C;background:#16265C;color:#fff':'border:1px '+(dash?'dashed #B8BFCC':'solid #D6DAE2')+';background:#fff;color:'+(dash?'#6B7280':'#16265C'))+'">'+e(lbl)+'</button>'; };
+  var boats=poPierBoats(_poPier);
+  if(S.boat && !boats.some(function(x){ return x.id===S.boat; })){ var xb=(BOATS||[]).filter(function(x){ return x.id===S.boat; })[0]; if(xb) boats.unshift(xb); }
+  var ids=poRpIds(_poPier), cost=0;
+  var prow=S.parts.map(function(p,i){ var pi=poRpInv(p.id); if(!pi) return ''; var st=poRpStat(pi,_poPier), left=st.have-p.q; cost+=p.q*(+pi.cost||0);
+    return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 80px 120px 30px;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid #F1F2F5">'
+      +'<div style="min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(pi.name)+'</div><div style="font-size:10.5px;color:#64748B;font-family:\'DM Mono\',monospace">'+e(pi.partNo||'')+'</div></div>'
+      +'<input id="pofixp'+i+'" value="'+p.q+'" inputmode="numeric" oninput="poFixCalc()" aria-label="จำนวน" style="height:32px;border:1px solid #CBD2DC;border-radius:8px;text-align:center;font:600 14px \'DM Mono\',monospace;width:100%;box-sizing:border-box">'
+      +'<span id="pofixl'+i+'" style="text-align:right;font:600 12.5px \'DM Mono\',monospace;color:'+(left<0?'#B91C1C':'#0F6E56')+'">'+left+' / '+st.have+' '+e(pi.unit||'')+'</span>'
+      +'<button type="button" onclick="poFixDelPart('+i+')" aria-label="เอาออก" style="border:0;background:none;color:#9CA3AF;font-size:16px;cursor:pointer">&times;</button></div>'; }).join('');
+  var rest=ids.filter(function(id){ return !S.parts.some(function(p){ return p.id===id; }); });
+  var addSel=rest.length?('<select onchange="poFixAddPart(this.value)" style="height:32px;border:1.5px dashed #9FB3D1;border-radius:8px;padding:0 10px;font:700 12px inherit;font-family:inherit;color:#185FA5;background:#fff;cursor:pointer">'
+      +'<option value="">＋ เพิ่มอะไหล่ที่ใช้</option>'+rest.map(function(id){ var pi=poRpInv(id), st=poRpStat(pi,_poPier); return '<option value="'+id+'">'+e(pi.name)+' · เหลือ '+st.have+'</option>'; }).join('')+'</select>')
+    : (ids.length?'':'<span style="font-size:11.5px;color:#94A3B8">ท่านี้ยังไม่ได้ตั้งรายการอะไหล่ซ่อม · เพิ่มได้ที่หัวข้อ "อะไหล่ซ่อม"</span>');
+  var lab='display:flex;flex-direction:column;gap:5px;font-size:11.5px;font-weight:700;color:#4B5563';
+  var inp='height:36px;border:1px solid #CBD2DC;border-radius:9px;padding:0 10px;font:600 14px "DM Mono",monospace;color:#16265C;box-sizing:border-box;width:100%';
+  var body='<div style="font-size:12px;color:#64748B;margin:-4px 0 12px">รอซ่อมอยู่ '+b.repair+' '+u+' · ของที่ซ่อมเสร็จกลับเข้าคลังพร้อมใช้ · ซ่อมไม่ไหวให้ตัดทิ้ง</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px">'
+      +'<label style="'+lab+'">ซ่อมเสร็จ ('+u+')<input id="pofix" value="'+S.f+'" inputmode="numeric" oninput="poFixCalc()" style="'+inp+'"></label>'
+      +'<label style="'+lab+'">ตัดทิ้ง ซ่อมไม่ไหว ('+u+')<input id="pofixw" value="'+S.w+'" inputmode="numeric" style="'+inp+'"></label></div>'
+    +'<div style="font-size:11.5px;font-weight:700;color:#4B5563;margin-bottom:6px">หน้ากากของเรือลำไหน</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+boats.map(function(x){ return chip(x.id, x.name||x.id, S.boat===x.id); }).join('')+chip('', 'ของกลางท่า', !S.boat, true)+'</div>'
+    +'<div style="border:1px solid #E2E5EC;border-radius:12px;overflow:hidden;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;padding:9px 12px;background:#F7F8FA"><b style="font-size:13px;flex:1">อะไหล่ที่ใช้</b><span style="font-size:11px;color:#64748B">'+e(poRpLoc(_poPier))+' · ตัดสต็อกตอนกดบันทึก</span></div>'
+      +(S.parts.length?'<div style="display:grid;grid-template-columns:minmax(0,1fr) 80px 120px 30px;gap:10px;padding:6px 12px;border-top:1px solid #EEF0F4;font-size:10.5px;font-weight:700;color:#64748B"><span>รายการ</span><span style="text-align:center">ใช้</span><span style="text-align:right">เหลือหลังใช้</span><span></span></div>':'')
+      +prow+'<div style="padding:8px 12px;border-top:1px solid #F1F2F5">'+addSel+'</div></div>'
+    +'<label style="'+lab+';margin-bottom:12px">หมายเหตุ<input id="pofixn" value="'+e(S.note)+'" placeholder="เช่น สายรัดขาด 4 เส้น · ตัวล็อกหัก 2 ชิ้น" style="'+inp+';font:500 13px inherit;font-family:inherit"></label>'
+    +'<div id="pofixc" style="background:#F0F6FD;border:1px solid #C9DCF2;border-radius:10px;padding:9px 12px;font-size:12px;color:#0F3F70">'+poFixCostLine(cost)+'</div>';
+  poModal('ซ่อมเสร็จ · '+e(it.label), body, poBtn('ยกเลิก','poModalClose()')+'<button id="pofixs" onclick="poFixSave(\''+S.itemId+'\')" style="border:1px solid #16265C;background:#16265C;color:#fff;border-radius:9px;padding:8px 16px;font:700 12.5px inherit;cursor:pointer;font-family:inherit">บันทึก · ซ่อมเสร็จ '+S.f+' ชิ้น</button>', 680);
 }
 function poFixSave(itemId){
-  var b=poBal(itemId), f=poNum(poV('pofix')), w=poNum(poV('pofixw'));
+  if(!poGuard()) return;
+  if(_poFix && _poFix.itemId===itemId) poFixSync();
+  var S=_poFix||{boat:'',parts:[],note:''};
+  var b=poBal(itemId), f=poNum(poV('pofix')), w=poNum(poV('pofixw')), it=poItem(itemId);
   if(f+w>b.repair){ alert('รวมกันเกินจำนวนที่รอซ่อม ('+b.repair+')'); return; }
-  if(f>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:'',type:'fixed',qty:f});
-  if(w>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:'',type:'writeoff',qty:w,from:'repair'});
+  var parts=(S.parts||[]).filter(function(p){ return p.q>0 && poRpInv(p.id); });
+  if(parts.length && f<=0 && w<=0){ alert('ใส่จำนวนที่ซ่อมเสร็จก่อน'); return; }
+  var short=parts.filter(function(p){ return poRpStat(poRpInv(p.id),_poPier).have<p.q; });
+  if(short.length && !confirm('อะไหล่ในคลังไม่พอ: '+short.map(function(p){ var x=poRpInv(p.id); return x.name+' (มี '+poRpStat(x,_poPier).have+')'; }).join(', ')+'\nบันทึกต่อจะทำให้ยอดติดลบ · ยืนยัน?')) return;
+  var note=String(S.note||'').trim(), who=poWho(), bn=poRpBoatNm(S.boat);
+  if(f>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:S.boat||'',type:'fixed',qty:f,note:note});
+  if(w>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:S.boat||'',type:'writeoff',qty:w,from:'repair',note:note});
+  if(parts.length){
+    if(!Array.isArray(FL_CONSUMABLE_LOGS)) FL_CONSUMABLE_LOGS=[];
+    parts.forEach(function(p){ var x=poRpInv(p.id);
+      /* ตัดจากช่องคลังของท่านี้ที่มีของมากที่สุด (ชื่อคลังพิมพ์ไม่ตรงกันหลายแบบ) · ไม่มีช่องเลย = ช่องมาตรฐานของท่า */
+      var cand=(x.stocks||[]).filter(function(s){ return poRpLocOk(_poPier, s.location); }).sort(function(a,c){ return (+c.qty||0)-(+a.qty||0); })[0];
+      var loc=cand?cand.location:poRpLoc(_poPier);
+      if(!cand){ if(!Array.isArray(x.stocks)) x.stocks=[]; cand={location:loc,qty:0,minQty:0}; x.stocks.push(cand); }
+      cand.qty=(+cand.qty||0)-p.q; if(typeof invSyncLegacy==='function') invSyncLegacy(x);
+      var id=(typeof LA_UID==='function')?LA_UID('cons_'):('cons_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+      var txt='ซ่อม'+(it?it.label:'หน้ากาก')+' '+f+' ชิ้น'+(note?(' · '+note):'');
+      if(!Array.isArray(x.history)) x.history=[];
+      x.history.push({date:_poDate,type:'withdraw',qty:p.q,location:loc,note:'อะไหล่ซ่อม → '+bn+' · '+txt,by:who,consumeId:id});
+      FL_CONSUMABLE_LOGS.push({id:id,date:_poDate,itemId:x.id,itemName:x.name,unit:x.unit||'',qty:p.q,unitCost:+x.cost||0,cost:p.q*(+x.cost||0),
+        location:loc,boatId:S.boat||'',engineId:'',engineLabel:'',by:who,note:txt,src:'pier_fix',pier:_poPier,poItemId:itemId,fixQty:f});
+    });
+    /* ข้อมูล Fleet อยู่ในก้อนเดียวกัน · เขียนผ่านแคชกลางพร้อมของท่า (poPersist) ไม่เขียน localStorage ดิบ */
+    try{ var d=(typeof laBlob==='function')?laBlob():null; if(d){ d.fleet_inventory=FL_INVENTORY; d.fleet_consumable_logs=FL_CONSUMABLE_LOGS; } }catch(_){}
+  }
+  _poFix=null;
   poPersist(); poModalClose(); renderPierOffice();
 }
 
