@@ -6909,16 +6909,19 @@ function insPrint(rid, bid){
   if(!trips.length && rid){ alert('Route not found on this date'); return; }
   const byBoat=!!bid || _insPrintBy==='boat';
   const pierEn=p=>(typeof LA_PIER_NAME!=='undefined'&&LA_PIER_NAME[p]&&LA_PIER_NAME[p].en)||insPierLbl(p);
+  /* §insPrint2 (2026-11-01) · owner "เอาให้กระชับที่สุด และให้ได้ชื่อเยอะที่สุด"
+     หัวใบ 2 บรรทัด (ยอดรวม + เตือนชื่อขาด อยู่บนหัว ไม่ตกหน้าใหม่) · แถวสูงคงที่ ~4.4 มม. → A4 หนึ่งหน้า ~58 ชื่อ
+     ฟอนต์มีตัวไทย (แถวไทยไม่สูงกว่าแถวอังกฤษ) · ตัดข้อความยาวด้วย … ไม่ขึ้นบรรทัดใหม่ */
   const sheet=(g, title, sets)=>{
-    let rows='', i=0, nb=0;
-    sets.forEach(bo=>{ nb+=bo.bookings.length; insBoatRows(bo,ds).rows.forEach(r=>{ if(!r.p) return; i++;
-      rows+=`<tr><td class="c">${i}</td><td>${e(r.fn)}</td><td>${e(r.ln)}</td><td class="c">${e(r.age)||'-'}</td><td>${e(r.natV)||'-'}</td></tr>`; }); });
-    return `<section class="rt"><h1>Passenger list for insurance</h1>`
-      +`<div class="meta">Operation LOVE Andaman · ${e(pierEn(insPierOf(g.routeId)))} · ${e(dateLbl)}</div>`
-      +`<h2>${e(title)}</h2>`
-      +`<table><thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead>`
-      +`<tbody>${rows}</tbody></table>`
-      +`<div class="tot">รวม ${i} ท่าน · ${nb} booking</div></section>`;
+    let rows='', i=0, nb=0, miss=0;
+    sets.forEach(bo=>{ nb+=bo.bookings.length; const S=insBoatRows(bo,ds); miss+=S.miss; S.rows.forEach(r=>{ if(!r.p) return; i++;
+      rows+=`<tr><td class="c n">${i}</td><td>${e(r.fn)}</td><td>${e(r.ln)}</td><td class="c">${e(r.age)||''}</td><td>${e(r.natV)||''}</td></tr>`; }); });
+    return `<section class="rt"><div class="hd"><b>${e(title)}</b><span class="tt">${i} pax · ${nb} booking</span></div>`
+      +`<div class="meta">Passenger list for insurance · Operation LOVE Andaman · ${e(pierEn(insPierOf(g.routeId)))} · ${e(dateLbl)}`
+      +(miss?` <span class="warn">· ⚠ ${miss} passenger${miss>1?'s':''} without names (booked ${i+miss})</span>`:'')+`</div>`
+      +`<table><colgroup><col style="width:7mm"><col style="width:33%"><col style="width:37%"><col style="width:10mm"><col></colgroup>`
+      +`<thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead>`
+      +`<tbody>${rows}</tbody></table></section>`;
   };
   let body='';
   trips.forEach(g=>{
@@ -6931,17 +6934,17 @@ function insPrint(rid, bid){
   const one=bid?insBoatsOf(trips[0],ds).find(bo=>(bo.bid||'_none')===bid):null;
   const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '+(one?(one.name+' · '):'')):(insPierCur()?(insPierLbl(insPierCur())+' · '):''))+dateLbl;
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${e(ttl)}</title><style>`
-   +`body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px}`
-   +`h1{font-size:18px;margin:0 0 4px}`
-   +`h2{font-size:14px;margin:14px 0 6px;border-bottom:2px solid #185FA5;padding-bottom:3px}`
-   +`.meta{font-size:12px;color:#555;margin-bottom:6px}`
-   +`table{width:100%;border-collapse:collapse;margin-bottom:6px}`
-   +`th,td{border:1px solid #bbb;padding:5px 8px;font-size:12px;text-align:left}`
-   +`th{background:#eef3f8}.c{text-align:center}`
-   +`.tot{font-size:12px;font-weight:700;color:#1B2A55}`
-   +`.rt+.rt{margin-top:26px;border-top:1px dashed #bbb;padding-top:18px}`
-   +`@media print{@page{size:A4;margin:14mm}`
-     +`.rt+.rt{break-before:page;page-break-before:always;margin-top:0;border-top:0;padding-top:0}`
+   +`body{font-family:Tahoma,'Leelawadee UI','Noto Sans Thai','Sarabun',Arial,sans-serif;color:#111;margin:16px}`
+   +`.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #185FA5;padding-bottom:2px}`
+   +`.hd b{font-size:12.5px}.hd .tt{font-size:11.5px;font-weight:700}`
+   +`.meta{font-size:9px;color:#444;margin:2px 0 3px}.warn{color:#9A3412;font-weight:700}`
+   +`table{width:100%;border-collapse:collapse;table-layout:fixed}`
+   +`th,td{border:0.5pt solid #9a9a9a;padding:0 4px;font-size:9.5px;line-height:15px;height:15px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`
+   +`th{background:#eef3f8;font-size:8.5px}.c{text-align:center}.n{color:#666}`
+   +`tbody tr:nth-child(even) td{background:#f6f7f9}`
+   +`.rt+.rt{margin-top:18px}`
+   +`@media print{@page{size:A4;margin:8mm 9mm}body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}`
+     +`.rt+.rt{break-before:page;page-break-before:always;margin-top:0}`
      +`thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}}`
    +`</style></head><body>${body}</body></html>`;
   const w=window.open('','_blank'); if(!w){ alert('Popup blocked'); return; } w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{ try{w.print();}catch(e){} }, 300);
