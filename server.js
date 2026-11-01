@@ -1047,6 +1047,60 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
         console.warn('[b2c-chg] before-snapshot failed, change log skipped this run:', e.message);
       }
 
+      /* §b2cOvrSeen (2026-11-01) · owner: "B2C อัพเดทที่รับส่งใหม่ ระบบนำเข้ามาแต่ไม่โชว์ · ฝั่ง rsvn เข้าไปแก้ที่พักไว้"
+         A column ops edited is listed in b2coverride and the upsert keeps our value (§b2cOwn) - correct, but it
+         was silent: B2C's new pickup never showed anywhere (LOV-1672686, 8 Oct). Before the upsert, for the
+         pickup/drop-off columns only: if B2C now sends a value different from ours on an overridden column,
+         append ONE history row (kind 'b2c_ovr', tag = column, text = "label: ours → B2C · ยังไม่ใช้ (rsvn แก้ไว้)").
+         The app turns that into a red "B2C แก้ที่รับ" flag with Use B2C / Keep ours buttons.
+         · Same B2C value again (45 s poller) = no new row: the last row per booking+column is compared on the
+           B2C side of the arrow only.
+         · Only bookings with a trip today or later. No schema change (history already has kind/tag/text).
+         · Own SAVEPOINT: a failure here only skips the flag, the sync carries on exactly as before. */
+      try {
+        await client.query('SAVEPOINT b2c_ovr');
+        const OVR = { hotelname:'ที่พัก', pickuparea:'จุดรับ', pickupzone:'โซนรับ', pickupself:'มาเอง',
+                      dropoffhotelname:'ที่ส่งกลับ', dropoffsame:'ส่งที่เดิม' };
+        const ovCols = Object.keys(OVR).filter(c => BK_COLS.includes(c));
+        const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);   // Asia/Bangkok
+        const fut = new Set(b2cBks.filter(b => (b.trips || []).some(t => t && String(t.date || '').slice(0, 10) >= today)).map(b => b.id));
+        const inc = (tables['sb_bookings'] || []).filter(r => preExisting.has(r.id) && fut.has(r.id));
+        if (ovCols.length && inc.length && BK_COLS.includes('b2coverride')) {
+          const ids = inc.map(r => r.id);
+          const cur = {};
+          for (const r of (await client.query(
+            `SELECT id, b2coverride, ${ovCols.map(qic).join(', ')} FROM ${fqt('sb_bookings')} WHERE id = ANY($1)`, [ids])).rows) cur[r.id] = r;
+          const last = {};
+          for (const r of (await client.query(
+            `SELECT DISTINCT ON (sb_bookings_id, tag) sb_bookings_id, tag, text FROM ${fqt('sb_bookings__history')}
+              WHERE sb_bookings_id = ANY($1) AND kind = 'b2c_ovr' ORDER BY sb_bookings_id, tag, at DESC`, [ids])).rows)
+            last[r.sb_bookings_id + '|' + r.tag] = r.text;
+          const isBool = c => c === 'pickupself' || c === 'dropoffsame';
+          const yes = v => v === true || v === 'true' || v === 't' || v === 1 || v === '1';
+          const norm = (c, v) => isBool(c) ? (yes(v) ? 'ใช่' : 'ไม่') : b2cChg._fmt.clean(v);
+          const toOf = t => { const m = /→ (.*) · ยังไม่ใช้/.exec(String(t || '')); return m ? m[1] : null; };
+          const list = [];
+          for (const r of inc) {
+            const c = cur[r.id]; if (!c || !c.b2coverride) continue;
+            for (const col of ovCols) {
+              if (String(c.b2coverride).indexOf('"' + col + '"') < 0) continue;
+              const a = norm(col, c[col]), b = norm(col, r[col]);
+              if (a === b) continue;
+              if (toOf(last[r.id + '|' + col]) === (b || '—')) continue;
+              list.push({ id: r.id, kind: 'b2c_ovr', tag: col, text: OVR[col] + ': ' + (a || '—') + ' → ' + (b || '—') + ' · ยังไม่ใช้ (rsvn แก้ไว้)' });
+            }
+          }
+          if (list.length) {
+            const n = await b2cChg.writeEntries(client, list, _b2cChgOpts());
+            console.log(`[b2c-ovr] ${n} B2C pickup change(s) on rsvn-edited field(s) flagged for review`);
+          }
+        }
+        await client.query('RELEASE SAVEPOINT b2c_ovr');
+      } catch (e) {
+        try { await client.query('ROLLBACK TO SAVEPOINT b2c_ovr'); } catch (_) {}
+        console.warn('[b2c-ovr] skipped this run:', e.message);
+      }
+
       // 1. Upsert main booking rows — ops columns preserved on conflict
       _phase = 'upsert sb_bookings';
       for (const row of tables['sb_bookings'] || []) {

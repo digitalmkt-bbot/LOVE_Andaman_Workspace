@@ -22640,7 +22640,7 @@ function pckRowHtml(r, date, sheet){
      ? ('<td class="pcs-tm">'+(r._ovnBack
           ? '<span class="ck-pick" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน · ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ">&#8617; ไม่มีขารับ</span>'
           : ckTimeChip(tst, time, 'pier'))+'</td>'
-        +'<td class="pcs-pk">'+(pickup?('<span class="ck-pick">'+(r._ovnBack?'&#8627; ส่ง ':'')+e(pickup)+'</span>'):'<span class="ck-dim">—</span>')
+        +'<td class="pcs-pk">'+((typeof bkB2cOvrChip==='function')?bkB2cOvrChip(b):'')+(pickup?('<span class="ck-pick">'+(r._ovnBack?'&#8627; ส่ง ':'')+e(pickup)+'</span>'):'<span class="ck-dim">—</span>')
           +(r.priv?' <span class="pcs-prv" title="รถเหมา · ไม่แชร์">เหมา'+(r.priv.qty>1?(' ×'+r.priv.qty):'')+'</span>':'')
           +pckDropHtml(b, date)
           +(r._ovnBack&&r._ovnOut?('<div class="pcs-sub">ไปเมื่อ <b>'+e((typeof ovnDayTh==='function')?ovnDayTh(r._ovnOut):r._ovnOut)+'</b></div>'):'')+'</td>'
@@ -40917,6 +40917,113 @@ function bkV2WeatherCancel(routeId,date){
   if(!bkV2IsWeatherClosed(routeId,date)){ SB_WEATHER_CLOSURES.push({routeId,date,reason:'weather',at:new Date().toISOString()}); sbWeatherPersist(); }
   bkV2WeatherPanel(routeId,date);
 }
+/* ══ §b2cOvrSeen (2026-11-01) · B2C แก้ที่รับในใบที่ rsvn เคยแก้ไว้ ══
+   owner "เมื่อเช้าเกิดเคส B2C อัพเดทที่รับส่งใหม่ ระบบนำเข้ามาแต่ไม่โชว์ · ฝั่ง rsvn เข้าไปแก้ที่พัก การแก้ไขเลยไม่ถูกแก้" (LOV-1672686)
+   server.js (§b2cOvrSeen) ลงประวัติ kind 'b2c_ovr' · tag = คอลัมน์ · "ป้าย: ของเรา → ของ B2C · ยังไม่ใช้ (rsvn แก้ไว้)"
+   ค้างอยู่ = แถวล่าสุดของคอลัมน์นั้น ยังไม่มีการตัดสิน (b2c_ovr_use / b2c_ovr_keep) หลังจากนั้น และคอลัมน์ยังล็อกอยู่
+   ใช้ค่าจาก B2C = เขียนค่าใหม่ + ปลดล็อกช่องนั้น (รอบหน้า B2C ทับเองได้) · คงค่าเดิม = ล็อกต่อ ป้ายหาย · ส่งค่าใหม่อีก = ขึ้นใหม่ */
+var B2C_OVR_PROP={ hotelname:'hotelName', pickuparea:'pickupArea', pickupzone:'pickupZone', pickupself:'pickupSelf', dropoffhotelname:'dropoffHotelName', dropoffsame:'dropoffSame' };
+function bkB2cOvrPending(b){
+  if(!b || !Array.isArray(b.history) || !Array.isArray(b.b2cOverride)) return [];
+  var last={}, dec={};
+  b.history.forEach(function(h){ if(!h || !h.tag) return;
+    if(h.kind==='b2c_ovr'){ if(!last[h.tag] || String(h.at)>=String(last[h.tag].at)) last[h.tag]=h; }
+    else if(h.kind==='b2c_ovr_use' || h.kind==='b2c_ovr_keep'){ if(!dec[h.tag] || String(h.at)>String(dec[h.tag])) dec[h.tag]=h.at; } });
+  var out=[];
+  Object.keys(last).forEach(function(col){
+    var h=last[col]; if(b.b2cOverride.indexOf(col)<0) return; if(dec[col] && String(dec[col])>=String(h.at)) return;
+    var m=/^([^:]+): (.*) → (.*) · ยังไม่ใช้/.exec(String(h.text||'')); if(!m) return;
+    out.push({ col:col, label:m[1], from:m[2], to:(m[3]==='—'?'':m[3]), at:h.at });
+  });
+  var ord=['hotelname','pickuparea','pickupzone','pickupself','dropoffhotelname','dropoffsame'];
+  return out.sort(function(a,c){ return ord.indexOf(a.col)-ord.indexOf(c.col); });
+}
+function bkB2cOvrDay(date){
+  return (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(b){
+    return b && !['cancelled','cancelled_weather','rejected'].includes(b.status) && (b.trips||[]).some(function(t){ return t && t.date===date; }) && bkB2cOvrPending(b).length; });
+}
+function bkB2cOvrCss(){
+  if(document.getElementById('b2covr-css')) return;
+  var st=document.createElement('style'); st.id='b2covr-css';
+  st.textContent='.b2covr{display:block;cursor:pointer;margin:0 0 3px}.b2covr .t{display:inline-block;background:#FDECEC;color:#9B1C1C;border:1px solid #F5B5B5;border-radius:6px;padding:0 6px;font-size:10px;font-weight:800;white-space:nowrap}'
+    +'.b2covr .n{display:block;color:#9B1C1C;font-weight:800;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}';
+  document.head.appendChild(st);
+}
+function bkB2cOvrChip(b){
+  var P=bkB2cOvrPending(b); if(!P.length) return '';
+  bkB2cOvrCss();
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var h=P.filter(function(x){ return x.col==='hotelname'; })[0]||P[0];
+  return '<span class="b2covr" data-b2covr="1" onclick="event.stopPropagation();bkB2cOvrOpen(\''+e(b.id)+'\')" title="'+e(P.map(function(x){ return x.label+': '+x.from+' → '+(x.to||'—'); }).join(' · ')+' · คลิกเพื่อเลือก')+'">'
+    +'<span class="t">B2C แก้ที่รับ · ต้องตรวจ</span><span class="n">&rarr; '+e((h.label!=='ที่พัก'?(h.label+' '):'')+(h.to||'—'))+'</span></span>';
+}
+function bkB2cOvrClose(){ var o=document.getElementById('b2covr-ov'); if(o) o.remove(); }
+function bkB2cOvrOpen(bkId){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var P=bkB2cOvrPending(b); if(!P.length){ bkB2cOvrClose(); return; }
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var t=(b.trips||[])[0]||{}, rt=(typeof getRoute==='function'?getRoute(t.routeId):null)||{};
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):'';
+  var ov=(t.ops&&t.ops.vanId)||(b.ops&&b.ops.vanId);
+  var cur=function(col){ var v=b[B2C_OVR_PROP[col]]; if(col==='pickupself'||col==='dropoffsame') return v?'ใช่':'ไม่'; return v==null?'':String(v); };
+  var when=P.reduce(function(m,x){ return String(x.at)>m?String(x.at):m; },'');
+  var whenTx=when?new Date(when).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  bkB2cOvrClose();
+  var o=document.createElement('div'); o.id='b2covr-ov'; o.className='la-modal';
+  o.style.cssText='position:fixed;inset:0;z-index:9100;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+  o.onclick=function(ev){ if(ev.target===o) bkB2cOvrClose(); };
+  o.innerHTML='<div style="background:#fff;border-radius:16px;width:min(560px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:inherit">'
+    +'<div style="padding:14px 18px;background:#FFF7F7;border-bottom:1px solid #F5D0D0"><div style="font-size:15px;font-weight:800;color:#9B1C1C">B2C แก้ที่รับ-ส่ง</div>'
+    +'<div style="font-size:12px;color:#7F1D1D;margin-top:2px">'+e(b.voucherRef||b.id)+' &middot; '+e(t.date||'')+' &middot; '+e(rt.name||'')+(pax?(' &middot; '+pax+' คน'):'')+(whenTx?(' &middot; B2C ส่งมาเมื่อ '+e(whenTx)):'')+'</div></div>'
+    +'<div style="padding:14px 18px;display:grid;grid-template-columns:96px 1fr 1fr;gap:8px 12px;font-size:13px;align-items:baseline">'
+      +'<span></span><b style="font-size:11px;color:#6B7280">ตอนนี้ในระบบ (rsvn แก้ไว้)</b><b style="font-size:11px;color:#9B1C1C">ใหม่จาก B2C</b>'
+      +P.map(function(x){ return '<span style="color:#6B7280">'+e(x.label)+'</span><span>'+e(cur(x.col)||'—')+'</span><b style="color:#9B1C1C">'+e(x.to||'—')+'</b>'; }).join('')
+      +((b.notes||'').trim()?('<span style="color:#6B7280">Request</span><span style="grid-column:2/4;color:#4B5160">'+e(String(b.notes).slice(0,200))+'</span>'):'')
+    +'</div>'
+    +(ov?'<div style="margin:0 18px 12px;background:#FFF8EC;border:1px solid #F3D19C;border-radius:9px;padding:8px 10px;font-size:12px;color:#7C2D12">ใบนี้จัดรถแล้ว &middot; ถ้าใช้ค่าใหม่ ต้องแจ้งทีมรถให้ตรวจจุดรับ</div>':'')
+    +'<div style="padding:12px 18px;border-top:1px solid #EEE;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+      +'<button onclick="bkB2cOvrDecide(\''+e(b.id)+'\',\'keep\')" style="border:1px solid #D0D5DD;background:#fff;border-radius:9px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">คงค่าเดิม (ล็อกต่อ)</button>'
+      +'<button onclick="bkB2cOvrDecide(\''+e(b.id)+'\',\'use\')" style="border:0;background:#0F766E;color:#fff;border-radius:9px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">ใช้ค่าจาก B2C</button>'
+    +'</div></div>';
+  document.body.appendChild(o);
+}
+function bkB2cOvrDecide(bkId, how){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var P=bkB2cOvrPending(b); if(!P.length){ bkB2cOvrClose(); return; }
+  P.forEach(function(x){
+    if(how==='use'){
+      var k=B2C_OVR_PROP[x.col], old=b[k];
+      b[k]=(x.col==='pickupself'||x.col==='dropoffsame')?(x.to==='ใช่'):x.to;
+      b.b2cOverride=b.b2cOverride.filter(function(c){ return c!==x.col; });
+      if(x.col==='pickuparea' && x.to && typeof SB_PICKUP_AREAS!=='undefined'){   /* จุดรับ (ชื่อ) เปลี่ยน · หาโซนในระบบที่ชื่อตรงกันให้ */
+        var lo=String(x.to).toLowerCase().trim(), ar=(SB_PICKUP_AREAS||[]).find(function(a){ return a && String(a.name||'').toLowerCase().trim()===lo; });
+        if(ar) b.pickupAreaId=ar.id;
+      }
+      bkV2AddHistory(b,'b2c_ovr_use', 'ใช้ค่าจาก B2C · '+x.label+': '+(old==null||old===''?'—':String(old))+' → '+(x.to||'—'), x.col);
+    } else {
+      bkV2AddHistory(b,'b2c_ovr_keep', 'คงค่าเดิม (ไม่ใช้ค่าจาก B2C) · '+x.label+': '+x.from+' · B2C: '+(x.to||'—'), x.col);
+    }
+  });
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  bkB2cOvrClose();
+  if(how==='use' && P.some(function(x){ return x.col==='pickuparea'; }) && !(typeof SB_PICKUP_AREAS!=='undefined' && (SB_PICKUP_AREAS||[]).some(function(a){ return a && b.pickupAreaId===a.id && String(a.name||'').toLowerCase().trim()===String(b.pickupArea||'').toLowerCase().trim(); })))
+    alert('Pickup area changed to "'+(b.pickupArea||'')+'" - check the pickup zone of this booking (no exact match in the area list).');
+  try{ if(typeof bkV2RenderKeep==='function' && document.getElementById('bkv2-host')) bkV2RenderKeep(); }catch(_){}
+  try{ if(typeof renderPierCheckin==='function' && document.getElementById('view-piercheckin') && document.getElementById('view-piercheckin').classList.contains('active')) renderPierCheckin(); }catch(_){}
+}
+function bkB2cOvrDayOpen(date){
+  var L=bkB2cOvrDay(date); if(!L.length) return;
+  if(L.length===1){ bkB2cOvrOpen(L[0].id); return; }
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  bkB2cOvrClose();
+  var o=document.createElement('div'); o.id='b2covr-ov'; o.className='la-modal';
+  o.style.cssText='position:fixed;inset:0;z-index:9100;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+  o.onclick=function(ev){ if(ev.target===o) bkB2cOvrClose(); };
+  o.innerHTML='<div style="background:#fff;border-radius:16px;width:min(520px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28)"><div style="padding:14px 18px;border-bottom:1px solid #EEE;font-weight:800;color:#9B1C1C">B2C แก้ที่รับ '+L.length+' ใบ &middot; '+e(date)+'</div>'
+    +L.map(function(b){ var x=bkB2cOvrPending(b)[0]; return '<div onclick="bkB2cOvrOpen(\''+e(b.id)+'\')" style="padding:10px 18px;border-bottom:1px solid #F3F2EE;cursor:pointer;display:flex;gap:10px;align-items:baseline"><b style="width:110px">'+e(b.voucherRef||b.id)+'</b><span style="flex:1;color:#4B5160">'+e(b.leadPax||'')+'</span><span style="color:#9B1C1C;font-weight:700">'+e(x.label)+' &rarr; '+e(x.to||'—')+'</span></div>'; }).join('')+'</div>';
+  document.body.appendChild(o);
+}
 function bkV2AddHistory(bk, kind, text, tag){
   if(!bk) return;
   if(!Array.isArray(bk.history)) bk.history=[];
@@ -57237,6 +57344,7 @@ function bkV2RenderTab2(){
   const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">today</span></div>
     <div class="bt-ncb">
       ${_unassignBar}
+      ${(function(){ var _ov=(typeof bkB2cOvrDay==='function')?bkB2cOvrDay(date):[]; return _ov.length?`<div class="bt-nc warn" data-b2covr-n="${_ov.length}" onclick="bkB2cOvrDayOpen('${date}')" style="cursor:pointer;background:#FDECEC;border-color:#F5B5B5;color:#9B1C1C"><span class="i">&#9888;</span><span><b>B2C แก้ที่รับ ${_ov.length} ใบ</b><i>ยังใช้ที่รับเดิม (rsvn เคยแก้ไว้) &middot; กดเพื่อเลือกค่าก่อนจัดรถ</i></span></div>`:''; })()}
       ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>Pending approval</b> &middot; ${_btPendN} booking<i>Not counted in trip totals &middot; not on van/boat job orders yet</i></span></div>`:''}
       ${_ckBar}
       ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
@@ -57959,7 +58067,7 @@ function bkV2RenderTab2(){
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               const _rtFt='';   /* §rtFt2 · ป้ายย้ายไปช่อง Send back */
-              return ((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt+((_unassignedCls && !vanMode)?`<div class="t2-unvan"><span class="nv">&#128652; ${laT('ยังไม่มีรถ')}</span><button type="button" class="pk" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">+ ${laT('เลือกรถ')}</button></div>`:''); })()}</td>
+              return ((typeof bkB2cOvrChip==='function')?bkB2cOvrChip(bk):'')+((bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>')+_rtFt+((_unassignedCls && !vanMode)?`<div class="t2-unvan"><span class="nv">&#128652; ${laT('ยังไม่มีรถ')}</span><button type="button" class="pk" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">+ ${laT('เลือกรถ')}</button></div>`:''); })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room" title="ห้อง ${esc(bk.roomNumber)}">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(function(){
               /* ══ §splitZone · โซนของแถวที่แยกคนออกมา ════════════════════════
