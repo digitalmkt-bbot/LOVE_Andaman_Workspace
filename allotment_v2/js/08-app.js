@@ -83694,6 +83694,16 @@ function bkNbfCSS2(){
     +S+' .nbf-gt tr.nbf-lead .nbf-ge{grid-column:3 / -1;grid-row:2;padding-top:0 !important;padding-bottom:9px !important}'
     +S+' .nbf-gt .nbf-gg{grid-column:4;grid-row:1}'
   +'}'
+  /* §bkMobEd · มือถือ · แขกแต่ละคนเป็นการ์ด ช่องเรียงลงทีละช่อง (owner ดู mockup "Booking Mobile" แล้วสั่งทำ) */
+  +'@media(max-width:640px){'
+    +S+' .nbf-gt thead{display:none}'
+    +S+' .nbf-gt tr{grid-template-columns:minmax(0,1fr) !important;gap:8px;padding:12px 12px 14px;border:1px solid #E3E6EE;border-radius:14px;margin:0 0 10px;background:#fff}'
+    +S+' .nbf-gt tr.nbf-lead{border:2px solid #2F5BD3}'
+    +S+' .nbf-gt td{grid-column:1 !important;grid-row:auto !important;padding:0 !important;display:block !important}'
+    +S+' .nbf-gt td.nbf-na{display:none !important}'
+    +S+' .nbf-gt .bkv2-nb-input{height:46px !important;font-size:15px !important;border-radius:11px !important}'
+    +S+' .nbf-gt .nbf-gn{flex-direction:row;gap:8px}'
+  +'}'
   +'@media(min-width:1501px){'
     +S+' .nbf-pk4{display:grid;grid-template-columns:max-content minmax(0,1fr) minmax(0,1.6fr) 150px;gap:0 12px;align-items:start}'
     +S+' .nbf-pk4 > .bkv2-nb-row{display:contents}'
@@ -87172,6 +87182,30 @@ function pc2CSS3(S){
     '.bk-mro-tabs .seg{flex:1;min-width:0;display:flex;background:#E9ECF3;border-radius:12px;padding:3px}',
     '.bk-mro-tabs .seg button{flex:1;min-width:0;height:38px;border:0;border-radius:9px;background:transparent;font:inherit;font-size:13.5px;font-weight:700;color:#4A5672;cursor:pointer}',
     '.bk-mro-tabs .seg button.on{background:#fff;color:#0F1B3D;box-shadow:0 1px 3px rgba(15,27,61,.12)}',
+    /* §bkMobEd · All bookings บนมือถือ · ตารางกลายเป็นการ์ดรายใบ (ข้อมูล/ปุ่มชุดเดิม แค่จัดวางใหม่) */
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-topcard,body.bk-mro.bk-mro-all #view-booking .bkv2-kpis,body.bk-mro.bk-mro-all #view-booking .bkv2-foot-hints,body.bk-mro.bk-mro-all #view-booking .bkv2-sortbar .hint{display:none!important}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-filterbar{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding-bottom:4px}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-filterbar .bkv2-pill{flex:none}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-search{order:-1;flex:0 0 100%;width:100%;height:44px;font-size:15px;box-sizing:border-box}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-filterbar{flex-wrap:wrap}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-sortbar .bkv2-seg{overflow-x:auto;max-width:100%}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl,body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tbody{display:block;width:100%;border:0;background:transparent}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl thead{display:none}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkv2-day{display:block;padding:12px 2px 4px}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkv2-day td{display:block;border:0;padding:0;font-size:12px;font-weight:700;color:#64748B;background:transparent}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"id pr" "tr tr" "dt ag" "st st";gap:4px 10px;background:#fff;border:1px solid #E5E7EC;border-radius:14px;padding:12px 14px;margin:0 0 8px}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td{display:block;border:0;padding:0;min-width:0;background:transparent}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(1){grid-area:id;padding-left:9px}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(2){grid-area:ag;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(2) .agent-rt{display:none}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(3){grid-area:tr}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(3) .trip-name{font-size:15px;font-weight:800}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(4){grid-area:dt}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(5),body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(8){display:none}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(6){grid-area:pr;text-align:right}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr>td:nth-child(7){grid-area:st}',
+    'body.bk-mro.bk-mro-all #view-booking table.bkv2-tbl tr.bkr .bk-sub{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}',
+    'body.bk-mro.bk-mro-all #view-booking .bkv2-month-bar,body.bk-mro.bk-mro-all #view-booking .bkv2-mbar{max-width:100%;overflow-x:auto}',
     '.bk-mro-new{flex:none;height:44px;padding:0 14px;border:0;border-radius:12px;background:#16265C;color:#fff;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;white-space:nowrap}',   /* §bkMobEd */
     '.bk-mro-c .ag{display:block;font-size:12px;color:#4A5672;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.bk-mro-ed{width:100%;height:48px;border:0;border-radius:12px;background:#16265C;color:#fff;font:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:4px}',
@@ -87726,7 +87760,7 @@ function pc2CSS3(S){
       document.body.classList.toggle('bk-mro', on);
       if(on) document.body.classList.remove('btc');   /* §bkMroBtc · ผิว Compact ปิดในผิวนี้ (§btCompact apply() ก็จะไม่ใส่กลับ) */
       document.documentElement.classList.toggle('bk-mro-x', on);
-      if(!on){ document.body.classList.remove('bk-mro-list', 'bk-mro-bt'); if(root) drop(root, '.bk-mro-top,.bk-mro-sum,.bk-mro-l'); busy = false; return; }
+      if(!on){ document.body.classList.remove('bk-mro-list', 'bk-mro-bt', 'bk-mro-all'); if(root) drop(root, '.bk-mro-top,.bk-mro-sum,.bk-mro-l'); busy = false; return; }
       ensureCss();
       hookRender();
       /* §bkMroBtc · มุมมอง Compact (§btCompact · เลือกไว้ในเครื่อง la_bt_view) เขียนการ์ด Boats running ทับเป็นตาราง (.btc-bt)
@@ -87743,6 +87777,7 @@ function pc2CSS3(S){
       try{ if(B){ B.boatAssignMode = false; B.vanAssignMode = false; B.reconfirmMode = false; } }catch(e){}
       var tab = B ? B.tab : '';
       document.body.classList.toggle('bk-mro-bt', tab === 'bytrip');
+      document.body.classList.toggle('bk-mro-all', tab === 'all');   /* §bkMobEd */
       var host = document.getElementById('bkv2-host') || root;
       var topcard = host.querySelector(':scope > .bkv2-topcard');
       if(topcard) place('bk-mro-top', host, topcard, buildTop(tab));
