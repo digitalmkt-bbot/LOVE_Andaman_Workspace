@@ -9808,6 +9808,7 @@ function bop2RpMoveBookings(d, fromId, toId){
     if(!b || ['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     if(typeof bkHasTripOn==='function' && !bkHasTripOn(b, d)) return;
     if(typeof bkOpsRead!=='function' || typeof bkOpsFor!=='function') return;
+    if(typeof bkUpgPromise==='function' && bkUpgPromise(b, d)){ (window._bop2Kept=window._bop2Kept||[]).push((b.voucherRef||b.code||b.id)+' '+d); return; }   /* §upgPromise · สัญญาลูกค้าไว้ = ไม่ย้ายตาม */
     const o=bkOpsRead(b, d); let hit=false;
     if(Array.isArray(o.boatSplits)) o.boatSplits.forEach(s=>{ if(s && s.boatId===fromId){ s.boatId=toId; hit=true; } });
     if(o.boatId===fromId){ bkOpsFor(b, d).boatId=toId; hit=true; }
@@ -9897,7 +9898,7 @@ function bop2ApplyReplace(){
     + (dropList.length ? ('Remove '+an+' from '+dropList.length+' day(s) (no replacement).\n') : '')
     + (P.skip.length-dropList.length>0 ? ('Leave '+(P.skip.length-dropList.length)+' day(s) as they are.\n') : '')
     + '\nContinue?')) return;
-  let nb=0;
+  let nb=0; window._bop2Kept=[];   /* §upgPromise */
   P.move.forEach(m=>{
     TRIPS[m.d][B]=Object.assign({}, TRIPS[m.d][A]);
     delete TRIPS[m.d][A];
@@ -9908,7 +9909,8 @@ function bop2ApplyReplace(){
   if(nb && typeof acctPersistBookings==='function') acctPersistBookings();
   bop2CloseModal();
   alert('Done. ' + (P.move.length ? (P.move.length+' day(s) now on '+bn+' ('+nb+' booking(s) moved). ') : '')
-    + (dropList.length ? (dropList.length+' day(s) removed - see the list of trips that need a boat.') : ''));
+    + (dropList.length ? (dropList.length+' day(s) removed - see the list of trips that need a boat.') : '')
+    + ((window._bop2Kept||[]).length ? ('\n\nNOT moved - '+window._bop2Kept.length+' GUARANTEED booking(s) promised '+an+': '+window._bop2Kept.join(', ')+'\nRe-assign each one yourself and tell the customer.') : ''));
   renderOp();
 }
 
