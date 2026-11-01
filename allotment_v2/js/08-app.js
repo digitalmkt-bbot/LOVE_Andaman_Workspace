@@ -22588,7 +22588,7 @@ function pckRowHtml(r, date, sheet){
   var room=b.roomNo||b.room||b.roomNumber||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
-  if(typeof bkUpgNote==='function'){ var _un=bkUpgNote(b, (typeof date!=='undefined')?date:''); if(_un) sreq=[_un,sreq].filter(Boolean).join(' \u00b7 '); }   /* §upgNote */
+  /* §upgTagPck · ที่มาของการ upgrade ขึ้นเป็นป้ายเหนือชื่อแล้ว (แบบ By trip) · ไม่ซ้ำในช่องคำขอพิเศษ */
   var ck=r.ck||{};
   /* §pckSplit · แถวจุดรับย่อยมีสถานะของตัวเอง · ปุ่มทุกตัวต้องส่ง kind ของแถวไป
      ไม่งั้นกดแล้วไปเขียนทับ ops.pierCheckin ของทั้งใบ แถวนี้จึงไม่ขึ้นสักที */
@@ -22634,7 +22634,7 @@ function pckRowHtml(r, date, sheet){
   }
   return '<tr class="'+cls+'">'
    +headCells
-   +'<td class="pcs-nm"'+pckNameTdAttr(r, sheet)+'>'+pckNameCell(r, sheet)+'</td>'
+   +'<td class="pcs-nm"'+pckNameTdAttr(r, sheet)+'>'+((typeof bkUpgTagHtml==='function')?bkUpgTagHtml(b, date):'')+pckNameCell(r, sheet)+'</td>'   /* §upgTagPck · ป้ายอยู่บรรทัดของตัวเอง เหนือชื่อ */
    +px('ad')+px('chd')+px('inf')+px('foc')
    +(sheet
      ? ('<td class="pcs-tm">'+(r._ovnBack
@@ -32084,6 +32084,27 @@ function bkUpgPromiseCommit(b, date, newBoatId){
   u.broken=(u.broken||[]).concat([{ from:from, to:newBoatId||'', reason:P.why, by:(typeof laBy==='function')?laBy():'', at:new Date().toISOString() }]);
   if(newBoatId) u.boatId=newBoatId; else { u.kind='fill'; delete u.boatId; }
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'ops','Guaranteed boat broken · '+bkUpgBoatNm(from)+' > '+(newBoatId?bkUpgBoatNm(newBoatId):'not assigned')+' · '+P.why+(P.how?(' · '+P.how):'')+(newBoatId?' · promise moves to the new boat':' · back to seat-fill upgrade'),'Boat');
+}
+/* §upgTagPck (2026-11-01) · owner "หน้าเช็คอินเรือ ต้องขึ้นเหมือนกันกับ By trip date"
+   ป้ายเดียวกับช่องลูกค้าใน By trip (ม่วง = เติมที่นั่ง · เขียวน้ำทะเล + ดาวเหลือง = สัญญาลูกค้า) · ใช้ได้ทุกหน้า
+   ใส่ CSS เองครั้งเดียว (ของ By trip อยู่ในสไตล์ของหน้านั้น ไม่มีในหน้าอื่น) */
+function bkUpgTagCss(){
+  if(document.getElementById('upg-tag-css')) return;
+  var st=document.createElement('style'); st.id='upg-tag-css';
+  st.textContent='.upg-tag{display:block;width:max-content;max-width:100%;box-sizing:border-box;font-size:10px;font-weight:800;color:#4A1D6E;background:#F4E8FB;border:1px solid #D9CFFA;border-radius:6px;padding:1px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.upg-tag.pr{position:relative;overflow:visible;color:#115E59;background:#CCFBF1;border-color:#5EC9BB;padding-left:12px;margin-left:9px;margin-top:9px}'
+    +'.upg-tag.pr .st{position:absolute;left:-8px;top:-9px;font-style:normal;font-size:15px;line-height:1;color:#FACC15;text-shadow:0 1px 0 #B45309,0 2px 4px rgba(180,83,9,.45);transform:rotate(-12deg)}';
+  document.head.appendChild(st);
+}
+function bkUpgTagHtml(b, date){
+  var t=((b&&b.trips)||[]).find(function(x){ return bkUpgActive(x) && (!date || (x.date||'')===date); }); if(!t) return '';
+  bkUpgTagCss();
+  var u=t.upg, pr=(u.kind==='promise');
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var tip=(pr?('★ Guaranteed boat '+bkUpgBoatNm(u.boatId)+' · '):'')+'Upgrade · '+bkUpgRouteName(u.fromRouteId)+' > '+bkUpgRouteName(u.toRouteId)
+    +(u.reason?(' · '+u.reason):'')+((+u.charge>0)?(' · +THB '+Number(u.charge).toLocaleString()):' · no charge');
+  return '<span class="upg-tag'+(pr?' pr':'')+'" data-upgfrom="'+e(u.fromRouteId)+'" title="'+e(tip)+'">'+(pr?'<i class="st" aria-hidden="true">&#9733;</i>':'')
+    +'&#10548; '+laT('จาก')+' '+e(bkUpgRouteName(u.fromRouteId))+'</span>';
 }
 function bkV2UpgKindHtml(U, pax, e){
   var k=U.kind||'fill';
