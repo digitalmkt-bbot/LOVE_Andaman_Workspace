@@ -22226,6 +22226,7 @@ function bkLtState(b, routeId, date){
 function pckTripStats(rows, date){
   var real={ad:0,chd:0,inf:0,foc:0}, book=0, lost=0;
   var lang={}, meal={veg:0,vegan:0,halal:0,allergy:0}, ltJoin=0, ltChtr=0;
+  var _sLost={};   /* §pckStatsSplit · ยอดหายรายประเภทที่ยังไม่ได้แจกให้แถวส่วนของใบ */
   // §cxlAddon (2026-08-03) · No-show / CXL หน้างานต้องหักของแถมตามไปด้วย
   //   เดิมทุกยอดข้างล่างคิดจาก "จองมา" (tot) ทั้งที่ยอดคนคิดจาก "เดินทางจริง" (real)
   //   ผลคือยกเลิก 2 คนแล้วเลขคนลดลง แต่ Longtail จอย / ภาษาไกด์ ยังเท่าเดิม
@@ -22239,6 +22240,23 @@ function pckTripStats(rows, date){
        ต่างกัน 8 คน = แถวค้างจัดการ 4 ใบ · เลขสองตัวอยู่บนแถบสีเดียวกัน */
     if(r.strand || r._vd) return;
     var b=r.b, t=r.t, pb=ckPaxBreak(t.pax), tot=0, realTot=0;
+    /* §pckStatsSplit (2026-11-01) · owner "เรางงอันนี้ สรุปจองกี่คนกันแน่" (Romeo · ใบเดียว 18 คน แยก 2 รถ)
+       ใบที่แยกรถ (vsPaxBd) / แยกเรือ (bsPaxBd) ถูกกางเป็นหลายแถว · ตัวนี้อ่าน t.pax เต็มใบทุกแถว
+       หัวเรือจึงขึ้น เดินทางจริง 34 · จอง 36 · หาย 2 ทั้งที่จริง 17 / 18 / 1
+       แถวที่เป็นส่วนของใบ → ใช้ยอดของส่วนนั้น · คนที่หายไปกระจายตามประเภทจากยอดหายของทั้งใบ (ไม่เกินที่เหลือ) */
+    var spb=r.vsPaxBd||r.bsPaxBd||null;
+    var first=!spb || !(+r.vsIdx||0) && !(+r.bsIdx||0);   /* ของรายใบ (อาหาร · หางยาวเหมา) นับครั้งเดียว */
+    if(spb){
+      var LK=_sLost[b.id];
+      if(!LK){ LK=_sLost[b.id]={};
+        ['ad','chd','inf','foc'].forEach(function(k){ var bf=pb[k]||0;
+          var lf=(typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,bf):bf; LK[k]=Math.max(0,bf-lf); }); }
+      var rl=Math.max(0,(+r.booked||0)-(r.expect!=null?(+r.expect||0):(+r.booked||0)));
+      ['ad','chd','inf','foc'].forEach(function(k){
+        var bk=+spb[k]||0, take=Math.min(rl, LK[k]||0, bk); rl-=take; LK[k]-=take;
+        book+=bk; tot+=bk; real[k]+=bk-take; realTot+=bk-take; lost+=take;
+      });
+    } else
     ['ad','chd','inf','foc'].forEach(function(k){
       var bk=pb[k]||0; book+=bk; tot+=bk;
       var left=(typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,bk):bk;
@@ -22250,16 +22268,16 @@ function pckTripStats(rows, date){
     ((typeof pckGuideLangs==='function')?pckGuideLangs(b):[]).forEach(function(c){ addL(c,realTot); });
     // อาหาร · ยกเลิกบางส่วนยังทำเผื่อไว้ (ไม่รู้ว่าคนที่ไม่มาคือคนที่สั่งอะไร ทำขาดเสียหายกว่าทำเกิน)
     //   ยกเลิกทั้งใบเท่านั้นที่ตัดออก
-    var mm=gone?{}:(b.specialMeals||{});
+    var mm=(gone||!first)?{}:(b.specialMeals||{});   /* §pckStatsSplit · ใบแยกรถ/เรือ นับอาหารครั้งเดียว */
     meal.veg+=+mm.veg||0; meal.vegan+=+mm.vegan||0; meal.halal+=+mm.halal||0;
     meal.allergy+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):(String(mm.allergies||'').trim()?1:0);
     /* §ltOne · รวมของที่จองมา + ขายเพิ่มหน้างาน + อัปเกรด ไว้ที่ bkLtState ที่เดียว */
     var LT=(typeof bkLtState==='function')?bkLtState(b,t.routeId,date):{mode:'none'};
     if(!gone){
-      if(LT.mode==='charter') ltChtr+=LT.boats;               // เหมาลำ · ยังต้องออกถ้ายังมีคนไป
+      if(LT.mode==='charter'){ if(first) ltChtr+=LT.boats; }  // เหมาลำ · ยังต้องออกถ้ายังมีคนไป · §pckStatsSplit ครั้งเดียวต่อใบ
       else if(LT.mode==='join'){
         if(LT.joinBooked) ltJoin+=realTot;                    // จอย · คิดรายหัวตามคนที่ไปจริง
-        ltJoin+=LT.joinExtra;                                 // ที่ขายเพิ่มหน้างาน · qty คือจำนวนคน
+        if(first) ltJoin+=LT.joinExtra;                       // ที่ขายเพิ่มหน้างาน · qty คือจำนวนคน
       }
     }
   });
