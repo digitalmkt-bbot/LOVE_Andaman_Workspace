@@ -248,7 +248,7 @@ test('pay: the allowance comes from the server; a rate is a PUT; the rules go as
   rt.w._paPay = true; rt.w._paDate = '2026-10-05';
   rt.w.renderPierAtt(); await rt.flush();
   const p = rt.w.paPayOf('ps_1', {}, 0, {});
-  assert.deepEqual(J(p), { total: 800, parts: [{ code: 'PP', days: 1, amt: 800, note: '' }], missing: false, rate: 800 });
+  assert.deepEqual(J(p), { total: 800, night: 0, parts: [{ code: 'PP', days: 1, amt: 800, note: '' }], missing: false, rate: 800, off: false });
   rt.w.PIER_CFG.payRate.ps_1 = 900;
   assert.equal(rt.w.paPayOf('ps_1').total, -1, 'a pending edit shows what was typed (legacy formula)');
   rt.w.PIER_CFG.payRules = { PP: { x: 2, d: 10, f: 0 } };
@@ -257,6 +257,35 @@ test('pay: the allowance comes from the server; a rate is a PUT; the rules go as
     ['PUT', '/v1/pier-office/staff/ps_1/pay-rate', { rate: 900 }],
     ['PUT', '/v1/pier-office/pay-rules', { rules: [{ code: 'PP', multiplier: 2, per_day: 10, flat: 0 }] }],
   ]);
+});
+
+test("§paRateRt, §paDept: the two settings load from pay-config, go whole on a save, and come back if refused; night pay has its own column", async () => {
+  const config = { route_rates: { ps_1: { SL: 700 } }, no_dept: {} };
+  const after = { route_rates: { ps_1: { SL: 750 } }, no_dept: { [PIER]: { 'r:Crew': 1 } } };
+  const rt = runtime({ answers: { 'GET /v1/pier-office/pay-config': config, 'PUT /v1/pier-office/pay-config': after } });
+  await boot(rt);
+  assert.deepEqual(J(rt.w.PIER_CFG.payRateRt), config.route_rates);
+  rt.w.PIER_CFG.payRateRt = { ps_1: { SL: 750 } };
+  rt.w.PIER_CFG.payNoDept = { [PIER]: { 'r:Crew': 1 } };
+  await save(rt);
+  assert.deepEqual(writes(rt).map((c) => [c.method, c.path, c.body]), [['PUT', '/v1/pier-office/pay-config', after]]);
+  rt.calls.length = 0;
+  await save(rt);
+  assert.deepEqual(writes(rt), [], 'saved: nothing left to send');
+
+  const refused = runtime({ answers: { 'GET /v1/pier-office/pay-config': config, 'PUT /v1/pier-office/pay-config': new Error('no') } });
+  await boot(refused);
+  refused.w.PIER_CFG.payRateRt = { ps_1: { SL: 1 } };
+  await save(refused);
+  assert.deepEqual(J(refused.w.PIER_CFG.payRateRt), config.route_rates, 'put back');
+
+  const night = runtime({ answers: { ['GET /v1/pier-office/' + PIER + '/pay?cycle=2026-09']: { people: [{ staff_id: 'ps_1', rate: null, total: 400, missing: false, off: true,
+    parts: [{ code: 'N', days: 2, amount: 400, ws: null, route_rate: null }] }] } }, over: () => ({ paNightCode: () => 'N' }) });
+  await boot(night);
+  night.w._paPay = true; night.w._paDate = '2026-10-05';
+  night.w.renderPierAtt(); await night.flush();
+  const p = night.w.paPayOf('ps_1', {}, 2, {});
+  assert.deepEqual([p.total, p.night, p.off], [0, 400, true], 'the server total includes the nights; the legacy column does not');
 });
 
 test('stock: balances are the server\'s; receive, count and laundry go to their commands and the server\'s moves replace the local ones', async () => {

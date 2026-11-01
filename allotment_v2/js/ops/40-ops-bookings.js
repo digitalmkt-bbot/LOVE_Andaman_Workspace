@@ -861,6 +861,8 @@
         ui: { newBooking: O.clone(st.newBooking), editingId: st.editingId, detailId: st.detailId, tab: st.tab, filterDate: st.filterDate, filterRoute: st.filterRoute }
       };
       window._laOpsCommitSync = null;
+      /* §paAdd · a walk-in opened from "เพิ่มคนหน้างาน" goes on the boat it came from once it is saved */
+      var pierBoat = st.newBooking && st.newBooking._pierBoat;
       /* the commit confirms a route outside the agent's contract ("เส้นทางนอกสัญญา…"); an OK is passed on to the server
          as programme_anyway so the person is not asked twice */
       var realConfirm = window.confirm;
@@ -871,6 +873,12 @@
       finally{ window.confirm = realConfirm; window._laOpsProgAgreed = false; }     // save() has already taken it
       var p = window._laOpsCommitSync; window._laOpsCommitSync = null;
       if(p && typeof p.then === 'function'){
+        if(pierBoat) p.then(function(j){
+          var tripId = j && j.trips && j.trips[0] && j.trips[0].id;
+          if(!tripId) return;
+          return O.queue(function(){ return O.call('PATCH', '/operations/trip-ops/' + encodeURIComponent(tripId), { boat_id: pierBoat }); })
+            .then(function(){ O.wrote('trip-ops'); }, function(e){ O.fail('Walk-in saved, but not placed on the boat', e); });
+        }, function(){});
         p.catch(function(e){
           if(typeof SB_BOOKINGS !== 'undefined') O.restoreInPlace(SB_BOOKINGS, before.bookings);
           if(typeof SB_SEAT_LOCKS !== 'undefined') O.restoreInPlace(SB_SEAT_LOCKS, before.locks);
