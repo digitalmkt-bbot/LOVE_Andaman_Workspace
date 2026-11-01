@@ -16232,6 +16232,7 @@ function ckSharedCSS(scope){
   +scope+' .ck-ev:hover{filter:brightness(.96)}'
   +scope+' .ck-ev-ns{border:1px solid #E6C9C3;color:#A32D2D}'
   +scope+' .ck-ev-cx{border:1px solid #EBDCC2;color:#8A5B00}'
+  +scope+' .ck-ev-bk{border:1px solid #B7D3EE;color:#1F5FA8;background:#F1F7FD}'   /* §pckKd */
   +scope+' .ck-ck{width:24px;height:24px;border-radius:7px;border:1px solid #D7DBD5;background:#fff;color:#B7BBB5;cursor:pointer;font-size:13px;font-weight:700}'
   +scope+' .ck-ck.on{background:#0F6E56;border-color:#0F6E56;color:#fff}'
   +scope+' .ck-rsn{font-size:10.5px;font-weight:600;color:#8a5622;background:#FBF3E6;border:1px solid #EBDCC2;border-radius:7px;padding:3px 8px;cursor:pointer;font-family:inherit;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}'
@@ -21547,10 +21548,16 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
   var e=ckEsc;
   var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
     +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>';
-  var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
-  var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
-    +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>';
-  if(!sheet) return stp+evs+okBtn;   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
+  var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',1)">+</button></span>';
+  var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
+    +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>';
+  /* §pckKd (2026-11-01) · owner "User แจ้งว่ากดยกเลิกผิด เราจะแก้ยังไง"
+     ปุ่ม + / No-show / CXL ของแถวเขียนลงช่อง 'pier' ตายตัว · ใบที่แยกรถ (pier#1, pier#2…) กด + ที่รถคันที่สองแล้วไปแก้ช่องของคันแรก
+     จึงคืนคนที่กดลบผิดไม่ได้ · ตอนนี้ทุกปุ่มใช้ช่องของแถวนั้น (kd) เหมือนปุ่ม − ที่ถูกอยู่แล้ว
+     และมีปุ่ม ↩ (รับกลับ / กดผิด) เมื่อแถวนั้นมีรายการ No-show / CXL ที่ยังมีผล · เก็บประวัติไว้ ไม่ลบทิ้ง */
+  var _live=(typeof ckEvLive==='function')?ckEvLive((ckRead(b,date,kd)||{}).events).length:0;
+  var undo=_live?('<button class="ck-ev ck-ev-bk'+(sheet?' ico':'')+'" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="กดผิด / เจอลูกค้าแล้ว · คืนคนที่ No-show / CXL ไว้">&#8617;'+(sheet?'':' กดผิด')+'</button>'):'';
+  if(!sheet) return stp+evs+undo+okBtn;   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
 
   /* ══ §pckMgTight · โหมดตาราง · ช่องการจัดการกินความกว้าง 318px กับสูงสองบรรทัด
      ทั้งที่คนหน้าท่ากดจริงแค่ปุ่มเช็คอิน · ที่เหลือกดนาน ๆ ครั้ง
@@ -21561,11 +21568,11 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
   var stp2='<span class="ck-stp" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน &#183; กดขึ้นได้ถึงยอดจอง แม้เช้าจะไม่ได้ขึ้นรถมา">'
     +'<button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button>'
     +'<span class="ck-n">'+actual+'<i>/'+r.booked+'</i></span>'
-    +'<button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
+    +'<button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',1)">+</button></span>';
   var evs2='<span class="pcs-evs">'
-    +'<button class="ck-ev ck-ev-ns ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="No-show · ลูกค้าไม่มา ไม่แจ้งล่วงหน้า">&#10005;</button>'
-    +'<button class="ck-ev ck-ev-cx ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="CXL · ลูกค้าแจ้งยกเลิกหน้างาน">&#8856;</button>'
-    +'</span>';
+    +'<button class="ck-ev ck-ev-ns ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\',\'no_show\')" title="No-show · ลูกค้าไม่มา ไม่แจ้งล่วงหน้า">&#10005;</button>'
+    +'<button class="ck-ev ck-ev-cx ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\',\'cxl\')" title="CXL · ลูกค้าแจ้งยกเลิกหน้างาน">&#8856;</button>'
+    +undo+'</span>';
   var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckTap(\''+b.id+'\',\''+date+'\',\''+kd+'\',this)" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
     +(on?('<span class="tm">'+e(pckHHMM(ck.at)||'')+'</span>'):'')+'</button>';
 
