@@ -1184,6 +1184,7 @@ function nav(el){
     else if(view==='marketdata') renderMarketData();
     else if(view==='focdetail') renderFocDetail();
     else if(view==='insurance') renderInsurance();
+    else if(view==='guestins' && typeof renderGuestInsights==='function') renderGuestInsights();   /* §guestIns */
     else if(view==='bookingflow') renderBookingFlow();
     else if(view==='pickupmap') renderPickupMap();
     else if(view==='devlog') renderDevLog();
