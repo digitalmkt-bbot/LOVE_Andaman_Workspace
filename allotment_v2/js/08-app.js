@@ -6786,7 +6786,8 @@ function renderInsurance(){
   const ds=_insDate;
   const trips=insTripsShown(ds);
   const F=_insFilt;
-  const G='32px 150px minmax(120px,210px) minmax(140px,250px) 60px 64px 44px minmax(0,1fr)';
+  /* §insFit (2026-11-01) · owner "ปรับให้พอดีหน่อย" · ทุกคอลัมน์ข้อความยืดตามสัดส่วน → เต็มกว้างพอดีทุกขนาดจอ · อายุ/สัญชาติ/ครบ คงที่ */
+  const G='32px minmax(130px,0.8fr) minmax(120px,1fr) minmax(140px,1.15fr) 64px 72px 48px minmax(90px,0.75fr)';
   const btn='border:1px solid #C7D6E6;background:#fff;color:#185FA5;border-radius:8px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap';
   const pill=(bg,fg,t)=>`<span style="background:${bg};color:${fg};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">${t}</span>`;
   let T={pax:0,noAge:0,noNat:0,miss:0,done:0,rev:0,boats:0};
@@ -6832,7 +6833,7 @@ function renderInsurance(){
         if(r.gapAfter && (!F||F==='name')){ shown++; rowsHtml+=gapRow(r); }
       });
       function gapRow(r){
-        return `<div style="display:grid;grid-template-columns:32px 150px minmax(0,1fr);column-gap:8px;align-items:center;padding:0 14px;min-height:26px;background:#FFF8EC;border-bottom:1px solid #F3F2EE;font-size:11.5px;color:#8A5100">
+        return `<div style="display:grid;grid-template-columns:32px minmax(130px,0.8fr) minmax(0,4fr);column-gap:8px;align-items:center;padding:0 14px;min-height:26px;background:#FFF8EC;border-bottom:1px solid #F3F2EE;font-size:11.5px;color:#8A5100">
           <span></span><span>${r.gapOnly?`<b style="font-size:11px;color:#334155">${e(r.b.voucherRef||r.b.id||'')}</b>`:''}</span>
           <span>+ ยังไม่มีชื่อ ${r.gapAfter} คน · ประกันยังไม่ครอบคลุม <a onclick="bkV2OpenDetail('${e(r.b.id)}')" style="cursor:pointer;color:#185FA5;font-weight:700;margin-left:6px">เปิด booking</a></span></div>`;
       }
