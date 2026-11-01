@@ -15256,6 +15256,106 @@ function tbOpen(bkId,date){
    +'    <button class="k" onclick="tbSave()">บันทึก</button></div>'
    +'</div></div>';
 }
+/* ══ §tbBoat (2026-11-01) · owner "ปุ่มกลับเข้าท่า ย้ายไปอยู่หัวเรือของลำนั้น ๆ ดีกว่า"
+   เรือกลับเข้าท่า = ทั้งลำ · กดทีเดียวบันทึกทุกใบที่อยู่บนเรือ (ติ๊กออกได้ เช่นใบที่ไม่ได้ไปจริง)
+   ที่เก็บเดิมทุกอย่าง (ops.turnBack รายใบ) · หน้าอื่น (By-trip · Travel Summary · Notice) อ่านเหมือนเดิม
+   เรื่องเงินในหน้านี้ = ค่าตั้งต้นของทุกใบที่ติ๊ก · ใบที่ตกลงเงินไว้แล้วและเลือก "รอตกลง" ที่นี่ จะไม่ถูกทับ
+   แก้รายใบ (เช่น เอเจนต์แต่ละเจ้าตกลงไม่เหมือนกัน) คลิกป้ายบนแถว หรือทำที่ Travel Summary */
+var _tbB={bid:'',date:'',reason:'weather',money:'pending',ids:[]};
+function tbBoatRows(bid, date){
+  var out=[];
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var on=(O.boatId||t.charterBoatId)===bid;
+    if(!on){ try{ var sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null; on=!!(sp && sp.some(function(x){ return x && x.boatId===bid; })); }catch(_){} }
+    if(!on) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    var ck=ckRead(b,date,'pier')||{}, booked=ckBookedPax(t), brd=!!ck.at;
+    try{ var vs=O.vanSplits; if(Array.isArray(vs)) vs.forEach(function(x,i){ var c=ckRead(b,date,'pier#'+i); if(c && c.at) brd=true; }); }catch(_){}
+    out.push({b:b, t:t, booked:booked, brd:brd, tb:tbOf(b,date)});
+  });
+  return out;
+}
+function tbBoatOpen(bid){
+  if(!ckGuard()) return;
+  var date=_pckDate, e=ckEsc, R=tbBoatRows(bid,date);
+  if(!R.length){ alert('No bookings on this boat today.'); return; }
+  var first=R.filter(function(x){ return x.tb; })[0], cur=first?first.tb:null;
+  _tbB={bid:bid, date:date, reason:(cur&&cur.reason)||'weather', money:'pending'};
+  var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var rb=function(k,l){ return '<button type="button" class="'+(_tbB.reason===k?'on':'')+'" onclick="tbBoatPick(\'reason\',\''+k+'\',this)"><div class="o1">'+e(l)+'</div></button>'; };
+  var mb=function(k,l,d){ return '<button type="button" class="'+(_tbB.money===k?'on':'')+'" onclick="tbBoatPick(\'money\',\''+k+'\',this)"><div class="o1">'+e(l)+'</div><div class="o2">'+e(d)+'</div></button>'; };
+  var anyTb=R.some(function(x){ return x.tb; });
+  var list=R.map(function(x){
+    var chk=anyTb ? !!x.tb : x.brd;
+    return '<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #F1EFE8;font-size:12px;cursor:pointer">'
+      +'<input type="checkbox" class="tb-bk" value="'+e(x.b.id)+'"'+(chk?' checked':'')+'>'
+      +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>'+e(x.b.leadPax||'—')+'</b> <span style="color:#8a8a82">· '+e(x.b.voucherRef||x.b.code||x.b.id)+'</span></span>'
+      +'<span style="color:#5F5E5A;font-family:\'DM Mono\',monospace">'+x.booked+' คน</span>'
+      +(x.brd?'':'<span style="font-size:10px;color:#A32D2D;font-weight:700">ยังไม่เช็คอิน</span>')
+      +(x.tb?('<span style="font-size:10px;color:#7A4300;font-weight:700">'+e(tbMoneyLbl(x.tb))+'</span>'):'')
+      +'</label>'; }).join('');
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg">'
+   +'  <div class="ck-dh"><div><div class="t1">&#9973; ออกเรือแล้วกลับเข้าท่า · ทั้งลำ</div>'
+   +'    <div class="t2">'+e(boat.name||bid)+' · '+R.length+' ใบ · ติ๊กเฉพาะใบที่อยู่บนเรือรอบนี้</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   +'    <div class="ck-fn" style="margin-bottom:8px">คนยัง<b>นับว่าขึ้นเรือ</b> (น้ำมัน · ลูกเรือ · ใบงาน เกิดแล้ว) · บันทึกนี้ไว้ตามเรื่องเงินกับเอเจนต์/ลูกค้าต่อ</div>'
+   +'    <div class="lb">ใบที่อยู่บนเรือ</div><div style="max-height:220px;overflow:auto;border:1px solid #EEECE6;border-radius:9px;padding:2px 10px;margin-bottom:10px">'+list+'</div>'
+   +'    <div class="lb">สาเหตุ</div><div class="ck-bkopt" id="tbb-reason">'+rb('weather',TB_REASON.weather)+rb('boat',TB_REASON.boat)+rb('guest',TB_REASON.guest)+rb('other',TB_REASON.other)+'</div>'
+   +'    <input id="tbb-note" class="ck-inp" type="text" placeholder="เช่น ออก 08:30 กลับเข้าท่า 09:15 · คลื่น 2 ม." value="'+e((cur&&cur.note)||'')+'">'
+   +'    <div class="lb" style="margin-top:10px">เรื่องเงิน · ใช้กับทุกใบที่ติ๊ก</div><div class="ck-bkopt" id="tbb-money">'
+   +mb('pending','รอตกลง','ใบที่ตกลงไว้แล้วจะไม่ถูกทับ')+mb('full','เก็บเต็ม 100%','ออกเรือแล้ว ต้นทุนเกิดแล้ว')
+   +mb('refund','คืนเงินบางส่วน','ระบุ % ด้านล่าง')+mb('resched','ไปใหม่วันอื่น','จองวันใหม่ให้')+mb('other','อื่นๆ','เขียนหมายเหตุ')+'</div>'
+   +'    <div style="display:flex;gap:8px;margin-top:6px"><input id="tbb-pct" class="ck-inp" type="number" min="0" max="100" step="1" placeholder="คืน %" style="width:90px">'
+   +'      <input id="tbb-mnote" class="ck-inp" type="text" placeholder="หมายเหตุเรื่องเงิน · ใครตกลง" style="flex:1"></div>'
+   +'    <div class="ck-fn" style="margin-top:8px">แต่ละใบตกลงไม่เหมือนกัน → บันทึกที่นี่ก่อน แล้วคลิกป้าย ⛵ บนแถวของใบนั้นเพื่อแก้รายใบ</div>'
+   +'  </div>'
+   +'  <div class="ck-df">'+(anyTb?'<button class="c" style="color:#A32D2D" onclick="tbBoatRemove()">ถอนทั้งลำ</button>':'')
+   +'<button class="c" onclick="ckReasonClose()">ยกเลิก</button><button class="k" onclick="tbBoatSave()">บันทึก</button></div>'
+   +'</div></div>';
+}
+function tbBoatPick(k,v,el){ _tbB[k]=v; var box=document.getElementById(k==='reason'?'tbb-reason':'tbb-money'); if(!box) return;
+  Array.prototype.forEach.call(box.children,function(x){ x.classList.remove('on'); }); if(el) el.classList.add('on'); }
+function tbBoatSave(){
+  var st=_tbB; if(!st.bid) return ckReasonClose(); if(!ckGuard()) return;
+  var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var pct=g('tbb-pct');
+  if(st.money==='refund' && !pct){ alert('Enter the refund %.'); return; }
+  var pick={}; document.querySelectorAll('#ck-reason-host .tb-bk').forEach(function(cb){ if(cb.checked) pick[cb.value]=1; });
+  if(!Object.keys(pick).length){ alert('Tick at least one booking.'); return; }
+  var R=tbBoatRows(st.bid, st.date), note=g('tbb-note'), now=new Date().toISOString(), n=0, rm=0;
+  R.forEach(function(x){
+    var b=x.b, cur=x.tb, O=bkOpsFor(b,st.date);
+    if(!pick[b.id]){
+      if(cur){ delete O.turnBack; rm++; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','ถอนรายการ "ออกเรือแล้วกลับเข้าท่า" (ทั้งลำ)','Turn-back'); }
+      return;
+    }
+    var ck=ckRead(b,st.date,'pier')||{};
+    var keepMoney=(st.money==='pending' && cur && cur.money && cur.money.kind && cur.money.kind!=='pending');
+    var tb={ at:(cur&&cur.at)||now, hm:(cur&&cur.hm)||ckNowHM(), by:(cur&&cur.by)||ckMe(), boat:st.bid,
+             reason:st.reason, note:note, pax:(ck.actualPax!=null)?ck.actualPax:x.booked,
+             money: keepMoney ? cur.money
+               : { kind:st.money, pct:(st.money==='refund'&&pct)?+pct:null, amt:null, note:g('tbb-mnote'), by:ckMe(), at:now } };
+    if(cur) tb.editedAt=now;
+    O.turnBack=tb; n++;
+    if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'pier','⛵ ออกเรือแล้วกลับเข้าท่า (ทั้งลำ) · '+(TB_REASON[tb.reason]||tb.reason)+(note?(' · '+note):'')+' · เงิน: '+tbMoneyLbl(tb),'Turn-back');
+  });
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+  try{ if(typeof bkV2Render==='function' && document.querySelector('#view-booking.active')) bkV2Render(); }catch(_){}
+}
+function tbBoatRemove(){
+  var st=_tbB; if(!st.bid) return ckReasonClose(); if(!ckGuard()) return;
+  if(!confirm('Remove the turn-back record from every booking on this boat?')) return;
+  tbBoatRows(st.bid, st.date).forEach(function(x){ if(!x.tb) return; var O=bkOpsFor(x.b,st.date); delete O.turnBack;
+    if(typeof bkV2AddHistory==='function') bkV2AddHistory(x.b,'pier','ถอนรายการ "ออกเรือแล้วกลับเข้าท่า" (ทั้งลำ)','Turn-back'); });
+  ckPersist(); ckReasonClose(); ckAfter('pier');
+}
 function tbPick(k,v,el){ _tb[k]=v; var box=document.getElementById(k==='reason'?'tb-reason':'tb-money'); if(!box) return;
   Array.prototype.forEach.call(box.children,function(x){ x.classList.remove('on'); }); if(el) el.classList.add('on'); }
 function tbSave(){
@@ -22113,11 +22213,7 @@ function pckRowHtml(r, date, sheet){
         โหมดการ์ดมีที่เหลือเฟือ เก็บคำไว้ตามเดิม */
      /* §pckMoveRow (2026-10-10) · "อยากให้กดเปลี่ยนในหน้า Manifest เลย" · ปุ่มย้ายลำบนแถว ไม่ต้องเปิดแถบรายละเอียด
         เฉพาะคนที่มีสิทธิ์ act-pckmove · ไม่ขึ้นกับแถวที่ยกเลิก/ไม่ต้องเช็คอิน ใบเหมาลำ และแถวของใบที่แยกลงหลายลำ */
-     /* §turnBack · ปุ่มเฉพาะแถวที่เช็คอินขึ้นเรือแล้ว (หรือมีรายการอยู่แล้ว → แก้) */
-     +((!_vd && (on || tbOf(b,date)))
-       ? ('<button class="pck-tbrow" onclick="event.stopPropagation();tbOpen(\''+b.id+'\',\''+date+'\')" title="ออกเรือแล้วกลับเข้าท่า (อากาศ/เรือ/ลูกค้าขอกลับ) · คนยังนับว่าขึ้นเรือ · บันทึกข้อตกลงเรื่องเงิน" '
-          +'style="border:1px solid #F0C37A;background:'+(tbOf(b,date)?'#F59E0B':'#FFF7E6')+';color:'+(tbOf(b,date)?'#fff':'#7A4300')+';border-radius:999px;padding:'+(sheet?'2px 8px':'4px 11px')+';font:700 '+(sheet?'11px':'11.5px')+' inherit;font-family:inherit;cursor:pointer;white-space:nowrap">&#9973;'+(sheet?'':(tbOf(b,date)?' กลับเข้าท่า ✎':' กลับเข้าท่า'))+'</button>')
-       : '')
+     /* §tbBoat (2026-11-01) · ปุ่ม ⛵ กลับเข้าท่า ย้ายไปหัวเรือ (กลับทั้งลำ) · แถวเหลือป้าย คลิกป้าย = แก้รายใบ */
      +((!_vd && t.bookingMode!=='charter' && !(r.bsN>1) && typeof pckMoveCan==='function' && pckMoveCan())
        ? ('<button class="pck-mvrow" onclick="event.stopPropagation();pckMoveOpen(\''+b.id+'\')" title="ย้ายใบนี้ไปลำอื่นที่วิ่งโปรแกรมเดียวกันวันนี้" '
           +'style="border:1px solid #BFD3EA;background:#EEF4FB;color:#15396B;border-radius:999px;padding:'+(sheet?'2px 8px':'4px 11px')+';font:700 '+(sheet?'11px':'11.5px')+' inherit;font-family:inherit;cursor:pointer;white-space:nowrap">&#8644;'+(sheet?'':' ย้ายลำ')+'</button>')
@@ -22134,7 +22230,7 @@ function pckRowHtml(r, date, sheet){
      +(tally.no_show>0?'<div style="text-align:right"><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
      +(tally.cxl>0?'<div style="text-align:right"><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div style="text-align:right"><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
-     +(tbOf(b,date)?('<div style="text-align:right;margin-top:4px">'+tbChip(tbOf(b,date),!!sheet)+'</div>'):'')   /* §turnBack */
+     +(tbOf(b,date)?('<div style="text-align:right;margin-top:4px;cursor:pointer" title="คลิกเพื่อแก้รายการของใบนี้ (สาเหตุ · เรื่องเงิน)" onclick="event.stopPropagation();tbOpen(\''+b.id+'\',\''+date+'\')">'+tbChip(tbOf(b,date),!!sheet)+'</div>'):'')   /* §turnBack · §tbBoat */
      +rsn
    +'</td>'
    +'</tr>';
@@ -24739,6 +24835,7 @@ function pckSheetBand(kind, key, rows, date, lvl){
        มุมมองการ์ดมีปุ่มนี้อยู่แล้ว · มุมมองตารางไม่มี ต้องเลื่อนไปกดที่แถบบนซึ่งพิมพ์ทุกลำ
        วางชิดขวาสุดของแถบหัวลำ ตรงคอลัมน์ "การจัดการ" ซึ่งเป็นเลนของปุ่มสั่งการอยู่แล้ว */
     +'</div>'
+    +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();tbBoatOpen(\''+e(key)+'\')" title="ออกเรือแล้วกลับเข้าท่า · บันทึกทั้งลำ">&#9973; กลับเข้าท่า</button>'):'')   /* §tbBoat · มุมมองตาราง */
     +(isBoat?('<button class="pcs-job" onclick="event.stopPropagation();pckGuideJobOrder(\''+e(key)+'\')"'
         +' title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'):'')
     +'</div></td></tr>';
@@ -25665,9 +25762,12 @@ function renderPierCheckin(){
         +(a.sx?('<div class="pck-bchip" style="background:#FCE4E4;border:1px solid #fff;color:#A32D2D;font-weight:800" title="จัดเรือ/จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก · ไม่นับเข้ายอดใด"><span class="k" style="opacity:.85">&#10007; ค้างจัดการ</span><span class="v">'+a.sx+'</span></div>'):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
         +(function(){ var n=0,px=0,pend=0; (B.rows||[]).forEach(function(r){ var tb=(typeof tbOf==='function')?tbOf(r.b,_pckDate):null; if(!tb) return; n++; px+=(+tb.pax||r.booked||0); if(!(tb.money&&tb.money.kind&&tb.money.kind!=='pending')) pend++; });   /* §turnBack2 */
-            return n?('<div class="pck-bchip" style="background:#FFF1DE;border:1px solid #fff;color:#7A4300;font-weight:800" title="ออกเรือแล้วกลับเข้าท่า · คนยังนับว่าขึ้นเรือ'+(pend?(' · รอตกลงเรื่องเงิน '+pend+' ใบ'):'')+'"><span class="k">&#9973; กลับเข้าท่า</span><span class="v">'+n+' ใบ · '+px+' คน'+(pend?' <b style="color:#A32D2D">รอตกลงเงิน</b>':'')+'</span></div>'):''; })()
+            return n?('<div class="pck-bchip" onclick="event.stopPropagation();tbBoatOpen(\''+bid+'\')" style="cursor:pointer;background:#FFF1DE;border:1px solid #fff;color:#7A4300;font-weight:800" title="ออกเรือแล้วกลับเข้าท่า · คนยังนับว่าขึ้นเรือ'+(pend?(' · รอตกลงเรื่องเงิน '+pend+' ใบ'):'')+' · คลิกเพื่อแก้ทั้งลำ"><span class="k">&#9973; กลับเข้าท่า</span><span class="v">'+n+' ใบ · '+px+' คน'+(pend?' <b style="color:#A32D2D">รอตกลงเงิน</b>':'')+'</span></div>'):''; })()
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="จ่ายไกด์แล้วพิมพ์ ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ต่อกันเป็นชุดเดียว">&#128220; ใบสั่งงาน + ทะเบียน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
+        /* §tbBoat · ออกเรือแล้วกลับเข้าท่า · ทั้งลำ */
+        +((B.rows||[]).some(function(r){ return r && !r.strand && !r._vd; })
+          ? '<button class="pck-jobbtn" onclick="event.stopPropagation();tbBoatOpen(\''+bid+'\')" title="ออกเรือแล้วกลับเข้าท่า · บันทึกทั้งลำครั้งเดียว · เลือกใบที่เกี่ยวข้องได้">&#9973; กลับเข้าท่า</button>' : '')
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
         /* §travelReg · ใบยื่นเจ้าท่า · ออกต่อจากใบงานไกด์ ชุดคนเดียวกัน */
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckTravelReg(\''+bid+'\')" title="ทะเบียนรายชื่ออย่างเดียว · ท่าเทียบเรือวิสิษฐ์พันวา · A4 แนวตั้ง">&#128203; ทะเบียนอย่างเดียว</button>'
