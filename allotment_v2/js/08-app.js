@@ -4263,7 +4263,13 @@ function bkV2LockFormFields(){
   const isBulk = f.scope==='bulk';
   if(!Array.isArray(f.dow)) f.dow=[];
   const agentDatalist = (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).map(a=>`<option value="${esc(a.name)}"></option>`).join('');
-  const routeOpts = (typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>`<option value="${r.id}" ${f.routeId===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
+  /* §lkRouteSea (2026-11-01) · owner "lock seat กรองให้เหลือแต่เส้นทางของเรา" · เฉพาะเส้นทางเรือ (ไม่มี City tour / รับส่ง / โชว์)
+     เกณฑ์เดียวกับทั้งระบบ laIsLandRoute() · จัดกลุ่มตามท่า เรียงตามลำดับที่ตั้งไว้ · ล็อกเก่าที่ผูกเส้นทางบกอยู่แล้วยังโชว์ (แก้ได้ ไม่หาย) */
+  const _lkR = (typeof ROUTES!=='undefined'?ROUTES:[]).filter(r=>r && (r.id===f.routeId || typeof laIsLandRoute!=='function' || !laIsLandRoute(r.id)));
+  if(typeof laRouteOrdCmp==='function') _lkR.sort((a,c)=>laRouteOrdCmp(a.id,c.id));
+  const _lkP=[]; _lkR.forEach(r=>{ const p=r.pier||''; if(_lkP.indexOf(p)<0) _lkP.push(p); });
+  const routeOpts = _lkP.map(p=>`<optgroup label="${esc((typeof laPierName==='function')?laPierName(p||'other'):(p||'-'))}">`
+    + _lkR.filter(r=>(r.pier||'')===p).map(r=>`<option value="${r.id}" ${f.routeId===r.id?'selected':''}>${esc(r.name)}</option>`).join('') + '</optgroup>').join('');
   const scopeBtn = (val,lbl)=>`<button ${_dis} onclick="bkV2LockSetField('scope','${val}')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 13px;background:${f.scope===val?'#C0392B':'#fff'};color:${f.scope===val?'#fff':'#9a3b21'};border-radius:6px">${lbl}</button>`;
   // §lkBulk · ติ๊กวันในสัปดาห์ · ไม่ติ๊ก = ทุกวัน
   const DOWL=['อา','จ','อ','พ','พฤ','ศ','ส'];
@@ -87128,7 +87134,11 @@ function pc2CSS3(S){
     return false;
   }
   function narrow(){ try{ return window.matchMedia ? window.matchMedia(MQ).matches : (window.innerWidth <= 760); }catch(e){ return false; } }
-  function isOn(){ return viewOnly() && narrow(); }
+  /* §bkMobEd (2026-11-01) · owner ดู mockup "Booking Mobile" แล้วสั่งทำ · ผิวการ์ดนี้ใช้กับทุกบัญชีบนจอแคบ
+     บัญชีที่แก้ operations ได้ (ED) เห็นเพิ่ม: เอเจนต์ · VC บนการ์ด · ปุ่ม "เปิดใบจอง / แก้ไข" ในแผ่นรายละเอียด
+     · แท็บ All bookings · ปุ่ม ＋ ใบจอง · บัญชีดูอย่างเดียวยังเหมือนเดิมทุกอย่าง (ไม่มีเอเจนต์ ไม่มีเงิน ไม่มีปุ่มแก้) */
+  function isOn(){ return narrow(); }
+  function ED(){ return !viewOnly(); }
   window.bkMroIsOn = isOn;
 
   var V = 'body.bk-mro #view-booking ';
@@ -87162,6 +87172,9 @@ function pc2CSS3(S){
     '.bk-mro-tabs .seg{flex:1;min-width:0;display:flex;background:#E9ECF3;border-radius:12px;padding:3px}',
     '.bk-mro-tabs .seg button{flex:1;min-width:0;height:38px;border:0;border-radius:9px;background:transparent;font:inherit;font-size:13.5px;font-weight:700;color:#4A5672;cursor:pointer}',
     '.bk-mro-tabs .seg button.on{background:#fff;color:#0F1B3D;box-shadow:0 1px 3px rgba(15,27,61,.12)}',
+    '.bk-mro-new{flex:none;height:44px;padding:0 14px;border:0;border-radius:12px;background:#16265C;color:#fff;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;white-space:nowrap}',   /* §bkMobEd */
+    '.bk-mro-c .ag{display:block;font-size:12px;color:#4A5672;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.bk-mro-ed{width:100%;height:48px;border:0;border-radius:12px;background:#16265C;color:#fff;font:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:4px}',
     '.bk-mro-ro{flex:none;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:14px;background:#FFD36A;color:#5A3A00;font-size:11.5px;font-weight:800;white-space:nowrap}',
     '.bk-mro-date{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:8px;box-shadow:0 1px 2px rgba(15,27,61,.06)}',
     '.bk-mro-date .ar{width:40px;height:40px;flex:none;border:1px solid #E3E6EE;border-radius:10px;background:#fff;font-size:20px;color:#3A3F5C;cursor:pointer}',
@@ -87362,11 +87375,15 @@ function pc2CSS3(S){
 
   /* ── หัว · แท็บ + ป้าย (+ แถบวันที่ใน By trip) ── */
   function buildTop(tab){
-    var h = '<div class="bk-mro-hrow"><span class="bk-mro-ro">&#128065; ดูอย่างเดียว</span></div>'
+    var ed = ED();
+    var h = (ed ? '' : '<div class="bk-mro-hrow"><span class="bk-mro-ro">&#128065; ดูอย่างเดียว</span></div>')
       + '<div class="bk-mro-tabs"><div class="seg" role="tablist">'
       + '<button type="button" class="' + (tab === 'cal' ? 'on' : '') + '" onclick="bkV2SwitchTab(\'cal\')">Calendar</button>'
       + '<button type="button" class="' + (tab === 'bytrip' ? 'on' : '') + '" onclick="bkV2SwitchTab(\'bytrip\')">By trip</button>'
-      + '</div></div>';
+      + (ed ? ('<button type="button" class="' + (tab === 'all' ? 'on' : '') + '" onclick="bkV2SwitchTab(\'all\')">All</button>') : '')
+      + '</div>'
+      + (ed ? '<button type="button" class="bk-mro-new" onclick="bkV2NewBooking()" aria-label="สร้างใบจองใหม่">&#65291; ใบจอง</button>' : '')
+      + '</div>';
     if(tab === 'bytrip'){
       var d = activeDate(); var dt = d ? new Date(d + 'T00:00') : new Date();
       if(isNaN(dt)) dt = new Date();
@@ -87550,6 +87567,7 @@ function pc2CSS3(S){
     return '<button type="button" class="bk-mro-c' + (row.cx ? ' cx' : '') + '" onclick="bkMroOpen(' + row.i + ')">'
       + '<span class="tm">' + esc(row.t1 || '—') + (row.t2 ? ('<small>' + esc(row.t2) + '</small>') : '') + '</span>'
       + '<span class="bd"><span class="nm"><b>' + esc(row.name || '—') + '</b>' + (row.cx ? '<span style="font-size:10.5px;font-weight:800;color:#A32D2D;flex:none">ยกเลิก</span>' : '') + '<span class="px">' + esc(pxTxt) + '</span></span>'
+      + ((ED() && (row.ag || row.vc)) ? ('<span class="ag">' + esc([row.ag, row.vc ? ('VC ' + row.vc) : ''].filter(Boolean).join(' · ')) + '</span>') : '')
       + '<span class="ht">' + esc(row.pk || (row.zk === 'OWN' ? 'มาเอง · ไม่มีรถรับ' : 'ยังไม่มีจุดรับ')) + (row.rm ? (' · <b>ห้อง ' + esc(row.rm) + '</b>') : '') + '</span>'
       + '<span class="mt">' + (row.zk ? ('<span class="zt' + (row.zk === 'KL' ? ' kl' : (row.zk === 'OWN' ? ' own' : '')) + '">' + (row.zk === 'OWN' ? 'Own' : esc(row.zk)) + '</span>') : '') + (row.zn ? ('<span>' + esc(row.zn) + '</span>') : '')
         + ((row.van || row.bt) ? '<span style="color:#9AA3B8">·</span>' : '') + (row.van ? ('<span>' + esc(row.van) + '</span>') : '') + (row.bt ? ('<span class="bt">→ ' + esc(row.bt) + '</span>') : '') + '</span>'
@@ -87620,6 +87638,7 @@ function pc2CSS3(S){
       var row = { id: id, i: ROWS.length, vc: txt(cell(C.vc)) || b.voucherRef || '', name: b.leadPax || txt(cell(C.cu)), px: px, tot: tot, tm: tmT, t1: t1, t2: t2,
                   pk: pk, rm: rm, zn: zn, zk: zk, bt: bt, van: van, vid: vid, ao: ao, sq: sq, cx: /\bt2-cxl\b/.test(cls), rc: rc, route: '', date: date, rid: (t && t.routeId) || '' };
       try{ var rr = (t && typeof getRoute === 'function') ? getRoute(t.routeId) : null; row.route = (rr && rr.name) || ''; }catch(e){}
+      try{ var ag = (b.agentId && typeof sbGetAgent === 'function') ? sbGetAgent(b.agentId) : null; row.ag = (ag && ag.name) || b.agentName || (b.source === 'b2c' ? 'B2C' : ''); }catch(e){ row.ag = ''; }   /* §bkMobEd */
       ROWS.push(row);
       var pxTxt = px.chd || px.inf ? (px.ad + '+' + (px.chd + px.inf)) : String(tot);
       /* ใบยกเลิก · พับไว้ท้ายหน้า ไม่ปนกับใบที่ไปจริง */
@@ -87674,13 +87693,17 @@ function pc2CSS3(S){
         + (r.bt ? ('<div><div class="k">เรือ</div><div class="v"><b>' + esc(r.bt) + '</b></div></div>') : '')
         + ((r.ao || r.sq) ? ('<div><div class="k">Add-on · คำขอพิเศษ</div><div class="tg">' + r.ao + r.sq + '</div></div>') : '')
         + (pax.length ? ('<div><div class="k">รายชื่อ · ' + pax.length + '</div><div class="v">' + pax.map(function(p){ return esc(p.name) + (p.nationality ? (' · ' + esc(p.nationality)) : ''); }).join('<br>') + '</div></div>') : '')
-        + '<div class="ro">&#128065; บัญชีนี้ดูได้อย่างเดียว · แก้ไข จัดรถ จัดเรือ ทำที่ออฟฟิศ</div>'
+        + (ED()
+          ? ('<div><div class="k">เอเจนต์</div><div class="v">' + esc(r.ag || '—') + '</div></div>'
+             + '<button type="button" class="bk-mro-ed" onclick="bkMroEdit(\'' + esc(r.id) + '\')">เปิดใบจอง · แก้ไข</button>')
+          : '<div class="ro">&#128065; บัญชีนี้ดูได้อย่างเดียว · แก้ไข จัดรถ จัดเรือ ทำที่ออฟฟิศ</div>')
       + '</div></div>';
     var sh = document.getElementById('bk-mro-sh');
     if(!sh){ sh = document.createElement('div'); sh.id = 'bk-mro-sh'; sh.addEventListener('click', function(e){ if(e.target === sh) window.bkMroClose(); }); document.body.appendChild(sh); }
     sh.innerHTML = h;
   };
   window.bkMroClose = function(){ var sh = document.getElementById('bk-mro-sh'); if(sh) sh.remove(); };
+  window.bkMroEdit = function(id){ window.bkMroClose(); try{ if(typeof bkV2OpenDetail === 'function') bkV2OpenDetail(id); }catch(e){} };   /* §bkMobEd */
 
   /* วางบล็อกของเรา · สร้างใหม่เฉพาะตอนเนื้อหาเปลี่ยน (เทียบสตริงที่เราสร้าง ไม่ใช่ innerHTML · เบราว์เซอร์เขียนใหม่ไม่ตรงตัว → วนไม่จบ) */
   function place(cls, parent, before, h){
@@ -87714,7 +87737,7 @@ function pc2CSS3(S){
       }
       var B = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2 : null;
       try{
-        if(B && /^(locks|approvals|cancel|all)$/.test(B.tab || '')){ B.tab = 'bytrip'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; }
+        if(B && (ED() ? /^(locks|approvals|cancel)$/ : /^(locks|approvals|cancel|all)$/).test(B.tab || '')){ B.tab = 'bytrip'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; }
         if(B && B.tab === 'cal' && B.view && B.view !== 'cal'){ B.view = 'cal'; busy = false; if(typeof bkV2Render === 'function') bkV2Render(); return; }   /* ตาราง matrix ไม่พอดีจอ */
       }catch(e){}
       try{ if(B){ B.boatAssignMode = false; B.vanAssignMode = false; B.reconfirmMode = false; } }catch(e){}
