@@ -88,6 +88,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v14H3z"/><path d="M7 21h10"/><path d="M7 12l3-3 3 3 4-5"/></svg>
       Action Board
     </div>
+    <!-- §guestIns -->
+    <div class="nav-item" data-view="guestins" onclick="nav(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>
+      Guest Insights
+    </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(130,210,170,.5)">Operations</div>
     <div class="nav-item" data-view="booking" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
@@ -430,6 +435,7 @@
 
     <!-- ══════════ ACTION BOARD (§abBoard) ══════════ -->
     <div id="view-execboard" class="view"><div id="eb-wrap"></div></div>   <!-- §execBoard -->
+    <div id="view-guestins" class="view"><div id="guestins-host"></div></div>   <!-- §guestIns -->
     <div id="view-actionboard" class="view"><div id="ab-wrap" style="background:#00BCDF;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div></div>
 
     <!-- ══════════ CALENDAR (redesigned · Fleet Insights style) ══════════ -->
@@ -3806,6 +3812,7 @@
 <script src="js/09-action-board.js?v=c2953402"></script>
 <script src="js/11-exec-board.js?v=819a1bc5"></script>
 <!-- §wx (lk-inbox b445e22d) · legacy weather log; before the ops adapters, as every legacy file -->
+<script src="js/13-guest-insights.js?v=ea78b067"></script>
 <script src="js/12-weather.js"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
 <script src="js/ops/00-ops-core.js?v=6cd548b1"></script>
