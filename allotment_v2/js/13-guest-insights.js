@@ -84,7 +84,7 @@ function giRange(){
   return {from:from, to:t};
 }
 function giSet(k,v){ if(k==='period') _giPeriod=v; else if(k==='pier') _giPier=v; else if(k==='fam') _giFam=v; else if(k==='all') _giAllNat=!_giAllNat; renderGuestInsights(); }
-/* ข้อมูลดิบ · หนึ่งแถวต่อคน · ใช้ทั้งหน้าจอและ export */
+/* ข้อมูลดิบ · หนึ่งแถวต่อคน */
 function giCollect(){
   var R=giRange(), rows=[], heads=0, bad={cancelled:1,cancelled_weather:1,rejected:1};
   var lock=(typeof laMyPier==='function' && laMyPier())?String(laMyPier()):'';
@@ -108,15 +108,7 @@ function giCollect(){
   });
   return {R:R, rows:rows, heads:heads, pierLock:lock};
 }
-function giExport(){
-  var D=giCollect();
-  var q=function(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-  var L=['travel_date,program,program_family,pier,nationality,age,generation,agent_channel'];
-  D.rows.forEach(function(r){ L.push([r.date,r.route,r.fam,r.pier,r.a2,r.age==null?'':r.age,r.gen,r.agent].map(q).join(',')); });
-  var blob=new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='guest_profile_'+D.R.from+'_'+D.R.to+'.csv';
-  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
-}
+/* §giNoExport (2026-11-01) · owner "ตัด Export ฐานข้อมูลออก" · เอาปุ่มและฟังก์ชัน export ออก */
 function giMapSvg(cnt, max, e){
   var W=window.LA_WORLD; if(!W) return '';
   var tone=function(n){ return Math.min(1, Math.log10(n)/Math.log10(Math.max(10,max))); };
@@ -247,7 +239,7 @@ function renderGuestInsights(){
          +'<div style="display:flex;background:rgba(255,255,255,.10);border-radius:10px;padding:3px">'+seg('period','30','30 วัน',_giPeriod)+seg('period','q','ไตรมาสนี้',_giPeriod)+seg('period','year','ปีนี้',_giPeriod)+'</div>'
          +pierSeg
          +'<select onchange="giSet(\'fam\',this.value)" style="border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:10px;padding:8px 10px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer"><option value="" style="color:#111">ทุกโปรแกรม</option>'+famOpts+'</select>'
-         +'<button onclick="giExport()" title="หนึ่งแถวต่อคน · ไม่มีชื่อ/เบอร์/เลขพาสปอร์ต" style="border:0;background:'+T.btn+';color:'+T.btnInk+';border-radius:10px;padding:9px 14px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">Export ฐานข้อมูล (.csv)</button>'
+
        +'</div></div>'
      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">'
        +kp.map(function(k){ return '<div style="display:flex;flex-direction:column;gap:2px;border-left:3px solid '+k[3]+';padding-left:14px"><span style="font-size:12px;color:'+T.sub+'">'+k[0]+'</span><b style="font-size:28px;font-weight:700;font-variant-numeric:tabular-nums">'+e(k[1])+'</b><span style="font-size:12px;color:'+T.sub2+'">'+e(k[2])+'</span></div>'; }).join('')
