@@ -14568,13 +14568,27 @@ function ckEvTries(ev){
 }
 // pax ที่ไม่ได้เดินทาง แยกตามประเภทผู้โดยสาร · รวมทั้งเช็คอินรถและหน้าท่า
 // ใช้ paxBreak ที่บันทึกตอนกดปุ่ม No-show/CXL · ถ้าไม่มี (ข้อมูลเก่า) จะคืน unalloc ไว้ให้หักจากยอดรวมแทน
+/* §ckLostSlots (2026-11-01) · ใบที่แยกรถ เก็บเช็คอินรายจุดไว้ใน ops.<pier|van>Checkin._s[i]
+   ckLostByType อ่านแต่ events ชั้นบน · No-show / CXL ที่กดในแถวของรถคันที่สองจึงไม่ถูกนับเป็นคนหาย
+   รวม events ทุกชั้น · ตัดตัวซ้ำ (ช่องแรกถูกเติมจากชั้นบนตอนแยกจุด) · รายการที่ถูก "กดผิด/รับกลับ" ที่ไหนก็ตาม ถือว่าถอนแล้ว */
+function _ckAllEv(o, k){
+  var host=(k==='pier')?o.pierCheckin:o.vanCheckin, src=[];
+  src.push(host&&host.events);
+  try{ var bag=_ckBag(o,{k:k,i:0}); if(bag) Object.keys(bag).forEach(function(i){ src.push(bag[i]&&bag[i].events); }); }catch(_){}
+  var key=function(x){ return [x.type,+x.pax||0,x.at||'',x.by||'',x.ts||''].join('|'); };
+  var gone={}, seen={}, out=[];
+  src.forEach(function(a){ (Array.isArray(a)?a:[]).forEach(function(x){ if(x && x.undone) gone[key(x)]=1; }); });
+  src.forEach(function(a){ (Array.isArray(a)?a:[]).forEach(function(x){
+    if(!x || x.undone) return; var kk=key(x); if(gone[kk] || seen[kk]) return; seen[kk]=1; out.push(x); }); });
+  return out;
+}
 function ckLostByType(b, date){
   var out={ad:0,chd:0,inf:0,foc:0,total:0,unalloc:0,ns:0,cxl:0,selfPier:0};
   var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   var _reins=!!(O.pierCheckin && O.pierCheckin.reinstate);   // §ckPierFix
   [[ 'van', O.vanCheckin ], [ 'pier', O.pierCheckin ]].forEach(function(pair){
     var kind=pair[0], ck=pair[1];
-    var ev=ckEvLive(ck&&ck.events);   /* §ckBack */
+    var ev=_ckAllEv(O, kind);   /* §ckBack · §ckLostSlots */
     ev.forEach(function(x){
       var n=Math.max(0,+x.pax||0); if(!n) return;
       // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่าไปเองที่ท่า/ไปรถคันอื่น → ยังถือว่าเดินทาง
@@ -15346,6 +15360,10 @@ function ckBackSave(){
   ev[st.ix]=Object.assign({}, hit, { undone:{ why:(st.why==='mistake'?'mistake':'found'),
       at:ckNowHM(), by:ckMe(), ts:new Date().toISOString(),
       note:(noteEl?noteEl.value.trim():'') } });
+  /* §ckBackCap (2026-11-01) · ยอดรอรับ (ckCap → pckExpected) หักคนหายทุกรายการ รวมรายการที่กำลังถอน
+     คิดก่อนบันทึก = ยอดรอรับต่ำไป 1 · คืนคนแล้วเกินยอดรอรับ ระบบเลยติดป้าย "ตามมาเองที่ท่า" ให้เอง
+     และป้ายนั้นไปลบล้างคนหายรายการอื่นทีหลัง · บันทึกรายการที่ถอนแล้วก่อน แล้วค่อยคิดยอดรอรับ */
+  ckWrite(b, st.date, st.kind, Object.assign({}, cur, { events:ev }));
   var t=ckTripOn(b,st.date)||{}, booked=ckBookedPax(t);
   var cap=(typeof ckCap==='function')?ckCap(b,st.date,st.kind,booked):booked;
   /* §ckPierSelf · ที่ท่าเรือคืนได้ถึงยอดจองเต็ม · ฝั่งรถเพดานคือยอดจองอยู่แล้ว */
@@ -21555,9 +21573,22 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
      ปุ่ม + / No-show / CXL ของแถวเขียนลงช่อง 'pier' ตายตัว · ใบที่แยกรถ (pier#1, pier#2…) กด + ที่รถคันที่สองแล้วไปแก้ช่องของคันแรก
      จึงคืนคนที่กดลบผิดไม่ได้ · ตอนนี้ทุกปุ่มใช้ช่องของแถวนั้น (kd) เหมือนปุ่ม − ที่ถูกอยู่แล้ว
      และมีปุ่ม ↩ (รับกลับ / กดผิด) เมื่อแถวนั้นมีรายการ No-show / CXL ที่ยังมีผล · เก็บประวัติไว้ ไม่ลบทิ้ง */
-  var _live=(typeof ckEvLive==='function')?ckEvLive((ckRead(b,date,kd)||{}).events).length:0;
-  var undo=_live?('<button class="ck-ev ck-ev-bk'+(sheet?' ico':'')+'" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="กดผิด / เจอลูกค้าแล้ว · คืนคนที่ No-show / CXL ไว้">&#8617;'+(sheet?'':' กดผิด')+'</button>'):'';
-  if(!sheet) return stp+evs+undo+okBtn;   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
+  var _live=(typeof ckEvLive==='function')?ckEvLive((ckRead(b,date,kd)||{}).events).length:0, _uk=kd;
+  /* §ckLostSlots · ใบแยกรถที่เคยกด CXL / No-show ก่อนแก้ปุ่ม · รายการไปอยู่ชั้นบน (ช่อง 'pier') ไม่ได้อยู่ในแถวไหนเลย */
+  if(!_live && kd!=='pier'){ try{ var _top=((typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{})).pierCheckin||{};
+    if(ckEvLive(_top.events).length){ _live=1; _uk='pier'; } }catch(_){} }
+  var undo=_live?('<button class="ck-ev ck-ev-bk'+(sheet?' ico':'')+'" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\''+_uk+'\')" title="กดผิด / เจอลูกค้าแล้ว · คืนคนที่ No-show / CXL ไว้">&#8617;'+(sheet?'':' กดผิด')+'</button>'):'';
+  /* §pckLockCard · owner "กดเช็คอินไปแล้ว จู่ๆ มากดเพิ่ม กดลดได้" · โหมดการ์ดล็อกหลังขึ้นเรือแบบเดียวกับโหมดตาราง
+     ตัวเลขยังเห็น · ปุ่ม ↩ กดผิด ยังกดได้ (เป็นทางแก้ที่เก็บประวัติ) · −/+/No-show/CXL ต้องกด "แก้" ก่อน */
+  if(!sheet){
+    var _lbs='border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:9px;padding:5px 11px;font:700 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap';
+    if(on && !_pckMgOpen[b.id])
+      return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน · ล็อกอยู่ กด แก้ เพื่อปลดล็อก" style="opacity:.85"><span class="ck-n">'+actual+'</span></span>'
+        +undo+okBtn
+        +'<button class="pck-mgedit" style="'+_lbs+'" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
+    return stp+evs+undo+okBtn
+      +(on?'<button class="pck-mgedit on" style="'+_lbs+'" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ">&#128274; ล็อก</button>':'');
+  }   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
 
   /* ══ §pckMgTight · โหมดตาราง · ช่องการจัดการกินความกว้าง 318px กับสูงสองบรรทัด
      ทั้งที่คนหน้าท่ากดจริงแค่ปุ่มเช็คอิน · ที่เหลือกดนาน ๆ ครั้ง
