@@ -27317,6 +27317,17 @@ function tsDocCompose(){
     + '<tbody>' + routeRows + '<tr class="tot"><td colspan="3">รวมทั้งวัน · ไม่นับใบที่ยกเลิก/เลื่อนวัน</td><td class="num">' + dN + '</td><td class="num">' + e(dayPx[0]) + '</td><td class="num">' + e(dayPx[1]) + '</td><td class="num">' + e(dayPx[2]) + '</td><td class="num">' + e(dayPx[3]) + '</td><td class="num">' + dAb[1] + '</td><td class="num">' + dAb[0] + '</td><td class="num">' + dPct + '%</td><td class="num">' + (dCxl || '·') + '</td><td class="num">' + e(dayMoney) + '</td></tr></tbody></table>'
     + '<div class="sec-t"><span class="n">E</span>เคสที่ต้องตัดสิน · ยกเลิก / เลื่อนวัน<span class="d">คนไม่ครบ · ยกเลิกหน้างาน · เลื่อนวัน และคำตัดสินค่าปรับ</span><span class="r">' + nCases + ' เคส</span></div>' + casesTbl
     + '<div class="sec-t"><span class="n">F</span>รายการรับเงินหน้างาน<span class="d">ทุกใบที่มียอดต้องเก็บ · วิธีรับเงิน · คนเก็บ · COT</span><span class="r">' + nRec + ' ใบ</span></div>' + recTbl
+    /* §tsAddPrint (2026-11-01) · หมวด "เพิ่มหน้างาน" ติดไปกับใบปิดวันด้วย · อ่านจากตารางบนจอ (แบบเดียวกับหมวดอื่นในใบนี้) · ไม่มีรายการ = ไม่พิมพ์ */
+    + (function(){ var tb=h.querySelector('.ts-sadd table'); if(!tb) return '';
+        var rs=[].slice.call(tb.querySelectorAll('tbody tr')); if(!rs.length) return '';
+        var hd=T(h.querySelector('.ts-sadd .ts-sect')).replace(/^＋\s*/,''), dd=T(h.querySelector('.ts-sadd .ts-secd'));
+        var cell=function(td){ var c=td.cloneNode(true); [].forEach.call(c.querySelectorAll('.ts-noprint'), function(x){ x.remove(); });
+          return e((c.textContent||'').replace(/\s+/g,' ').trim()); };
+        return '<div class="sec-t"><span class="n">＋</span>' + e(hd) + '<span class="d">' + e(dd) + '</span></div>'
+          + '<table class="rt"><thead><tr><th>เรือ</th><th>Voucher</th><th>ลูกค้า</th><th class="r">เพิ่ม</th><th>เงิน</th><th>สถานะเงิน</th><th>ชื่อ</th><th>บันทึก</th></tr></thead><tbody>'
+          + rs.map(function(tr){ var td=[].slice.call(tr.children);
+              return '<tr>' + td.map(function(x,i){ return '<td' + (i===3?' class="num"':'') + '>' + cell(x) + '</td>'; }).join('') + '</tr>'; }).join('')
+          + '</tbody></table>'; })()
     + '<div class="sec-t"><span class="n">G</span>Manifest ประจำวัน<span class="d">ทุกใบของวัน เรียงตามเส้นทาง · Agency A–Z</span><span class="r">' + dN + ' ใบ · ไปจริง ' + dAb[0] + ' / จอง ' + dAb[1] + '</span></div>'
     + '<div class="aokey">Add-on: ' + aokey + '</div>' + manTbl
     + '</div>'
