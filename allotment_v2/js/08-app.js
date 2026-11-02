@@ -7550,6 +7550,65 @@ function bkBoatSplitPool(b, date){
 
 // ── กล่อง "แยกคนลงเรือ" ────────────────────────────────────────────────────────
 let _bkBoatM = null;
+// §altPickups phase-2 · auto-build vanSplits from altPickups so each pickup point becomes its own
+// allocation (same booking · can ride a DIFFERENT van). Split[0] = main pickup (Lead), split[i] = each
+// alt pickup carrying its own pickup location (pickAreaId/pickHotel/pickZone/altWho). Van/group assignments
+// are preserved across edits by index. Only manages AUTO splits (ops.altSplitAuto) — never touches a manual
+// split. Returns true if it changed b.ops. Does NOT persist/re-render (caller does).
+/* §pckFast2 · เดิมตอบ "เปลี่ยน" ทุกครั้งที่สร้าง split ใหม่ แม้ได้ค่าเดิมเป๊ะ
+   → bookingV2HealAltSplits สั่งบันทึกข้อมูลทั้งก้อน (~35 MB) ทุกครั้งที่หน้าท่า/By trip/ใบงานรถวาดใหม่
+   และล้างแคชทุกหน้าทิ้งไปด้วย · ตอนนี้เทียบก่อน/หลัง ตอบ true เฉพาะเมื่อข้อมูลรถเปลี่ยนจริง
+   (altSplitAuto ไม่นับ · ไม่ถูก map ลง DB จะหายทุกครั้งที่โหลดใหม่) */
+function _bkV2AltSnap(o){ o=o||{}; return JSON.stringify([o.vanSplits||null, o.vanGroup, o.vanId, o.vanReturnId]); }
+function _bkV2SyncAltPickupSplitsRaw(b){
+  if(!b) return false; b.ops = b.ops || {};
+  /* §altDrop · รายการที่ "รับที่เดิมแต่ส่งคนละที่" ไม่มีจุดรับของตัวเอง
+     เงื่อนไขเดิมจะคัดทิ้ง ต้องรับเข้ามาด้วย ไม่งั้นแยกส่งอย่างเดียวไม่ได้เลย */
+  const alt = Array.isArray(b.altPickups) ? b.altPickups.filter(a=>a && bkPaxSum(bkAltPax(a))>0
+      && ((a.place||'').trim()||a.areaId||(a.who||'').trim()||bkAltHasDrop(a))) : [];
+  const hc = (b.trips||[]).reduce((m,t)=>Math.max(m,(typeof bookingV2PaxAllTot==='function'?bookingV2PaxAllTot(t.pax||{}):0)),0);
+  const altTot = alt.reduce((s,a)=>s+bkPaxSum(bkAltPax(a)),0);
+  // ยอดของบุ๊กกิ้งแยกตามประเภท (เอาทริปที่คนเยอะสุด — แขกกลุ่มเดียวกันทุกทริป)
+  let _bkPax={ad:0,chd:0,inf:0,foc:0};
+  (b.trips||[]).forEach(t=>{ const p=bkPaxOfTrip(t); if(bkPaxSum(p)>bkPaxSum(_bkPax)) _bkPax=p; });
+  const cur = Array.isArray(b.ops.vanSplits) ? b.ops.vanSplits : [];
+  // respect a MANUAL split (not auto) — leave it alone
+  if(cur.length && !_bkV2IsAltAutoSplit(b)) return false;   // ops.altSplitAuto ไม่ถูก map ลง DB — ต้องดูจาก marker ใน vanSplits
+  // no usable alt pickups (or they overflow the group) → collapse any auto split back to a single row
+  if(!alt.length || altTot>=hc || hc<2){
+    if(cur.length && _bkV2IsAltAutoSplit(b)){
+      const f=cur[0]||{}; b.ops.vanGroup=+f.vanGroup||0; b.ops.vanId=f.vanId||null; b.ops.vanReturnId=f.vanReturnId||null;
+      delete b.ops.vanSplits; delete b.ops.altSplitAuto; return true;
+    }
+    return false;
+  }
+  const mainQty = hc - altTot;
+  // seed van assignments: from existing splits (by index) else from the flat ops fields (main)
+  const old = cur.length ? cur : [{vanGroup:+b.ops.vanGroup||0, vanId:b.ops.vanId||null, vanReturnId:b.ops.vanReturnId||null, vanSeq:+b.ops.vanSeq||0}];
+  const o0 = old[0]||{};
+  // จุดรับหลัก = ยอดบุ๊กกิ้ง ลบ ทุกจุดรับเพิ่ม · หักทีละประเภท เด็ก/ทารกจึงไม่ถูกแปลงเป็นผู้ใหญ่
+  const _altSum = alt.reduce((acc,a)=>bkPaxAdd(acc, bkAltPax(a)), {ad:0,chd:0,inf:0,foc:0});
+  const _mainPax = bkPaxSub(_bkPax, _altSum);
+  const splits = [Object.assign({ pax:mainQty, vanGroup:+o0.vanGroup||0, vanId:o0.vanId||null, vanReturnId:o0.vanReturnId||null, vanSeq:+o0.vanSeq||0, main:true }, _mainPax)];
+  alt.forEach((a,i)=>{ const _p=bkAltPax(a);
+    /* §altDrop · แถวที่ "รับที่เดิม แต่ส่งคนละที่" ขาไปนั่งรถคันเดียวกับกลุ่มหลักแน่นอน
+       ต้องสืบรถ/กลุ่ม/ลำดับจากกลุ่มหลักให้เลย ไม่งั้นตกจากใบงานขาไปทั้งแถว
+       ส่วนแถวที่รับคนละที่จริง ปล่อยว่างไว้เหมือนเดิม · คนจัดรถต้องเป็นคนเลือกเอง */
+    const _ownPick = !!((a.place||'').trim() || a.areaId);
+    const o = old[i+1] || (_ownPick ? {} : {
+      vanGroup:+o0.vanGroup||0, vanId:o0.vanId||null,
+      vanReturnId:o0.vanReturnId||null, vanSeq:+o0.vanSeq||0 });
+    /* §altDrop · จุดส่งของแถวนี้ · ใส่เฉพาะตอนตั้งเอง เพื่อให้ bkDropOf ถอยไปใช้ของทั้งใบได้ */
+    const _d = bkAltHasDrop(a)
+      ? { dropAreaId:a.dropAreaId||'', dropHotel:(a.dropPlace||'').trim(), dropZone:a.dropZone||'' }
+      : {};
+    splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p,
+      /* §splitPickTime · เก็บเวลารับของแถวนี้ไว้ ถ้าจุดรับยังเป็นที่เดิม */
+      (_ownPick && o.pickTime && (o.pickAreaId||'')===(a.areaId||'') && String(o.pickHotel||'').trim()===(a.place||'').trim()) ? {pickTime:o.pickTime} : {})); });
+  b.ops.vanSplits = splits; b.ops.altSplitAuto = true;
+  delete b.ops.vanGroup; delete b.ops.vanId;   // main now lives in split[0]
+  return true;
+}
 // Heal all bookings on a date · rebuild auto alt-pickup splits (for bookings saved before this feature / after edits)
 // §altPickups · detect an AUTO alt-pickup split from PERSISTED data (the `altSplitAuto` flag is a scalar on
 // ops that the relational backend does NOT map, so it's lost on reload) — the vanSplits markers (fromAlt /
@@ -11687,30 +11746,47 @@ function pckStageRank(k){ return {wait:0, arr:1, clr:2, on:3}[k]||0; }
 //   ระบบผูก "รถ" กับ booking และผูก "เรือ" กับ booking แยกกัน ไม่มีใครผูกรถกับเรือ
 //   หน้าจอเลยไม่เคยบอกว่ารถคันนี้ต้องส่งใครขึ้นลำไหน — คนขับกับไกด์ไปเจอกันงงหน้าท่า
 //   คืนรายการ [{bid, pax, n}] เรียงจากลำที่คนเยอะสุด
+/* §pckFast3 · ป้าย "จอยรถกับลำ…" เรียกตัวนี้ทีละคัน และแต่ละครั้งไล่ใบจองทั้งระบบ (~9,000 ใบ)
+   หน้าท่า 1 รอบเรียก ~50 ครั้ง = ไล่ ~450,000 รอบ · ตอนนี้ไล่ครั้งเดียวแล้วแยกเก็บทุกคัน
+   แคชใช้เฉพาะระหว่าง renderPierCheckin กำลังวาด (เปิดตอนเริ่ม ปิดตอนจบ · ตัวซ่อมข้อมูลรันก่อนเปิด)
+   ที่อื่นเรียกเมื่อไรก็คำนวณสดเหมือนเดิม · ข้อมูลเปลี่ยนแล้วไม่มีทางได้ของเก่า */
+var _pckVbsMemo=null, _pckVbsOn=false;
 function pckVanBoatSplit(vanId, date){
-  var out=[], idx={};
-  if(!vanId) return out;
+  if(!vanId) return [];
+  var map;
+  if(_pckVbsOn){
+    if(!_pckVbsMemo || _pckVbsMemo.date!==date) _pckVbsMemo={date:date, map:_pckVanBoatSplitAll(date)};
+    map=_pckVbsMemo.map;
+  } else map=_pckVanBoatSplitAll(date);
+  var r=map[vanId];
+  return r ? r.map(function(x){ return Object.assign({},x); }) : [];
+}
+function _pckVanBoatSplitAll(date){
+  var byVan={};
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    var mine=false, pax=0;
+    var per={};   // vanId → pax ของใบนี้ (คันเดียวกันหลาย split รวมเป็นหนึ่ง · นับใบเดียว เหมือนเดิม)
     if(Array.isArray(O.vanSplits) && O.vanSplits.length){
-      O.vanSplits.forEach(function(sp){ if(sp && sp.vanId===vanId){ mine=true; pax+=(+sp.pax||0); } });
-    } else if(O.vanId===vanId){ mine=true; pax=ckBookedPax(t); }
-    if(!mine) return;
+      O.vanSplits.forEach(function(sp){ if(sp && sp.vanId){ per[sp.vanId]=(per[sp.vanId]||0)+(+sp.pax||0); } });
+    } else if(O.vanId){ per[O.vanId]=ckBookedPax(t); }
     var bid=O.boatId||t.charterBoatId||'', k=bid||'__none';
-    if(!idx[k]){ idx[k]={bid:bid, pax:0, n:0, t0:'', t1:''}; out.push(idx[k]); }
-    idx[k].pax+=pax; idx[k].n++;
     // เก็บช่วงเวลารับของกลุ่มนี้ไว้ตัดสินว่า "จอยรอบเดียวกัน" หรือ "คนละรอบ"
     var tm=String(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'').trim();
-    if(/^\d{1,2}:\d{2}/.test(tm)){
-      if(!idx[k].t0 || tm<idx[k].t0) idx[k].t0=tm;
-      if(!idx[k].t1 || tm>idx[k].t1) idx[k].t1=tm;
-    }
+    var okT=/^\d{1,2}:\d{2}/.test(tm);
+    Object.keys(per).forEach(function(vid){
+      var V=byVan[vid]||(byVan[vid]={out:[], idx:{}});
+      if(!V.idx[k]){ V.idx[k]={bid:bid, pax:0, n:0, t0:'', t1:''}; V.out.push(V.idx[k]); }
+      var g=V.idx[k]; g.pax+=per[vid]; g.n++;
+      if(okT){ if(!g.t0 || tm<g.t0) g.t0=tm; if(!g.t1 || tm>g.t1) g.t1=tm; }
+    });
   });
-  out.sort(function(a,b){ return b.pax-a.pax; });
-  return out;
+  var map={};
+  Object.keys(byVan).forEach(function(vid){
+    map[vid]=byVan[vid].out.sort(function(a,b){ return b.pax-a.pax; });
+  });
+  return map;
 }
 // §vanJoin · การ์ด/ใบงานหนึ่งอันเป็นของเรือลำเดียว · ลำอื่นที่รถคันเดียวกันต้องไปส่งคือสิ่งที่มองไม่เห็น
 //   บอกแค่ "จอยรถกับลำไหน" พอ · จำนวนคนอยู่ใน title ไว้ให้จิ้มดูตอนอยากรู้ ไม่เอามารกบนป้าย
@@ -18313,7 +18389,7 @@ var PCK_THEAD='<thead><tr>'
  +'<th style="width:13%;text-align:right">การจัดการ</th>'
  +'</tr></thead>';
 function pckCardCSS(scope){ return ''
-  +scope+' .pck-boat{border-radius:22px;margin-bottom:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 10px 30px -6px rgba(15,23,42,.10),0 3px 10px -3px rgba(15,23,42,.06)}'
+  +scope+' .pck-boat{content-visibility:auto;contain-intrinsic-size:auto 600px;border-radius:22px;margin-bottom:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 10px 30px -6px rgba(15,23,42,.10),0 3px 10px -3px rgba(15,23,42,.06)}'
   +scope+' .pck-bband{padding:14px 18px 13px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}'
   +scope+' .pck-bmark{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;font-family:\'DM Mono\',monospace;flex:none}'
   +scope+' .pck-bname{font-size:19px;font-weight:800;line-height:1.1;letter-spacing:-.2px}'
@@ -22487,7 +22563,21 @@ function pckScrollRestore(host){
   /* กล่องเพิ่งถูกสร้างใหม่ ความสูงอาจยังไม่นิ่งในเฟรมนี้ · ค่าที่ตั้งไปจะโดนบีบเงียบ ๆ */
   if(window.requestAnimationFrame) requestAnimationFrame(apply);
 }
+/* §pckFast1 · การ์ดเรือที่ยังไม่อยู่บนจอ เบราว์เซอร์ข้ามการจัดหน้าไปก่อน (content-visibility)
+   เดิมทุกครั้งที่กด ✓ เบราว์เซอร์จัดหน้าใหม่ทั้ง ~12,000 ชิ้น ~0.5 วิ · ตอนนี้จัดแค่ลำที่เห็น
+   ลำที่ข้ามไปใช้ "ความสูงจริงครั้งก่อน" ของลำนั้น (จำตาม id) ตำแหน่งเลื่อนหลังวาดใหม่จึงไม่เด้ง */
+var _pckBoatH={};
+function pckBoatHSave(host){
+  try{ host.querySelectorAll('.pck-boat[id]').forEach(function(el){
+    var h=Math.round(el.getBoundingClientRect().height); if(h>0) _pckBoatH[el.id]=h; }); }catch(_){}
+}
+function pckBoatHApply(host){
+  try{ host.querySelectorAll('.pck-boat[id]').forEach(function(el){
+    var h=_pckBoatH[el.id]||Math.max(200, 90+68*el.querySelectorAll('.ck-row').length);
+    el.style.containIntrinsicSize='auto '+h+'px'; }); }catch(_){}
+}
 function renderPierCheckin(){
+  var _pf0=(typeof performance!=='undefined'&&performance.now)?performance.now():0;   /* §pckFast4 */
   var host=pckHostEl(); if(!host) return;   /* §landCk */
   if(typeof laMyPier==='function' && laMyPier()) _pckPier=laMyPier();   /* §pierScope · ล็อกท่า */
   var e=ckEsc, date=_pckDate;
@@ -22495,6 +22585,17 @@ function renderPierCheckin(){
   /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
      จะขึ้นป้าย "ยังไม่จัดรถ" ทั้งที่จัดครบแล้ว */
   if(typeof bookingV2HealAltSplits==='function'){ try{ bookingV2HealAltSplits(date); }catch(_){} }
+  _pckVbsMemo=null; _pckVbsOn=true;   /* §pckFast3 · เปิดแคชหลังตัวซ่อมข้อมูลรันเสร็จ */
+  /* §pckFast5 · สีสถานะ/สีบริการ อ่าน laBlob() แถวละหลายครั้ง · หลังเพิ่งบันทึก (ทุกครั้งที่กด ✓)
+     laBlob() ต้องเทียบสตริงก้อนทั้งระบบ (~35 MB) ทุกครั้งที่ถูกเรียก = ~1 วิ · ปักก้อนไว้ช่วงวาด
+     แบบเดียวกับหน้าเงินสดย่อย (§pcFast) · ตัวซ่อมข้อมูลด้านบนรันและบันทึกเสร็จก่อนปัก จึงไม่ได้ของเก่า */
+  var _pinMine=!_laBlobPin;
+  if(_pinMine){ try{ _laBlobPin=laBlob(); }catch(_){ _laBlobPin=null; } }
+  try{ return _renderPierCheckinBody(host, date, _pf0); }
+  finally { _pckVbsOn=false; _pckVbsMemo=null; if(_pinMine) _laBlobPin=null; }
+}
+function _renderPierCheckinBody(host, date, _pf0){
+  var e=ckEsc;
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
@@ -22844,6 +22945,7 @@ function renderPierCheckin(){
   if(_pckView==='sheet'){ try{ sheetHtml=pckSheetHtml(boats, border, date); }catch(err){
     try{ console.warn('[pckSheet] fallback to cards', err && err.message); }catch(_){} sheetHtml=''; } }
   pckScrollSave(host);
+  pckBoatHSave(host);   /* §pckFast1 */
   /* §pckHead · หัวข้อหน้ากับคำอธิบายถูกตัดออก · เมนูซ้ายบอกอยู่แล้วว่าอยู่หน้าไหน
      ที่ประหยัดได้เอาไปให้ตาราง ซึ่งเป็นของที่ต้องอ่านจริงทุกเช้า */
   host.innerHTML='<style id="pck-style">'+ckStrandCSS('.pck-host')+ckSharedCSS('.pck-host')+pckExtraCSS()+pckCardCSS('.pck-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
@@ -22892,10 +22994,14 @@ function renderPierCheckin(){
     host.style.setProperty('--pck-band', _b?pckTint(_b,.78):'#E4E7EC');
     host.style.setProperty('--pck-bandb', _b?pckTint(_b,.44):'#CFD4DC');
   })();
+  pckBoatHApply(host);   /* §pckFast1 · ต้องก่อนคืนตำแหน่งเลื่อน */
   ckSyncSticky(host); pckFitPane();
   pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
   ckStartTick('piercheckin', renderPierCheckin);
-  if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
+  if(_pckKitOpen) pckKitchenRender();
+  /* §pckFast4 · ตัวเฝ้าความเร็ว · วาดเกิน 300 ms ให้รู้ใน console ว่าช้าตรงไหน (ไม่เตือนผู้ใช้) */
+  try{ var _pfMs=Math.round(performance.now()-_pf0); window._pckLastMs=_pfMs;
+       if(_pfMs>300) console.warn('[perf] renderPierCheckin '+_pfMs+' ms · rows '+(all?all.length:0)+' · view '+_pckView); }catch(_){}   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
 // ══ §Travel Summary (2026-07-26) · สรุปหน้างานรายวัน → ตัดสินว่าเก็บเท่าไร / เลื่อนวัน ══
 // อ่านผลจากเช็คอินรถ + เช็คอินหน้าท่า (events[] ของ ops.vanCheckin / ops.pierCheckin)
@@ -51649,6 +51755,8 @@ function poBal(itemId){
       case 'ship_lost':     b.onship-=q; b.gone+=q; break;
       case 'ship_writeoff': b.onship-=q; b.gone+=q; break;
       case 'ship_repair':   b.onship-=q; b.repair+=q; break;
+      /* §poRpPier · อะไหล่ที่เบิกไปใช้ซ่อม · ออกจากพร้อมใช้ ไม่นับเป็นของหาย */
+      case 'part_use':      b.ready-=q; break;
       /* §poXfer · โยกไปท่าอื่น · ออกจากพร้อมใช้ทันที (ระหว่างทางไม่ใช่ของท่านี้แล้ว) · ยกเลิกก่อนปลายทางรับ = คืนเข้า
          ปลายทางรับไม่ครบ = ส่วนที่ขาดนับเป็นหายสะสมของท่าต้นทาง */
       case 'xfer_out':      b.ready-=q; break;
@@ -56983,10 +57091,10 @@ function renderPierOffice(pier){
       +'</div>'
     +poXferBlock(ro)   /* §poXfer · ของโอนเข้ารอรับ / กำลังส่ง */
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
-    /* §poRepPart · อะไหล่ซ่อมหน้ากาก · ของในคลัง Fleet ที่ท่านี้ใช้ซ่อม */
+    /* §poRepPart · §poRpPier · อะไหล่ซ่อมหน้ากาก · นับในคลังท่า (หัวข้อ 2) ที่เดียว */
     +poRpCss()+'<div class="po-sec"><span class="n">3</span> อะไหล่ซ่อม'
-      +'<span class="chip">ซื้อผ่าน Memo · ใช้ตอนกด "ซ่อม✓"</span><span style="flex:1"></span>'
-      +(ro?'':'<button class="po-btn" onclick="poRpAddOpen()" title="เลือกอะไหล่จากคลังฝั่ง Fleet มาแสดงที่ท่านี้">&#65291; เพิ่มรายการ</button>')
+      +'<span class="chip">นับในคลังท่า · ใช้ตอนกด "ซ่อม✓"</span><span style="flex:1"></span>'
+      +(ro?'':'<button class="po-btn" onclick="poRecvOpen()" title="ซื้ออะไหล่มาแล้ว · รับเข้าคลังท่า (ปุ่มเดียวกับหัวข้อ 2)">&#65291; รับของเข้า</button>')
       +'</div>'
     +poRepPartBlock(ro)
     /* §poShip3 · กอง 3 ของประจำเรือ · มีหน้าที่ของตัวเองบนหน้าหลัก */
@@ -58752,7 +58860,7 @@ function T_LDG(t){
          onboard:'ค้างบนเรือ',laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',
          adjust:'ปรับยอด',assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
          ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
-         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด',part_use:'ใช้ซ่อม'};   /* §poXfer */
   return M[t]||t;
 }
 function poMoveEditSave(id){
@@ -59074,150 +59182,111 @@ function poUnshipSave(itemId, boatId){
   poPersist(); renderPierOffice(); poShipOpen(itemId);
 }
 
-/* ══ §poRepPart (2026-11-01) · อะไหล่ซ่อมหน้ากาก ════════════════════════════════════════════
-   owner: "เบิกซื้อตัวซ่อมมา … ต้องเรคคอร์ดด้วยว่า ซื้อมาเท่านี้ แล้วเอาไปใช้ตอนไหนบ้าง ซ่อมกับหน้ากากของเรือลำไหน"
-   ตัวอะไหล่อยู่ในคลังฝั่ง Fleet (FL_INVENTORY) ที่เดียว · ซื้อเข้าผ่าน Memo → รับของ เหมือนเดิม
-   หน้าเบิก-คืนแค่ "ใช้" · กดซ่อมเสร็จ → ตัดสต็อกที่คลังของท่า + ลงบันทึกเบิกของใช้ (FL_CONSUMABLE_LOGS)
-   เข้าเรือลำนั้น · จึงขึ้นในหน้าเบิกของใช้และต้นทุนเรือฝั่ง Fleet ด้วยโดยไม่ต้องกรอกซ้ำ
-   รายการที่โชว์ของแต่ละท่า = PIER_CFG.repairParts[ท่า] (เพิ่ม/เอาออกได้) · ครั้งแรกเติมจาก Memo ที่ชื่อมี "หน้ากาก" */
-var PO_RP_LOC={ tublamu:'คลัง Tub Lamu', panwa:'คลัง Visit Panwa', ranong:'คลัง Ranong' };
-var PO_RP_RX={ tublamu:/tub\s*la\s*m?u|tublamu|tubluma|ทับละมุ/i, panwa:/panwa|panda|พันวา/i, ranong:/ranong|ระนอง/i };
-function poRpLoc(pier){ return PO_RP_LOC[pier||_poPier]||('คลัง '+(pier||_poPier)); }
-function poRpLocOk(pier, loc){ var rx=PO_RP_RX[pier||_poPier]; return rx ? rx.test(String(loc||'')) : String(loc||'')===poRpLoc(pier); }
-function poRpInv(id){ return (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).filter(function(x){ return x && x.id===id; })[0]||null; }
-function poRpIds(pier){
-  pier=pier||_poPier;
-  if(!PIER_CFG || typeof PIER_CFG!=='object') return [];
-  var M=PIER_CFG.repairParts=(PIER_CFG.repairParts&&typeof PIER_CFG.repairParts==='object')?PIER_CFG.repairParts:{};
-  var S=PIER_CFG.repairPartsSeed=(PIER_CFG.repairPartsSeed&&typeof PIER_CFG.repairPartsSeed==='object')?PIER_CFG.repairPartsSeed:{};
-  if(!Array.isArray(M[pier])) M[pier]=[];
-  if(!S[pier] && !M[pier].length){   /* เติมครั้งเดียว · รายการจาก Memo ซ่อมหน้ากากที่มีของอยู่คลังท่านี้ */
-    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){ if(!/หน้ากาก|mask/i.test(String(m&&m.title||''))) return;
-      (m.items||[]).forEach(function(i){ var it=i&&i.invId&&poRpInv(i.invId); if(!it || M[pier].indexOf(it.id)>=0) return;
-        if((it.stocks||[]).some(function(s){ return poRpLocOk(pier, s.location); })) M[pier].push(it.id); }); });
-    S[pier]=1;
-  }
-  return M[pier].filter(function(id){ return !!poRpInv(id); });
+/* ══ §poRepPart (2026-11-01) · §poRpPier (2026-11-02) · อะไหล่ซ่อมหน้ากาก ═════════════════════
+   owner 2026-11-01: "ต้องเรคคอร์ดด้วยว่า ซื้อมาเท่านี้ แล้วเอาไปใช้ตอนไหนบ้าง ซ่อมกับหน้ากากของเรือลำไหน"
+   owner 2026-11-02: สต็อกแบ่ง 2 ก้อน ออฟฟิศ / เรือ · ตรวจนับบนเรือ เสียส่งคืนออฟฟิศเป็นรอซ่อม
+     ออฟฟิศเบิกอะไหล่จากคลังมาซ่อม · ซ่อมเสร็จหน้ากากอยู่คลังออฟฟิศ · จะคืนก็ส่งลงเรือ
+   → ตัวอะไหล่นับที่คลังของท่าที่เดียว = ของในทะเบียนท่า (PIER_ITEMS) ที่ประเภทชื่อมี "อะไหล่"
+     ซื้อเข้า / นับ / โยก ใช้ปุ่มหัวข้อ 2 เดิมทั้งหมด (เดิมไปตัดคลัง Fleet อีกเล่ม ยอดเลยไม่ตรงกับที่ท่านับ)
+   ซ่อม✓ → move 'part_use' (พร้อมใช้ −) ผูกเรือที่ forBoat (ไม่ใช้ boatId · ตัวนั้นใบเบิก–คืนรายวันอ่าน)
+     + ลงเบิกของใช้ฝั่ง Fleet (src pier_fix · ไม่ตัดคลัง Fleet) ให้ต้นทุนเรือขึ้น · ลบที่ Fleet = ลบ move นี้ด้วย
+   ราคาต่อหน่วยยืมจากของในคลัง Fleet ที่ชื่อตรงกัน (ของที่ซื้อผ่าน Memo) · หัวข้อ 3 เหลือไว้ดูอย่างเดียว */
+function poRpKinds(){ return (PIER_KINDS||[]).filter(function(k){ return k && k.active!==false && /อะไหล่|spare|part/i.test(String(k.name||'')+' '+String(k.name_en||'')); }).map(function(k){ return k.id; }); }
+function poRpItems(pier){ var K=poRpKinds(); return poItemsAll(pier||_poPier).filter(function(i){ return K.indexOf(i.kind)>=0 && i.active!==false; }); }
+function poRpTok(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').split(' ').filter(function(w){ return w.length>=3 || /\d/.test(w); }); }
+function poRpInvOf(it){
+  if(!it) return null; var A=poRpTok(it.label); if(!A.length) return null; var best=null, bs=0;
+  (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(x){ if(!x) return; var B=poRpTok((x.name||'')+' '+(x.partNo||'')), s=0;
+    A.forEach(function(w){ if(B.indexOf(w)>=0) s++; });
+    /* ต้องตรงอย่างน้อย 60% ของคำในชื่อฝั่ง Fleet · กัน "Mask Strap Retainer" ไปจับ "Mask Strap Sil" */
+    var r=(s>=2 && B.length)?s/B.length:0; if(r>=0.6 && r>bs){ bs=r; best=x; } });
+  return best;
 }
-/* ยอดของท่าเดียว · คงเหลือ = ทุกช่องสต็อกที่ชื่อคลังเป็นท่านี้ (ชื่อพิมพ์ไม่ตรงกันหลายแบบ) · ซื้อเข้า = ประวัติรับเข้าที่คลังนี้ */
-function poRpStat(it, pier){
-  pier=pier||_poPier;
-  var have=0; (it.stocks||[]).forEach(function(s){ if(poRpLocOk(pier, s.location)) have+=(+s.qty||0); });
-  var recv=0; (it.history||[]).forEach(function(h){ if(!h) return; if(h.type!=='receive' && h.type!=='in' && h.type!=='transfer-in') return;
-    var loc=h.location||((String(h.note||'').match(/@\s*(.+)$/)||[])[1]||''); if(poRpLocOk(pier, loc)) recv+=(+h.qty||0); });
-  var logs=(typeof FL_CONSUMABLE_LOGS!=='undefined'?FL_CONSUMABLE_LOGS:[]).filter(function(r){ return r && r.itemId===it.id && r.src==='pier_fix' && r.pier===pier; });
-  var used=logs.reduce(function(s,r){ return s+(+r.qty||0); },0);
-  var last=logs.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); })[0]||null;
-  return { have:have, recv:recv, used:used, last:last, logs:logs };
+function poRpCost(it){ var x=poRpInvOf(it); return x?(+x.cost||0):0; }
+function poRpUnit(it){ return (PO_KIND[it&&it.kind]||{u:'ชิ้น'}).u; }
+function poRpStat(it){
+  var b=poBal(it.id), recv=poNum(it.total), used=0, logs=[];
+  (PIER_MOVES||[]).forEach(function(m){ if(m.itemId!==it.id) return; var q=poNum(m.qty);
+    if(m.type==='receive' && m.from!=='found') recv+=q; else if(m.type==='part_use'){ used+=q; logs.push(m); } });
+  logs.sort(function(a,c){ return String(c.date).localeCompare(String(a.date)) || String(c.at||'').localeCompare(String(a.at||'')); });
+  return { have:b.ready, recv:recv, used:used, last:logs[0]||null, logs:logs };
 }
-function poRpLow(it, st){ var mn=0; (it.stocks||[]).forEach(function(s){ if(poRpLocOk(_poPier, s.location)) mn=Math.max(mn, +s.minQty||0); });
-  if(!(st.recv>0 || st.used>0)) return false;   /* ยังไม่เคยซื้อเข้าคลังนี้ = ไม่ใช่ใกล้หมด */
-  var lim=Math.max(mn, Math.ceil((st.recv||st.have+st.used)*0.2)); return st.have<=lim; }
+function poRpLow(it, st){ if(!(st.recv>0 || st.used>0)) return false; return st.have<=Math.ceil((st.recv||st.have+st.used)*0.2); }
 function poRpDShort(ymd){ try{ var d=new Date(ymd+'T12:00:00'), M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return d.getDate()+' '+M[d.getMonth()]; }catch(_){ return ymd||''; } }
 function poRpBoatNm(id){ if(!id) return 'ของกลางท่า'; var b=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(x){ return x.id===id; })[0]; return b?(b.name||id):id; }
 
 /* ── ส่วนบนหน้าหลัก ── */
 function poRepPartBlock(ro){
-  var e=poE, ids=poRpIds(_poPier), ym=String(_poDate||'').slice(0,7);
-  if(!ids.length) return '<div class="po-card" style="padding:18px;font-size:12.5px;color:#64748B">ยังไม่มีอะไหล่ซ่อมของท่านี้'
-    +(ro?'':' · กด "＋ เพิ่มรายการ" แล้วเลือกจากคลัง (ของที่ซื้อผ่าน Memo และรับเข้าแล้ว)')+'</div>';
+  var e=poE, L=poRpItems(_poPier), ym=String(_poDate||'').slice(0,7);
+  if(!L.length) return '<div class="po-card" style="padding:18px;font-size:12.5px;color:#64748B;line-height:1.6">ยังไม่มีอะไหล่ซ่อมในคลังท่านี้'
+    +(ro?'':' · ตั้งรายการที่ "ทะเบียนของ" ในประเภทที่ชื่อมีคำว่า <b>อะไหล่</b> (เช่น อะไหล่ซ่อมหน้ากาก) แล้วรับของเข้าที่หัวข้อ 2')+'</div>';
   var rows=[], mCost=0, mFix=0, mBoats={}, nLow=0, buyCost=0;
-  ids.forEach(function(id){ var it=poRpInv(id), st=poRpStat(it,_poPier), low=poRpLow(it,st);
-    if(low) nLow++; buyCost+=st.recv*(+it.cost||0);
-    st.logs.forEach(function(r){ if(String(r.date).slice(0,7)!==ym) return; mCost+=(+r.cost||0); mBoats[r.boatId||'_']=1; });
+  L.forEach(function(it){ var st=poRpStat(it), low=poRpLow(it,st), c=poRpCost(it), u=poRpUnit(it);
+    if(low) nLow++; buyCost+=st.recv*c;
+    st.logs.forEach(function(m){ if(String(m.date).slice(0,7)!==ym) return; mCost+=(m.cost!=null?+m.cost:poNum(m.qty)*c); mBoats[m.forBoat||'_']=1; mFix++; });
     var base=Math.max(st.recv, st.have+st.used, 1), pct=Math.max(0, Math.min(100, Math.round(st.have/base*100)));
     var col=low?'#D97706':'#0F6E56';
     rows.push('<div class="po-rp-r">'
-      +'<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+e(it.name)+'">'+e(it.name)+'</div>'
-        +'<div style="font-size:10.5px;color:#64748B">'+(it.partNo?('<span style="font-family:\'DM Mono\',monospace">'+e(it.partNo)+'</span> · '):'')+'฿'+(+it.cost||0).toLocaleString(undefined,{maximumFractionDigits:2})+' / '+e(it.unit||'หน่วย')+'</div></div>'
+      +'<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+e(it.label)+'">'+e(it.label)+'</div>'
+        +'<div style="font-size:10.5px;color:#64748B">'+(c?('฿'+c.toLocaleString(undefined,{maximumFractionDigits:2})+' / '+e(u)):'ยังไม่มีราคา · ไม่พบในคลัง Fleet')+'</div></div>'
       +'<span class="po-rp-n">'+st.recv+'</span>'
       +'<span class="po-rp-n" style="color:#185FA5">'+st.used+'</span>'
       +'<div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="flex:1;height:8px;border-radius:4px;background:#F1F2F5;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+'"></div></div>'
-        +'<b style="font:700 14px \'DM Mono\',monospace;color:'+(low?'#B45309':'#0F6E56')+'">'+st.have+'</b><span style="font-size:11px;color:#64748B">'+e(it.unit||'')+'</span></div>'
-      +'<div style="font-size:12px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(st.last?('<b>'+e(poRpBoatNm(st.last.boatId))+'</b> · '+poRpDShort(st.last.date)+' · '+st.last.qty+' '+e(it.unit||'')):'<span style="color:#94A3B8">ยังไม่เคยใช้</span>')+'</div>'
-      +'<span style="display:flex;gap:6px;justify-content:flex-end"><button class="po-go" onclick="poRpHist(\''+id+'\')">ประวัติ</button>'
-        +(ro?'':'<button class="po-go" title="เอาออกจากรายการของท่านี้ (ไม่ลบของในคลัง)" onclick="poRpRemove(\''+id+'\')">&times;</button>')+'</span>'
-      +'</div>');
-    mFix+=st.logs.filter(function(r){ return String(r.date).slice(0,7)===ym; }).length; });
+        +'<b style="font:700 14px \'DM Mono\',monospace;color:'+(low?'#B45309':'#0F6E56')+'">'+st.have+'</b><span style="font-size:11px;color:#64748B">'+e(u)+'</span></div>'
+      +'<div style="font-size:12px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(st.last?('<b>'+e(poRpBoatNm(st.last.forBoat))+'</b> · '+poRpDShort(st.last.date)+' · '+poNum(st.last.qty)+' '+e(u)):'<span style="color:#94A3B8">ยังไม่เคยใช้</span>')+'</div>'
+      +'<span style="display:flex;gap:6px;justify-content:flex-end"><button class="po-go" onclick="poRpHist(\''+it.id+'\')">ประวัติ</button></span>'
+      +'</div>'); });
   var nB=Object.keys(mBoats).length;
   var kp=function(l,v,s,warn){ return '<div class="po-rp-k'+(warn?' w':'')+'"><span>'+l+'</span><b>'+v+'</b>'+(s?('<i>'+s+'</i>'):'')+'</div>'; };
   return '<div class="po-card" style="padding:0;overflow:hidden">'
-    +'<div class="po-rp-kg">'+kp('รายการอะไหล่', ids.length, 'คลัง '+e(poRpLoc(_poPier).replace(/^คลัง\s*/,'')))
-      +kp('ซื้อเข้ารวม', '฿'+Math.round(buyCost).toLocaleString(), 'จากประวัติรับของที่คลังนี้')
+    +'<div class="po-rp-kg">'+kp('รายการอะไหล่', L.length, 'คลังท่า '+e(poPierName()))
+      +kp('รับเข้ารวม', buyCost?('฿'+Math.round(buyCost).toLocaleString()):'—', 'ตั้งต้น + รับของเข้า')
       +kp('ใช้ไปเดือนนี้', '฿'+Math.round(mCost).toLocaleString(), mFix?(mFix+' ครั้ง · '+nB+' ลำ'):'ยังไม่มี')
-      +kp('ใกล้หมด', nLow, nLow?'เหลือไม่ถึง 20% ของที่ซื้อ':'ไม่มี', nLow>0)+'</div>'
-    +'<div class="po-rp-r h"><span>รายการ</span><span style="text-align:right">ซื้อเข้า</span><span style="text-align:right">ใช้ซ่อม</span><span>คงเหลือ</span><span>ใช้ล่าสุด</span><span></span></div>'
+      +kp('ใกล้หมด', nLow, nLow?'เหลือไม่ถึง 20% ของที่รับเข้า':'ไม่มี', nLow>0)+'</div>'
+    +'<div class="po-rp-r h"><span>รายการ · ยอดเดียวกับหัวข้อ 2</span><span style="text-align:right">รับเข้า</span><span style="text-align:right">ใช้ซ่อม</span><span>คงเหลือ</span><span>ใช้ล่าสุด</span><span></span></div>'
     +rows.join('')+'</div>';
 }
-function poRpCss(){ var H='#po-host';
+function poRpCss(){
   return '<style>'
     +'.po-rp-kg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:14px 16px}'
     +'.po-rp-k{border:1px solid #E8EBF0;border-radius:12px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}'
     +'.po-rp-k span{font-size:11px;color:#64748B;font-weight:700}.po-rp-k b{font:700 21px "DM Mono",monospace;color:#0F172A}.po-rp-k i{font-style:normal;font-size:10.5px;color:#64748B}'
     +'.po-rp-k.w{border-color:#F3D9A8;background:#FFFBF2}.po-rp-k.w b{color:#B45309}.po-rp-k.w span,.po-rp-k.w i{color:#92400E}'
-    +'.po-rp-r{display:grid;grid-template-columns:minmax(0,2.2fr) 80px 80px minmax(0,1.6fr) minmax(0,1.6fr) 120px;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid #F1F2F5}'
+    +'.po-rp-r{display:grid;grid-template-columns:minmax(0,2.2fr) 80px 80px minmax(0,1.6fr) minmax(0,1.6fr) 80px;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid #F1F2F5}'
     +'.po-rp-r.h{background:#F7F8FA;font-size:10.5px;font-weight:700;color:#64748B;padding:8px 16px}'
     +'.po-rp-n{text-align:right;font:600 14px "DM Mono",monospace;color:#0F172A}'
     +'@media (max-width:820px){.po-rp-kg{grid-template-columns:repeat(2,minmax(0,1fr))}.po-rp-r{grid-template-columns:minmax(0,1fr) 60px 60px;row-gap:6px}.po-rp-r>*:nth-child(n+4){grid-column:1/-1}}'
     +'</style>'; }
 
-/* ── เพิ่ม / เอาออก ── */
-function poRpAddOpen(){
-  if(!poGuard()) return;
-  var body='<div style="font-size:12px;color:#64748B;margin-bottom:9px">เลือกจากคลังอะไหล่ฝั่ง Fleet · ของที่ซื้อผ่าน Memo จะอยู่ที่นี่หลังรับของ</div>'
-    +'<input id="po-rp-q" placeholder="ค้นชื่อ หรือรหัส เช่น DBZ, strap, หน้ากาก" oninput="poRpAddList()" style="width:100%;box-sizing:border-box;border:1px solid #D8D4CA;border-radius:9px;padding:9px 11px;font:500 13px inherit;font-family:inherit">'
-    +'<div id="po-rp-list" style="margin-top:10px;max-height:52vh;overflow:auto"></div>';
-  poModal('เพิ่มอะไหล่ซ่อม · '+poE(poPierName()), body, poBtn('ปิด','poModalClose()'), 620);
-  poRpAddList(); var q=document.getElementById('po-rp-q'); if(q) q.focus();
-}
-function poRpAddList(){
-  var el=document.getElementById('po-rp-list'); if(!el) return;
-  var q=String(poV('po-rp-q')||'').trim().toLowerCase(), have=poRpIds(_poPier), e=poE;
-  var L=(typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).filter(function(it){ if(!it || have.indexOf(it.id)>=0) return false;
-    var t=(String(it.name||'')+' '+String(it.partNo||'')+' '+String(it.category||'')).toLowerCase();
-    return q ? t.indexOf(q)>=0 : /mask|หน้ากาก|strap|snorkel|buckle|dbz/i.test(t); });
-  L.sort(function(a,b){ return poRpStat(b,_poPier).have-poRpStat(a,_poPier).have; });
-  el.innerHTML=L.slice(0,60).map(function(it){ var st=poRpStat(it,_poPier);
-    return '<div style="'+poRowCss()+'"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">'+e(it.name)+'</div>'
-      +'<div style="font-size:11px;color:#64748B">'+(it.partNo?e(it.partNo)+' · ':'')+'ที่ท่านี้ '+st.have+' '+e(it.unit||'')+'</div></div>'
-      +poBtn('เพิ่ม',"poRpAdd('"+it.id+"')",1)+'</div>'; }).join('')
-    || '<div style="padding:16px;color:#94A3B8;font-size:12.5px">'+(q?'ไม่พบรายการ':'พิมพ์เพื่อค้นหาในคลัง')+'</div>';
-}
-function poRpAdd(id){ if(!poGuard()) return; var L=poRpIds(_poPier); if(L.indexOf(id)<0) PIER_CFG.repairParts[_poPier].push(id); poPersist(); poRpAddList(); renderPierOffice(); }
-function poRpRemove(id){ if(!poGuard()) return; if(!confirm('เอารายการนี้ออกจากอะไหล่ซ่อมของท่านี้?\nของในคลังและประวัติการใช้ยังอยู่ครบ')) return;
-  poRpIds(_poPier); PIER_CFG.repairParts[_poPier]=PIER_CFG.repairParts[_poPier].filter(function(x){ return x!==id; }); poPersist(); renderPierOffice(); }
-
-/* ── ประวัติของอะไหล่หนึ่งรายการ ── */
+/* ── ประวัติของอะไหล่หนึ่งรายการ · ทุกความเคลื่อนไหวในคลังท่า ── */
+var PO_RP_SIGN={ receive:1, xfer_back:1, fixed:1, unassign:1, laundry_in:1, part_use:-1, xfer_out:-1, assign:-1, issue:-1 };
 function poRpHist(id){
-  var it=poRpInv(id); if(!it) return; var st=poRpStat(it,_poPier), e=poE, u=e(it.unit||'');
-  var byB={}; st.logs.forEach(function(r){ var k=r.boatId||''; byB[k]=(byB[k]||0)+(+r.qty||0); });
+  var it=poItem(id); if(!it) return; var st=poRpStat(it), e=poE, u=e(poRpUnit(it)), c=poRpCost(it);
+  var byB={}; st.logs.forEach(function(m){ var k=m.forBoat||''; byB[k]=(byB[k]||0)+poNum(m.qty); });
   var bk=Object.keys(byB).sort(function(a,b){ return byB[b]-byB[a]; }), mx=bk.length?byB[bk[0]]:1;
-  var cost=st.logs.reduce(function(s,r){ return s+(+r.cost||0); },0);
-  var dates=st.logs.map(function(r){ return r.date; }).sort(), wk=null;
+  var cost=st.logs.reduce(function(s,m){ return s+(m.cost!=null?+m.cost:poNum(m.qty)*c); },0);
+  var dates=st.logs.map(function(m){ return m.date; }).sort(), wk=null;
   if(dates.length>=2){ var span=Math.max(7,(new Date(dates[dates.length-1])-new Date(dates[0]))/864e5); wk=st.used/(span/7); }
   var left='<div style="font-size:12px;font-weight:800;margin-bottom:9px">ใช้ไปกับเรือลำไหน</div>'
     +(bk.length?bk.map(function(k){ return '<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:12px;margin-bottom:7px"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(poRpBoatNm(k))+'</b>'
       +'<div style="height:9px;border-radius:5px;background:#F1F2F5"><div style="width:'+Math.round(byB[k]/mx*100)+'%;height:100%;border-radius:5px;background:#185FA5"></div></div><span style="text-align:right;font-family:\'DM Mono\',monospace">'+byB[k]+' '+u+'</span></div>'; }).join(''):'<div style="font-size:12px;color:#94A3B8">ยังไม่เคยใช้</div>')
     +'<div style="margin-top:10px;border-top:1px dashed #DDE1E8;padding-top:9px;font-size:12px;line-height:1.7">ต้นทุนที่ใช้ไป <b>฿'+Math.round(cost).toLocaleString()+'</b>'
     +(wk?('<br>เฉลี่ย <b>'+(Math.round(wk*10)/10)+' '+u+' / สัปดาห์</b><br><span style="color:'+(st.have/wk<2?'#B45309':'#0F6E56')+';font-weight:700">ที่เหลือพอใช้ราว '+Math.max(0,Math.round(st.have/wk))+' สัปดาห์</span>'):'')+'</div>';
-  /* ไทม์ไลน์ · ประวัติของชิ้นนั้นที่คลังท่านี้ · ใช้ซ่อม (มีเรือ) + รับเข้า + การเบิกอื่น */
-  var logBy={}; st.logs.forEach(function(r){ logBy[r.id]=r; });
-  var H=(it.history||[]).filter(function(h){ if(!h) return false; var loc=h.location||((String(h.note||'').match(/@\s*(.+)$/)||[])[1]||'');
-    return /receive|^in$|transfer|withdraw|adjust/.test(h.type||'') && (poRpLocOk(_poPier, loc) || (h.consumeId && logBy[h.consumeId])); })
-    .slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
-  var row=function(h){ var r=h.consumeId?logBy[h.consumeId]:null, plus=/receive|^in$|transfer-in/.test(h.type||'') || (h.type==='adjust' && (+h.qty||0)>0);
-    var what=r?('<b>ซ่อม · '+e(poRpBoatNm(r.boatId))+'</b>'):(plus?'<b style="color:#0F6E56">รับเข้า</b>':'<b>เบิกออก</b>');
-    var note=r?(r.note||''):(h.note||'');
-    return '<div style="display:grid;grid-template-columns:96px 130px 64px minmax(0,1fr) 96px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F2F5;font-size:12.5px'+(plus?';background:#F2FAF6':'')+'">'
-      +'<span>'+poRpDShort(h.date)+' '+String(h.date||'').slice(0,4)+'</span><span>'+what+'</span>'
-      +'<span style="text-align:right;font-family:\'DM Mono\',monospace;color:'+(plus?'#0F6E56':'#B91C1C')+'">'+(plus?'+':'−')+Math.abs(+h.qty||0)+'</span>'
-      +'<span style="color:#4B5563;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+e(note)+'">'+e(note)+'</span><span>'+e((r&&r.by)||h.by||'')+'</span></div>'; };
-  var body='<div style="font-size:12px;color:#64748B;margin:-4px 0 12px">'+(it.partNo?('<span style="font-family:\'DM Mono\',monospace">'+e(it.partNo)+'</span> · '):'')+e(poRpLoc(_poPier))+' · ซื้อ '+st.recv+' · ใช้ซ่อม '+st.used+' · เหลือ '+st.have+' '+u+'</div>'
+  var H=(PIER_MOVES||[]).filter(function(m){ return m.itemId===id; }).slice()
+    .sort(function(a,b){ return String(b.date).localeCompare(String(a.date)) || String(b.at||'').localeCompare(String(a.at||'')); });
+  var row=function(m){ var q=poNum(m.qty), sg=PO_RP_SIGN[m.type]||((m.type==='count'||m.type==='adjust')?(q>=0?1:-1):-1), plus=sg>0;
+    var what=m.type==='part_use'?('<b>ซ่อม · '+e(poRpBoatNm(m.forBoat))+'</b>'):('<b'+(plus?' style="color:#0F6E56"':'')+'>'+e(T_LDG(m.type))+'</b>');
+    return '<div style="display:grid;grid-template-columns:96px 140px 64px minmax(0,1fr) 96px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F2F5;font-size:12.5px'+(plus?';background:#F2FAF6':'')+'">'
+      +'<span>'+poRpDShort(m.date)+' '+String(m.date||'').slice(0,4)+'</span><span>'+what+'</span>'
+      +'<span style="text-align:right;font-family:\'DM Mono\',monospace;color:'+(plus?'#0F6E56':'#B91C1C')+'">'+(plus?'+':'−')+Math.abs(q)+'</span>'
+      +'<span style="color:#4B5563;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+e(m.note||'')+'">'+e(m.note||'')+'</span><span>'+e(m.by||'')+'</span></div>'; };
+  var body='<div style="font-size:12px;color:#64748B;margin:-4px 0 12px">คลังท่า '+e(poPierName())+' · รับเข้า '+st.recv+' · ใช้ซ่อม '+st.used+' · เหลือ '+st.have+' '+u+(c?(' · ฿'+c+' / '+u):'')+'</div>'
     +'<div style="display:grid;grid-template-columns:260px minmax(0,1fr);border:1px solid #E8EBF0;border-radius:12px;overflow:hidden">'
     +'<div style="padding:14px;background:#FBFCFD;border-right:1px solid #EEF0F4">'+left+'</div>'
-    +'<div style="min-width:0"><div style="display:grid;grid-template-columns:96px 130px 64px minmax(0,1fr) 96px;gap:10px;padding:8px 14px;background:#F7F8FA;border-bottom:1px solid #EEF0F4;font-size:10.5px;font-weight:700;color:#64748B"><span>วันที่</span><span>รายการ</span><span style="text-align:right">จำนวน</span><span>รายละเอียด</span><span>โดย</span></div>'
-    +(H.length?H.map(row).join(''):'<div style="padding:16px;color:#94A3B8;font-size:12.5px">ยังไม่มีประวัติที่คลังนี้</div>')+'</div></div>';
-  poModal('ประวัติ · '+e(it.name), body, poBtn('ปิด','poModalClose()'), 1000);
+    +'<div style="min-width:0"><div style="display:grid;grid-template-columns:96px 140px 64px minmax(0,1fr) 96px;gap:10px;padding:8px 14px;background:#F7F8FA;border-bottom:1px solid #EEF0F4;font-size:10.5px;font-weight:700;color:#64748B"><span>วันที่</span><span>รายการ</span><span style="text-align:right">จำนวน</span><span>รายละเอียด</span><span>โดย</span></div>'
+    +'<div style="background:#F7F9FC;border-bottom:1px solid #F1F2F5;padding:8px 14px;font-size:12px;color:#475569">ตั้งต้นในทะเบียน <b>'+poNum(it.total)+'</b> '+u+'</div>'
+    +(H.length?H.map(row).join(''):'<div style="padding:16px;color:#94A3B8;font-size:12.5px">ยังไม่มีความเคลื่อนไหว</div>')+'</div></div>';
+  poModal('ประวัติ · '+e(it.label), body, poBtn('ปิด','poModalClose()'), 1000);
 }
 
 /* ── ซ่อมเสร็จ · เลือกเรือ + อะไหล่ที่ใช้ ── */
@@ -59243,9 +59312,9 @@ function poFixBoat(id){ poFixSync(); _poFix.boat=id; poFixRender(); }
 function poFixAddPart(id){ poFixSync(); if(id && !_poFix.parts.some(function(p){ return p.id===id; })) _poFix.parts.push({id:id,q:1}); poFixRender(); }
 function poFixDelPart(i){ poFixSync(); _poFix.parts.splice(i,1); poFixRender(); }
 function poFixCalc(){ if(!_poFix) return; poFixSync(); var cost=0;
-  _poFix.parts.forEach(function(p,i){ var it=poRpInv(p.id); if(!it) return; var st=poRpStat(it,_poPier), left=st.have-p.q;
-    cost+=p.q*(+it.cost||0);
-    var el=document.getElementById('pofixl'+i); if(el){ el.textContent=left+' / '+st.have+' '+(it.unit||''); el.style.color=left<0?'#B91C1C':'#0F6E56'; } });
+  _poFix.parts.forEach(function(p,i){ var pi=poItem(p.id); if(!pi) return; var st=poRpStat(pi), left=st.have-p.q;
+    cost+=p.q*poRpCost(pi);
+    var el=document.getElementById('pofixl'+i); if(el){ el.textContent=left+' / '+st.have+' '+poRpUnit(pi); el.style.color=left<0?'#B91C1C':'#0F6E56'; } });
   var c=document.getElementById('pofixc'); if(c) c.innerHTML=poFixCostLine(cost);
   var s=document.getElementById('pofixs'); if(s) s.textContent='บันทึก · ซ่อมเสร็จ '+_poFix.f+' ชิ้น'; }
 function poFixCostLine(cost){
@@ -59257,17 +59326,17 @@ function poFixRender(){
     +(on?'border:1.5px solid #16265C;background:#16265C;color:#fff':'border:1px '+(dash?'dashed #B8BFCC':'solid #D6DAE2')+';background:#fff;color:'+(dash?'#6B7280':'#16265C'))+'">'+e(lbl)+'</button>'; };
   var boats=poPierBoats(_poPier);
   if(S.boat && !boats.some(function(x){ return x.id===S.boat; })){ var xb=(BOATS||[]).filter(function(x){ return x.id===S.boat; })[0]; if(xb) boats.unshift(xb); }
-  var ids=poRpIds(_poPier), cost=0;
-  var prow=S.parts.map(function(p,i){ var pi=poRpInv(p.id); if(!pi) return ''; var st=poRpStat(pi,_poPier), left=st.have-p.q; cost+=p.q*(+pi.cost||0);
+  var L=poRpItems(_poPier), cost=0;
+  var prow=S.parts.map(function(p,i){ var pi=poItem(p.id); if(!pi) return ''; var st=poRpStat(pi), left=st.have-p.q; cost+=p.q*poRpCost(pi);
     return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 80px 120px 30px;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid #F1F2F5">'
-      +'<div style="min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(pi.name)+'</div><div style="font-size:10.5px;color:#64748B;font-family:\'DM Mono\',monospace">'+e(pi.partNo||'')+'</div></div>'
+      +'<div style="min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+e(pi.label)+'">'+e(pi.label)+'</div>'
       +'<input id="pofixp'+i+'" value="'+p.q+'" inputmode="numeric" oninput="poFixCalc()" aria-label="จำนวน" style="height:32px;border:1px solid #CBD2DC;border-radius:8px;text-align:center;font:600 14px \'DM Mono\',monospace;width:100%;box-sizing:border-box">'
-      +'<span id="pofixl'+i+'" style="text-align:right;font:600 12.5px \'DM Mono\',monospace;color:'+(left<0?'#B91C1C':'#0F6E56')+'">'+left+' / '+st.have+' '+e(pi.unit||'')+'</span>'
+      +'<span id="pofixl'+i+'" style="text-align:right;font:600 12.5px \'DM Mono\',monospace;color:'+(left<0?'#B91C1C':'#0F6E56')+'">'+left+' / '+st.have+' '+e(poRpUnit(pi))+'</span>'
       +'<button type="button" onclick="poFixDelPart('+i+')" aria-label="เอาออก" style="border:0;background:none;color:#9CA3AF;font-size:16px;cursor:pointer">&times;</button></div>'; }).join('');
-  var rest=ids.filter(function(id){ return !S.parts.some(function(p){ return p.id===id; }); });
-  var addSel=rest.length?('<select onchange="poFixAddPart(this.value)" style="height:32px;border:1.5px dashed #9FB3D1;border-radius:8px;padding:0 10px;font:700 12px inherit;font-family:inherit;color:#185FA5;background:#fff;cursor:pointer">'
-      +'<option value="">＋ เพิ่มอะไหล่ที่ใช้</option>'+rest.map(function(id){ var pi=poRpInv(id), st=poRpStat(pi,_poPier); return '<option value="'+id+'">'+e(pi.name)+' · เหลือ '+st.have+'</option>'; }).join('')+'</select>')
-    : (ids.length?'':'<span style="font-size:11.5px;color:#94A3B8">ท่านี้ยังไม่ได้ตั้งรายการอะไหล่ซ่อม · เพิ่มได้ที่หัวข้อ "อะไหล่ซ่อม"</span>');
+  var rest=L.filter(function(pi){ return !S.parts.some(function(p){ return p.id===pi.id; }); });
+  var addSel=rest.length?('<select onchange="poFixAddPart(this.value)" style="height:32px;max-width:100%;border:1.5px dashed #9FB3D1;border-radius:8px;padding:0 10px;font:700 12px inherit;font-family:inherit;color:#185FA5;background:#fff;cursor:pointer">'
+      +'<option value="">＋ เพิ่มอะไหล่ที่ใช้</option>'+rest.map(function(pi){ return '<option value="'+pi.id+'">'+e(pi.label)+' · เหลือ '+poRpStat(pi).have+'</option>'; }).join('')+'</select>')
+    : (L.length?'':'<span style="font-size:11.5px;color:#94A3B8">คลังท่านี้ยังไม่มีรายการอะไหล่ · ตั้งที่ทะเบียนของ ในประเภทที่ชื่อมีคำว่า "อะไหล่"</span>');
   var lab='display:flex;flex-direction:column;gap:5px;font-size:11.5px;font-weight:700;color:#4B5563';
   var inp='height:36px;border:1px solid #CBD2DC;border-radius:9px;padding:0 10px;font:600 14px "DM Mono",monospace;color:#16265C;box-sizing:border-box;width:100%';
   var body='<div style="font-size:12px;color:#64748B;margin:-4px 0 12px">รอซ่อมอยู่ '+b.repair+' '+u+' · ของที่ซ่อมเสร็จกลับเข้าคลังพร้อมใช้ · ซ่อมไม่ไหวให้ตัดทิ้ง</div>'
@@ -59277,7 +59346,7 @@ function poFixRender(){
     +'<div style="font-size:11.5px;font-weight:700;color:#4B5563;margin-bottom:6px">หน้ากากของเรือลำไหน</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+boats.map(function(x){ return chip(x.id, x.name||x.id, S.boat===x.id); }).join('')+chip('', 'ของกลางท่า', !S.boat, true)+'</div>'
     +'<div style="border:1px solid #E2E5EC;border-radius:12px;overflow:hidden;margin-bottom:12px">'
-      +'<div style="display:flex;align-items:center;padding:9px 12px;background:#F7F8FA"><b style="font-size:13px;flex:1">อะไหล่ที่ใช้</b><span style="font-size:11px;color:#64748B">'+e(poRpLoc(_poPier))+' · ตัดสต็อกตอนกดบันทึก</span></div>'
+      +'<div style="display:flex;align-items:center;padding:9px 12px;background:#F7F8FA"><b style="font-size:13px;flex:1">อะไหล่ที่ใช้</b><span style="font-size:11px;color:#64748B">เบิกจากคลังท่า '+e(poPierName())+' · ตัดตอนกดบันทึก</span></div>'
       +(S.parts.length?'<div style="display:grid;grid-template-columns:minmax(0,1fr) 80px 120px 30px;gap:10px;padding:6px 12px;border-top:1px solid #EEF0F4;font-size:10.5px;font-weight:700;color:#64748B"><span>รายการ</span><span style="text-align:center">ใช้</span><span style="text-align:right">เหลือหลังใช้</span><span></span></div>':'')
       +prow+'<div style="padding:8px 12px;border-top:1px solid #F1F2F5">'+addSel+'</div></div>'
     +'<label style="'+lab+';margin-bottom:12px">หมายเหตุ<input id="pofixn" value="'+e(S.note)+'" placeholder="เช่น สายรัดขาด 4 เส้น · ตัวล็อกหัก 2 ชิ้น" style="'+inp+';font:500 13px inherit;font-family:inherit"></label>'
@@ -59290,30 +59359,26 @@ function poFixSave(itemId){
   var S=_poFix||{boat:'',parts:[],note:''};
   var b=poBal(itemId), f=poNum(poV('pofix')), w=poNum(poV('pofixw')), it=poItem(itemId);
   if(f+w>b.repair){ alert('รวมกันเกินจำนวนที่รอซ่อม ('+b.repair+')'); return; }
-  var parts=(S.parts||[]).filter(function(p){ return p.q>0 && poRpInv(p.id); });
+  var parts=(S.parts||[]).filter(function(p){ return p.q>0 && poItem(p.id); });
   if(parts.length && f<=0 && w<=0){ alert('ใส่จำนวนที่ซ่อมเสร็จก่อน'); return; }
-  var short=parts.filter(function(p){ return poRpStat(poRpInv(p.id),_poPier).have<p.q; });
-  if(short.length && !confirm('อะไหล่ในคลังไม่พอ: '+short.map(function(p){ var x=poRpInv(p.id); return x.name+' (มี '+poRpStat(x,_poPier).have+')'; }).join(', ')+'\nบันทึกต่อจะทำให้ยอดติดลบ · ยืนยัน?')) return;
+  var short=parts.filter(function(p){ return poRpStat(poItem(p.id)).have<p.q; });
+  if(short.length && !confirm('อะไหล่ในคลังท่าไม่พอ: '+short.map(function(p){ var x=poItem(p.id); return x.label+' (มี '+poRpStat(x).have+')'; }).join(', ')+'\nบันทึกต่อจะทำให้ยอดพร้อมใช้ติดลบ · ไปนับสต็อกทีหลัง · ยืนยัน?')) return;
   var note=String(S.note||'').trim(), who=poWho(), bn=poRpBoatNm(S.boat);
   if(f>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:S.boat||'',type:'fixed',qty:f,note:note});
   if(w>0) poAdd({date:_poDate,pier:_poPier,itemId:itemId,boatId:S.boat||'',type:'writeoff',qty:w,from:'repair',note:note});
   if(parts.length){
     if(!Array.isArray(FL_CONSUMABLE_LOGS)) FL_CONSUMABLE_LOGS=[];
-    parts.forEach(function(p){ var x=poRpInv(p.id);
-      /* ตัดจากช่องคลังของท่านี้ที่มีของมากที่สุด (ชื่อคลังพิมพ์ไม่ตรงกันหลายแบบ) · ไม่มีช่องเลย = ช่องมาตรฐานของท่า */
-      var cand=(x.stocks||[]).filter(function(s){ return poRpLocOk(_poPier, s.location); }).sort(function(a,c){ return (+c.qty||0)-(+a.qty||0); })[0];
-      var loc=cand?cand.location:poRpLoc(_poPier);
-      if(!cand){ if(!Array.isArray(x.stocks)) x.stocks=[]; cand={location:loc,qty:0,minQty:0}; x.stocks.push(cand); }
-      cand.qty=(+cand.qty||0)-p.q; if(typeof invSyncLegacy==='function') invSyncLegacy(x);
-      var id=(typeof LA_UID==='function')?LA_UID('cons_'):('cons_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
-      var txt='ซ่อม'+(it?it.label:'หน้ากาก')+' '+f+' ชิ้น'+(note?(' · '+note):'');
-      if(!Array.isArray(x.history)) x.history=[];
-      x.history.push({date:_poDate,type:'withdraw',qty:p.q,location:loc,note:'อะไหล่ซ่อม → '+bn+' · '+txt,by:who,consumeId:id});
-      FL_CONSUMABLE_LOGS.push({id:id,date:_poDate,itemId:x.id,itemName:x.name,unit:x.unit||'',qty:p.q,unitCost:+x.cost||0,cost:p.q*(+x.cost||0),
-        location:loc,boatId:S.boat||'',engineId:'',engineLabel:'',by:who,note:txt,src:'pier_fix',pier:_poPier,poItemId:itemId,fixQty:f});
+    var txt='ซ่อม'+(it?it.label:'หน้ากาก')+' '+f+' ชิ้น'+(note?(' · '+note):'');
+    parts.forEach(function(p){ var x=poItem(p.id), c=poRpCost(x), u=poRpUnit(x);
+      var cid=(typeof LA_UID==='function')?LA_UID('cons_'):('cons_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+      var mv=poAdd({date:_poDate,pier:_poPier,itemId:x.id,type:'part_use',qty:p.q,forBoat:S.boat||'',fixItem:itemId,fixQty:f,
+        unitCost:c,cost:p.q*c,consumeId:cid,note:bn+' · '+txt});
+      /* ลงเบิกของใช้ฝั่ง Fleet ให้ต้นทุนเรือขึ้น · itemId เป็นของท่า (pi_) จึงไม่ไปแตะคลัง Fleet */
+      FL_CONSUMABLE_LOGS.push({id:cid,date:_poDate,itemId:x.id,itemName:x.label,unit:u,qty:p.q,unitCost:c,cost:p.q*c,
+        location:'คลังท่า '+poPierName(),boatId:S.boat||'',engineId:'',engineLabel:'',by:who,note:txt,
+        src:'pier_fix',pier:_poPier,poItemId:itemId,fixQty:f,pierMoveId:mv.id});
     });
-    /* ข้อมูล Fleet อยู่ในก้อนเดียวกัน · เขียนผ่านแคชกลางพร้อมของท่า (poPersist) ไม่เขียน localStorage ดิบ */
-    try{ var d=(typeof laBlob==='function')?laBlob():null; if(d){ d.fleet_inventory=FL_INVENTORY; d.fleet_consumable_logs=FL_CONSUMABLE_LOGS; } }catch(_){}
+    try{ var d=(typeof laBlob==='function')?laBlob():null; if(d){ d.fleet_consumable_logs=FL_CONSUMABLE_LOGS; } }catch(_){}
   }
   _poFix=null;
   poPersist(); poModalClose(); renderPierOffice();
@@ -59374,7 +59439,7 @@ function poLaundrySave(isOut){
 var _poLdgF='all';
 var PO_LDG_G={ all:null, recv:['receive'], issue:['issue'], ret:['return'], laundry:['laundry_out','laundry_in'],
                loss:['lost','writeoff','repair','ship_lost','ship_writeoff','ship_repair'], ship:['assign','unassign','ship_lost','ship_writeoff','ship_repair'],
-               adj:['count','adjust','onboard','fixed'], xfer:['xfer_out','xfer_back','xfer_short'] };   /* §poXfer */
+               adj:['count','adjust','onboard','fixed','part_use'], xfer:['xfer_out','xfer_back','xfer_short'] };   /* §poXfer */
 var PO_LDG_GN={ all:'ทั้งหมด', recv:'รับของเข้า', issue:'เบิก', ret:'คืน', laundry:'ส่งซัก / รับเข้า',
                 loss:'หาย · ตัดทิ้ง · เสีย', ship:'ประจำเรือ', adj:'นับสต็อก / ปรับยอด', xfer:'โยกระหว่างท่า' };   /* §poXfer */
 function poLdgFilter(k){ _poLdgF=(PO_LDG_G[k]!==undefined)?k:'all'; poLedgerOpen(); }
@@ -59577,7 +59642,7 @@ function poLedgerOpen(){
          laundry_out:'ส่งซัก',laundry_in:'รับเข้าจากซัก',fixed:'ซ่อมเสร็จ',adjust:'ปรับยอด',
          assign:'ลงประจำเรือ',unassign:'ถอดจากเรือ',receive:'รับของเข้า',count:'นับสต็อก',
          ship_lost:'หายบนเรือ',ship_writeoff:'ตัดทิ้ง·บนเรือ',ship_repair:'เสีย·ซ่อม (จากเรือ)',
-         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด'};   /* §poXfer */
+         xfer_out:'โยกไปท่าอื่น',xfer_back:'ยกเลิกโยก',xfer_short:'โยกแล้วขาด',part_use:'ใช้ซ่อม'};   /* §poXfer */
   /* สีป้ายประเภท · เบิกน้ำเงิน คืนเขียว หายแดง งานผ้าเหลือง ที่เหลือเทา */
   var TC={issue:['#EFF6FF','#1D4ED8'],['return']:['#ECFDF5','#047857'],
           lost:['#FEF2F2','#B91C1C'],writeoff:['#FEF2F2','#B91C1C'],repair:['#FFFBEB','#B45309'],
@@ -59585,7 +59650,7 @@ function poLedgerOpen(){
           assign:['#ECFEFF','#0E7490'],unassign:['#ECFEFF','#0E7490'],
           receive:['#EEF2FF','#4338CA'],count:['#F5F3FF','#6D28D9'],
           ship_lost:['#FEF2F2','#B91C1C'],ship_writeoff:['#FEF2F2','#B91C1C'],ship_repair:['#FFFBEB','#B45309'],
-          xfer_out:['#EEF2FF','#4338CA'],xfer_back:['#F1F5F9','#475569'],xfer_short:['#FEF2F2','#B91C1C']};   /* §poXfer */
+          xfer_out:['#EEF2FF','#4338CA'],xfer_back:['#F1F5F9','#475569'],xfer_short:['#FEF2F2','#B91C1C'],part_use:['#EFF6FF','#185FA5']};   /* §poXfer */
 
   /* ── รวมยอดทั้งท่า · ไม่สนตัวกรอง เพราะสรุปต้องเป็นภาพรวมเสมอ ───────────── */
   var S={issue:0,ret:0,lost:0,fine:0,fineN:0,nfN:0,nfQ:0,lout:0,lin:0,

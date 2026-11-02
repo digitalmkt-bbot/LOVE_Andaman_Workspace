@@ -6182,6 +6182,14 @@ function flConsumeSubmit(){
 }
 function flConsumeDelete(id){
   const rec=(FL_CONSUMABLE_LOGS||[]).find(r=>r.id===id); if(!rec) return;
+  /* §poRpPier · เบิกจากหน้าท่า (ซ่อม✓) · ของอยู่คลังท่า ไม่ใช่คลัง Fleet · ลบที่นี่ = ลบรายการใช้ที่ท่าด้วย อะไหล่คืนเข้าคลังท่า */
+  if(rec.src==='pier_fix' && rec.pierMoveId){
+    if(!confirm('ลบรายการนี้? อะไหล่ '+rec.qty+' '+(rec.unit||'')+' จะคืนเข้าคลังท่า\n(จำนวนหน้ากากที่ซ่อมเสร็จไม่ย้อนเอง · ปรับที่หน้าเบิก-คืน)')) return;
+    if(typeof PIER_MOVES!=='undefined' && Array.isArray(PIER_MOVES)){ const ix=PIER_MOVES.findIndex(m=>m.id===rec.pierMoveId); if(ix>=0) PIER_MOVES.splice(ix,1); }
+    FL_CONSUMABLE_LOGS=FL_CONSUMABLE_LOGS.filter(r=>r.id!==id);
+    if(typeof poPersist==='function') poPersist();
+    flSave(); renderConsumables(); return;
+  }
   if(!confirm('ลบรายการเบิกนี้ และคืนของเข้าคลัง '+rec.qty+' '+(rec.unit||'')+'?')) return;
   const it=(FL_INVENTORY||[]).find(x=>x.id===rec.itemId);
   if(it){ if(typeof invAddAt==='function') invAddAt(it,rec.location,rec.qty); else it.qty=(it.qty||0)+rec.qty; if(Array.isArray(it.history)) it.history=it.history.filter(h=>h.consumeId!==id); }
