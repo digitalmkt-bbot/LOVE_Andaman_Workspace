@@ -50,6 +50,19 @@ function depPickSt(st){
   document.querySelector('#dep-exp-row label.dep-lbl').textContent=
     st==='ok'?'วันหมดอายุใหม่':'วันหมดอายุเดิม (อ้างอิง)';
 }
+/* §beDate (2026-11-02) · owner "บัคไหม" (Verona ใบอนุญาตใช้เรือ ขึ้น "26 Oct 70 · อีก 198685 วัน")
+   เครื่องที่ตั้งภาษาไทยพิมพ์ปี พ.ศ. ลงช่องวันที่ได้ (26/10/2570) · ช่อง type=date เก็บตามที่พิมพ์ = ค.ศ. 2570
+   แก้ทุกช่องวันที่ในระบบที่เดียว: ปีตั้งแต่ 2400 ขึ้นไป = พ.ศ. · ลบ 543 ให้ทันทีตอนพิมพ์/เลือก (capture · ก่อนตัวจัดการของช่องนั้นอ่านค่า) */
+function laFixBEDate(v){
+  var m=/^(\d{4})(-\d{2}-\d{2}.*)$/.exec(String(v||'')); if(!m) return v;
+  var y=+m[1]; return (y>=2400 && y<=2700) ? (String(y-543)+m[2]) : v;
+}
+(function(){
+  if(window.__laBEDateHook) return; window.__laBEDateHook=1;
+  var fix=function(ev){ var el=ev.target; if(!el || el.tagName!=='INPUT' || (el.type!=='date' && el.type!=='datetime-local' && el.type!=='month')) return;
+    var v=el.value; if(!v) return; var f=(el.type==='month')?laFixBEDate(v+'-01').slice(0,7):laFixBEDate(v); if(f!==v) el.value=f; };
+  document.addEventListener('input', fix, true); document.addEventListener('change', fix, true);
+})();
 function depSave(){
   const b=getBoat(_depBoatId);if(!b)return;
   if(!b.docs) b.docs=[];
@@ -63,15 +76,15 @@ function depSave(){
     const doc=b.docs.filter(d=>d.name===_depDocName).at(-1);
     if(doc){
       doc.renewStatus='processing';
-      const expVal=document.getElementById('dep-exp-input').value;
+      const expVal=laFixBEDate(document.getElementById('dep-exp-input').value);
       if(expVal) doc.exp=expVal;
     } else {
       // no existing — create
-      const expVal=document.getElementById('dep-exp-input').value;
+      const expVal=laFixBEDate(document.getElementById('dep-exp-input').value);
       b.docs.push({name:_depDocName,exp:expVal||null,renewStatus:'processing'});
     }
   } else if(_depSt==='ok'){
-    const newExp=document.getElementById('dep-exp-input').value;
+    const newExp=laFixBEDate(document.getElementById('dep-exp-input').value);
     if(!newExp){alert('กรุณาระบุวันหมดอายุใหม่');return;}
     // add NEW record — keep old for history
     b.docs.push({name:_depDocName, exp:newExp, renewStatus:null});
