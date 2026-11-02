@@ -13,7 +13,10 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   o.cards = [...H().querySelectorAll('.vkh-card')].map(c => c.dataset.blk);
   o.progs = q('.pgf'); o.vars0 = q('.pgv'); o.chips = q('.vkh-vc'); o.search = !!H().querySelector('.vkh-fwrap #vck-q'); o.legendBtn = !!H().querySelector('.vkh-fwrap .vck-lgt');
   o.kpi = t('.vkh-fwrap').replace(/\s+/g, ' ');
-  o.oldBar = q('.ck-unitbar') + q('.ck-hd'); o.piers = q('.pgf-pier'); o.pierTxt = [...H().querySelectorAll('.pgf-pier')].map(x => x.textContent).join(' · '); o.progNames = [...H().querySelectorAll('.pgf-nm')].map(x => x.textContent).join(', '); o.vrows = q('.vkh-vrow'); o.teams1 = [...H().querySelector('.vkh-vrow').querySelectorAll('.vkh-team')].map(t => t.title.split(' · ')[0]); o.timeAm = [...H().querySelectorAll('.vkh-vc .t')].filter(x => /a\.m|p\.m/.test(x.textContent)).length;
+  o.oldBar = q('.ck-unitbar') + q('.ck-hd'); o.piers = q('.pgf-pier'); o.pierTxt = [...H().querySelectorAll('.pgf-pier')].map(x => x.textContent).join(' · '); o.progNames = [...H().querySelectorAll('.pgf-nm')].map(x => x.textContent).join(', '); o.vrows = q('.vkh-vrow'); o.teams1 = [...H().querySelector('.vkh-vrow').querySelectorAll('.vkh-team')].map(t => t.title.split(' · ')[0]);
+  const aid = el => (el.getAttribute('onclick').match(/ckJump\('([^']+)'\)/) || [])[1];
+  o.chipOrder = [...H().querySelector('.vkh-vrow').querySelectorAll('.vkh-vc')].map(aid);
+  o.tableOrder = [...H().querySelectorAll('tr.ck-ghd [id^=vckg-]')].map(d => d.id).filter(id => o.chipOrder.includes(id)); o.timeAm = [...H().querySelectorAll('.vkh-vc .t')].filter(x => /a\.m|p\.m/.test(x.textContent)).length;
   // กาง variant โดยไม่กรอง
   H().querySelector('.pgf-cv').click(); await z(400); o.varsOpen = q('.pgv'); o.filtered = !!H().querySelector('.vkh-allbtn');
   // กรองโปรแกรม → ชิปรถเหลือเฉพาะคันของโปรแกรมนั้น · ชื่อกลางหัวเปลี่ยน
@@ -51,7 +54,7 @@ if (JSON.stringify(r.cards) === '["prog","vans","filters"]') ok('การ์ด
 if (r.piers >= 4 && /ทับละมุ \d+/.test(r.pierTxt) && /พันวา \d+/.test(r.pierTxt)) ok('ชิปท่าเรือบนแถวโปรแกรม · ' + r.pierTxt.slice(0, 60)); else fail('piers ' + J);
 if (!/Activities/.test(r.progNames) && !/Transfer/.test(r.progNames)) ok('โปรแกรมภาคพื้นที่ไม่มีรถรับ (Activities) ไม่ขึ้น · ' + r.progNames); else fail('land ' + r.progNames);
 if (r.timeAm === 0) ok('ชิปรถไม่มีเวลา (ชื่อ · n/n)'); else fail('time ' + r.timeAm);
-if (r.vrows === 7 && r.teams1[0] === 'รถบริษัท' && r.teams1.length === 4 && r.teams1.slice(1).join() === r.teams1.slice(1).sort((a, b) => a.localeCompare(b, 'th')).join()) ok('แถวละโปรแกรม 7 แถว · แถวแรก 4 ทีม · รถบริษัทก่อน แล้วรถร่วมเรียงชื่อ: ' + r.teams1.join(' / ')); else fail('rows ' + JSON.stringify({ vrows: r.vrows, teams1: r.teams1 }));
+if (r.vrows === 7 && r.chipOrder.length > 2 && JSON.stringify(r.chipOrder) === JSON.stringify(r.tableOrder)) ok('แถวละโปรแกรม 7 แถว · ชิป ' + r.chipOrder.length + ' คันเรียงตรงกับหัวคันในตาราง · เว้นช่องตรงรอยต่อทีม ' + r.teams1.length + ' ช่วง'); else fail('rows ' + JSON.stringify({ vrows: r.vrows, teams1: r.teams1, chipOrder: r.chipOrder, tableOrder: r.tableOrder }));
 if (r.progs === 4 && r.vars0 === 0 && r.varsOpen === 4 && !r.filtered) ok('โปรแกรม 4 แถว · กาง variant ได้ 4 โดยยังไม่กรอง'); else fail('prog ' + J);
 if (r.chips === 49 && r.oldBar === 0 && r.search && r.legendBtn) ok('ชิปรถ 49 คัน · ไม่มีแถบ/หัวแบบเดิม · ช่องค้นหา · ปุ่มแถบสี'); else fail('chips ' + J);
 if (/ขึ้นรถแล้ว \d+\/\d+/.test(r.kpi) && /รอ \d+/.test(r.kpi)) ok('ตัวกรอง · ชิปสถานะ ' + r.kpi.slice(0, 40)); else fail('kpi ' + r.kpi);

@@ -20119,11 +20119,13 @@ function vckVanRows(groups, gkeys, date){
     var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(R.rid):null;
     var lbl=f?(f.name+((famN[f.id]||0)>1?(' · '+pckVarLbl(f,R.rid)):'')):(rt.name||'—');
     var col=rt.color||(f&&f.color)||'#8b909c';
-    var teams={}, tord=[];
-    R.keys.forEach(function(k){ var T=vckVanTeam(groups[k].vid); if(!teams[T.k]){ teams[T.k]={t:T, keys:[]}; tord.push(T.k); } teams[T.k].keys.push(k); });
-    tord.sort(function(a,b){ var A=teams[a].t, B=teams[b].t; if(A.own!==B.own) return A.own?-1:1; return A.lbl.localeCompare(B.lbl,'th'); });
-    var chips=tord.map(function(tk){
-      var T=teams[tk];
+    /* §vckHead4 · เจ้าของ: "ควรเรียงตามแถวที่เรียงไว้ไหม" · ใช่ · ลำดับชิป = ลำดับคันในตาราง (ที่จัดไว้ในใบงานรถ) เป๊ะ
+       ไม่จัดกลุ่มทีมใหม่แล้ว · แค่เว้นช่องตรงรอยต่อเมื่อคันถัดไปเป็นคนละทีม (ทีมเดียวกันที่จัดไว้ติดกันก็ยังติดกันเหมือนเดิม) */
+    var runs=[], cur=null;
+    R.keys.forEach(function(k){ var T=vckVanTeam(groups[k].vid);
+      if(!cur || cur.k!==T.k){ cur={k:T.k, t:T, keys:[]}; runs.push(cur); }
+      cur.keys.push(k); });
+    var chips=runs.map(function(T){
       return '<span class="vkh-team" title="'+e(T.t.lbl)+' · '+T.keys.length+' คัน">'
         +T.keys.map(function(k){ return ckUnitBar(groups,[k],'van','vckg-','',{compact:true}); }).join('')+'</span>';
     }).join('');
