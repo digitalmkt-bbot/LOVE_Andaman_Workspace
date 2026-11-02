@@ -11032,7 +11032,18 @@ function bkV2BoatSplitRender(){
 // alt pickup carrying its own pickup location (pickAreaId/pickHotel/pickZone/altWho). Van/group assignments
 // are preserved across edits by index. Only manages AUTO splits (ops.altSplitAuto) — never touches a manual
 // split. Returns true if it changed b.ops. Does NOT persist/re-render (caller does).
+/* §pckFast2 · เดิมตอบ "เปลี่ยน" ทุกครั้งที่สร้าง split ใหม่ แม้ได้ค่าเดิมเป๊ะ
+   → bkV2HealAltSplits สั่งบันทึกข้อมูลทั้งก้อน (~35 MB) ทุกครั้งที่หน้าท่า/By trip/ใบงานรถวาดใหม่
+   และล้างแคชทุกหน้าทิ้งไปด้วย · ตอนนี้เทียบก่อน/หลัง ตอบ true เฉพาะเมื่อข้อมูลรถเปลี่ยนจริง
+   (altSplitAuto ไม่นับ · ไม่ถูก map ลง DB จะหายทุกครั้งที่โหลดใหม่) */
+function _bkV2AltSnap(o){ o=o||{}; return JSON.stringify([o.vanSplits||null, o.vanGroup, o.vanId, o.vanReturnId]); }
 function bkV2SyncAltPickupSplits(b){
+  if(!b) return false;
+  var _before=_bkV2AltSnap(b.ops);
+  var r=_bkV2SyncAltPickupSplitsRaw(b);
+  return !!r && _bkV2AltSnap(b.ops)!==_before;
+}
+function _bkV2SyncAltPickupSplitsRaw(b){
   if(!b) return false; b.ops = b.ops || {};
   /* §altDrop · รายการที่ "รับที่เดิมแต่ส่งคนละที่" ไม่มีจุดรับของตัวเอง
      เงื่อนไขเดิมจะคัดทิ้ง ต้องรับเข้ามาด้วย ไม่งั้นแยกส่งอย่างเดียวไม่ได้เลย */
@@ -15324,30 +15335,47 @@ function pckStageRank(k){ return {wait:0, arr:1, clr:2, on:3}[k]||0; }
 //   ระบบผูก "รถ" กับ booking และผูก "เรือ" กับ booking แยกกัน ไม่มีใครผูกรถกับเรือ
 //   หน้าจอเลยไม่เคยบอกว่ารถคันนี้ต้องส่งใครขึ้นลำไหน — คนขับกับไกด์ไปเจอกันงงหน้าท่า
 //   คืนรายการ [{bid, pax, n}] เรียงจากลำที่คนเยอะสุด
+/* §pckFast3 · ป้าย "จอยรถกับลำ…" เรียกตัวนี้ทีละคัน และแต่ละครั้งไล่ใบจองทั้งระบบ (~9,000 ใบ)
+   หน้าท่า 1 รอบเรียก ~50 ครั้ง = ไล่ ~450,000 รอบ · ตอนนี้ไล่ครั้งเดียวแล้วแยกเก็บทุกคัน
+   แคชใช้เฉพาะระหว่าง renderPierCheckin กำลังวาด (เปิดตอนเริ่ม ปิดตอนจบ · ตัวซ่อมข้อมูลรันก่อนเปิด)
+   ที่อื่นเรียกเมื่อไรก็คำนวณสดเหมือนเดิม · ข้อมูลเปลี่ยนแล้วไม่มีทางได้ของเก่า */
+var _pckVbsMemo=null, _pckVbsOn=false;
 function pckVanBoatSplit(vanId, date){
-  var out=[], idx={};
-  if(!vanId) return out;
+  if(!vanId) return [];
+  var map;
+  if(_pckVbsOn){
+    if(!_pckVbsMemo || _pckVbsMemo.date!==date) _pckVbsMemo={date:date, map:_pckVanBoatSplitAll(date)};
+    map=_pckVbsMemo.map;
+  } else map=_pckVanBoatSplitAll(date);
+  var r=map[vanId];
+  return r ? r.map(function(x){ return Object.assign({},x); }) : [];
+}
+function _pckVanBoatSplitAll(date){
+  var byVan={};
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    var mine=false, pax=0;
+    var per={};   // vanId → pax ของใบนี้ (คันเดียวกันหลาย split รวมเป็นหนึ่ง · นับใบเดียว เหมือนเดิม)
     if(Array.isArray(O.vanSplits) && O.vanSplits.length){
-      O.vanSplits.forEach(function(sp){ if(sp && sp.vanId===vanId){ mine=true; pax+=(+sp.pax||0); } });
-    } else if(O.vanId===vanId){ mine=true; pax=ckBookedPax(t); }
-    if(!mine) return;
+      O.vanSplits.forEach(function(sp){ if(sp && sp.vanId){ per[sp.vanId]=(per[sp.vanId]||0)+(+sp.pax||0); } });
+    } else if(O.vanId){ per[O.vanId]=ckBookedPax(t); }
     var bid=O.boatId||t.charterBoatId||'', k=bid||'__none';
-    if(!idx[k]){ idx[k]={bid:bid, pax:0, n:0, t0:'', t1:''}; out.push(idx[k]); }
-    idx[k].pax+=pax; idx[k].n++;
     // เก็บช่วงเวลารับของกลุ่มนี้ไว้ตัดสินว่า "จอยรอบเดียวกัน" หรือ "คนละรอบ"
     var tm=String(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'').trim();
-    if(/^\d{1,2}:\d{2}/.test(tm)){
-      if(!idx[k].t0 || tm<idx[k].t0) idx[k].t0=tm;
-      if(!idx[k].t1 || tm>idx[k].t1) idx[k].t1=tm;
-    }
+    var okT=/^\d{1,2}:\d{2}/.test(tm);
+    Object.keys(per).forEach(function(vid){
+      var V=byVan[vid]||(byVan[vid]={out:[], idx:{}});
+      if(!V.idx[k]){ V.idx[k]={bid:bid, pax:0, n:0, t0:'', t1:''}; V.out.push(V.idx[k]); }
+      var g=V.idx[k]; g.pax+=per[vid]; g.n++;
+      if(okT){ if(!g.t0 || tm<g.t0) g.t0=tm; if(!g.t1 || tm>g.t1) g.t1=tm; }
+    });
   });
-  out.sort(function(a,b){ return b.pax-a.pax; });
-  return out;
+  var map={};
+  Object.keys(byVan).forEach(function(vid){
+    map[vid]=byVan[vid].out.sort(function(a,b){ return b.pax-a.pax; });
+  });
+  return map;
 }
 // §vanJoin · การ์ด/ใบงานหนึ่งอันเป็นของเรือลำเดียว · ลำอื่นที่รถคันเดียวกันต้องไปส่งคือสิ่งที่มองไม่เห็น
 //   บอกแค่ "จอยรถกับลำไหน" พอ · จำนวนคนอยู่ใน title ไว้ให้จิ้มดูตอนอยากรู้ ไม่เอามารกบนป้าย
@@ -21914,7 +21942,7 @@ var PCK_THEAD='<thead><tr>'
  +'<th style="width:13%;text-align:right">การจัดการ</th>'
  +'</tr></thead>';
 function pckCardCSS(scope){ return ''
-  +scope+' .pck-boat{border-radius:22px;margin-bottom:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 10px 30px -6px rgba(15,23,42,.10),0 3px 10px -3px rgba(15,23,42,.06)}'
+  +scope+' .pck-boat{content-visibility:auto;contain-intrinsic-size:auto 600px;border-radius:22px;margin-bottom:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 10px 30px -6px rgba(15,23,42,.10),0 3px 10px -3px rgba(15,23,42,.06)}'
   +scope+' .pck-bband{padding:14px 18px 13px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}'
   +scope+' .pck-bmark{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;font-family:\'DM Mono\',monospace;flex:none}'
   +scope+' .pck-bname{font-size:19px;font-weight:800;line-height:1.1;letter-spacing:-.2px}'
@@ -26058,7 +26086,21 @@ function pckScrollRestore(host){
   /* กล่องเพิ่งถูกสร้างใหม่ ความสูงอาจยังไม่นิ่งในเฟรมนี้ · ค่าที่ตั้งไปจะโดนบีบเงียบ ๆ */
   if(window.requestAnimationFrame) requestAnimationFrame(apply);
 }
+/* §pckFast1 · การ์ดเรือที่ยังไม่อยู่บนจอ เบราว์เซอร์ข้ามการจัดหน้าไปก่อน (content-visibility)
+   เดิมทุกครั้งที่กด ✓ เบราว์เซอร์จัดหน้าใหม่ทั้ง ~12,000 ชิ้น ~0.5 วิ · ตอนนี้จัดแค่ลำที่เห็น
+   ลำที่ข้ามไปใช้ "ความสูงจริงครั้งก่อน" ของลำนั้น (จำตาม id) ตำแหน่งเลื่อนหลังวาดใหม่จึงไม่เด้ง */
+var _pckBoatH={};
+function pckBoatHSave(host){
+  try{ host.querySelectorAll('.pck-boat[id]').forEach(function(el){
+    var h=Math.round(el.getBoundingClientRect().height); if(h>0) _pckBoatH[el.id]=h; }); }catch(_){}
+}
+function pckBoatHApply(host){
+  try{ host.querySelectorAll('.pck-boat[id]').forEach(function(el){
+    var h=_pckBoatH[el.id]||Math.max(200, 90+68*el.querySelectorAll('.ck-row').length);
+    el.style.containIntrinsicSize='auto '+h+'px'; }); }catch(_){}
+}
 function renderPierCheckin(){
+  var _pf0=(typeof performance!=='undefined'&&performance.now)?performance.now():0;   /* §pckFast4 */
   var host=pckHostEl(); if(!host) return;   /* §landCk */
   if(typeof laMyPier==='function' && laMyPier()) _pckPier=laMyPier();   /* §pierScope · ล็อกท่า */
   var e=ckEsc, date=_pckDate;
@@ -26066,6 +26108,17 @@ function renderPierCheckin(){
   /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
      จะขึ้นป้าย "ยังไม่จัดรถ" ทั้งที่จัดครบแล้ว */
   if(typeof bkV2HealAltSplits==='function'){ try{ bkV2HealAltSplits(date); }catch(_){} }
+  _pckVbsMemo=null; _pckVbsOn=true;   /* §pckFast3 · เปิดแคชหลังตัวซ่อมข้อมูลรันเสร็จ */
+  /* §pckFast5 · สีสถานะ/สีบริการ อ่าน laBlob() แถวละหลายครั้ง · หลังเพิ่งบันทึก (ทุกครั้งที่กด ✓)
+     laBlob() ต้องเทียบสตริงก้อนทั้งระบบ (~35 MB) ทุกครั้งที่ถูกเรียก = ~1 วิ · ปักก้อนไว้ช่วงวาด
+     แบบเดียวกับหน้าเงินสดย่อย (§pcFast) · ตัวซ่อมข้อมูลด้านบนรันและบันทึกเสร็จก่อนปัก จึงไม่ได้ของเก่า */
+  var _pinMine=!_laBlobPin;
+  if(_pinMine){ try{ _laBlobPin=laBlob(); }catch(_){ _laBlobPin=null; } }
+  try{ return _renderPierCheckinBody(host, date, _pf0); }
+  finally { _pckVbsOn=false; _pckVbsMemo=null; if(_pinMine) _laBlobPin=null; }
+}
+function _renderPierCheckinBody(host, date, _pf0){
+  var e=ckEsc;
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
@@ -26412,6 +26465,7 @@ function renderPierCheckin(){
   if(_pckView==='sheet'){ try{ sheetHtml=pckSheetHtml(boats, border, date); }catch(err){
     try{ console.warn('[pckSheet] fallback to cards', err && err.message); }catch(_){} sheetHtml=''; } }
   pckScrollSave(host);
+  pckBoatHSave(host);   /* §pckFast1 */
   /* §pckHead · หัวข้อหน้ากับคำอธิบายถูกตัดออก · เมนูซ้ายบอกอยู่แล้วว่าอยู่หน้าไหน
      ที่ประหยัดได้เอาไปให้ตาราง ซึ่งเป็นของที่ต้องอ่านจริงทุกเช้า */
   host.innerHTML='<style id="pck-style">'+ckStrandCSS('.pck-host')+ckSharedCSS('.pck-host')+pckExtraCSS()+pckCardCSS('.pck-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
@@ -26460,10 +26514,14 @@ function renderPierCheckin(){
     host.style.setProperty('--pck-band', _b?pckTint(_b,.78):'#E4E7EC');
     host.style.setProperty('--pck-bandb', _b?pckTint(_b,.44):'#CFD4DC');
   })();
+  pckBoatHApply(host);   /* §pckFast1 · ต้องก่อนคืนตำแหน่งเลื่อน */
   ckSyncSticky(host); pckFitPane();
   pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
   ckStartTick('piercheckin', renderPierCheckin);
-  if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
+  if(_pckKitOpen) pckKitchenRender();
+  /* §pckFast4 · ตัวเฝ้าความเร็ว · วาดเกิน 300 ms ให้รู้ใน console ว่าช้าตรงไหน (ไม่เตือนผู้ใช้) */
+  try{ var _pfMs=Math.round(performance.now()-_pf0); window._pckLastMs=_pfMs;
+       if(_pfMs>300) console.warn('[perf] renderPierCheckin '+_pfMs+' ms · rows '+(all?all.length:0)+' · view '+_pckView); }catch(_){}   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
 // ══ §Travel Summary (2026-07-26) · สรุปหน้างานรายวัน → ตัดสินว่าเก็บเท่าไร / เลื่อนวัน ══
 // อ่านผลจากเช็คอินรถ + เช็คอินหน้าท่า (events[] ของ ops.vanCheckin / ops.pierCheckin)
