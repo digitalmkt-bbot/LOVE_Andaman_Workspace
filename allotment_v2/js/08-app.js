@@ -16726,6 +16726,7 @@ function ckSharedCSS(scope){
   +'.vck-lndlg .vck-lnex-row .k{font-size:10px;font-weight:800;color:#64748B}'
   +'.vck-lndlg .vck-lnex-row button{border:1px solid #DCE3EC;background:#fff;border-radius:999px;padding:2px 9px;font:700 10px inherit;font-family:inherit;color:#475569;cursor:pointer}'
   +'.vck-lndlg .ck-df .k.vck-lncopy{background:#06C755;border-color:#06C755}'
+  +'.vck-lndlg .vck-lnclr{border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:999px;padding:1px 8px;font:700 9.5px inherit;font-family:inherit;cursor:pointer;margin-left:4px;vertical-align:1px}'
   /* แถบสี · กดเปลี่ยนสีได้ */
   +scope+' .vck-lgbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;'
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
@@ -17174,7 +17175,8 @@ function vckNoteHtml(ck,st,r,rsn){
   var _by=(ck&&ck.by)?(' title="บันทึกโดย '+ckEsc(ck.by)+(ck.at?(' · '+ckEsc(new Date(ck.at).toLocaleString('th-TH'))):'')+'"'):'';   /* §vckNoteShort · ชี้เมาส์ดูคนบันทึก */
   /* §vckLine · แถว "ตามแขก" มีปุ่มไลน์ตามเอเจนต์ · ส่งแล้วกี่ครั้งโชว์ต่อท้าย */
   var _ls=(ck&&Array.isArray(ck.lineSent))?ck.lineSent:[];
-  var lnTxt=_ls.length?('<span class="vck-lnsent" title="ส่งไลน์ตามเอเจนต์แล้ว '+_ls.length+' ครั้ง · ล่าสุด '+ckEsc(_ls[_ls.length-1].at||'')+' โดย '+ckEsc(_ls[_ls.length-1].by||'')+'">&#128172; LINE '+ckEsc(_ls[_ls.length-1].at||'')+(_ls.length>1?(' ×'+_ls.length):'')+'</span>'):'';
+  var _lnOpen=(r&&r.b)?(' onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" style="cursor:pointer"'):'';
+  var lnTxt=_ls.length?('<span class="vck-lnsent"'+_lnOpen+' title="ส่งไลน์ตามเอเจนต์แล้ว '+_ls.length+' ครั้ง · ล่าสุด '+ckEsc(_ls[_ls.length-1].at||'')+' โดย '+ckEsc(_ls[_ls.length-1].by||'')+' · กดเพื่อเปิด/ล้างประวัติ">&#128172; LINE '+ckEsc(_ls[_ls.length-1].at||'')+(_ls.length>1?(' ×'+_ls.length):'')+'</span>'):'';
   /* §vckLine2 · เจ้าของ: "ให้มีขึ้นมาให้กดได้เลย ไม่ต้องรอสถานะ Pending" · ขึ้นทุกแถวที่ยังไม่จบ (รอ / Standby / ตามแขก) */
   var lnBtn=((st==='pending'||st==='standby'||st==='wait') && r && r.b)?('<button class="vck-ln'+(st==='wait'?' q':'')+'" onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" title="คัดลอกข้อความตามแขกไปส่งไลน์เอเจนต์">&#128172; LINE</button>'):'';
   var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+(lnTxt?(' · '+lnTxt):'')+'</span>') : (lnTxt?('<span class="vck-nt">'+lnTxt+'</span>'):'<span class="ck-dim">—</span>');
@@ -17271,7 +17273,7 @@ function vckLineRender(){
   host.innerHTML=''
    +'<div id="ck-reason-ov" onclick="if(event.target===this)vckLineClose()" class="ck-ovl"><div class="ck-dlg vck-lndlg">'
    +'  <div class="ck-dh"><span class="vck-lnico">&#128172;</span><div style="flex:1;min-width:0"><div class="t1">ข้อความตามแขก · ส่งไลน์เอเจนต์</div>'
-   +'    <div class="t2">'+e(D.agent)+' · '+e(D.voucher)+' · '+e(D.guest)+(sent.length?(' · <span style="color:#06C755;font-weight:700">ส่งแล้ว '+sent.length+' ครั้ง ล่าสุด '+e(sent[sent.length-1].at||'')+'</span>'):'')+'</div></div>'
+   +'    <div class="t2">'+e(D.agent)+' · '+e(D.voucher)+' · '+e(D.guest)+(sent.length?(' · <span style="color:#06C755;font-weight:700">ส่งแล้ว '+sent.length+' ครั้ง ล่าสุด '+e(sent[sent.length-1].at||'')+'</span> <button class="vck-lnclr" onclick="vckLineClearLog()" title="ล้างประวัติการส่งไลน์ของแถวนี้ (กรณีกดทดสอบ/กดผิด)">ล้างประวัติ</button>'):'')+'</div></div>'
    +     tabs+'<button class="x" onclick="vckLineClose()">&times;</button></div>'
    +'  <div class="ck-db">'+body+'</div>'
    +'  <div class="ck-df">'
@@ -17282,6 +17284,16 @@ function vckLineRender(){
         +'<button class="k vck-lncopy" onclick="vckLineCopy()">&#128203; คัดลอกข้อความ</button>')
    +'  </div>'
    +'</div></div>';
+}
+/* §vckLine3 · เจ้าของ: "ลองเทสแล้วล้างไม่ได้" · ล้างประวัติส่งไลน์ของแถว (ปุ่มในหัวกล่อง) */
+function vckLineClearLog(){
+  var S=window._vckLnState; if(!S) return;
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b) return;
+  var cur=ckRead(b,S.date,S.kind)||{}; var n=(cur.lineSent||[]).length;
+  if(!confirm('ล้างประวัติส่งไลน์ '+n+' ครั้งของแถวนี้?')) return;
+  var o={}; Object.keys(cur).forEach(function(k){ o[k]=cur[k]; }); o.lineSent=[];
+  ckWrite(b,S.date,S.kind,o); ckPersist(); S.msg=null; vckLineRender(); if(typeof ckAfter==='function') ckAfter(S.kind);
 }
 function vckLineCopy(){
   var S=window._vckLnState; if(!S) return; var ta=document.getElementById('vck-ln-msg'); if(!ta) return;
