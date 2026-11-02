@@ -15277,7 +15277,7 @@ function _ckLegacySeed(L){
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
 var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate','selfAdd',
-                   'flow','flowAt','flowBy','flowNote'];   /* §vckFlow · สถานะรายแถวก็ต้องไม่หายตอนกด +/- */   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
+                   'flow','flowAt','flowBy','flowNote','lineSent'];   /* §vckLine · ประวัติส่งไลน์ตามเอเจนต์ */   /* §vckFlow · สถานะรายแถวก็ต้องไม่หายตอนกด +/- */   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
   var sl=_ckSlot(kind);
@@ -16706,6 +16706,25 @@ function ckSharedCSS(scope){
   +scope+' .vck-nt{font-size:11px;font-weight:700;line-height:1.35;white-space:normal;'
     +'display:inline-block;max-width:230px;color:#5F5E5A}'
   +scope+' .vck-rsn{margin-top:3px}'
+  /* §vckLine */
+  +scope+' .vck-ln{margin-left:6px;border:1px solid #06C755;background:#06C755;color:#fff;border-radius:7px;padding:2px 7px;font:800 10px inherit;font-family:inherit;cursor:pointer;white-space:nowrap;vertical-align:top}'
+  +scope+' .vck-ln:hover{background:#05b24c}'
+  +scope+' .vck-lnsent{color:#06C755;font-weight:800;white-space:nowrap}'
+  +'.vck-lndlg{width:min(560px,96vw)}'
+  +'.vck-lndlg .vck-lnico{width:28px;height:28px;border-radius:8px;background:#06C755;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}'
+  +'.vck-lndlg .vck-lntabs{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden;flex:none;align-self:center}'
+  +'.vck-lndlg .vck-lntabs button{border:0;background:#fff;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+  +'.vck-lndlg .vck-lntabs button+button{border-left:1px solid #EFECE4}'
+  +'.vck-lndlg .vck-lntabs button.on{background:#15201a;color:#fff}'
+  +'.vck-lndlg .vck-lnta{width:100%;box-sizing:border-box;border:1px solid #DCE3EC;border-radius:10px;padding:10px 12px;font:12.5px/1.6 inherit;font-family:inherit;color:#1F2430;background:#FAFBFC;resize:vertical}'
+  +'.vck-lndlg .vck-lnta.mono{font-family:\'DM Mono\',monospace;font-size:11.5px}'
+  +'.vck-lndlg .vck-lnvars{display:flex;flex-wrap:wrap;gap:4px}'
+  +'.vck-lndlg .vck-lnvars button{border:1px solid #DCE3EC;background:#fff;border-radius:6px;padding:2px 7px;font:700 10px \'DM Mono\',monospace;color:#185FA5;cursor:pointer}'
+  +'.vck-lndlg .vck-lnex{width:100%;box-sizing:border-box;margin-bottom:5px}'
+  +'.vck-lndlg .vck-lnex-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:8px}'
+  +'.vck-lndlg .vck-lnex-row .k{font-size:10px;font-weight:800;color:#64748B}'
+  +'.vck-lndlg .vck-lnex-row button{border:1px solid #DCE3EC;background:#fff;border-radius:999px;padding:2px 9px;font:700 10px inherit;font-family:inherit;color:#475569;cursor:pointer}'
+  +'.vck-lndlg .ck-df .k.vck-lncopy{background:#06C755;border-color:#06C755}'
   /* แถบสี · กดเปลี่ยนสีได้ */
   +scope+' .vck-lgbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;'
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
@@ -17152,8 +17171,132 @@ function vckNoteHtml(ck,st,r,rsn){
   var txt=vckRowNote(ck, st, arr&&arr.at);
   var d=vckStDef(st);
   var _by=(ck&&ck.by)?(' title="บันทึกโดย '+ckEsc(ck.by)+(ck.at?(' · '+ckEsc(new Date(ck.at).toLocaleString('th-TH'))):'')+'"'):'';   /* §vckNoteShort · ชี้เมาส์ดูคนบันทึก */
-  var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
-  return body + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
+  /* §vckLine · แถว "ตามแขก" มีปุ่มไลน์ตามเอเจนต์ · ส่งแล้วกี่ครั้งโชว์ต่อท้าย */
+  var _ls=(ck&&Array.isArray(ck.lineSent))?ck.lineSent:[];
+  var lnTxt=_ls.length?('<span class="vck-lnsent" title="ส่งไลน์ตามเอเจนต์แล้ว '+_ls.length+' ครั้ง · ล่าสุด '+ckEsc(_ls[_ls.length-1].at||'')+' โดย '+ckEsc(_ls[_ls.length-1].by||'')+'">&#128172; LINE '+ckEsc(_ls[_ls.length-1].at||'')+(_ls.length>1?(' ×'+_ls.length):'')+'</span>'):'';
+  var lnBtn=(st==='pending' && r && r.b)?('<button class="vck-ln" onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" title="คัดลอกข้อความตามแขกไปส่งไลน์เอเจนต์">&#128172; LINE</button>'):'';
+  var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+(lnTxt?(' · '+lnTxt):'')+'</span>') : (lnTxt?('<span class="vck-nt">'+lnTxt+'</span>'):'<span class="ck-dim">—</span>');
+  return body + lnBtn + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
+}
+/* ══ §vckLine (2026-11-02) · ตามแขกไม่เจอ → คัดลอกข้อความไปส่งไลน์เอเจนต์ ═══════════════════
+   เจ้าของ: "ตอนที่ติดตาม ลค ไปถึงแล้วไม่เจอ เราจะส่งไลน์ไปให้เอเจนต์ตาม · ขอให้ Copy แล้วส่งไลน์เลยได้
+   มีรายละเอียดคร่าว ๆ · เป็นภาษาอังกฤษ กระชับ · ขาดชื่อโปรแกรม วันที่"
+   เทมเพลตเป็นข้อความที่มี {ตัวแปร} · เก็บทั้งบริษัทที่ vck_line_tpl (สตริง) เหมือนสีสถานะ · แก้ได้ในแท็บ "แก้เทมเพลต" ของกล่องเดียวกัน
+   คัดลอกแล้วจด ck.lineSent[] = {at,by} · ช่องบันทึกหน้างานโชว์ "💬 LINE 04:09 ×2" */
+var VCK_LINE_TPL_DEF='LOVE ANDAMAN – guest not found ({date})\n'
+  +'{program} · boat {boatTime} {pier}\n'
+  +'Voucher {voucher} ({agent}) · {guest} · {pax} pax · {guestPhone}\n'
+  +'{hotel}, room {room} · pickup {pickupTime}\n'
+  +'Driver {driver} {driverPhone} at the hotel since {arrivedAt}, guest not at room/lobby.\n'
+  +'Please contact the guest and call the driver back. Van must leave by {deadline}.';
+var VCK_LINE_EXTRA_DEF=['2nd follow-up – still no contact with the guest.','Office: {office}','Guest may also go directly to {pier} pier before {boatTime} (self-arrive).'];
+var VCK_LINE_VARS=[['voucher','เลข voucher'],['agent','ชื่อเอเจนต์'],['guest','ชื่อแขกหลัก'],['pax','จำนวนคน'],['guestPhone','เบอร์แขก'],['hotel','โรงแรม/จุดรับ'],['room','ห้อง'],['pickupTime','เวลานัดรับ'],['van','ชื่อรถ'],['plate','ทะเบียน'],['driver','คนขับ'],['driverPhone','เบอร์คนขับ'],['program','โปรแกรม'],['boatTime','เวลาเรือออก'],['pier','ท่า'],['arrivedAt','เวลาคนขับกดสแตนบาย'],['deadline','ถึง + 15 นาที'],['date','วันที่'],['nth','ครั้งที่ตาม'],['office','เบอร์ออฟฟิศ (ตั้งในเทมเพลต)']];
+function vckLineTpl(){ try{ var v=laBlob().vck_line_tpl; return (typeof v==='string'&&v.trim())?v:VCK_LINE_TPL_DEF; }catch(_){ return VCK_LINE_TPL_DEF; } }
+function vckLineExtras(){ try{ var v=laBlob().vck_line_extras; var a=JSON.parse(v||'null'); return (Array.isArray(a)&&a.length)?a:VCK_LINE_EXTRA_DEF.slice(); }catch(_){ return VCK_LINE_EXTRA_DEF.slice(); } }
+function vckLineOffice(){ try{ return String(laBlob().vck_line_office||''); }catch(_){ return ''; } }
+function vckLineTplSave(){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var t=(document.getElementById('vck-ln-tpl')||{}).value||'', ex=[0,1,2].map(function(i){ return ((document.getElementById('vck-ln-ex'+i)||{}).value||'').trim(); }).filter(Boolean);
+  var off=((document.getElementById('vck-ln-office')||{}).value||'').trim();
+  try{ var b=laBlob();
+    if(t.trim()&&t.trim()!==VCK_LINE_TPL_DEF) b.vck_line_tpl=t; else delete b.vck_line_tpl;
+    if(ex.length&&JSON.stringify(ex)!==JSON.stringify(VCK_LINE_EXTRA_DEF)) b.vck_line_extras=JSON.stringify(ex); else delete b.vck_line_extras;
+    if(off) b.vck_line_office=off; else delete b.vck_line_office;
+    laBlobSave(); }catch(e){ try{ console.warn('[vckLine] template save failed', e&&e.message); }catch(_){} }
+  var S=window._vckLnState; if(S){ S.tab='msg'; S.msg=null; vckLineRender(); }
+}
+function vckLineTplReset(){ if(!confirm('คืนเทมเพลตข้อความตามแขกเป็นค่าเริ่มต้น?')) return; try{ var b=laBlob(); delete b.vck_line_tpl; delete b.vck_line_extras; laBlobSave(); }catch(_){} var S=window._vckLnState; if(S){ S.msg=null; vckLineRender(); } }
+function vckLineData(b,date,kind,gk){
+  var e=function(v){ return String(v==null?'':v).trim(); };
+  var t=(b.trips||[]).filter(function(x){ return x.date===date; })[0]||{};
+  var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+  var ck=ckRead(b,date,kind)||{};
+  var rt=(typeof getRoute==='function'?getRoute(t.routeId):null)||{};
+  var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  var vid=O.vanId; if(gk){ var m=String(gk).split('~'); if(m[0]) vid=m[0]; }
+  var v=(typeof vehGet==='function'?vehGet(vid):null)||{};
+  var arr=null; try{ if(gk) arr=vckArrGet(date,gk); }catch(_){}
+  var arrAt=(arr&&arr.at)||ck.flowAt||'';
+  var dead=''; var mm=String(arrAt).match(/(\d{1,2}):(\d{2})/); if(mm){ var mins=(+mm[1])*60+(+mm[2])+15; dead=String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
+  var PIER_EN={tublamu:'Tub Lamu',panwa:'Panwa',ranong:'Ranong'};
+  var pk=rt.pier||''; var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  var dEn=''; try{ dEn=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }catch(_){ dEn=date; }
+  var nth=((Array.isArray(ck.lineSent)?ck.lineSent.length:0)+1);
+  return { voucher:e(b.voucherRef||b.code||b.id), agent:e(ag?(ag.name||ag.code):(b.channel||'walk-in')), guest:e(b.leadPax||'-'), pax:pax,
+    guestPhone:e(b.leadPhone||b.phone||b.customerPhone||'-'), hotel:e((typeof ckPickShort==='function'?ckPickShort(b.hotelName||b.pickup):(b.hotelName||b.pickup))||'-'),
+    room:e(b.roomNumber||b.roomNo||'-'), pickupTime:e(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'-'),
+    van:e(v.name||vid||'-'), plate:e(v.plate&&v.plate!=='-'?v.plate:''), driver:e(v.driver||'-'), driverPhone:e(v.driverPhone||v.phone||'-'),
+    program:e(rt.name||'-'), boatTime:e((rt.times&&rt.times[0])||'-'), pier:e(PIER_EN[pk]||pk||'-'),
+    arrivedAt:e(arrAt||'-'), deadline:e(dead||'-'), date:dEn, nth:(nth===1?'1st':nth===2?'2nd':nth===3?'3rd':(nth+'th')), office:e(vckLineOffice()||'-') };
+}
+function vckLineFill(tpl,D){ return String(tpl||'').replace(/\{(\w+)\}/g,function(m,k){ return (D[k]!==undefined&&D[k]!=='')?String(D[k]):m; }).replace(/\\n/g,'\n')
+  .replace(/ · -(?=\n|$)/g,'').replace(/, room -/g,'').replace(/ \(-\)/g,''); }   /* ช่องที่ไม่มีข้อมูล (เบอร์/ห้อง) ตัดทิ้ง ไม่ปล่อย " · -" ค้างในข้อความ */
+function vckLineOpen(bkId,date,kind,gk){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  window._vckLnState={bkId:bkId,date:date,kind:kind,gk:gk||'',tab:'msg',msg:null};
+  vckLineRender();
+}
+function vckLineClose(){ var h=document.getElementById('ck-reason-host'); if(h) h.innerHTML=''; window._vckLnState=null; }
+function vckLineInsert(txt){ var ta=document.getElementById('vck-ln-msg'); if(!ta) return; var S=window._vckLnState; var D=vckLineData((SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }),S.date,S.kind,S.gk); ta.value=(ta.value.replace(/\s+$/,''))+'\n'+vckLineFill(txt,D); S.msg=ta.value; ta.focus(); }
+function vckLineTplVar(k){ var ta=document.getElementById('vck-ln-tpl'); if(!ta) return; var a=ta.selectionStart||ta.value.length, z=ta.selectionEnd||a; ta.value=ta.value.slice(0,a)+'{'+k+'}'+ta.value.slice(z); ta.focus(); ta.selectionStart=ta.selectionEnd=a+k.length+2; }
+function vckLineTab(t){ var S=window._vckLnState; if(!S) return; var ta=document.getElementById('vck-ln-msg'); if(ta) S.msg=ta.value; S.tab=t; vckLineRender(); }
+function vckLineRender(){
+  var S=window._vckLnState; if(!S) return; var e=ckEsc;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b){ vckLineClose(); return; }
+  var D=vckLineData(b,S.date,S.kind,S.gk);
+  var msg=(S.msg!=null)?S.msg:vckLineFill(vckLineTpl(),D);
+  var canEdit=!(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations'));
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var tabs='<span class="vck-lntabs"><button class="'+(S.tab==='msg'?'on':'')+'" onclick="vckLineTab(\'msg\')">ข้อความ</button>'+(canEdit?('<button class="'+(S.tab==='tpl'?'on':'')+'" onclick="vckLineTab(\'tpl\')">&#9998; แก้เทมเพลต</button>'):'')+'</span>';
+  var body;
+  if(S.tab==='tpl'){
+    var ex=vckLineExtras();
+    body='<div class="lb">เทมเพลต · ใส่ {ตัวแปร} ตรงไหนก็ได้ · ตั้งครั้งเดียวใช้ทั้งบริษัท</div>'
+      +'<textarea id="vck-ln-tpl" class="vck-lnta mono" rows="7">'+e(vckLineTpl())+'</textarea>'
+      +'<div class="lb">ตัวแปร · คลิกเพื่อแทรก</div><div class="vck-lnvars">'+VCK_LINE_VARS.map(function(v){ return '<button onclick="vckLineTplVar(\''+v[0]+'\')" title="'+e(v[1])+'">{'+v[0]+'}</button>'; }).join('')+'</div>'
+      +'<div class="lb">ประโยคเสริม (ปุ่ม "เติม" ในแท็บข้อความ)</div>'
+      +[0,1,2].map(function(i){ return '<input id="vck-ln-ex'+i+'" class="ck-inp vck-lnex" value="'+e(ex[i]||'')+'" placeholder="ว่าง = ไม่มีปุ่ม">'; }).join('')
+      +'<div class="lb">เบอร์ออฟฟิศ · ใช้กับ {office}</div><input id="vck-ln-office" class="ck-inp" style="width:200px" value="'+e(vckLineOffice())+'" placeholder="076-xxx-xxxx">';
+  } else {
+    var ex2=vckLineExtras();
+    body='<div class="lb">ข้อความ (EN) · แก้ได้ก่อนคัดลอก</div>'
+      +'<textarea id="vck-ln-msg" class="vck-lnta" rows="8" oninput="window._vckLnState&&(window._vckLnState.msg=this.value)">'+e(msg)+'</textarea>'
+      +(ex2.length?('<div class="vck-lnex-row"><span class="k">เติม:</span>'+ex2.map(function(x){ return '<button onclick="vckLineInsert(\''+e(x).replace(/'/g,'&#39;')+'\')">+ '+e(x.length>34?(x.slice(0,32)+'…'):x)+'</button>'; }).join('')+'</div>'):'')
+      +(D.arrivedAt==='-'?'<div class="ck-fn" style="color:#A32D2D;margin-top:6px">ยังไม่มีเวลาที่คนขับกดสแตนบายถึงจุดรับ · {arrivedAt}/{deadline} จึงว่าง — กดสแตนบายที่หัวคันก่อน หรือพิมพ์เวลาเอง</div>':'');
+  }
+  var sent=(ckRead(b,S.date,S.kind)||{}).lineSent||[];
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)vckLineClose()" class="ck-ovl"><div class="ck-dlg vck-lndlg">'
+   +'  <div class="ck-dh"><span class="vck-lnico">&#128172;</span><div style="flex:1;min-width:0"><div class="t1">ข้อความตามแขก · ส่งไลน์เอเจนต์</div>'
+   +'    <div class="t2">'+e(D.agent)+' · '+e(D.voucher)+' · '+e(D.guest)+(sent.length?(' · <span style="color:#06C755;font-weight:700">ส่งแล้ว '+sent.length+' ครั้ง ล่าสุด '+e(sent[sent.length-1].at||'')+'</span>'):'')+'</div></div>'
+   +     tabs+'<button class="x" onclick="vckLineClose()">&times;</button></div>'
+   +'  <div class="ck-db">'+body+'</div>'
+   +'  <div class="ck-df">'
+   +(S.tab==='tpl'
+      ? '<button class="c" onclick="vckLineTplReset()">&#8634; คืนค่าเริ่มต้น</button><span style="flex:1"></span><button class="c" onclick="vckLineTab(\'msg\')">ยกเลิก</button><button class="k" onclick="vckLineTplSave()">บันทึกเทมเพลต</button>'
+      : '<span class="ck-fn" style="margin:0;align-self:center">คัดลอกแล้วระบบจดไว้ในแถวว่า "LINE '+e(ckNowHM())+' · '+e(ckMe())+'"</span><span style="flex:1"></span>'
+        +(D.guestPhone&&D.guestPhone!=='-'?('<a class="c" href="tel:'+e(D.guestPhone)+'" style="text-decoration:none;display:inline-flex;align-items:center">&#128222; โทรแขก</a>'):'')
+        +'<button class="k vck-lncopy" onclick="vckLineCopy()">&#128203; คัดลอกข้อความ</button>')
+   +'  </div>'
+   +'</div></div>';
+}
+function vckLineCopy(){
+  var S=window._vckLnState; if(!S) return; var ta=document.getElementById('vck-ln-msg'); if(!ta) return;
+  var txt=ta.value;
+  var done=function(){
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b) return;
+    if(typeof ckGuard==='function' && ckGuard()){
+      var cur=ckRead(b,S.date,S.kind)||{}, o={}; Object.keys(cur).forEach(function(k){ o[k]=cur[k]; });
+      o.lineSent=(Array.isArray(cur.lineSent)?cur.lineSent.slice():[]); o.lineSent.push({at:ckNowHM(), by:ckMe()});
+      ckWrite(b,S.date,S.kind,o); ckPersist(); }
+    var btn=document.querySelector('.vck-lncopy'); if(btn){ btn.textContent='✓ คัดลอกแล้ว'; btn.disabled=true; }
+    setTimeout(function(){ vckLineClose(); if(typeof ckAfter==='function') ckAfter(S.kind); }, 700);
+  };
+  var fired=false, once=function(){ if(fired) return; fired=true; done(); };
+  var fallback=function(){ ta.select(); try{ document.execCommand('copy'); }catch(_){} once(); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(once, fallback); setTimeout(function(){ if(!fired) fallback(); }, 900); return; } }catch(_){}   /* clipboard API ค้างได้ตอนไม่มี permission · กันไว้ด้วยเวลา */
+  fallback();
 }
 /* §pickShort (2026-09-03) · ชื่อจุดรับที่ลงท้ายด้วย (self-arrive) ยาวเกินช่อง
    และซ้ำกับสิ่งที่คอลัมน์โซนบอกอยู่แล้ว · ตัดเฉพาะตอนแสดงผล ไม่แตะข้อมูล
