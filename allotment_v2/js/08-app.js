@@ -34767,6 +34767,12 @@ function pxCSS(){ return ''
  +'#trippl-host table.sum tr.nosail td.netc{background:#FAFBFC}'
  +'#trippl-host table.sum tr.nosail .num,#trippl-host table.sum tr.nosail .net{color:#A9B2BC}'
  +'#trippl-host table.sum tr.nosail .bn b{color:#7C8794}'
+ /* §pxPierGrp */
+ +'#trippl-host table.sum tr.pgh td{background:#F1F4F9;padding:9px 14px;font-size:12px;color:#16265C;border-top:1.5px solid #D5DCE8;text-align:left;cursor:default}'
+ +'#trippl-host table.sum tr.pgh .pgd{display:inline-block;width:9px;height:9px;border-radius:5px;margin-right:8px;vertical-align:1px}'
+ +'#trippl-host table.sum tr.pgh .pgm{margin-left:10px;font-weight:500;color:#64748B;font-size:11px}'
+ +'#trippl-host table.sum tr.pgs td{background:#F8FAFD;border-top:1px dashed #C9D3E2;font-weight:700}'
+ +'#trippl-host table.sum tr.pgs td.l{color:#334155;font-size:12px}'
  +'#trippl-host .pnet{display:flex;align-items:center;gap:8px;background:rgba(16,185,129,.09);'
    +'border:1px solid rgba(16,185,129,.22);padding:0 12px;border-radius:999px;height:30px;flex:none}'
  +'#trippl-host .pnet > div:last-child{display:flex;align-items:baseline;gap:8px}'
@@ -35596,7 +35602,7 @@ function pxDaily(e){
       +'<span class="pill pu">'+D.filter(function(t){ return t.closed; }).length+' locked</span></div></div>'
     +'</div>';
 
-  var sumRows=D.map(function(t){
+  var pxSumRow=function(t){
     /* §pxNoSail · ลำที่ไม่ได้ออกต้องไม่ขึ้นแถบแดง 100% · ไม่มีรายได้ ไม่มีต้นทุน ไม่มีอะไรให้เทียบ */
     var loss=t.profit<0, ratio=t.rev?Math.min(140, t.cost/t.rev*100):(t.noSail?0:100);
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
@@ -35622,7 +35628,7 @@ function pxDaily(e){
         +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
           +(t.noSail?'ไม่ได้ออก':('Cost '+Math.round(ratio)+'%'))+'</span>'
         +'<span class="b">'+(t.noSail?'—':(t.be?('B/E '+t.be+' pax'):'—'))+'</span></div></td></tr>';
-  }).join('');
+  };
   var totRow='<tr class="tot"><td class="l">Σ Day total · '+SAIL.length+' boat'+(SAIL.length===1?'':'s')
     +(nNo?(' <span class="nsx">+'+nNo+' ไม่ได้ออก</span>'):'')+'</td>'
     +'<td class="c"><span class="num mut">—</span></td>'
@@ -35636,6 +35642,41 @@ function pxDaily(e){
     +(fShow?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
     +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:#4F46E5"></i></div>'
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
+
+  /* §pxPierGrp (2026-11-02) · owner: "แยกเป็นท่าเรือให้หน่อย"
+     ดูทุกท่า + มีเรือมากกว่า 1 ท่า → หัวท่า · แถวเรือของท่านั้น · รวมของท่า แล้วค่อย Σ ทั้งวัน
+     ตัวเลขรวมท่าคิดแบบเดียวกับแถว Σ (ลำที่ไม่ได้ออกไม่นับกำไร) · เลือกท่าเดียวจากตัวกรอง = ตารางเดิม */
+  var pxTPier=function(t){ var r=t.route||{}; if(r.pier) return r.pier;
+    var op=(typeof TRIPS!=='undefined'&&TRIPS[_px.date])?TRIPS[_px.date][t.bid]:null;
+    var rt=(op&&op.route&&typeof getRoute==='function')?getRoute(op.route):null; return (rt&&rt.pier)||''; };
+  var PG={}, PGO=[];
+  D.forEach(function(t){ var k=pxTPier(t); if(!PG[k]){ PG[k]=[]; PGO.push(k); } PG[k].push(t); });
+  var PL=(typeof PO_PIERS!=='undefined')?PO_PIERS:[];
+  PGO.sort(function(a,b){ var ia=PL.findIndex(function(p){ return p.k===a; }), ib=PL.findIndex(function(p){ return p.k===b; });
+    return (ia<0?99:ia)-(ib<0?99:ib); });
+  var sumRows;
+  if(_px.pier || PGO.length<2) sumRows=D.map(pxSumRow).join('');
+  else sumRows=PGO.map(function(k){
+    var L=PG[k], S=L.filter(function(t){ return !t.noSail; }), P=PL.filter(function(p){ return p.k===k; })[0]||{t:(k||'ไม่ระบุท่า'),c:'#64748B'};
+    var r=0,c2=0,pf=0,px=0,bk=0,fm=0,fp=0;
+    L.forEach(function(t){ r+=t.rev; c2+=t.cost; px+=t.px.tot; bk+=t.px.bk; });
+    S.forEach(function(t){ pf+=t.profit; var F=t.fam||{}; fm+=(F.cost||0); fp+=(F.pax||0); });
+    var ng=pf<0, pp=px?Math.round(pf/px):0, rt=r?Math.round(c2/r*100):0, nNoP=L.length-S.length;
+    var bc=rt>=100?'#E11D48':(rt>=70?'#F59E0B':'#10B981');
+    var head='<tr class="pgh"><td colspan="'+(fShow?9:7)+'"><span class="pgd" style="background:'+e(P.c||'#64748B')+'"></span>'
+      +'<b>'+e(P.t||P.n||k)+'</b><span class="pgm">'+S.length+' boat'+(S.length===1?'':'s')+(nNoP?(' · +'+nNoP+' ไม่ได้ออก'):'')+' · '+px+' pax</span></td></tr>';
+    var sub='<tr class="pgs"><td class="l">รวม '+e(String(P.t||P.n||k).split(' · ')[0])+' · '+S.length+' boat'+(S.length===1?'':'s')+'</td>'
+      +'<td class="c"><span class="num mut">—</span></td>'
+      +'<td class="c"><span class="num n">'+px+'</span><div class="per">'+bk+' bookings</div></td>'
+      +'<td><span class="num n">'+pxN(r)+'</span><div class="per n">avg '+pxN(r/Math.max(1,px))+' / pax</div></td>'
+      +'<td><span class="num cost n">'+pxN(c2)+'</span><div class="per n">avg '+pxN(c2/Math.max(1,px))+' / pax</div></td>'
+      +(!S.length?'<td class="netc"><span class="net mut n">—</span><div class="per">ไม่ได้ออกทั้งท่า</div></td>'
+        :('<td class="netc'+(ng?' neg':'')+'"><span class="net'+(ng?' neg':'')+' n">'+(ng?'−':'+')+pxN(Math.abs(pf))+'</span>'
+        +'<div class="per '+(ng?'negp':'pos')+' n">'+(pp<0?'−':'+')+pxN(Math.abs(pp))+' / pax'+(r?(' · '+Math.round(pf/r*100)+'%'):'')+'</div></td>'))
+      +(fShow?pxFamCells(pf+fm, fm, fp?(fp+' pax'):''):'')
+      +'<td><div class="bars"><i style="width:'+Math.min(100,rt)+'%;background:'+bc+'"></i></div>'
+        +'<div class="bmeta"><span class="a" style="color:'+bc+'">Cost '+rt+'%</span><span class="b"></span></div></td></tr>';
+    return head+L.map(pxSumRow).join('')+sub; }).join('');
 
   var GORD=pxGOrd(D);
   /* §revFlag · รายได้ต่อหัวของลำนี้ต่ำกว่าค่าเฉลี่ยของวันมากผิดปกติ = น่าจะกรอกใบจองผิด
