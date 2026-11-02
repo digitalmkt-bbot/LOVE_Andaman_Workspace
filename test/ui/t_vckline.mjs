@@ -12,6 +12,7 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   const row = [...H().querySelectorAll('tr.ck-row[data-bk], tbody tr')].find(tr => tr.querySelector('select.vck-sel'));
   const sel = row.querySelector('select.vck-sel'); const m = sel.getAttribute('onchange').match(/vckStatus\('([^']+)','([^']+)','([^']+)'/);
   const bkId = m[1], date = m[2], kind = m[3];
+  o.btnWait = !!row.querySelector('.vck-ln.q');   // §vckLine2 · แถว รอ ก็มีปุ่ม (แบบขอบ)
   vckStatus(bkId, date, kind, 'pending'); await z(500);
   o.btn = !!H().querySelector('.vck-ln'); o.noLnBefore = H().querySelectorAll('.vck-lnsent').length;
   const b = SB_BOOKINGS.find(x => x.id === bkId); const t = b.trips.find(x => x.date === date); const rt = getRoute(t.routeId);
@@ -39,7 +40,7 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   return o;
 });
 const J = JSON.stringify(r);
-if (r.btn && r.noLnBefore === 0 && r.dlg) ok('แถวตามแขกมีปุ่ม LINE · กดแล้วเปิดกล่อง'); else fail('btn ' + J);
+if (r.btnWait && r.btn && r.noLnBefore === 0 && r.dlg) ok('ปุ่ม LINE มีตั้งแต่สถานะ รอ (แบบขอบ) และ ตามแขก · กดแล้วเปิดกล่อง'); else fail('btn ' + J);
 if (r.hasProg && r.hasDate && r.hasVoucher && r.noBraces && r.lines >= 5 && r.lines <= 7) ok('ข้อความ EN ' + r.lines + ' บรรทัด · มีโปรแกรม · วันที่ (15 Oct) · voucher · ไม่มี {ตัวแปร} ค้าง'); else fail('msg ' + J);
 if (r.afterInsert === r.lines + 1) ok('ปุ่มเติมประโยคเสริม → เพิ่ม 1 บรรทัด'); else fail('insert ' + J);
 if (r.tplTab && /TEST \{program\}/.test(r.savedTpl) && r.msg2ok) ok('แก้เทมเพลต → บันทึกทั้งบริษัท → ข้อความใหม่ตามเทมเพลต: ' + r.msg2.slice(0, 50)); else fail('tpl ' + J);

@@ -16709,6 +16709,7 @@ function ckSharedCSS(scope){
   /* §vckLine */
   +scope+' .vck-ln{margin-left:6px;border:1px solid #06C755;background:#06C755;color:#fff;border-radius:7px;padding:2px 7px;font:800 10px inherit;font-family:inherit;cursor:pointer;white-space:nowrap;vertical-align:top}'
   +scope+' .vck-ln:hover{background:#05b24c}'
+  +scope+' .vck-ln.q{background:#fff;color:#06C755}'+scope+' .vck-ln.q:hover{background:#E9FBF0}'
   +scope+' .vck-lnsent{color:#06C755;font-weight:800;white-space:nowrap}'
   +'.vck-lndlg{width:min(560px,96vw)}'
   +'.vck-lndlg .vck-lnico{width:28px;height:28px;border-radius:8px;background:#06C755;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}'
@@ -17174,7 +17175,8 @@ function vckNoteHtml(ck,st,r,rsn){
   /* §vckLine · แถว "ตามแขก" มีปุ่มไลน์ตามเอเจนต์ · ส่งแล้วกี่ครั้งโชว์ต่อท้าย */
   var _ls=(ck&&Array.isArray(ck.lineSent))?ck.lineSent:[];
   var lnTxt=_ls.length?('<span class="vck-lnsent" title="ส่งไลน์ตามเอเจนต์แล้ว '+_ls.length+' ครั้ง · ล่าสุด '+ckEsc(_ls[_ls.length-1].at||'')+' โดย '+ckEsc(_ls[_ls.length-1].by||'')+'">&#128172; LINE '+ckEsc(_ls[_ls.length-1].at||'')+(_ls.length>1?(' ×'+_ls.length):'')+'</span>'):'';
-  var lnBtn=(st==='pending' && r && r.b)?('<button class="vck-ln" onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" title="คัดลอกข้อความตามแขกไปส่งไลน์เอเจนต์">&#128172; LINE</button>'):'';
+  /* §vckLine2 · เจ้าของ: "ให้มีขึ้นมาให้กดได้เลย ไม่ต้องรอสถานะ Pending" · ขึ้นทุกแถวที่ยังไม่จบ (รอ / Standby / ตามแขก) */
+  var lnBtn=((st==='pending'||st==='standby'||st==='wait') && r && r.b)?('<button class="vck-ln'+(st==='wait'?' q':'')+'" onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" title="คัดลอกข้อความตามแขกไปส่งไลน์เอเจนต์">&#128172; LINE</button>'):'';
   var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+(lnTxt?(' · '+lnTxt):'')+'</span>') : (lnTxt?('<span class="vck-nt">'+lnTxt+'</span>'):'<span class="ck-dim">—</span>');
   return body + lnBtn + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
 }
