@@ -19697,6 +19697,11 @@ function vckArrChip(date,gk,vanName,rows){
 // ══ §เช็คอินรถ (Van Check-in) ══
 var _vanCkDate = (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
 var _vckFam=null, _vckRoute=null;
+/* §vckPier · เจ้าของ: "เพิ่มชิปกรองท่าเรือ" · ตัวกรองท่าของหน้ารถ (ทุกท่า / ทับละมุ / พันวา) · ซ้อนบนตัวกรองโปรแกรม
+   ท่าของทริป = routes.pier (pckPierOf) · ทริปภาคพื้นไม่มีท่า → ผ่านเฉพาะตอน "ทุกท่า" */
+var _vckPier=null;
+function vckSetPier(p){ _vckPier=(_vckPier===p)?null:p; renderVanCheckin(); }
+function vckPierOk(rid){ return !_vckPier || pckPierOf(rid)===_vckPier; }
 function vanCkDateShift(delta){ var d=new Date(_vanCkDate+'T12:00:00'); d.setDate(d.getDate()+delta); _vanCkDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderVanCheckin(); }
 function vanCkToday(){ _vanCkDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderVanCheckin(); }
 function vckSetFam(f){ _vckFam=(_vckFam===f)?null:f; _vckRoute=null; renderVanCheckin(); }
@@ -19985,9 +19990,28 @@ function vckProgStatus(A){
   if(A.done>0) return ['รับอยู่ · เหลือ '+(A.tot-A.done),'#FBF0DD','#8A5B00'];
   return ['ยังไม่เริ่ม','#F1EFE8','#8a8a82'];
 }
+function vckPierBar(date){
+  var cnt={}, tot=0;
+  vckProgData(date).forEach(function(A){ A.rids.forEach(function(rid){ var pk=pckPierOf(rid); if(!pk) return; cnt[pk]=(cnt[pk]||0)+A.v[rid].pax; tot+=A.v[rid].pax; }); });
+  var ks=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
+  if(ks.length<2) return '';   /* มีท่าเดียวก็ไม่ต้องมีปุ่ม (เหมือนหน้าท่า) */
+  var b=function(k,lbl,n){ return '<button class="vkh-pb'+((_vckPier===k)?' on':'')+'" onclick="vckSetPier('+(k?('\''+k+'\''):'null')+')" title="'+ckEsc(lbl)+'">'+ckEsc(lbl)+'<b class="ck-mono">'+n+'</b></button>'; };
+  return '<span class="vkh-piers">'+b(null,'ทุกท่า',tot)+ks.map(function(k){ return b(k, PCK_PIER_LBL[k]||k, cnt[k]); }).join('')+'</span>';
+}
 function vckProgList(date){
   var e=ckEsc, list=vckProgData(date);
-  if(!list.length) return '<div class="pgh-empty">ไม่มีโปรแกรมในวันนี้</div>';
+  if(_vckPier){   /* §vckPier · เหลือเฉพาะ variant ของท่าที่เลือก · ยอดของแถวคิดใหม่จาก variant ที่เหลือ */
+    list=list.map(function(A){
+      var keep=A.rids.filter(function(rid){ return pckPierOf(rid)===_vckPier; });
+      if(!keep.length) return null;
+      var B={}; for(var k in A) B[k]=A[k];
+      B.rids=keep; B.pax=0; B.booked=0; B.tot=0; B.done=0; B.own=0; B.piers={}; B.pord=[_vckPier];
+      keep.forEach(function(rid){ var V=A.v[rid]; B.pax+=V.pax; B.booked+=V.bk; B.tot+=V.R.PK.tot+V.R.KL.tot; B.done+=V.R.PK.done+V.R.KL.done; B.own+=V.R.OWN.tot; });
+      B.piers[_vckPier]=B.pax; B.lost=Math.max(0,B.booked-B.pax);
+      return B;
+    }).filter(Boolean);
+  }
+  if(!list.length) return '<div class="pgh-empty">ไม่มีโปรแกรม'+(_vckPier?('ที่ท่า'+(PCK_PIER_LBL[_vckPier]||_vckPier)):'')+'ในวันนี้</div>';
   return list.map(function(A){
     var famOn=(_vckFam===A.f.id)||(_vckRoute&&A.v[_vckRoute]);
     var op=!!_vckProgOpen[A.f.id] || !!famOn;
@@ -20039,7 +20063,7 @@ function vckDayBar(date, o){
   var _d=new Date(date+'T00:00');
   var dnum=_d.toLocaleDateString('en-GB',{day:'numeric'}), dowLong=_d.toLocaleDateString('en-GB',{weekday:'long'});
   var dmy=_d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase();
-  var brand=(_vckFam||_vckRoute)?vckSelName(date):'LOVE ANDAMAN';
+  var brand=(_vckFam||_vckRoute)?vckSelName(date):(_vckPier?('ท่า'+(PCK_PIER_LBL[_vckPier]||_vckPier)):'LOVE ANDAMAN');
   return '<div class="vkh-day">'
     +'<button class="vkh-nav" onclick="vanCkDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>'
     +'<label class="vkh-dt" title="เลือกวันที่"><b class="vkh-dnum">'+e(dnum)+'</b>'
@@ -20047,7 +20071,7 @@ function vckDayBar(date, o){
       +'<input type="date" value="'+e(date)+'" onclick="event.stopPropagation();try{this.showPicker()}catch(_){}" onchange="if(this.value)vckPickDay(this.value)"></label>'
     +(isToday?'<span class="vkh-today">วันนี้</span>':'<button class="vkh-back" onclick="vanCkToday()" title="กลับไปวันนี้">&#8617; กลับวันนี้</button>')
     +'<button class="vkh-nav" onclick="vanCkDateShift(1)" title="วันถัดไป">&rsaquo;</button>'
-    +'<span class="vkh-sp"></span><div class="vkh-brand'+((_vckFam||_vckRoute)?' on':'')+'">'+e(brand)+'</div><span class="vkh-sp"></span>'
+    +'<span class="vkh-sp"></span><div class="vkh-brand'+((_vckFam||_vckRoute||_vckPier)?' on':'')+'">'+e(brand)+'</div><span class="vkh-sp"></span>'
     +'<div class="vkh-kpi">'
       +'<span class="vkh-k">รถ <b class="ck-mono">'+o.vans+'</b> คัน · จอง <b class="ck-mono">'+o.booked+'</b> pax</span>'
       +(o.kpiHtml||'')
@@ -20093,11 +20117,12 @@ function vckHeadCard(id, title, headHtml, bodyHtml){
   return '<div class="vkh-card" data-blk="'+id+'"><div class="vkh-chd"><span class="vkh-ct">'+ckEsc(title)+'</span>'+(headHtml||'')+'</div>'+bodyHtml+'</div>';
 }
 function vckHeadHtml(o){
-  var date=o.date, nProg=0; try{ nProg=vckProgData(date).length; }catch(_){}
+  var date=o.date, progHtml=vckProgList(date);
+  var nProg=(progHtml.match(/class="pgf[" ]/g)||[]).length;   /* §vckPier · นับจากที่แสดงจริง (หลังกรองท่า) */
   var allBtn=(_vckFam||_vckRoute)?'<button class="vkh-allbtn" onclick="vckSetFam(null)" title="เลิกกรอง แสดงทุกโปรแกรม">&#10005; ทุกโปรแกรม</button>':'';
   var prog=vckHeadCard('prog','โปรแกรมวันนี้',
-    (nProg?('<span class="vkh-cnt">'+nProg+' โปรแกรม</span>'):'')+'<span class="vkh-csp"></span>'+allBtn,
-    '<div class="vkh-plist">'+vckProgList(date)+'</div>');
+    (nProg?('<span class="vkh-cnt">'+nProg+' โปรแกรม</span>'):'')+vckPierBar(date)+'<span class="vkh-csp"></span>'+allBtn,
+    '<div class="vkh-plist">'+progHtml+'</div>');
   var vans=vckHeadCard('vans','รถ',
     '<span class="vkh-selnm">'+ckEsc(vckSelName(date))+'</span><span class="vkh-cnt dark">รถทั้งหมด '+o.nVans+'</span>'
       +'<span class="vkh-hint">แถวละโปรแกรม · รถทีมเดียวกันอยู่ติดกัน · กดเพื่อเด้งไปที่คันนั้น</span><span class="vkh-csp"></span>'
@@ -20150,6 +20175,11 @@ function vckHeadCSS(){
   +H+' .vkh-csp{flex:1}'
   +H+' .vkh-ico{width:25px;height:25px;border-radius:50%;border:1px solid #DFE3E9;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0}'
   +H+' .vkh-ico:hover{border-color:#185FA5}'
+  +H+' .vkh-piers{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden;background:#fff;flex:none;margin-left:4px}'
+  +H+' .vkh-pb{border:0;background:none;padding:3px 9px;font:700 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer;white-space:nowrap}'
+  +H+' .vkh-pb+.vkh-pb{border-left:1px solid #EFECE4}'
+  +H+' .vkh-pb.on{background:#15201a;color:#fff}'
+  +H+' .vkh-pb b{font-weight:700;opacity:.6;margin-left:4px}'
   +H+' .vkh-allbtn{border:1px solid #185FA5;background:#E6F1FB;color:#0C447C;border-radius:999px;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;cursor:pointer}'
   +H+' .vkh-plist{max-height:300px;overflow-y:auto;overscroll-behavior:contain}'
   +H+' .vkh-plist::-webkit-scrollbar{width:6px}'+H+' .vkh-plist::-webkit-scrollbar-thumb{background:#DAD6CC;border-radius:3px}'
@@ -20235,6 +20265,7 @@ function renderVanCheckin(){
     if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN = ส่งกลับ ไม่ใช่รับขึ้นรถ
     if(_vckRoute){ if(t.routeId!==_vckRoute) return; }
     else if(_vckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_vckFam) return; }
+    if(!vckPierOk(t.routeId)) return;   /* §vckPier */
     if(!vckQMatch(b, date)) return;   /* §vckSrch */
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
@@ -20288,6 +20319,7 @@ function renderVanCheckin(){
     if(_vckRoute){ if(r.t.routeId!==_vckRoute) return; }
     else if(_vckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.t.routeId):null;
       if(!f||f.id!==_vckFam) return; }
+    if(!vckPierOk(r.t.routeId)) return;   /* §vckPier */
     if(!vckQMatch(r.b, date)) return;
     var mk=r.vanId+'~'+(r.t.routeId||'');
     var MG=(groups[mk]=groups[mk]||{vid:r.vanId, routeId:r.t.routeId||'', zone:r.t.zone||'PK',

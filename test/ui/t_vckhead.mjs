@@ -23,6 +23,10 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   // ล้าง
   H().querySelector('.vkh-allbtn').click(); await z(500); o.chipsAll = q('.vkh-vc'); o.brandAll = t('.vkh-brand');
   // ชิปรถ → เด้งไปคันนั้น
+  // §vckPier · ชิปกรองท่า · เลือกพันวา → เหลือโปรแกรมฝั่งพันวา · ชิปรถ/กลุ่มในตารางเหลือเฉพาะท่านั้น · หัวกลางเป็นชื่อท่า
+  o.pierBtns = [...H().querySelectorAll('.vkh-pb')].map(x => x.textContent); const pb = [...H().querySelectorAll('.vkh-pb')].find(x => /พันวา/.test(x.textContent)); pb.click(); await z(500);
+  o.pierProgs = [...H().querySelectorAll('.pgf-nm')].map(x => x.textContent); o.pierChips = q('.vkh-vc'); o.pierGroups = q('tr.ck-ghd'); o.pierBrand = t('.vkh-brand'); o.pierOn = (H().querySelector('.vkh-pb.on') || {}).textContent;
+  H().querySelector('.vkh-pb').click(); await z(400); o.pierBack = q('.vkh-vc');
   // §ckJumpBox · กดชิปคันท้าย ๆ → กล่องตาราง (.vck-tw) ต้องเลื่อนไปหาหัวคันนั้น และหัวคันต้องโผล่ใต้ thead ไม่โดนบัง
   const chips = [...H().querySelectorAll('.vkh-vc')]; const c = chips[chips.length - 1]; const nm = c.querySelector('.n').textContent;
   const tw = H().querySelector('.vck-tw'); const sc0 = tw.scrollTop; c.click(); await z(900);
@@ -48,6 +52,7 @@ if (/ขึ้นรถแล้ว \d+\/\d+/.test(r.kpi) && /รอ \d+/.test(r
 if (r.brandFam === 'Similan Islands' && r.chipsFam === 33 && r.allbtn && r.groupsFam === 33) ok('กรองโปรแกรม · หัวเป็นชื่อโปรแกรม · ชิปรถ 33 = กลุ่มในตาราง 33 · ปุ่ม ✕ ทุกโปรแกรม'); else fail('fam ' + J);
 if (/Similan Islands · /.test(r.brandVar) && r.chipsVar < r.chipsFam) ok('กรอง variant · หัว "' + r.brandVar + '" · ชิปรถ ' + r.chipsVar); else fail('var ' + J);
 if (r.chipsAll === 49 && r.brandAll === 'LOVE ANDAMAN') ok('ล้างตัวกรอง · กลับครบ 49 คัน'); else fail('all ' + J);
+if (r.pierBtns.length === 3 && /^ทุกท่า/.test(r.pierBtns[0]) && r.pierProgs.join() === 'Phi Phi Bamboo,Whale Shark Phi Phi Maiton' && r.pierChips > 0 && r.pierChips === r.pierGroups && r.pierChips < 49 && /พันวา/.test(r.pierOn) && r.pierBrand === 'ท่าพันวา' && r.pierBack === 49) ok('ชิปกรองท่า ' + r.pierBtns.join(' | ') + ' · เลือกพันวา → โปรแกรม 2 · รถ ' + r.pierChips + ' = กลุ่มตาราง · หัว "ท่าพันวา" · กลับทุกท่า 49'); else fail('pier ' + JSON.stringify({ b: r.pierBtns, p: r.pierProgs, c: r.pierChips, g: r.pierGroups, br: r.pierBrand, on: r.pierOn, back: r.pierBack }));
 if (r.groupHas && r.jump.moved && r.jump.visible) ok('กดชิป "' + r.chipName + '" → กล่องตารางเลื่อนไปหัวคันนั้น · โผล่ใต้ thead'); else fail('jump ' + JSON.stringify(r.jump));
 if (r.sticky === 'sticky' && r.pageOver <= 0) ok('หัวตรึง (sticky) · หน้าเว็บไม่มีแถบเลื่อนซ้อน (overflow ' + r.pageOver + ')'); else fail('sticky ' + r.sticky + ' over ' + r.pageOver);
 if (r.qText) ok('ค้นหาชื่อแล้วเจอในตาราง'); else fail('search ' + J);
