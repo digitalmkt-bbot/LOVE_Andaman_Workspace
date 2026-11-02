@@ -19424,8 +19424,10 @@ function vckRowSt(ck){
 function vckRowNote(ck, st, arrAt){
   ck=ck||{};
   var e=ckEsc;
+  /* §vckNoteShort · เจ้าของ: "รายละเอียดขวาสุด ปรับให้กระชับ" · ไอคอน ✓ กับช่อง Status บอก "ขึ้นรถแล้ว" อยู่แล้ว
+     เหลือ เวลา · คนบันทึก */
   if(st==='checkin'){ var hm=''; try{ hm=ck.at?new Date(ck.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):''; }catch(_){}
-    return 'ขึ้นรถแล้ว'+(hm?(' '+hm):'')+(ck.by?(' · '+e(ck.by)):''); }
+    return (hm||'ขึ้นรถแล้ว')+(ck.by?(' · '+e(ck.by)):''); }
   var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[], last=null;
   for(var i=ev.length-1;i>=0;i--){ if(ev[i] && +ev[i].pax>0){ last=ev[i]; break; } }
   if(st==='cxl'||st==='noshow'||st==='pier'){
@@ -19440,7 +19442,7 @@ function vckRowNote(ck, st, arrAt){
       +(tries>0?(' · วนกลับแล้ว '+tries+' รอบ'):'');
   }
   if(st==='pending') return (ck.flowNote?e(ck.flowNote):'ไม่เจอแขก · กำลังตาม')+(ck.flowAt?(' '+e(ck.flowAt)):'');
-  if(st==='standby') return 'สแตนบายถึงจุดแรกแล้ว'+((arrAt||ck.flowAt)?(' '+e(arrAt||ck.flowAt)):'');
+  if(st==='standby') return 'ถึงจุดแรก'+((arrAt||ck.flowAt)?(' '+e(arrAt||ck.flowAt)):'');   /* §vckNoteShort */
   return '';
 }
 /* ── เปลี่ยนสถานะจาก dropdown ── */
@@ -19848,10 +19850,12 @@ function vckSheetCSS(){
   +S+' .vck-sel{padding:2px 4px;font-size:10.5px;max-width:114px;border-width:1.5px;border-radius:6px}'
   /* บันทึกหน้างาน · เหตุผลจริงยาวกว่าบรรทัดเดียวเสมอ ("ไม่มา 07:02 · อื่นๆ · เลื่อนวัน รออัปเดต")
      ตัดทิ้งแล้วเหลือแต่ต้นประโยค อ่านไม่ได้ความ · ให้สองบรรทัด จำกัดด้วย max-height */
+  /* §vckNoteShort · 352 → 250px · ข้อความสั้นลงแล้ว (เวลา · คนบันทึก) ช่องกว้างเดิมเหลือแต่ที่ว่าง */
   +S+' tr.ck-row>td:nth-child(17){white-space:normal;overflow:hidden;line-height:1.3;'
-    +'width:352px;min-width:352px;max-width:352px;padding:2px 8px}'
-  +S+' thead th:nth-child(17){width:352px;min-width:352px;max-width:352px}'
-  +S+' .vck-nt{max-width:336px;max-height:28px;white-space:normal;overflow:hidden;'
+    +'width:250px;min-width:250px;max-width:250px;padding:2px 8px}'
+  +S+' thead th:nth-child(17){width:250px;min-width:250px;max-width:250px}'
+  +S+' tr.ck-gsp>td{height:10px;padding:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important}'   /* §vckGap */
+  +S+' .vck-nt{max-width:234px;max-height:28px;white-space:normal;overflow:hidden;'
     +'line-height:1.3;font-size:10.5px;display:inline-block;vertical-align:top}'
   +S+' .vck-rsn{display:inline !important;margin:0 0 0 5px !important}'
   +S+' .ck-rsn{font-size:9.5px;padding:1px 7px;max-width:200px;vertical-align:top}'
@@ -20420,7 +20424,9 @@ function renderVanCheckin(){
     var _gEdge=_sbNow?'#12A46F':(_gAny?(c[1]||'#3A6FF7'):'#DFE3E9');
     /* §vckSheet · --vc สีประจำรถตัวจริง (ใช้ตอน hover) · --vbg2 พื้นอ่อนของคันนั้น */
     var _gv=' style="--vc:'+(c[1]||'#3A6FF7')+';--vbg2:'+soft+';--vedge:'+_gEdge+'"';
-    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':(_gAny?' vck-gon':' vck-gpale'))+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
+    /* §vckGap · เจ้าของ: "ให้มีช่องว่างระหว่างรถหน่อย" · แถวเว้นโปร่งก่อนหัวคันแต่ละคัน · ไม่ sticky ไม่มีพื้น */
+    bodyHtml+='</tbody><tbody><tr class="ck-gsp"><td colspan="17"></td></tr>'
+      +'<tr class="ck-ghd'+(_sbNow?' vck-sb':(_gAny?' vck-gon':' vck-gpale'))+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
