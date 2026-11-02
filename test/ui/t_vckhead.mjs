@@ -2,7 +2,7 @@
 // blob: python3 test/ui/_mk_subset_vck.py → LAD=allotment_v2/data_exports/subset_vck.json (subset_ct + รถ 12 คัน + จัดรถวันที่ 15 ต.ค.)
 import { open, goView } from './_harness.mjs';
 let bad = 0; const ok = m => console.log('  ✓ ' + m), fail = m => { bad++; console.log('  ✗ ' + m); };
-const { page, errors, close } = await open({ blob: process.env.LAD, width: 1700, height: 900 });
+const { page, errors, close } = await open({ blob: process.env.LAD, width: 1700, height: 760 });
 page.on('dialog', d => d.accept());
 await goView(page, 'vancheckin', 1200);
 const r = await page.evaluate(async () => { const z = ms => new Promise(f => setTimeout(f, ms));
@@ -23,8 +23,14 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   // ล้าง
   H().querySelector('.vkh-allbtn').click(); await z(500); o.chipsAll = q('.vkh-vc'); o.brandAll = t('.vkh-brand');
   // ชิปรถ → เด้งไปคันนั้น
-  const c = H().querySelector('.vkh-vc'); const nm = c.querySelector('.n').textContent; c.click(); await z(300);
-  o.chipName = nm; o.groupHas = [...H().querySelectorAll('tr.ck-ghd')].some(tr => tr.textContent.includes(nm));
+  // §ckJumpBox · กดชิปคันท้าย ๆ → กล่องตาราง (.vck-tw) ต้องเลื่อนไปหาหัวคันนั้น และหัวคันต้องโผล่ใต้ thead ไม่โดนบัง
+  const chips = [...H().querySelectorAll('.vkh-vc')]; const c = chips[chips.length - 1]; const nm = c.querySelector('.n').textContent;
+  const tw = H().querySelector('.vck-tw'); const sc0 = tw.scrollTop; c.click(); await z(900);
+  const gid = c.getAttribute('onclick').match(/ckJump\('([^']+)'\)/)[1]; const g = document.getElementById(gid);
+  const twR = tw.getBoundingClientRect(), gR = g.getBoundingClientRect(), thH = tw.querySelector('thead').getBoundingClientRect().height;
+  o.chipName = nm; o.groupHas = !!g; o.jump = { moved: tw.scrollTop > sc0 + 50, visible: gR.top >= twR.top + thH - 2 && gR.bottom <= twR.bottom + 2, pageY: window.pageYOffset };
+  // §vckStick · หัวตรึง · เลื่อนหน้าเว็บแล้วหัวยังอยู่บนสุด
+  o.sticky = getComputedStyle(H().querySelector('.vkh')).position; o.pageOver = document.documentElement.scrollHeight - document.documentElement.clientHeight;
   // ค้นหา
   vckSetQ('RAKOWSKI'); await z(400); o.qRows = q('tr.ck-unassigned, tr.ck-row, tbody tr[data-bk]'); o.qText = H().querySelector('.vck-tw').textContent.includes('RAKOWSKI'); vckSetQ(''); await z(300);
   return o;
@@ -42,7 +48,8 @@ if (/ขึ้นรถแล้ว \d+\/\d+/.test(r.kpi) && /รอ \d+/.test(r
 if (r.brandFam === 'Similan Islands' && r.chipsFam === 33 && r.allbtn && r.groupsFam === 33) ok('กรองโปรแกรม · หัวเป็นชื่อโปรแกรม · ชิปรถ 33 = กลุ่มในตาราง 33 · ปุ่ม ✕ ทุกโปรแกรม'); else fail('fam ' + J);
 if (/Similan Islands · /.test(r.brandVar) && r.chipsVar < r.chipsFam) ok('กรอง variant · หัว "' + r.brandVar + '" · ชิปรถ ' + r.chipsVar); else fail('var ' + J);
 if (r.chipsAll === 49 && r.brandAll === 'LOVE ANDAMAN') ok('ล้างตัวกรอง · กลับครบ 49 คัน'); else fail('all ' + J);
-if (r.groupHas) ok('ชิปรถ "' + r.chipName + '" มีกลุ่มในตารางให้เด้งไป'); else fail('jump ' + J);
+if (r.groupHas && r.jump.moved && r.jump.visible) ok('กดชิป "' + r.chipName + '" → กล่องตารางเลื่อนไปหัวคันนั้น · โผล่ใต้ thead'); else fail('jump ' + JSON.stringify(r.jump));
+if (r.sticky === 'sticky' && r.pageOver <= 0) ok('หัวตรึง (sticky) · หน้าเว็บไม่มีแถบเลื่อนซ้อน (overflow ' + r.pageOver + ')'); else fail('sticky ' + r.sticky + ' over ' + r.pageOver);
 if (r.qText) ok('ค้นหาชื่อแล้วเจอในตาราง'); else fail('search ' + J);
 const errs = errors.filter(e => !/404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/.test(e));
 if (errs.length) { fail('page errors'); console.log('    errors:', errs.slice(0, 3)); }

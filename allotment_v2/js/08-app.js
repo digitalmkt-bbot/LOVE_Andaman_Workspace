@@ -17054,8 +17054,24 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
 // เด้งไปที่แถวหัวรถ/หัวเรือที่กด · เลื่อนให้พ้นหัวตารางที่ตรึงไว้ แล้วไฮไลต์สั้นๆ
 function ckJump(id){
   var el=document.getElementById(id); if(!el) return;
-  var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
-  try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
+  /* §ckJumpBox (2026-11-02) · เจ้าของ: "กดชิปรถแล้วเด้งไปที่ตารางนั้น ตอนนี้ไม่ไป"
+     ตารางของทั้งสองหน้าเลื่อนอยู่ในกล่องของตัวเอง (.vck-tw / .pcs-tw · §vckStay) ไม่ใช่หน้าเว็บ
+     window.scrollTo จึงไม่ขยับอะไร · หา ancestor ที่เลื่อนได้แล้วเลื่อนกล่องนั้นแทน
+     เผื่อหัวตารางที่ตรึงในกล่อง (thead) ไว้ด้วย ไม่งั้นแถวที่เด้งไปโดนหัวตารางบัง */
+  var box=null, pnode=el.parentElement;
+  while(pnode && pnode!==document.body){
+    var ov=getComputedStyle(pnode).overflowY;
+    if((ov==='auto'||ov==='scroll') && pnode.scrollHeight>pnode.clientHeight+2){ box=pnode; break; }
+    pnode=pnode.parentElement;
+  }
+  if(box){
+    var th=box.querySelector('thead'); var thH=th?th.getBoundingClientRect().height:0;
+    var top=box.scrollTop+el.getBoundingClientRect().top-box.getBoundingClientRect().top-thH-6;
+    try{ box.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ box.scrollTop=Math.max(0,top); }
+  } else {
+    var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
+    try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
+  }
   var prev=el.style.boxShadow;
   el.style.transition='box-shadow .18s'; el.style.boxShadow='inset 0 0 0 2px #0F6E56';
   setTimeout(function(){ el.style.boxShadow=prev||''; }, 1500);
@@ -19879,6 +19895,9 @@ function vckFitPane(){
     var w=document.querySelector('#vancheckin-host .vck-tw'); if(!w) return;
     var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
     if(w._vh!==h){ w._vh=h; w.style.maxHeight=h+'px'; }
+    /* §vckStick · หัวตรึงแล้ว หน้าเว็บไม่ควรเลื่อนซ้อนอีกชั้น · หักส่วนที่ยังล้นจอออกจากกล่องตาราง (เหมือน §pckHead9) */
+    var de=document.documentElement, over=de.scrollHeight-de.clientHeight;
+    if(over>0){ h=Math.max(260,h-over); w._vh=h; w.style.maxHeight=h+'px'; }
   });
 }
 if(!window._vckFitBound){
@@ -20094,7 +20113,10 @@ function vckHeadHtml(o){
 function vckHeadCSS(){
   var H='#vancheckin-host';
   return ''
-  +H+' .vkh{margin:0 0 10px}'
+  /* §vckStick · เจ้าของ: "ตรึงส่วนนี้ไว้" · สูตรเดียวกับหัวหน้าท่า (§pkhStick) · ดึงออกถึงขอบ .main แล้วตรึงที่ 0 */
+  +H+' .vkh{position:sticky;top:0;z-index:60;background:#E4E7EC;margin:-22px -22px 10px -14px;padding:11px 22px 11px 14px;'
+    +'border-bottom:1px solid #DCE0E6;box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
+  +'#view-vancheckin{padding-bottom:0 !important}'
   +H+' .vkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
   +H+' .vkh-nav{width:26px;height:26px;flex:none;border-radius:50%;border:1px solid #DFE3E9;background:#fff;color:#5F5E5A;font-size:15px;line-height:1;cursor:pointer;font-family:inherit}'
   +H+' .vkh-nav:hover{border-color:#185FA5;color:#185FA5}'
