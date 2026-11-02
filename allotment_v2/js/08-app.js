@@ -17151,7 +17151,8 @@ function vckNoteHtml(ck,st,r,rsn){
   try{ if(r && r._gk) arr=vckArrGet(r._date||_vanCkDate, r._gk); }catch(_){}
   var txt=vckRowNote(ck, st, arr&&arr.at);
   var d=vckStDef(st);
-  var body = txt ? ('<span class="vck-nt">'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
+  var _by=(ck&&ck.by)?(' title="บันทึกโดย '+ckEsc(ck.by)+(ck.at?(' · '+ckEsc(new Date(ck.at).toLocaleString('th-TH'))):'')+'"'):'';   /* §vckNoteShort · ชี้เมาส์ดูคนบันทึก */
+  var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
   return body + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
 }
 /* §pickShort (2026-09-03) · ชื่อจุดรับที่ลงท้ายด้วย (self-arrive) ยาวเกินช่อง
@@ -19427,7 +19428,7 @@ function vckRowNote(ck, st, arrAt){
   /* §vckNoteShort · เจ้าของ: "รายละเอียดขวาสุด ปรับให้กระชับ" · ไอคอน ✓ กับช่อง Status บอก "ขึ้นรถแล้ว" อยู่แล้ว
      เหลือ เวลา · คนบันทึก */
   if(st==='checkin'){ var hm=''; try{ hm=ck.at?new Date(ck.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):''; }catch(_){}
-    return (hm||'ขึ้นรถแล้ว')+(ck.by?(' · '+e(ck.by)):''); }
+    return hm||'ขึ้นรถแล้ว'; }   /* ชื่อคนบันทึกไม่ขึ้นในช่อง (เจ้าของ: "ตรวจได้ทีหลัง") · อยู่ใน title ของช่องแทน */
   var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[], last=null;
   for(var i=ev.length-1;i>=0;i--){ if(ev[i] && +ev[i].pax>0){ last=ev[i]; break; } }
   if(st==='cxl'||st==='noshow'||st==='pier'){
