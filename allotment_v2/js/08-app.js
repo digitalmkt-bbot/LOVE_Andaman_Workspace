@@ -33908,7 +33908,7 @@ function renderVehicles(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">${cards||'<div style="color:#8a8a82">ไม่มีรถ active</div>'}</div>`;
   }
   /* §vehMxHead · แท็บตารางเดือน: หัวทั้งหมดยุบเหลือแถวเดียว (ชื่อ · แท็บ · เดือน · ตัวกรอง · ตัวเลขรถ · + เพิ่มรถ)
-     แท็บอื่นยังใช้หัวเดิม (หน้าสถานะมี KPI ของตัวเองอยู่แล้ว) */
+     §vehMxHead2 · ต่อมาใช้กับทุกแท็บ */
   const _mxKpi=`<span style="display:inline-flex;align-items:center;gap:10px;font-size:11px;font-weight:700;color:#475569;white-space:nowrap;margin-left:auto">`
     +`<span><b style="font-size:14px;color:#15201a;font-family:'DM Mono',monospace">${nActiveV}</b> คัน <span style="color:#94A3B8;font-weight:600">PK ${nPKv} · KL ${nKLv}</span></span>`
     +`<span style="color:#0F6E56"><b style="font-size:14px;font-family:'DM Mono',monospace">${nAvailV}</b> พร้อม</span>`
@@ -33917,14 +33917,8 @@ function renderVehicles(){
     +`<button onclick="vehSetTab('registry');vehFormOpen()" style="background:#15201a;color:#fff;border:0;border-radius:999px;padding:6px 12px;font:700 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap">+ เพิ่มรถ</button>`;
   const _mxHead=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
       <span style="font-size:16px;font-weight:800;letter-spacing:-.3px;color:#1A1A1A;white-space:nowrap">Transfer Fleet</span>${tabGroup}${matrixCtrls}${_mxKpi}</div>`;
-  host.innerHTML=(_vehTab==='matrix')
-    ? `${vehMatrixCSS()}<div style="padding:2px 26px 14px;font-family:'DM Sans',sans-serif">${_mxHead}${body}</div>`
-    : `
-    <div style="padding:2px 26px 22px;font-family:'DM Sans',sans-serif">
-      ${vehHeader}
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">${tabGroup}${matrixCtrls}</div>
-      ${body}
-    </div>`;
+  /* §vehMxHead2 · เจ้าของ: "ปรับ header ให้เหมือนกับของตารางเดือนเลย" · ทุกแท็บใช้หัวแถวเดียว · vehHeader เดิมไม่วาดแล้ว */
+  host.innerHTML=`${vehMatrixCSS()}<div style="padding:2px 26px 14px;font-family:'DM Sans',sans-serif">${_mxHead}${body}</div>`;
   // sticky day-header offset = height of the pinned summary/legend block (so วันที่ pins right below it)
   requestAnimationFrame(()=>{ const st=document.getElementById('veh-matrix-stickytop'), sc=document.getElementById('veh-matrix-scroll'); if(st&&sc) sc.style.setProperty('--vehhdr-top', st.offsetHeight+'px'); });
 }
