@@ -39,6 +39,9 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   const rowX = [...H().querySelectorAll('select.vck-sel')].find(s => (s.getAttribute('onchange') || '').includes("'" + bkId + "'")).closest('tr'); rowX.querySelector('.vck-lnsent').click(); await z(300);
   o.clrBtn = !!document.querySelector('.vck-lnclr'); vckLineClearLog(); await z(400);
   o.afterClr = ((ckRead(SB_BOOKINGS.find(x => x.id === bkId), date, kind) || {}).lineSent || []).length; o.chipGone = rowX.querySelectorAll('.vck-lnsent').length === 0 || !document.getElementById('vancheckin-host').contains(rowX); vckLineClose();
+  // §vckLine5 · ทะเบียน/คนขับที่แก้รายวันในใบงานรถ ต้องมาในข้อความ
+  const vidX = (SB_BOOKINGS.find(x => x.id === bkId).ops || {}).vanId; VANJOB_DRIVER[date + '::' + vidX] = { plate: 'ชข-9999', driver: 'ลุงทดสอบ', phone: '089-000-0000' };
+  const DX = vckLineData(SB_BOOKINGS.find(x => x.id === bkId), date, kind, ''); o.ovr = { plate: DX.plate, driver: DX.driver, phone: DX.driverPhone }; delete VANJOB_DRIVER[date + '::' + vidX];
   // §vckBackWait · dropdown มี "ล้าง → รอ" เมื่อเป็น standby/pending · เลือกแล้วกลับเป็น รอ
   const selP = [...H().querySelectorAll('select.vck-sel')].find(s => (s.getAttribute('onchange') || '').includes("'" + bkId + "'"));
   o.hasWaitOpt = [...selP.options].some(op => op.value === 'wait'); vckStatus(bkId, date, kind, 'wait'); await z(400);
@@ -55,6 +58,7 @@ if (r.afterInsert === r.lines + 1) ok('ปุ่มเติมประโย�
 if (r.tplTab && /TEST \{program\}/.test(r.savedTpl) && r.msg2ok) ok('แก้เทมเพลต → บันทึกทั้งบริษัท → ข้อความใหม่ตามเทมเพลต: ' + r.msg2.slice(0, 50)); else fail('tpl ' + J);
 if (r.closed && r.sent === 1 && r.sentBy && r.noteHasLine === 1) ok('คัดลอกแล้วปิดกล่อง · จด lineSent 1 ครั้ง โดย ' + r.sentBy + ' · ช่องบันทึกโชว์ LINE'); else fail('copy ' + J);
 if (r.nth === '2nd') ok('ครั้งถัดไป {nth} = 2nd'); else fail('nth ' + J);
+if (r.ovr.plate === 'ชข-9999' && r.ovr.driver === 'ลุงทดสอบ' && r.ovr.phone === '089-000-0000') ok('ทะเบียน/คนขับ/เบอร์ ที่แก้รายวันในใบงานรถ มาในข้อความ'); else fail('ovr ' + JSON.stringify(r.ovr));
 if (r.hasWaitOpt && r.backWait && r.noWaitOptWhenWait) ok('dropdown มี "↩ ล้าง → รอ" ตอน standby/pending · เลือกแล้วกลับเป็น รอ'); else fail('wait ' + J);
 if (r.clrBtn && r.afterClr === 0) ok('กดชิป LINE ในแถว → กล่องมีปุ่มล้างประวัติ → ล้างแล้ว lineSent = 0'); else fail('clear ' + J);
 const errs = errors.filter(e => !/404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED|clipboard|Clipboard/.test(e));

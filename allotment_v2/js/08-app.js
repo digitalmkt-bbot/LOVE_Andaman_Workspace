@@ -17221,6 +17221,9 @@ function vckLineData(b,date,kind,gk){
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   var vid=O.vanId; if(gk){ var m=String(gk).split('~'); if(m[0]) vid=m[0]; }
   var v=(typeof vehGet==='function'?vehGet(vid):null)||{};
+  /* §vckLine5 · เจ้าของ: "รถบางคันอัพเดททะเบียนรายคัน(รายวัน) แล้วไม่ขึ้นตอน copy" · ทะเบียน/คนขับ/เบอร์ ต้องอ่านจากที่หัวคันอ่าน
+     (vanJobsDriverInfo = ค่าที่แก้รายวันในใบงานรถ ถ้ามี · ไม่มีค่อยถอยไปทะเบียนรถ) */
+  var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vid,date):{driver:v.driver||'',phone:v.driverPhone||v.phone||'',plate:v.plate||''};
   var arr=null; try{ if(gk) arr=vckArrGet(date,gk); }catch(_){}
   var arrAt=(arr&&arr.at)||ck.flowAt||'';
   var dead=''; var mm=String(arrAt).match(/(\d{1,2}):(\d{2})/); if(mm){ var mins=(+mm[1])*60+(+mm[2])+15; dead=String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
@@ -17231,7 +17234,7 @@ function vckLineData(b,date,kind,gk){
   return { voucher:e(b.voucherRef||b.code||b.id), agent:e(ag?(ag.name||ag.code):(b.channel||'walk-in')), guest:e(b.leadPax||'-'), pax:pax,
     guestPhone:e(b.leadPhone||b.phone||b.customerPhone||'-'), hotel:e((typeof ckPickShort==='function'?ckPickShort(b.hotelName||b.pickup):(b.hotelName||b.pickup))||'-'),
     room:e(b.roomNumber||b.roomNo||'-'), pickupTime:e(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'-'),
-    van:e(v.name||vid||'-'), plate:e(v.plate&&v.plate!=='-'?v.plate:''), driver:e(v.driver||'-'), driverPhone:e(v.driverPhone||v.phone||'-'),
+    van:e(v.name||vid||'-'), plate:e((rd.plate&&rd.plate!=='-')?rd.plate:((v.plate&&v.plate!=='-')?v.plate:'')), driver:e(rd.driver||v.driver||'-'), driverPhone:e(rd.phone||v.driverPhone||v.phone||'-'),
     program:e(rt.name||'-'), boatTime:e((rt.times&&rt.times[0])||'-'), pier:e(PIER_EN[pk]||pk||'-'),
     arrivedAt:e(arrAt||'-'), deadline:e(dead||'-'), date:dEn, nth:(nth===1?'1st':nth===2?'2nd':nth===3?'3rd':(nth+'th')), office:e(vckLineOffice()||'-') };
 }
