@@ -6577,6 +6577,31 @@
       "source": "note",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "src": {
+      "source": "src",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "pier": {
+      "source": "pier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "poitemid": {
+      "source": "poItemId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "fixqty": {
+      "source": "fixQty",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "piermoveid": {
+      "source": "pierMoveId",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "insurance_overrides": {
@@ -7248,6 +7273,36 @@
     },
     "at": {
       "source": "at",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "forboat": {
+      "source": "forBoat",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "fixitem": {
+      "source": "fixItem",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "fixqty": {
+      "source": "fixQty",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "unitcost": {
+      "source": "unitCost",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "cost": {
+      "source": "cost",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "consumeid": {
+      "source": "consumeId",
       "kind": "scalar",
       "db_type": "text"
     }
