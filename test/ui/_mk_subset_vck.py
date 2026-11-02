@@ -6,8 +6,10 @@ import json, os
 root = os.path.join(os.path.dirname(__file__), '..', '..', 'allotment_v2', 'data_exports')
 d = json.load(open(os.path.join(root, 'subset_ct.json')))
 names = ['Love1','Love2','Love3','VAN1','VAN2','VAN3','GM1','GM2','Fluke','บังรอม1','สตอ1','V7']
+partner = {'GM1': 'GM', 'GM2': 'GM', 'บังรอม1': 'บังรอม', 'สตอ1': 'สตอ'}   # รถร่วม 3 เจ้า · ที่เหลือรถบริษัท
 d['sb_vehicles'] = [{'id': 'veh%02d' % i, 'name': n, 'plate': '31-%04d' % (6000 + i), 'driver': 'คนขับ%d' % i,
-                     'phone': '08%08d' % i, 'type': 'van', 'active': True} for i, n in enumerate(names)]
+                     'phone': '08%08d' % i, 'type': 'van', 'active': True,
+                     'ownership': 'partner' if n in partner else 'own', 'partnerName': partner.get(n, '')} for i, n in enumerate(names)]
 k = 0
 for b in d['sb_bookings']:
     if b.get('status') in ('cancelled', 'rejected', 'cancelled_weather'): continue
