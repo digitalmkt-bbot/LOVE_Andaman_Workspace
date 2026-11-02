@@ -17233,8 +17233,11 @@ function vckLineData(b,date,kind,gk){
     program:e(rt.name||'-'), boatTime:e((rt.times&&rt.times[0])||'-'), pier:e(PIER_EN[pk]||pk||'-'),
     arrivedAt:e(arrAt||'-'), deadline:e(dead||'-'), date:dEn, nth:(nth===1?'1st':nth===2?'2nd':nth===3?'3rd':(nth+'th')), office:e(vckLineOffice()||'-') };
 }
-function vckLineFill(tpl,D){ return String(tpl||'').replace(/\{(\w+)\}/g,function(m,k){ return (D[k]!==undefined&&D[k]!=='')?String(D[k]):m; }).replace(/\\n/g,'\n')
-  .replace(/ · -(?=\n|$)/g,'').replace(/, room -/g,'').replace(/ \(-\)/g,''); }   /* ช่องที่ไม่มีข้อมูล (เบอร์/ห้อง) ตัดทิ้ง ไม่ปล่อย " · -" ค้างในข้อความ */
+/* §vckLine4 · เจ้าของ: "{plate} ไม่ขึ้น" · รถคันนั้นไม่มีทะเบียนในทะเบียนรถ · เดิมปล่อย {plate} ค้างไว้ในข้อความ
+   ตอนนี้ตัวแปรที่รู้จักแต่ไม่มีค่า → เว้นว่าง (และเก็บช่องว่างซ้ำ) · ตัวแปรที่ไม่รู้จักยังคงไว้ให้เห็นว่าพิมพ์ผิด */
+function vckLineFill(tpl,D){ return String(tpl||'').replace(/\{(\w+)\}/g,function(m,k){ if(D[k]===undefined) return m; return (D[k]!=='' && D[k]!=='-')?String(D[k]):''; }).replace(/\\n/g,'\n')
+  .replace(/[ \t]{2,}/g,' ').replace(/ +(\n|$)/g,'$1')
+  .replace(/ ·\s*(?=\n|$)/g,'').replace(/, room(?=\n|$)/g,'').replace(/ \(\)/g,'').replace(/ · -(?=\n|$)/g,'').replace(/, room -/g,'').replace(/ \(-\)/g,''); }   /* ช่องที่ไม่มีข้อมูล (เบอร์/ห้อง) ตัดทิ้ง ไม่ปล่อย " · -" ค้างในข้อความ */
 function vckLineOpen(bkId,date,kind,gk){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   window._vckLnState={bkId:bkId,date:date,kind:kind,gk:gk||'',tab:'msg',msg:null};
