@@ -24856,7 +24856,10 @@ function pckKitchenRender(){
     sum+=(+amt||0);
     if((taGet(K.date,bid)||{}).meal) nSent++; else nDue++;
   });
-  h.innerHTML='<div onclick="if(event.target===this)pckKitchenClose()" style="position:fixed;inset:0;'
+  /* §kitKeep · หน้าต่างครัววาดใหม่ทุกครั้งที่หน้าท่าวาดใหม่ (ทุก 60 วิ + ทุกครั้งที่อีกเครื่องเช็คอิน ~1 วิ)
+     เดิมเขียน innerHTML ทับทั้งก้อน → กล่องเลื่อนกลับไปบนสุด = "เด้ง" ขณะกำลังอ่าน/กดลำล่าง ๆ
+     ตอนนี้ ของเหมือนเดิมเป๊ะ = ไม่แตะเลย · ของเปลี่ยน = วาดใหม่แล้วคืนตำแหน่งเลื่อนเดิม */
+  var _kh='<div onclick="if(event.target===this)pckKitchenClose()" style="position:fixed;inset:0;'
    +'background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9000;display:flex;align-items:center;'
    +'justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
    +'<div style="background:#F6F7F9;border-radius:16px;width:min(840px,96vw);max-height:90vh;display:flex;'
@@ -24876,10 +24879,14 @@ function pckKitchenRender(){
        +'<button onclick="pckKitchenClose()" style="background:transparent;border:none;font-size:20px;'
          +'color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
      +'</div></div>'
-   +'<div style="padding:16px 20px;overflow:auto;flex:1">'
+   +'<div id="pck-kit-sc" style="padding:16px 20px;overflow:auto;flex:1">'
      +(cards||'<div style="font-size:12.5px;color:#94A3B8;text-align:center;padding:28px 0">'
               +'วันนี้ยังไม่มีเรือที่ต้องสั่งอาหาร</div>')
    +'</div></div></div>';
+  if(h._kitHtml===_kh && h.firstChild) return;
+  var _sc0=document.getElementById('pck-kit-sc'), _st=_sc0?_sc0.scrollTop:0;
+  h.innerHTML=_kh; h._kitHtml=_kh;
+  if(_st){ var _sc1=document.getElementById('pck-kit-sc'); if(_sc1) _sc1.scrollTop=_st; }
 }
 /* ═══ §mealSlip · ใบสั่งอาหาร ════════════════════════════════════════════════
    ภาษาไทยทั้งใบ · คนอ่านคือแม่ครัว ไม่ใช่ลูกค้า
