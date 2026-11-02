@@ -369,7 +369,10 @@
        still see it after a reload */
     var up = t.operations && t.operations.upgrade;
     if(up && up.from_route_id && up.to_route_id) o.upg = { fromRouteId: up.from_route_id, toRouteId: up.to_route_id, date: up.to_date || o.date,
-      reason: up.reason || '', charge: +up.charge || 0, upgId: up.upgrade_id || '', by: up.by || '', at: up.at || '' };
+      reason: up.reason || '', charge: +up.charge || 0, upgId: up.upgrade_id || '', by: up.by || '', at: up.at || '', kind: up.kind || 'fill' };
+    /* §upgPromise · bkUpgPromise reads t.upg.kind and boatId; the log of promises broken stays on the upgrade */
+    if(o.upg && up.kind === 'promise') o.upg.boatId = up.promised_boat_id;
+    if(o.upg && up.broken && up.broken.length) o.upg.broken = up.broken;
     /* §upgVan · a whole-van upgrade: bkUpgVanOf / bkUpgVanBtn read t.upg.van (server: operations.upgrade.van) */
     if(o.upg && up.van) o.upg.van = { key: up.van.key, gid: up.van.from_number, newGid: up.van.to_number, vanId: up.van.van_id || '',
       pick: up.van.pickup_time || '', pickChanged: !!up.van.pickup_changed };
@@ -499,6 +502,9 @@
        so a field dropped here would be wiped on the server. to_company is an amount, not a flag. */
     bk.upgrades = (ob.upgrades || []).map(function(u){ return { id:u.id, label:u.label || 'Upgrade', sellPrice:+(u.sell_price != null ? u.sell_price : u.sellPrice) || 0, toCompany:+(u.to_company != null ? u.to_company : u.toCompany) || 0, commission:+u.commission || 0, seller:u.seller || '', note:u.note || '', collected:!!u.collected, settle:u.settle || 'pending', method:u.method || null, feePct:+(u.fee_pct != null ? u.fee_pct : u.feePct) || 0, fee:+u.fee || 0, customerPaid:+(u.customer_paid != null ? u.customer_paid : u.customerPaid) || 0, at:u.at || null, slips:u.slips || [] }; });
     if(ob.company_purpose != null) bk.companyPurpose = ob.company_purpose;
+    /* §b2cOvrSeen · the fields staff edited, and what Love Kingdom's push left waiting: the server's, read by 44-ops-b2c-health.js */
+    if(Array.isArray(ob.b2c_override)) bk.b2cOverride = ob.b2c_override;
+    if(ob.b2c_held && typeof ob.b2c_held === 'object') bk.b2cHeld = ob.b2c_held;
     /* w5-a · the seats this booking holds right now (computed by the server, top level of every booking answer): a booking waiting for
        an over-allotment approval holds none. Read-only, never sent; bkPendHoldsSeat (80-ops-w5a-reads.js) reads it. */
     if(ob.allocated_pax !== undefined) bk.srvAllocatedPax = +ob.allocated_pax || 0;
@@ -560,7 +566,7 @@
     var fresh = fromServer(ob);
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
-    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'weatherResolve', 'b2cOverride', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'weatherResolve', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count

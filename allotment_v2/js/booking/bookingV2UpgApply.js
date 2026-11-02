@@ -53,7 +53,9 @@ function bookingV2UpgApply(go){
   var opsOn=!!(window.laOps && window.laOps.enabled && window.laOps.enabled() && typeof window.laOpsBookingAction==='function');
   if(opsOn){
     if(!b.opsId || !t.opsTripId){ alert('Save this booking to operation-backend first, then upgrade.'); return; }
-    window.laOpsBookingAction(b.id,'upgrade',{trip_id:t.opsTripId, to_route_id:U.to, reason:reason, charge:charge},
+    var upgBody={trip_id:t.opsTripId, to_route_id:U.to, reason:reason, charge:charge};
+    if(kind==='promise'){ upgBody.kind='promise'; upgBody.boat_id=U.boat; }   /* §upgPromise · the server checks the boat and lands the booking on it */
+    window.laOpsBookingAction(b.id,'upgrade',upgBody,
       function(){ applyLocal(true); }, 'Upgrade route', true);
     return;
   }

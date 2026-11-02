@@ -92,6 +92,20 @@
       o.boatId = ops.boat_id || null;
     }
     o.boatPulled = !!ops.boat_pulled;
+    /* §upgPromise · a promise broken with a reason followed the booking, or went back to seat-fill */
+    var t = tripOn(b, d);
+    if(t && t.upg && ops.upgrade){
+      t.upg.kind = ops.upgrade.kind || 'fill';
+      if(ops.upgrade.promised_boat_id) t.upg.boatId = ops.upgrade.promised_boat_id; else delete t.upg.boatId;
+      if(ops.upgrade.broken && ops.upgrade.broken.length) t.upg.broken = ops.upgrade.broken;
+    }
+  }
+  /* §upgPromise · legacy bkUpgPromiseGuard's words · null when staff cancel or give no reason */
+  function promiseReason(b, d, boatId){
+    var t = tripOn(b, d), promised = (t && t.upg && t.upg.boatId) || '';
+    var why = window.prompt('GUARANTEED UPGRADE\nThe customer was promised boat ' + boatName(promised) + ' on ' + d + '.\nMoving this booking' + (boatId ? (' to ' + boatName(boatId)) : ' off the boat')
+      + ' breaks that promise.\n\nType the reason to move it anyway (recorded in the booking history):', '');
+    return why && String(why).trim() ? String(why).trim() : null;
   }
 
   /* un-queued: one PATCH; resolves with the server's trip */
@@ -110,6 +124,12 @@
       return Promise.reject(e);
     }
     return O.queue(function(){ return patchNow(t.opsTripId, body); }).catch(function(err){
+      if(!(err && err.code === 'guaranteed_boat') || opts.ask === false) throw err;
+      var why = promiseReason(b, d, body.boat_id || (body.boat_splits && body.boat_splits[0] && body.boat_splits[0].boat_id) || '');
+      if(!why) throw err;
+      body = Object.assign({}, body, { promise_reason: why });
+      return O.queue(function(){ return patchNow(t.opsTripId, body); });
+    }).catch(function(err){
       if(!(err && err.code === 'boat_full') || opts.ask === false || !canRaise()) throw err;
       var reason = window.prompt(err.message + '\n\nEMERGENCY ONLY: raise this boat\'s capacity for the day?\nType the reason (your name is recorded), or Cancel to leave it.', '');
       if(!reason || !String(reason).trim()) throw err;
@@ -186,7 +206,8 @@
     });
     return chain.then(function(){
       if(skipped.length) window.alert('Assigned ' + done + ' booking(s) to ' + boatName(boatId) + '.\nSkipped ' + skipped.length + ': ' + skipped.join(', ')
-        + '\n\nboat_full: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).');
+        + '\n\nboat_full: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).'
+        + '\nguaranteed_boat: the customer was promised another boat. Move that row on its own if you really must.');
       rerender();
     });
   });
@@ -280,5 +301,5 @@
     return null;
   });
 
-  O.boats = { setBoat: setBoat, applyOps: applyOps };
+  O.boats = { setBoat: setBoat, applyOps: applyOps, promiseReason: promiseReason };
 })();

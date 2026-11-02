@@ -154,7 +154,9 @@
         closeModal();
         var an2 = (done.from_boat && done.from_boat.name) || A, bn2 = (done.to_boat && done.to_boat.name) || B;
         alert('Done. ' + (moved.length ? (moved.length + ' day(s) now on ' + bn2 + ' (' + nb + ' booking(s) moved). ') : '')
-          + (dropped.length ? (dropped.length + ' day(s) removed - see the list of trips that need a boat.') : ''));
+          + (dropped.length ? (dropped.length + ' day(s) removed - see the list of trips that need a boat.') : '')
+          /* §upgPromise · a guaranteed booking stays put; the server lists them */
+          + ((done.kept || []).length ? ('\n\nNOT moved - ' + done.kept.length + ' GUARANTEED booking(s) promised ' + an2 + ': ' + done.kept.map(function(k){ return k.ref + ' ' + k.service_date; }).join(', ') + '\nRe-assign each one yourself and tell the customer.') : ''));
         redraw();
         return an2;
       });
