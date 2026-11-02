@@ -16,6 +16,8 @@
      bookingV2BoatSplitApply       the split popup
      bookingV2BoatUnsplit          back to one boat
      bookingV2BoatAssignSelected   ticked rows to one boat · a refused row is skipped and listed
+     bookingV2BoatClearTrip        "remove boat from this trip" · a refused row stays and is listed;
+                                   409 guaranteed_boat rows are kept, listed the way legacy lists them
    Snapshot → original → send → restore if refused (they validate their own forms first):
      pckMoveSave                   pier "move boat" (ย้ายลำหน้าท่า)
      bop2RpMoveBookings            Boat Operation "replace boat": runs inside the deployment sync,
@@ -32,7 +34,7 @@
   var PAX = ['ad', 'chd', 'inf', 'foc'];
   var originals = {};
   var WRAPPED = ['bookingV2AssignBoat', 'bookingV2BoatSplitApply', 'bookingV2BoatUnsplit', 'bookingV2BoatAssignSelected',
-    'pckMoveSave', 'bop2RpMoveBookings', 'baAutoAssign'];
+    'bookingV2BoatClearTrip', 'pckMoveSave', 'bop2RpMoveBookings', 'baAutoAssign'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
   function wrap(name, opsFn){
     var orig = originals[name];
@@ -188,6 +190,37 @@
       if(skipped.length) window.alert('Assigned ' + done + ' booking(s) to ' + boatName(boatId) + '.\nSkipped ' + skipped.length + ': ' + skipped.join(', ')
         + '\n\nboat_full: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).');
       rerender();
+    });
+  });
+
+  /* ── one boat off the whole trip · one PATCH each, in order; a refused row stays and is listed ──
+     legacy cleared ops.boatId in the browser and called acctPersistBookings, a no-op in ops mode,
+     so the boats looked removed and came back on reload. The legacy confirm is kept word for word */
+  wrap('bookingV2BoatClearTrip', function(boatId, date, rid){
+    var S = bookingV2BoatClearScan(boatId, date, rid);
+    var nm = boatName(boatId);
+    var ref = function(b){ return b.voucherRef || b.code || b.id; };
+    var sk = S.split.length ? ('\n\n' + S.split.length + ' booking(s) split across several boats are not changed - open each one to change its split:\n  ' + S.split.map(ref).join(', ')) : '';
+    if(!S.one.length){ if(S.split.length) window.alert('Nothing to remove from ' + nm + ' except split bookings.' + sk); return null; }
+    if(!window.confirm('Remove boat ' + nm + ' from ' + S.one.length + ' booking(s) (' + S.pax + ' pax) on this trip?\n' + date + '\n\nThey go back to "not assigned".' + sk)) return null;
+    var done = 0, kept = [], refused = [];
+    var chain = Promise.resolve();
+    S.one.forEach(function(b){
+      chain = chain.then(function(){
+        return setBoat(b, dateOf(b, date), { boat_id: null }, { routeId: rid, ask: false }).then(function(){
+          done++;
+        }, function(e){
+          if(e && e.code === 'guaranteed_boat') kept.push(ref(b));
+          else refused.push(ref(b) + ' (' + failCode(e) + ')');
+        });
+      });
+    });
+    return chain.then(function(){
+      var msgs = [];
+      if(kept.length) msgs.push('Kept ' + kept.length + ' GUARANTEED booking(s) on ' + nm + ': ' + kept.join(', ') + '\nThe customer was promised this boat. Move them one by one if you really must.');
+      if(refused.length) msgs.push('Removed ' + done + ' booking(s) from ' + nm + '.\nNot removed ' + refused.length + ': ' + refused.join(', '));
+      if(msgs.length) window.alert(msgs.join('\n\n'));
+      if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep(); else rerender();   // the scroll stays put, as in legacy
     });
   });
 
