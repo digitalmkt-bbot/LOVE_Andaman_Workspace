@@ -66,6 +66,9 @@ function laFixBEDate(v){
 function depSave(){
   const b=getBoat(_depBoatId);if(!b)return;
   if(!b.docs) b.docs=[];
+  /* §beDate2 · ใบที่เคยบันทึกเป็นปี พ.ศ. (2570) ถูกเลือกเป็น "ใบปัจจุบัน" ตลอด เพราะหมดทีหลังสุด · บันทึกใหม่กี่ครั้งก็ไม่เปลี่ยน
+     ซ่อมใบของเรือลำนี้ทุกครั้งที่กดบันทึก */
+  b.docs.forEach(function(d){ if(d && d.exp) d.exp=laFixBEDate(d.exp); });
 
   if(_depSt==='exp'){
     // mark existing as not processing
@@ -87,10 +90,11 @@ function depSave(){
     const newExp=laFixBEDate(document.getElementById('dep-exp-input').value);
     if(!newExp){alert('กรุณาระบุวันหมดอายุใหม่');return;}
     // add NEW record — keep old for history
-    b.docs.push({name:_depDocName, exp:newExp, renewStatus:null});
-    // mark previous as closed (set renewStatus to null = done)
-    b.docs.filter(d=>d.name===_depDocName&&d.renewStatus==='processing')
-      .forEach(d=>d.renewStatus='done');
+    const _newDoc={name:_depDocName, exp:newExp, renewStatus:null};
+    b.docs.push(_newDoc);
+    // mark previous as closed · §beDate2 · ทุกใบเก่าของชื่อนี้ (ไม่ใช่แค่ที่กำลังยื่น) = ใบที่เพิ่งบันทึกเป็นใบปัจจุบันเสมอ
+    //   เดิมใบเก่าที่วันหมดอายุไกลกว่า (เช่นพิมพ์ปีผิด) ชนะใบใหม่ตลอด · แก้วันกี่ครั้งหน้าจอก็ไม่เปลี่ยน
+    b.docs.filter(d=>d!==_newDoc && d.name===_depDocName).forEach(d=>d.renewStatus='done');
   }
 
   save();
