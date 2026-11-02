@@ -16785,6 +16785,9 @@ function ckSharedCSS(scope){
   +scope+' table.ck-tbl th{text-align:left;font-size:9px;font-weight:700;color:#a5a49d;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border,#E7E4DC);white-space:nowrap;position:sticky;top:var(--ck-th-top,0px);z-index:35;background:#fff;box-shadow:inset 0 -1px 0 var(--border,#E7E4DC)}'
   /* หัวรถ/หัวเรือตรึงใต้หัวคอลัมน์ · แถวข้อมูลอยู่ layer ต่ำกว่า วาดทับไม่ได้ */
   +scope+' table.ck-tbl tr.ck-ghd>td{position:sticky;top:var(--ck-grp-top,26px);z-index:30}'
+  /* §ckJumpHit · แถวที่เด้งไปหา · ส้มอำพันตัดกับเขียว/ฟ้าของหัวคัน · กะพริบแล้วค้างไว้ให้หาเจอ */
+  +'@keyframes ckJumpPulse{0%,100%{box-shadow:inset 0 0 0 3px #F59E0B,inset 0 0 0 999px rgba(245,158,11,.22)}50%{box-shadow:inset 0 0 0 5px #D97706,inset 0 0 0 999px rgba(245,158,11,.38)}}'
+  +scope+' table.ck-tbl tr.ck-jumphit>td{box-shadow:inset 0 0 0 3px #F59E0B,inset 0 0 0 999px rgba(245,158,11,.22) !important;animation:ckJumpPulse .7s ease-in-out 3}'
   +scope+' table.ck-tbl tr.ck-row>td,'+scope+' table.ck-tbl tr.ck-zhead>td,'+scope+' table.ck-tbl tr.ck-warn>td{position:relative;z-index:0}'
   +scope+' table.ck-tbl tr.ck-ghd>td{box-shadow:0 2px 5px -3px rgba(15,23,42,.35)}'
   +scope+' table.ck-tbl td{padding:13px 8px;border-bottom:1px solid #F4F2ED;vertical-align:middle;white-space:nowrap}'
@@ -17079,9 +17082,12 @@ function ckJump(id){
     var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
     try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
   }
-  var prev=el.style.boxShadow;
-  el.style.transition='box-shadow .18s'; el.style.boxShadow='inset 0 0 0 2px #0F6E56';
-  setTimeout(function(){ el.style.boxShadow=prev||''; }, 1500);
+  /* §ckJumpHit · เจ้าของ: "มีเส้นให้เห็นว่าคันนี้ ปรับสีให้เด่น" · เดิมเส้นเขียวบาง 2px ในกรอบย่อย 1.5 วิ
+     กลืนกับสีหัวคัน · ใหม่: ทั้งแถวหัวคันขอบส้มอำพัน 3px + พื้นอาบส้ม กะพริบ 2 จังหวะ ค้าง 3 วิ (CSS ใน ckSharedCSS) */
+  var tr=(el.closest&&el.closest('tr'))||el;
+  document.querySelectorAll('.ck-jumphit').forEach(function(x){ x.classList.remove('ck-jumphit'); });
+  tr.classList.add('ck-jumphit');
+  setTimeout(function(){ tr.classList.remove('ck-jumphit'); }, 3000);
 }
 // การ์ดรถ/เรือของเส้นทางที่กำลังดูอยู่ · สร้างจาก groups ก้อนเดียวกับตาราง → ตัวเลขตรงกันเสมอ
 // กดแล้วเด้งไปที่หัวคันนั้นในตาราง

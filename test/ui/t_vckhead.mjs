@@ -37,6 +37,7 @@ const r = await page.evaluate(async () => { const z = ms => new Promise(f => set
   const c2 = chips[1]; const scDown = tw.scrollTop; c2.click(); await z(900);
   const g2 = document.getElementById(c2.getAttribute('onclick').match(/ckJump\('([^']+)'\)/)[1]); const g2R = g2.getBoundingClientRect(); const twR2 = tw.getBoundingClientRect();
   const nextRow = g2.closest('tr').nextElementSibling; const nR = nextRow ? nextRow.getBoundingClientRect() : null;
+  o.hit = { cls: g2.closest('tr').classList.contains('ck-jumphit'), shadow: getComputedStyle(g2.closest('tr').querySelector('td')).boxShadow };
   o.jumpUp = { name: c2.querySelector('.n').textContent, movedUp: tw.scrollTop < scDown - 50, headerAtTop: Math.abs(g2R.top - (twR2.top + thH)) < 40, rowBelowVisible: !!nR && nR.top > g2R.top && nR.top < twR2.bottom };
   // §vckStick · หัวตรึง · เลื่อนหน้าเว็บแล้วหัวยังอยู่บนสุด
   o.sticky = getComputedStyle(H().querySelector('.vkh')).position; o.pageOver = document.documentElement.scrollHeight - document.documentElement.clientHeight;
@@ -60,6 +61,7 @@ if (r.chipsAll === 49 && r.brandAll === 'LOVE ANDAMAN') ok('ล้างตั�
 if (r.pierBtns.length === 3 && /^ทุกท่า/.test(r.pierBtns[0]) && r.pierProgs.join() === 'Phi Phi Bamboo,Whale Shark Phi Phi Maiton' && r.pierChips > 0 && r.pierChips === r.pierGroups && r.pierChips < 49 && /พันวา/.test(r.pierOn) && r.pierBrand === 'ท่าพันวา' && r.pierBack === 49) ok('ชิปกรองท่า ' + r.pierBtns.join(' | ') + ' · เลือกพันวา → โปรแกรม 2 · รถ ' + r.pierChips + ' = กลุ่มตาราง · หัว "ท่าพันวา" · กลับทุกท่า 49'); else fail('pier ' + JSON.stringify({ b: r.pierBtns, p: r.pierProgs, c: r.pierChips, g: r.pierGroups, br: r.pierBrand, on: r.pierOn, back: r.pierBack }));
 if (r.groupHas && r.jump.moved && r.jump.visible) ok('กดชิป "' + r.chipName + '" → กล่องตารางเลื่อนไปหัวคันนั้น · โผล่ใต้ thead'); else fail('jump ' + JSON.stringify(r.jump));
 if (r.jumpUp.movedUp && r.jumpUp.headerAtTop && r.jumpUp.rowBelowVisible) ok('กดชิป "' + r.jumpUp.name + '" ที่อยู่เหนือจอ → เลื่อนขึ้นไปหาจริง · แถวลูกค้าใต้หัวคันมองเห็น'); else fail('jumpUp ' + JSON.stringify(r.jumpUp));
+if (r.hit.cls && /245, 158, 11|217, 119, 6/.test(r.hit.shadow)) ok('แถวที่เด้งไปหาติดไฮไลต์ส้มอำพันทั้งแถว'); else fail('hit ' + JSON.stringify(r.hit));
 if (r.sticky === 'sticky' && r.pageOver <= 0) ok('หัวตรึง (sticky) · หน้าเว็บไม่มีแถบเลื่อนซ้อน (overflow ' + r.pageOver + ')'); else fail('sticky ' + r.sticky + ' over ' + r.pageOver);
 if (r.qText) ok('ค้นหาชื่อแล้วเจอในตาราง'); else fail('search ' + J);
 const errs = errors.filter(e => !/404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/.test(e));
