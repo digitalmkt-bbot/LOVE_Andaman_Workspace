@@ -33203,7 +33203,7 @@ function _vehDayCellInner(v,date){
   const rnBadge=_rnMore?`<span title="วันนี้วิ่ง ${_rnTot} รอบ (คนละเวลา) — ใบงานรถแยกใบตามรอบ" style="position:absolute;bottom:-5px;left:-5px;height:13px;padding:0 3px;border-radius:7px;background:#fff;border:1.5px solid #5B289A;color:#5B289A;font-size:7.5px;line-height:10px;font-weight:800;letter-spacing:-.02em">&times;${_rnTot}</span>`:'';
   const jbBadge=(routes.length>0&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
   const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
+  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:4px auto;width:26px;height:22px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -33327,6 +33327,12 @@ function _vehGroupsForDay(routeId,day){
          + บรรทัดคำอธิบายสีเฉพาะโปรแกรมที่มีรถในเดือนนี้ (ที่ไม่อยู่ในแถบวันแล้ว) · ที่เหลือพับไว้หลัง "+ N โปรแกรมที่ไม่ได้ใช้" */
 var _vehLegendAll=false;
 function vehLegendToggle(){ _vehLegendAll=!_vehLegendAll; renderVehicles(); }
+/* §vehMxFold · เจ้าของ: "เพิ่มที่แบบยุบได้ · มีหัวทีมหลักและรถที่อยู่ในทีมนั้น ๆ" · จำต่อเครื่อง (localStorage) ไม่ใช่ทั้งบริษัท
+   key: own / rented / partner / partner|<ซัพ> · ยุบ partner = ซ่อนทุกซัพข้างใน */
+var _vehMxFold=(function(){ try{ return JSON.parse(localStorage.getItem('veh_mx_fold')||'{}')||{}; }catch(_){ return {}; } })();
+function vehMxFold(k){ if(_vehMxFold[k]) delete _vehMxFold[k]; else _vehMxFold[k]=1; try{ localStorage.setItem('veh_mx_fold',JSON.stringify(_vehMxFold)); }catch(_){} renderVehicles(); }
+function _vehMxHidden(k,pk){ return !!(_vehMxFold[k] || (pk&&_vehMxFold[pk])); }
+function vehMxFoldAll(on){ _vehMxFold={}; if(on){ ['own','rented','partner'].forEach(k=>_vehMxFold[k]=1); } try{ localStorage.setItem('veh_mx_fold',JSON.stringify(_vehMxFold)); }catch(_){} renderVehicles(); }
 function _vehMonthUsedRoutes(){
   var used={}; var [my,mm]=_vehMonth.split('-').map(Number); var n=new Date(my,mm,0).getDate();
   (SB_VEHICLES||[]).forEach(function(v){ if(!v.active) return;
@@ -33394,6 +33400,7 @@ function _vehMatrixSummaryHTML(day){
     +(busy?`<span class="vmx-st bad" title="รถซ่อม/หยุดวันนี้">🔧 ซ่อม/หยุด <b>${busy}</b></span>`:'')
     +`</div>`
     +`<div class="vmx-legend">`
+    +`<span class="vmx-foldall" title="ยุบ/กางทีมรถในตาราง"><button onclick="vehMxFoldAll(false)">กางหมด</button><button onclick="vehMxFoldAll(true)">ยุบหมด</button></span>`
     +(monthOnly.length?`<span class="vmx-lgk">ใช้ในเดือนนี้ด้วย</span>${monthOnly.map(lg).join('')}`:'')
     +(rest.length?(_vehLegendAll
         ?`<span class="vmx-lgk">ไม่ได้ใช้</span>${rest.map(lg).join('')}<button class="vmx-more" onclick="vehLegendToggle()">พับ</button>`
@@ -33426,6 +33433,12 @@ function vehMatrixCSS(){
   +H+' .vmx-more{border:1px dashed #CBD5E1;background:transparent;border-radius:999px;padding:1px 8px;font:700 9.5px inherit;font-family:inherit;color:#64748B;cursor:pointer}'
   +H+' .vmx-key{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-left:6px}'
   +H+' .vmx-key i{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid}'
+  +H+' .vmx-cv{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;border:1px solid #E3E0D7;background:#fff;color:#8a8a82;font-size:9px;vertical-align:-2px;transition:transform .12s}'
+  +H+' .vmx-cv.op{transform:rotate(90deg)}'
+  +H+' tr.vmx-ghd:hover td,'+H+' tr.vmx-gsub:hover td{background:#F3F6FA !important}'
+  +H+' .vmx-foldall{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden}'
+  +H+' .vmx-foldall button{border:0;background:#fff;padding:2px 8px;font:700 9.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+  +H+' .vmx-foldall button+button{border-left:1px solid #EFECE4}'
   +'</style>';
 }
 function vehDaySetStatus(id,date,s){ const v=vehGet(id); if(!v)return; v.dayStatus=v.dayStatus||{}; if(s){ v.dayStatus[date]=s; } else { delete v.dayStatus[date]; } const LB={available:'พร้อม',maintenance:'ซ่อม',off:'หยุด'}; vehLog(id,'status',date+' · '+(s?LB[s]:'ล้างสถานะ')); sbVehiclesPersist(); _vehDayRefresh(id,date); }
@@ -33622,11 +33635,13 @@ function vehBuildGrouped(list, rowFn, hd, subhd){
   let html='';
   [['own','รถบริษัท','#185FA5'],['rented','รถเช่า','#0F6E56'],['partner','รถร่วม','#534AB7']].forEach(([key,lbl,col])=>{
     const cv=list.filter(v=>(v.ownership||'own')===key).slice().sort(_vehNameCmp); if(!cv.length) return;
-    html+=hd(col,lbl,cv.length);
+    /* §vehMxFold · ส่ง key ของกลุ่ม/ทีมให้ตัววาดด้วย (hd(col,lbl,n,key) · subhd(s,n,key,parentKey) · rowFn(v,key,parentKey))
+       ตัววาดเดิมของแท็บอื่นรับแค่พารามิเตอร์แรก ๆ ไม่กระทบ · แท็บตารางเดือนใช้ทำยุบ/กาง */
+    html+=hd(col,lbl,cv.length,key);
     if(key==='partner'){
       const sups={}; cv.forEach(v=>{ const s=(v.partnerName||'').trim()||'(ไม่ระบุซัพ)'; (sups[s]=sups[s]||[]).push(v); });
-      Object.keys(sups).sort().forEach(s=>{ html+=subhd(s,sups[s].length); html+=sups[s].slice().sort(_vehNameCmp).map(rowFn).join(''); });
-    } else { html+=cv.map(rowFn).join(''); }
+      Object.keys(sups).sort().forEach(s=>{ const sk=key+'|'+s; html+=subhd(s,sups[s].length,sk,key); html+=sups[s].slice().sort(_vehNameCmp).map(v=>rowFn(v,sk,key)).join(''); });
+    } else { html+=cv.map(v=>rowFn(v,key,null)).join(''); }
   });
   return html;
 }
@@ -33862,13 +33877,15 @@ function renderVehicles(){
     const hCell='position:sticky;top:var(--vehhdr-top,92px);z-index:2;background:#fafafa;padding:4px 0;text-align:center;font-weight:500;border-bottom:0.5px solid rgba(0,0,0,.06);min-width:34px;cursor:pointer';
     const headCells=dates.map(ds=>{ const dt=new Date(ds+'T12:00:00'); const dow=dt.getDay(); const dn=dt.getDate(); const isToday=ds===todayStr; const isSel=ds===sumDay; const we=(dow===0||dow===6);
       return `<th onclick="vehSumSelectDay('${ds}')" title="ดูสรุปวันนี้" style="${hCell};${isSel?'background:#185FA5':isToday?'background:#E6F1FB;border-bottom:2px solid #185FA5':''}"><div style="font-size:9px;color:${isSel?'#cfe2f5':isToday?'#185FA5':(we?'#A05A1A':'#999')}">${DOW[dow]}</div><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:${isSel?700:400};color:${isSel?'#fff':isToday?'#185FA5':'#666'}">${dn}</div></th>`; }).join('');
-    const rowFn=v=>{
-      const cells=dates.map(ds=>`<td id="vehcell-${v.id}-${ds}" onclick="vehDayCellClick('${v.id}','${ds}')" oncontextmenu="event.preventDefault();vehDayPopup('${v.id}','${ds}')" title="คลิก = สลับโปรแกรม · คลิกขวา = รายละเอียด" style="text-align:center;border-bottom:0.5px solid rgba(0,0,0,.04);${ds===sumDay?'background:#EEF5FC':ds===todayStr?'background:#F3F8FE':''}">${_vehDayCellInner(v,ds)}</td>`).join('');
-      return `<tr><td style="position:sticky;left:0;background:#fff;padding:6px 11px;border-bottom:0.5px solid rgba(0,0,0,.04);white-space:nowrap;z-index:1;${v.active?'':'opacity:.55'}"><span style="font-weight:600;font-size:13px;color:#1B2A55">${esc(v.name||v.id)}</span>${v.plate&&v.plate!=='-'?` <span style="font-size:10px;color:#aaa;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</td>${cells}</tr>`;
+    /* §vehMxTight · เจ้าของ: "บีบตารางให้กระชับหน่อย" · แถวจาก ~53px เหลือ ~32px · padding ช่องเป็น 0 · ช่องสี 26×22 */
+    const rowFn=(v,gk,pk)=>{
+      const cells=dates.map(ds=>`<td id="vehcell-${v.id}-${ds}" onclick="vehDayCellClick('${v.id}','${ds}')" oncontextmenu="event.preventDefault();vehDayPopup('${v.id}','${ds}')" title="คลิก = สลับโปรแกรม · คลิกขวา = รายละเอียด" style="text-align:center;padding:0;border-bottom:0.5px solid rgba(0,0,0,.04);${ds===sumDay?'background:#EEF5FC':ds===todayStr?'background:#F3F8FE':''}">${_vehDayCellInner(v,ds)}</td>`).join('');
+      return `<tr class="vmx-row"${_vehMxHidden(gk,pk)?' style="display:none"':''}><td style="position:sticky;left:0;background:#fff;padding:3px 11px 3px 22px;border-bottom:0.5px solid rgba(0,0,0,.04);white-space:nowrap;z-index:1;${v.active?'':'opacity:.55'}"><span style="font-weight:700;font-size:12px;color:#1B2A55">${esc(v.name||v.id)}</span>${v.plate&&v.plate!=='-'?` <span style="font-size:9.5px;color:#aaa;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</td>${cells}</tr>`;
     };
     const colspanN=dates.length+1;
-    const gHd=(col,lbl,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:8px 11px;background:#fbfbfc;border-bottom:0.5px solid rgba(0,0,0,.05)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px"></span> <span style="font-weight:700;font-size:12.5px;color:#1B2A55">${lbl}</span> <span style="color:#8a8a82;font-size:11px">· ${n}</span></td></tr>`;
-    const gSub=(s,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:6px 11px 4px 24px;background:#fff"><span style="font-size:11.5px;font-weight:700;color:#534AB7">&#9679; ${esc(s)}</span> <span style="font-size:9.5px;color:#8a8a82">${n}</span></td></tr>`;
+    const _fold=(k,on)=>`<span class="vmx-cv${on?'':' op'}" title="${on?'กางทีมนี้':'ยุบทีมนี้'}">&#9656;</span>`;
+    const gHd=(col,lbl,n,k)=>`<tr class="vmx-ghd" onclick="vehMxFold('${k}')"><td colspan="${colspanN}" style="position:sticky;left:0;padding:5px 11px;background:#fbfbfc;border-bottom:0.5px solid rgba(0,0,0,.05);cursor:pointer;user-select:none">${_fold(k,!!_vehMxFold[k])}<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px;margin:0 6px 0 2px"></span><span style="font-size:12px;font-weight:700;color:#1B2A55">${lbl}</span> <span style="font-size:10px;color:#8a8a82">· ${n} คัน</span>${_vehMxFold[k]?'<span style="font-size:9.5px;color:#a5a49d;margin-left:8px">ยุบอยู่ · กดเพื่อกาง</span>':''}</td></tr>`;
+    const gSub=(s,n,k,pk)=>`<tr class="vmx-gsub" onclick="vehMxFold('${k.replace(/'/g,"\\'")}')"${_vehMxHidden(null,pk)?' style="display:none"':''}><td colspan="${colspanN}" style="position:sticky;left:0;padding:3px 11px 2px 18px;background:#fff;cursor:pointer;user-select:none">${_fold(k,!!_vehMxFold[k])}<span style="font-size:11px;font-weight:700;color:#534AB7;margin-left:4px">&#9679; ${esc(s)}</span> <span style="font-size:9.5px;color:#8a8a82">${n}</span></td></tr>`;
     const matrixRows=vehBuildGrouped(SB_VEHICLES.filter(_vehOwnerMatch), rowFn, gHd, gSub);
     body=`
       <div id="veh-matrix-scroll" style="overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:12px;background:#fff;max-height:calc(100vh - var(--topbar,0) - 120px)">
