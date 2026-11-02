@@ -17162,6 +17162,8 @@ function vckSelHtml(bkId,date,kind,st){
   if(st==='wait'||st==='pier') lead='<option value="" selected>'+e(d.lbl)+'</option>';
   var opts=['standby','pending','checkin','cxl','noshow'].map(function(k){
     return '<option value="'+k+'"'+((k===st)?' selected':'')+'>'+e(VCK_SEL_LBL[k])+'</option>'; }).join('');
+  /* §vckBackWait · เจ้าของ: "เทสแล้วกลายเป็น Standby แก้ยังไง" · เดิมถอยกลับเป็น "รอ" ไม่ได้เลย · เพิ่มตัวเลือกล้างสถานะ */
+  if(st==='standby'||st==='pending') opts+='<option value="wait">↩ ล้าง → รอ</option>';
   return '<select class="vck-sel" title="เปลี่ยนสถานะของแถวนี้"'
     +' onchange="vckStatus(\''+bkId+'\',\''+date+'\',\''+kind+'\',this.value)"'
     +' onclick="event.stopPropagation()">'+lead+opts+'</select>';
@@ -19629,6 +19631,7 @@ function vckStatus(bkId,date,kind,val){
       ckToggle(bkId,date,kind); }
     vckSetFlow(bkId,date,kind,val); ckPersist(); ckAfter(kind); return;
   }
+  if(val==='wait'){ vckSetFlow(bkId,date,kind,'',''); ckPersist(); ckAfter(kind); return; }   /* §vckBackWait · ล้าง flow กลับเป็น รอ */
   ckAfter(kind);
 }
 /* ── หน้าต่างเลือกสี ── */
