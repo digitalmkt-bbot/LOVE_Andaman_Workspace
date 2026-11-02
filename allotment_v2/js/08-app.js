@@ -17065,8 +17065,15 @@ function ckJump(id){
     pnode=pnode.parentElement;
   }
   if(box){
+    /* §ckJumpUp · เจ้าของ: "บางคันอยู่บน กดแล้วไม่เด้งขึ้น" · หัวคัน (tr.ck-ghd>td) เป็น sticky
+       พอเลื่อนผ่านไปแล้ว getBoundingClientRect ของมันคือตำแหน่งที่ "ค้างอยู่ใต้หัวตาราง" ไม่ใช่ตำแหน่งจริง
+       คำนวณจากตรงนั้นได้ค่าเท่า scrollTop เดิมพอดี = ไม่ขยับ · ใช้ offsetTop (ตำแหน่ง layout · sticky ไม่กระทบ) แทน */
     var th=box.querySelector('thead'); var thH=th?th.getBoundingClientRect().height:0;
-    var top=box.scrollTop+el.getBoundingClientRect().top-box.getBoundingClientRect().top-thH-6;
+    /* เริ่มจาก <tr> ไม่ใช่ตัว td/div ข้างใน · Chrome คืน offsetTop ของตัวที่ sticky เป็นตำแหน่งที่ค้างอยู่เช่นกัน
+       แต่ <tr> ไม่ได้ sticky (sticky อยู่ที่ td) จึงได้ตำแหน่งจริงในตาราง */
+    var y=0, n=el.closest?(el.closest('tr')||el):el;
+    while(n && n!==box){ y+=n.offsetTop||0; n=n.offsetParent; if(n && n!==box && !box.contains(n)) break; }
+    var top=y-thH-6;
     try{ box.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ box.scrollTop=Math.max(0,top); }
   } else {
     var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
