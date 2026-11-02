@@ -32,6 +32,7 @@ function bookingV2UpgModal(){
     +'<div style="font-size:11.5px;color:#8a8a82;margin-top:3px">'+e((b&&(b.leadPax||b.customerName))||U.bkId)+' &middot; '+pax+' pax &middot; '+e(U.date)+' &middot; '+laT('จาก')+' <b>'+e(bkUpgRouteName(U.from))+'</b> &middot; &#9875; '+e((typeof laPierName==='function')?laPierName(bkUpgPierOf(U.from)):bkUpgPierOf(U.from))+'</div></div>'
     +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
     +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('ไปโปรแกรม')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+opts+'</div></div>'
+    +bookingV2UpgKindHtml(U, pax, e)   /* §upgPromise */
     +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เหตุผล')+'</div>'
     +'<input id="bkupg-reason" type="text" value="'+e(U.reason)+'" oninput="_bkUpg.reason=this.value" placeholder="'+laT('เช่น ทริปเดิมไม่ออก · ลูกค้าขอเปลี่ยน')+'" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;box-sizing:border-box;font-family:inherit"></div>'
     +'<div><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+laT('เก็บเพิ่ม (บาท) · 0 = ไม่เก็บ')+'</div>'

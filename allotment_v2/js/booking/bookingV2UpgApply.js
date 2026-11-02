@@ -10,6 +10,13 @@ function bookingV2UpgApply(go){
   if(al && al.hasAllotment && pax>al.seatsAvailable){
     alert('Not enough free seats on '+bkUpgRouteName(U.to)+' ('+U.date+').\nNeeds '+pax+', free '+al.seatsAvailable+'.'); return; }
   var O=bkOpsFor(b, U.date), fromNm=bkUpgRouteName(U.from), toNm=bkUpgRouteName(U.to), upgId='';
+  var kind=(U.kind==='promise')?'promise':'fill';   /* §upgPromise */
+  if(kind==='promise'){
+    if(!U.boat){ alert('Pick the boat promised to the customer.'); return; }
+    if(!baBoatsForRoute(U.date, U.to).some(function(x){ return x.boatId===U.boat; })){ alert(bkUpgBoatNm(U.boat)+' is not running '+toNm+' on '+U.date+'. Pick another boat.'); return; }
+    var _pc=(typeof boatCapFor==='function')?boatCapFor(U.boat,U.date):0, _pf2=_pc-baAssignedPax(U.date,U.boat);
+    if(_pc>0 && pax>_pf2){ alert('Not enough room on '+bkUpgBoatNm(U.boat)+'.\nNeeds '+pax+', free '+Math.max(0,_pf2)+'.'); return; }
+  }
   /* §upgConfirm (2026-10-03) · ผู้ใช้ขอ "กด Upgrade แล้วให้ขึ้นเตือนอีกรอบว่ายืนยันจะ Upgrade จากเส้นทางนี้เป็นเส้นทางนี้"
      ย้ายแล้วที่นั่งสองโปรแกรมเปลี่ยนทันทีและเรือเดิมถูกล้าง · ถามหลังตรวจทุกอย่างผ่านแล้ว จะได้ไม่ถามแล้วค่อยบอกว่าย้ายไม่ได้ */
   var _pEn=function(rid){ var p=bkUpgPierOf(rid); return ((typeof LA_PIER_NAME!=='undefined' && LA_PIER_NAME[p] && LA_PIER_NAME[p].en) || p || '-'); };
@@ -19,7 +26,7 @@ function bookingV2UpgApply(go){
      กด Upgrade = ตรวจทุกอย่างแล้วโชว์หน้าสรุป · กดยืนยันในหน้าสรุป = เรียกตัวนี้อีกรอบด้วย go=true
      ตรวจซ้ำอีกรอบตอนยืนยัน (ที่นั่งอาจถูกคนอื่นจองไประหว่างนั้น) */
   if(go!==true){
-    bookingV2UpgConfirmView({ b:b, pax:pax, fromNm:fromNm, toNm:toNm, pf:_pf, pt:_pt, charge:charge, reason:reason, date:U.date });
+    bookingV2UpgConfirmView({ b:b, pax:pax, fromNm:fromNm, toNm:toNm, pf:_pf, pt:_pt, charge:charge, reason:reason, date:U.date, kind:kind, boatNm:(kind==='promise'?bkUpgBoatNm(U.boat):'') });
     return;
   }
   /* opsOn · operation-backend is the master: the server makes the upgrade sale and returns it, so the
@@ -31,11 +38,12 @@ function bookingV2UpgApply(go){
     b.upgrades.push({ id:upgId, label:'Upgrade > '+toNm, sellPrice:charge, toCompany:charge, commission:0, collected:false,
       note:reason, seller:'', settle:'pending', at:new Date().toISOString(), method:'cash', feePct:0, fee:0, customerPaid:charge, slips:[] });
   }
-  t.upg={ fromRouteId:U.from, toRouteId:U.to, date:U.date, reason:reason, charge:charge, upgId:upgId, by:laBy(), at:new Date().toISOString() };
+  t.upg={ fromRouteId:U.from, toRouteId:U.to, date:U.date, reason:reason, charge:charge, upgId:upgId, by:laBy(), at:new Date().toISOString(), kind:kind };
+  if(kind==='promise') t.upg.boatId=U.boat;   /* §upgPromise */
   t.routeId=U.to;
-  O.boatId=null; if(O.boatSplits) delete O.boatSplits;       /* เรือของเส้นทางเดิมใช้ต่อไม่ได้ · จัดใหม่ในโปรแกรมปลายทาง */
+  O.boatId=(kind==='promise')?U.boat:null; if(O.boatSplits) delete O.boatSplits;       /* เรือของเส้นทางเดิมใช้ต่อไม่ได้ · จัดใหม่ในโปรแกรมปลายทาง */
   if(b.ops && b.ops.upgrade) b.ops.upgrade=null;              /* ธงแบบเก่า · เลิกใช้ */
-  if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','Upgrade route · '+fromNm+' > '+toNm+' · '+reason+(charge>0?(' · +THB '+charge.toLocaleString()):' · no charge'),'Edit');
+  if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','Upgrade route · '+fromNm+' > '+toNm+' · '+reason+(charge>0?(' · +THB '+charge.toLocaleString()):' · no charge')+(kind==='promise'?(' · GUARANTEED boat '+bkUpgBoatNm(U.boat)):' · seat-fill'),'Edit');
   if(!opsOn) acctPersistBookings();
   bookingV2UpgModalClose();
   if(_bkV2 && _bkV2.boatAssignMode && typeof bookingV2Render==='function') bookingV2Render(); else if(typeof bookingV2Render==='function' && document.getElementById('bkv2-host')) bookingV2Render(); else renderBoatAssign();

@@ -1,6 +1,7 @@
 function bookingV2AssignBoat(bkId, boatId, date){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   const _d = bkOpsDate(b, date);   // which travel day this assignment belongs to
+  if(typeof bkUpgPromiseGuard==='function' && !bkUpgPromiseGuard(b, _d, boatId||'', 'By trip')) return;   /* §upgPromise */
   // §boatSplit · เลือกเรือลำเดียวทั้งที่บุคกิ้งแยกลงหลายลำอยู่ → ต้องยืนยันก่อน ไม่งั้นการแยกหายเงียบ
   const _sp0=(typeof bkBoatSplits==='function')?bkBoatSplits(b,_d):null;
   if(_sp0){ if(!confirm('บุคกิ้งนี้แยกลง '+_sp0.length+' ลำอยู่\nเลือกลำเดียวจะยกเลิกการแยกทั้งหมด — ยืนยันไหม')) return; delete bkOpsFor(b,_d).boatSplits; }
@@ -45,6 +46,7 @@ function bookingV2AssignBoat(bkId, boatId, date){
     }
   }
   bkOpsFor(b, _d).boatId = boatId || null;
+  if(typeof bkUpgPromiseCommit==='function') bkUpgPromiseCommit(b, _d, boatId||'');   /* §upgPromise */
   acctPersistBookings();
   // re-render whichever surface is showing
   /* §btBoatPick · เลือกเรือจากหน้า By trip นอกโหมดเรือ · ต้องวาดหน้า By trip ใหม่ด้วย (เดิมวาดหน้า Boat Assign) */
