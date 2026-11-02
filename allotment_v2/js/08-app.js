@@ -33160,7 +33160,17 @@ let _vehMonth=(bkV2LocalYMD(new Date())).slice(0,7);   // 'YYYY-MM'
 let _vehCalMonth=(bkV2LocalYMD(new Date())).slice(0,7); // detail-panel status calendar month
 function vehCalShift(n){ const [y,m]=_vehCalMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
 function vehMonthShift(n){ const [y,m]=_vehMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
-function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
+/* §vehMxFast · เจ้าของ: "คลิกในหน้า Transfer Fleet ช้า ดีเลย์"
+   ของเดิมกวาด SB_BOOKINGS ทั้งก้อนต่อ "ช่อง" · 73 คัน × 30 วัน = 2,190 ช่อง × หลายพันใบ = สิบล้านรอบต่อการวาดหนึ่งครั้ง
+   ตอนนี้เดินใบจองครั้งเดียวต่อวัน แล้วจำไว้ (ดัชนี vid → จำนวนงาน) · ล้างทุกครั้งที่วาดหน้าใหม่หรือช่องเดียว (_vehJobIdxGen) */
+var _vehJobIdx={}, _vehJobIdxGen=0, _vehJobIdxSeen=-1;
+function _vehJobIdxBump(){ _vehJobIdxGen++; }
+function _vehDayJobN(id,date){
+  if(_vehJobIdxSeen!==_vehJobIdxGen){ _vehJobIdx={}; _vehJobIdxSeen=_vehJobIdxGen; }
+  let m=_vehJobIdx[date];
+  if(!m){ m=_vehJobIdx[date]={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const vid=bkOpsRead(b,date).vanId; if(!vid)return; let n=0; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) n++; }); if(n) m[vid]=(m[vid]||0)+n; }); }
+  return m[id]||0;
+}
 function _vehDayCellInner(v,date){
   const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
   const routes=_vehDayRoutes(v,date);
@@ -33268,7 +33278,7 @@ function vehDayPopup(id,date){
   ov.onclick=ev=>{ if(ev.target===ov && ov._d) vehDayClose(); };
   document.body.appendChild(ov);
 }
-function _vehDayRefresh(id,date){ const v=vehGet(id); const cell=document.getElementById('vehcell-'+id+'-'+date); if(cell&&v) cell.innerHTML=_vehDayCellInner(v,date); if(document.getElementById('veh-day-modal')) vehDayPopup(id,date); }
+function _vehDayRefresh(id,date){ if(typeof _vehJobIdxBump==='function') _vehJobIdxBump(); const v=vehGet(id); const cell=document.getElementById('vehcell-'+id+'-'+date); if(cell&&v) cell.innerHTML=_vehDayCellInner(v,date); if(document.getElementById('veh-day-modal')) vehDayPopup(id,date); }
 function vehDaySetZone(id,date,z){ const v=vehGet(id); if(!v)return; v.dayZone=v.dayZone||{}; if(z){ v.dayZone[date]=z; } else { delete v.dayZone[date]; } vehLog(id,'zone',date+' · โซน '+(z||'ตามหลัก')); sbVehiclesPersist(); _vehDayRefresh(id,date); }
 // ── Per-day route/program assignment (which program a van runs that day) ──
 const VEH_FAM_ABBR={similan:'SM',surin:'SR',phiphi:'PP',krabi:'KB',whaleshark:'WS'};
@@ -33323,14 +33333,40 @@ function _vehMonthUsedRoutes(){
     for(var d=1;d<=n;d++){ var ds=_vehMonth+'-'+String(d).padStart(2,'0'); _vehDayRoutes(v,ds).forEach(function(r){ used[r]=1; }); } });
   return used;
 }
+/* §vehMxFast · เจ้าของ: "คลิกในหน้า Transfer Fleet ช้า ดีเลย์"
+   _vehRouteDemand / _vehGroupsForDay กวาด SB_BOOKINGS ทั้งก้อน (หลายพันใบ) ต่อเส้นทาง · แถบสรุปเรียกรวม ~190 รอบต่อการวาด
+   และวาดใหม่ทุกคลิกช่อง · รวบเป็นรอบเดียว: เดินใบจองครั้งเดียว ได้ทั้ง demand และกรุ๊ปของทุกเส้นทางในวันนั้น */
+function _vehDayStats(day){
+  const dm={}, grp={};
+  const D=rid=>(dm[rid]=dm[rid]||{pax:0,pickup:0});
+  const G=rid=>(grp[rid]=grp[rid]||{set:new Set(),vanByKey:{}});
+  (SB_BOOKINGS||[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    (b.trips||[]).forEach(t=>{
+      if(t.date!==day||!t.routeId)return; if(t.bookingMode==='charter')return;
+      const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0);
+      const d=D(t.routeId); d.pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT') d.pickup+=p;
+      const g=G(t.routeId), ops=b.ops||{};
+      const addG=(gn,vid)=>{ if(!gn)return; const k=z+'|'+gn; g.set.add(k); if(vid)g.vanByKey[k]=vid; };
+      if(Array.isArray(ops.vanSplits)&&ops.vanSplits.length){ ops.vanSplits.forEach(sp=>addG(sp.vanGroup,sp.vanId)); }
+      else addG(ops.vanGroup,ops.vanId);
+    });
+  });
+  const out={dm:{},grp:{}};
+  Object.keys(dm).forEach(k=>{ out.dm[k]=dm[k]; });
+  Object.keys(grp).forEach(k=>{ let withVan=0,woVan=0; grp[k].set.forEach(kk=>{ if(grp[k].vanByKey[kk])withVan++; else woVan++; }); out.grp[k]={total:grp[k].set.size,withVan,woVan}; });
+  return out;
+}
 function _vehMatrixSummaryHTML(day){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const rts=(typeof ROUTES!=='undefined'&&ROUTES)||[];
+  const ST=_vehDayStats(day), Z0={pax:0,pickup:0}, G0={total:0,withVan:0,woVan:0};
+  const _dm=rid=>ST.dm[rid]||Z0, _grp=rid=>ST.grp[rid]||G0;
   const counts={}; let avail=0, busy=0;
   (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const rs=_vehDayRoutes(v,day); if(rs.length){ rs.forEach(r=>counts[r]=(counts[r]||0)+1); } else if(st==='available'){ avail++; } });
   let dlbl=day; try{ dlbl=new Date(day+'T12:00:00').toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'}); }catch(_){}
-  const todayChips=rts.filter(r=>{ const dm=_vehRouteDemand(r.id,day); return counts[r.id]||dm.pax; })
-    .map(r=>{ const nv=counts[r.id]||0, dm=_vehRouteDemand(r.id,day), grp=_vehGroupsForDay(r.id,day); return {r,nv,dm,grp}; })
+  const todayChips=rts.filter(r=>counts[r.id]||_dm(r.id).pax)
+    .map(r=>{ const nv=counts[r.id]||0, dm=_dm(r.id), grp=_grp(r.id); return {r,nv,dm,grp}; })
     .sort((a,b)=>b.nv-a.nv||b.dm.pax-a.dm.pax)
     .map(x=>{ const r=x.r, nv=x.nv, dm=x.dm, grp=x.grp;
       const need=(dm.pickup>0&&nv===0), notFull=grp.total>0&&grp.woVan>0;
@@ -33340,9 +33376,9 @@ function _vehMatrixSummaryHTML(day){
         +`<i style="background:${r.color}">${_vehRouteAbbr(r.id)}</i>${esc(_vehRouteShort(r.id))}<b style="color:${nv?r.color:'#A32D2D'}">${nv}</b>`
         +(notFull?`<em title="${grp.woVan} กรุ๊ปยังไม่มีรถ">✗${grp.woVan}</em>`:'')+`</span>`; }).join('');
   const tot=Object.values(counts).reduce((a,b)=>a+b,0);
-  let totG=0,totGwo=0; rts.forEach(r=>{ const g=_vehGroupsForDay(r.id,day); totG+=g.total; totGwo+=g.woVan; });
+  let totG=0,totGwo=0; rts.forEach(r=>{ const g=_grp(r.id); totG+=g.total; totGwo+=g.woVan; });
   /* บรรทัดสี · โปรแกรมที่มีรถในเดือนนี้ แต่ไม่ได้อยู่ในแถบวันที่เลือก */
-  const inDay={}; rts.forEach(r=>{ const dm=_vehRouteDemand(r.id,day); if(counts[r.id]||dm.pax) inDay[r.id]=1; });
+  const inDay={}; rts.forEach(r=>{ if(counts[r.id]||_dm(r.id).pax) inDay[r.id]=1; });
   const used=_vehMonthUsedRoutes();
   const monthOnly=rts.filter(r=>used[r.id]&&!inDay[r.id]);
   const rest=rts.filter(r=>!used[r.id]&&!inDay[r.id]);
@@ -33679,6 +33715,7 @@ function vehDetailPanel(id, jobsT, today, initials, TYLBL){
 }
 function renderVehicles(){
   const host=document.getElementById('vehicles-host'); if(!host) return;
+  if(typeof _vehJobIdxBump==='function') _vehJobIdxBump();   /* §vehMxFast · ดัชนีงานต่อช่องสร้างใหม่ทุกครั้งที่วาด */
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const inp='border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit';
   const th='padding:8px 10px;text-align:left;font-size:9.5px;color:#8a8a82;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.08)';
