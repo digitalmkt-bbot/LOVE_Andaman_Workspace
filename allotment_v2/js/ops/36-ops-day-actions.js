@@ -351,6 +351,16 @@
         targetOps[prop] = null;
       }
     });
+    /* §paAdd · legacy keeps the people added at the pier on the check-in (ops.pierCheckin.adds); here they are the trip's pier_adds */
+    var adds = Array.isArray(ops.pier_adds) ? ops.pier_adds : [];
+    if(adds.length){
+      targetOps.pierCheckin = targetOps.pierCheckin || {};
+      targetOps.pierCheckin.adds = adds.map(function(x){
+        return { id: x.id, at: x.at, hm: x.hm, by: x.by || '', add: clone(x.add), nat: x.nat, names: clone(x.names || []), pay: x.pay, method: x.method || '',
+          unit: clone(x.unit || {}), total: +x.total || 0, reason: x.reason || '', exId: x.sale_id || '', slot: x.slot == null ? null : x.slot,
+          bill: x.bill || '', billBy: x.bill_by || '', billAt: x.bill_at || '', undone: x.undone ? clone(x.undone) : undefined };
+      });
+    }
   }
 
   function mergeTripOperations(bk, date, serverTrip){
@@ -687,6 +697,20 @@
     return updateInsuranceServer(bkId, pk, { reviewed: nextRev }).catch(function(){ return null; });
   });
 
+  // insReviewBoat (lk-inbox §insBoat): "Review all" on one boat ticks or unticks its people. Legacy writes the local overrides and insPersist does nothing
+  // here, so each person goes as insToggleReviewed goes: one PUT per passenger, server first.
+  wrap('insReviewBoat', function(orig, rid, bid){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')) return null;
+    if(typeof _insDate === 'undefined' || typeof insTripsForDate !== 'function') return null;
+    var g = insTripsForDate(_insDate).find(function(x){ return String(x.routeId) === String(rid); }); if(!g) return null;
+    var bo = insBoatsOf(g, _insDate).find(function(x){ return (x.bid || '') === (bid || ''); }); if(!bo) return null;
+    var rows = insBoatRows(bo, _insDate).rows.filter(function(r){ return r.p; });
+    var allOn = rows.length > 0 && rows.every(function(r){ return r.rev; });
+    return rows.reduce(function(p, r){
+      return p.then(function(){ return updateInsuranceServer(r.b.id, r.p.key, { reviewed: !allOn }); });
+    }, Promise.resolve()).catch(function(){ return null; });
+  });
+
   // insRevertRow (08-app.js): the Revert button drops the typed age as well as the local first/last name and nationality.
   // The age lives on the server (PUT /v1/bookings/:id/insurance, age: null clears it); the other overrides stay in this browser.
   wrap('insRevertRow', function(orig, bkId, pk){
@@ -915,6 +939,133 @@
     if(!t){ alert('This booking has no operation-backend trip on ' + d + ': save the booking first'); return null; }
     return O.queue(function(){ return O.call('DELETE', '/operations/trip-ops/' + enc(t.opsTripId) + '/turn-back'); })
       .then(function(res){ turnBackAfter(b, d, res); return res; }, function(e){ O.fail('Turn-back not removed', e); return null; });
+  });
+
+  // §tbBoat (lk-inbox 51bb0ea3) · tbBoatSave / tbBoatRemove (08-app.js): the boat header's "⛵ กลับเข้าท่า", one dialog for a tick-list of the
+  // boat's bookings. Legacy writes ops.turnBack on each and calls ckPersist (local only here). There is one record per booking on the server,
+  // so this is the same PUT / DELETE as tbSave, one after another. "รอตกลง" does not overwrite a money decision already made (legacy keepMoney).
+  // A booking refused stops nothing already saved: what was saved stays, and the refusal says which one.
+  function boatTurnBacks(st, jobs, label){
+    var left = jobs.length, failed = [];
+    if(!left){ if(typeof window.ckReasonClose === 'function') window.ckReasonClose(); return Promise.resolve(null); }
+    return jobs.reduce(function(p, job){
+      return p.then(function(){
+        return O.queue(job.run).then(function(res){ job.after(res); }, function(e){ failed.push(job.b); if(failed.length === 1) O.fail(label + ' · ' + (job.b.voucherRef || job.b.id), e); });
+      });
+    }, Promise.resolve()).then(function(){
+      O.wrote('trip-ops');
+      if(!failed.length && typeof window.ckReasonClose === 'function') window.ckReasonClose();
+      if(typeof window.ckAfter === 'function') window.ckAfter('pier');
+      try{ if(typeof window.bookingV2Render === 'function' && document.querySelector('#view-booking.active')) window.bookingV2Render(); }catch(_){}
+      return null;
+    });
+  }
+  function turnBackStored(b, d, res){
+    var op = opsBlock(b, d), tb = res && res.trip && res.trip.operations && res.trip.operations.turn_back;
+    var mapped = O.bookings && O.bookings.turnBackFrom ? O.bookings.turnBackFrom(tb) : null;
+    if(mapped) op.turnBack = mapped; else delete op.turnBack;
+  }
+  wrap('tbBoatSave', function(orig){
+    var st = window._tbB || {};
+    if(!st.bid) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    var g = function(id){ var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    var pct = g('tbb-pct');
+    if(st.money === 'refund' && !pct){ alert('Enter the refund %.'); return null; }
+    var pick = {}; document.querySelectorAll('#ck-reason-host .tb-bk').forEach(function(cb){ if(cb.checked) pick[cb.value] = 1; });
+    if(!Object.keys(pick).length){ alert('Tick at least one booking.'); return null; }
+    var note = g('tbb-note') || null, mnote = g('tbb-mnote') || null, jobs = [], missing = 0;
+    window.tbBoatRows(st.bid, st.date).forEach(function(x){
+      var b = x.b, cur = x.tb, d = typeof bkOpsDate === 'function' ? bkOpsDate(b, st.date) : st.date, t = tripOnDate(b, d);
+      if(!pick[b.id] && !cur) return;
+      if(!t){ missing++; return; }
+      var url = '/operations/trip-ops/' + enc(t.opsTripId) + '/turn-back', done = function(res){ turnBackStored(b, d, res); };
+      if(!pick[b.id]){ jobs.push({ b: b, after: done, run: function(){ return O.call('DELETE', url); } }); return; }
+      var m = cur && cur.money, keep = st.money === 'pending' && m && m.kind && m.kind !== 'pending';
+      var money = keep ? { kind: m.kind, pct: m.pct == null ? null : m.pct, amt: m.amt == null ? null : m.amt, note: m.note || null }
+        : { kind: st.money || 'pending', pct: st.money === 'refund' ? +pct : null, amt: null, note: mnote };
+      jobs.push({ b: b, after: done, run: function(){ return O.call('PUT', url, { reason: st.reason || 'other', note: note, money: money }); } });
+    });
+    if(missing && !jobs.length){ alert('These bookings have no operation-backend trip on this day: save them first'); return null; }
+    return boatTurnBacks(st, jobs, 'Turn-back not saved');
+  });
+  wrap('tbBoatRemove', function(orig){
+    var st = window._tbB || {};
+    if(!st.bid) return typeof window.ckReasonClose === 'function' ? window.ckReasonClose() : null;
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    if(!confirm('Remove the turn-back record from every booking on this boat?')) return null;
+    var jobs = [];
+    window.tbBoatRows(st.bid, st.date).forEach(function(x){
+      if(!x.tb) return;
+      var b = x.b, d = typeof bkOpsDate === 'function' ? bkOpsDate(b, st.date) : st.date, t = tripOnDate(b, d);
+      if(!t) return;
+      jobs.push({ b: b, after: function(res){ turnBackStored(b, d, res); }, run: function(){ return O.call('DELETE', '/operations/trip-ops/' + enc(t.opsTripId) + '/turn-back'); } });
+    });
+    return boatTurnBacks(st, jobs, 'Turn-back not removed');
+  });
+
+  // §paAdd (lk-inbox 62b099bd) · paAddSave / paAddUndo / paAddBillDone (08-app.js): people added at the pier. Legacy changes the booking's pax, names,
+  // van part, check-in and pier extra in the browser. The server does all of that in one write (operation-backend pier-adds.ts) and answers the booking,
+  // so nothing here changes local state first; the dialog stays open on a refusal. The walk-in path is an ordinary new booking (40-ops-bookings.js).
+  function pierAddDone(b, res){
+    applyBookingResponse(b, res && res.booking);
+    O.wrote('booking');
+    if(typeof window.ckReasonClose === 'function') window.ckReasonClose();
+    return loadTourSalesForBooking(b.id).catch(function(){ return []; }).then(function(){
+      if(typeof window.ckAfter === 'function') window.ckAfter('pier');
+      return res;
+    });
+  }
+  function pierAddTrip(b, date){
+    var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date, t = tripOnDate(b, d);
+    if(!t) alert('This booking has no operation-backend trip on ' + d + ': save the booking first');
+    return t;
+  }
+  wrap('paAddSave', function(orig){
+    var S = window._pa; if(!S) return null;
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    var keys = ['ad', 'chd', 'inf', 'foc'], tot = 0; keys.forEach(function(k){ tot += +S.n[k] || 0; });
+    if(!tot){ alert('Add at least one person.'); return null; }
+    var cap = typeof window.boatCapFor === 'function' ? window.boatCapFor(S.bid, S.date) : 0;
+    if(cap > 0 && typeof window.paBoatOcc === 'function' && window.paBoatOcc(S.bid, S.date) + tot > cap){ alert('Over the boat capacity - move a booking to another boat first.'); return null; }
+    if(S.walk) return window.paAddWalkOpen();
+    var b = findBooking(S.bk); if(!b){ alert('Pick a booking first.'); return null; }
+    var priceEdited = S.pay !== 'foc' && (S.price.ad !== S.priceDef.ad || S.price.chd !== S.priceDef.chd);
+    var mayMoney = typeof window.paMoneyCan !== 'function' || window.paMoneyCan();
+    if((S.pay === 'foc' || priceEdited) && !mayMoney){ alert('Only users with accounting edit rights can change the price or give FOC.'); return null; }
+    var reason = String(S.reason || '').trim();
+    if((S.pay === 'foc' || priceEdited) && !reason){ alert('Please enter the reason.'); return null; }
+    var money = S.pay === 'foc' ? 0 : (+S.n.ad || 0) * (+S.price.ad || 0) + (+S.n.chd || 0) * (+S.price.chd || 0);
+    if(S.pay !== 'foc' && (+S.n.ad || 0) + (+S.n.chd || 0) > 0 && !(money > 0)){ alert('Enter the price per person (or choose FOC).'); return null; }
+    var t = pierAddTrip(b, S.date); if(!t) return null;
+    var add = {}; keys.forEach(function(k){ add[k] = +S.n[k] || 0; });
+    var body = { add: add, nat: S.nat, names: (S.names || []).slice(0, tot).map(function(v){ return String(v || '').trim(); }), pay: S.pay, unit: { ad: +S.price.ad || 0, chd: +S.price.chd || 0 },
+      reason: reason || null, price_edited: priceEdited, boat_id: S.bid };
+    if(S.pay === 'pier') body.method = S.method;
+    return O.queue(function(){ return O.call('POST', '/operations/trip-ops/' + enc(t.opsTripId) + '/pier-adds', body); })
+      .then(function(res){ return pierAddDone(b, res); }, function(e){ O.fail('Addition not saved', e); return null; });
+  });
+  wrap('paAddUndo', function(orig, bkId, date, i){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return null;
+    var b = findBooking(bkId); if(!b) return null;
+    var list = typeof window.paAddsOf === 'function' ? window.paAddsOf(b, date) : [], x = list[i];
+    if(!x || x.undone) return null;
+    if(!confirm('Undo this on-site addition? The added people, names and the pier payment of this entry will be removed.')) return null;
+    var t = pierAddTrip(b, date); if(!t) return null;
+    return O.queue(function(){ return O.call('DELETE', '/operations/trip-ops/' + enc(t.opsTripId) + '/pier-adds/' + enc(x.id)); })
+      .then(function(res){ return pierAddDone(b, res); }, function(e){ O.fail('Addition not undone', e); return null; });
+  });
+  wrap('paAddBillDone', function(orig, bkId, date, recId){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('accounting')) return null;
+    var b = findBooking(bkId); if(!b) return null;
+    var t = pierAddTrip(b, date); if(!t) return null;
+    return O.queue(function(){ return O.call('POST', '/operations/trip-ops/' + enc(t.opsTripId) + '/pier-adds/' + enc(recId) + '/bill-done', {}); })
+      .then(function(res){
+        applyBookingResponse(b, res && res.booking);
+        O.wrote('booking');
+        if(typeof window.tsAfter === 'function') window.tsAfter(); else if(typeof window.renderTravelSum === 'function') window.renderTravelSum();
+        return res;
+      }, function(e){ O.fail('Bill not updated', e); return null; });
   });
 
   // ckStrandClear (08-app.js): "ล้างรายการค้าง" / "ล้างการจัดรถ/เรือ" on a struck-through row. Server first; the dialogs are legacy's.

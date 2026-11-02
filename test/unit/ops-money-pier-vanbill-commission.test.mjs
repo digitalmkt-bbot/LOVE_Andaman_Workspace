@@ -421,7 +421,7 @@ test('commissions: lists items and totals, pays out only the picked payable ones
   const html = rt.hosts['commissions-host'].innerHTML;
   assert.match(html, /unpaid ฿400/);
   assert.equal((html.match(/type="checkbox"/g) || []).length, 1, 'only the collected, unpaid item can be picked');
-  assert.match(rt.requests[0].path, /^\/v1\/commissions\?from=2026-10-01&to=/);
+  assert.match(rt.requests[0].path, /^\/v1\/commissions\?from=\d{4}-\d{2}-01&to=/);
   rt.ctx.laOpsCommissions.pick('tour_sale|lg_1|ts1', true);
   rt.ctx.laOpsCommissions.pick('tour_sale|lg_1|ts2', true);   // not payable: ignored
   rt.ctx.laOpsCommissions.payOut(); await rt.settle();

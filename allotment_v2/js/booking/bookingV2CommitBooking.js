@@ -716,6 +716,11 @@ function bookingV2CommitBooking(status){
   if(d._boatLockId && typeof bookingV2BoatLockOnConvert==='function'){
     try{ bookingV2BoatLockOnConvert(d._boatLockId, newBk); }catch(e){ console.warn('boat lock convert failed', e); }
   }
+  /* §paAdd · ใบ walk-in ที่เปิดจากปุ่ม "เพิ่มคนหน้างาน" · จัดลงเรือลำที่กดมาให้เลย */
+  if(d._pierBoat && newBk.trips && newBk.trips[0]){
+    try{ var _pO=bkOpsFor(newBk, newBk.trips[0].date); _pO.boatId=d._pierBoat;
+         if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(newBk,'pier','＋ เพิ่มหน้างาน (walk-in) · จัดลงเรือจากหน้าเช็คอินหน้าท่า','Add pax'); }catch(e){ console.warn('pier walk-in boat assign failed', e); }
+  }
   if(typeof TRIPS !== 'undefined' && status !== 'quote'){
     newBk.trips.forEach(t => {
       if(t.bookingMode !== 'charter' || !t.charterBoatId) return;

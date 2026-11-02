@@ -1281,7 +1281,7 @@
     settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
-    {v:'dashboard',t:'Dashboard',a:'overview'},{v:'execboard',t:'Executive Board',a:'overview'},{v:'actionboard',t:'Action Board',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
+    {v:'dashboard',t:'Dashboard',a:'overview'},{v:'execboard',t:'Executive Board',a:'overview'},{v:'actionboard',t:'Action Board',a:'overview'},{v:'guestins',t:'Guest Insights',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
     /* §สิทธิ์ · reconfirm กับ bookingflow ไม่เคยอยู่ใน LA_NAV เลย และ laAllowed() ปล่อยผ่านเมนูที่ไม่รู้จัก
        (return managed?false:true) → 2 หน้านี้เปิดให้ "ทุกคน" มาตลอด แม้ผู้ใช้จะไม่ได้ติ๊กพื้นที่ปฏิบัติการไว้
        ใส่เข้ากลุ่ม operations · เรียงตามลำดับในเมนูจริง (Booking → Re-confirm → Booking Flow → ตรวจเอกสาร) */

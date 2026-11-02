@@ -15,6 +15,7 @@
    PUT    /v1/pier-office/{pier}/roster/{date}/{staff}              a hand-set cell, a plan, the night code
    GET    /v1/pier-office/{pier}/pay?cycle=                         the trip allowance (paPayOf answers from it)
    PUT    /v1/pier-office/staff/{id}/pay-rate · GET|PUT /v1/pier-office/pay-rules
+   GET|PUT /v1/pier-office/pay-config                               §paRateRt, §paDept: PIER_CFG.payRateRt and payNoDept, both whole
    GET    /v1/pier-office/{pier}/stock                              balances (poBal answers from them), transfers in transit (poXferPendIn/Out)
    POST   /v1/pier-office/{pier}/transfers | /transfers/receive | /transfers/{id}/cancel   §poXfer: send, receive, cancel (server first)
    POST   /v1/pier-office/{pier}/stock/{receive|count|adjust|laundry-out|laundry-in|mark-fixed|write-off}
@@ -407,7 +408,15 @@
   });
 
   /* ════ pay · PIER_CFG.payRate / payRules ══════════════════════════════ */
-  var pay = { rate: {}, rules: null, ruleSrv: null, ready: false }, lastPay = null;
+  var pay = { rate: {}, rules: null, ruleSrv: null, config: null, ready: false }, lastPay = null;
+  /* §paRateRt, §paDept · the two settings as the server holds them, compared with sorted keys */
+  function configNorm(v){
+    if(v === null || typeof v !== 'object') return v;
+    var o = {}; Object.keys(v).sort().forEach(function(k){ o[k] = configNorm(v[k]); });
+    return o;
+  }
+  function configNow(){ var c = cfg(); return { route_rates: c.payRateRt || {}, no_dept: c.payNoDept || {} }; }
+  function configDirty(){ return !!pay.config && !same(configNorm(configNow()), configNorm(pay.config)); }
   function cycleKey(date){
     var cs = parseInt(cfg().cycleStart, 10); if(!(cs >= 1 && cs <= 28)) cs = 26;
     var p = String(date).split('-'), y = +p[0], m = +p[1], d = +p[2];
@@ -440,7 +449,7 @@
       var m = c.payWsMin || {};
       if(num(m.cap) !== setBase.pay_ws_min_cap || num(m.crew) !== setBase.pay_ws_min_crew) dirty = true;
     }
-    return dirty;
+    return dirty || configDirty();
   }
   P.register({
     name: 'pay', order: 95,
@@ -464,12 +473,18 @@
           return O.call('PUT', '/v1/pier-office/pay-rules', { rules: rules }).then(function(a){ pay.rules = rulesMap(a.rules); });
         } });
       }
+      if(configDirty()){
+        jobs.push({ phase: 2, label: 'pay by route and department', run: function(){
+          return O.call('PUT', '/v1/pier-office/pay-config', clone(configNow())).then(function(a){ pay.config = { route_rates: a.route_rates || {}, no_dept: a.no_dept || {} }; });
+        } });
+      }
       return jobs;
     },
     restore: function(){
       if(!pay.ready) return;
       var c = cfg(); c.payRate = clone(pay.rate) || {};
       if(pay.rules && c.payRules && Object.keys(c.payRules).length) c.payRules = clone(pay.rules);
+      if(pay.config){ c.payRateRt = clone(pay.config.route_rates); c.payNoDept = clone(pay.config.no_dept); }
     },
     commit: function(){}
   });
@@ -488,6 +503,10 @@
     var piers = ['tublamu', 'panwa', 'ranong'].map(function(p){
       return O.get('/v1/pier-office/' + p + '/pay', { cycle: cyc }).then(applyPay);
     });
+    piers.push(O.get('/v1/pier-office/pay-config').then(function(a){
+      pay.config = { route_rates: a.route_rates || {}, no_dept: a.no_dept || {} };
+      cfg().payRateRt = clone(pay.config.route_rates); cfg().payNoDept = clone(pay.config.no_dept);
+    }, function(){ pay.config = null; }));   // these two are extras on the pay screen: without them it still works, and nothing here is written
     // pay is for pier editors only: a 403 here is the normal answer for anyone else, and means no pay writes
     return Promise.all([rules].concat(piers)).then(function(){ pay.ready = true; }, function(){ pay.ready = false; });
   });
@@ -495,15 +514,19 @@
     if(ready() && lastPay && fresh[lastPay.key] && lastPay.pier === window._poPier && lastPay.cycle === cycleKey(window._paDate) && !payDirty()){
       var p = lastPay.by[sid];
       if(p){
+        var nc = typeof window.paNightCode === 'function' ? window.paNightCode() : '';
         var parts = (p.parts || []).map(function(x){
           var w = x.ws, note = '';
           if(w){
             note = [w.cap ? 'cap ' + w.cap : '', w.crew ? 'crew ' + w.crew : '', (w.cap || w.crew) && w.staff ? 'staff ' + w.staff : ''].filter(Boolean).join(' · ');
           }
+          if(x.route_rate != null) note += (note ? ' · ' : '') + 'เรต ' + x.code + ' ' + x.route_rate;
           return { code: x.code, days: x.days, amt: x.amount, note: note };
         });
-        var total = p.total != null ? p.total : parts.reduce(function(s, x){ return s + x.amt; }, 0);
-        return { total: total, parts: parts, missing: !!p.missing, rate: p.rate };
+        /* §paNightPay · night pay has its own column: the server's total includes it, legacy's total does not */
+        var night = parts.reduce(function(s, x){ return x.code === nc ? s + x.amt : s; }, 0);
+        var total = (p.total != null ? p.total : parts.reduce(function(s, x){ return s + x.amt; }, 0)) - night;
+        return { total: total, night: night, parts: parts, missing: !!p.missing, rate: p.rate, off: !!p.off };
       }
     }
     return L.paPayOf.apply(this, arguments);
