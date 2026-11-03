@@ -41886,30 +41886,96 @@ function _bkVaDesc(A, B){
   if(a.r!==b.r){ parts.push('ขากลับ '+_bkVaNm(a.r)+' → '+_bkVaNm(b.r)); if(!parts[1] && parts.length===1) verb=(!a.r)?'จัดรถขากลับ':((!b.r)?'ถอดรถขากลับ':'เปลี่ยนรถขากลับ'); }
   return parts.length ? (verb+' · '+parts.join(' · ')) : null;
 }
+/* ══ §vanGuard (2026-11-03) · กันรถหายจากใบที่รถไปรับแล้ว ═══════════════════════════════
+   7678 / GYG2Q88XBVYH: รถไปรับแล้ว (มีเช็คอินรถ) แต่ต่อมาชื่อรถหายจากใบ → ยอดวางบิลรถผิด และหน้า By trip ขึ้น "ยังไม่จัดรถ"
+   ใบที่ (1) มีผลเช็คอินรถ/หน้าท่าของวันนั้นแล้ว หรือ (2) วันเดินทางผ่านไปแล้ว
+   ถ้ารถขาไปจะถูกถอดหรือเปลี่ยน · ต้องพิมพ์เหตุผล · กดยกเลิก = คืนรถเดิมให้ก่อนบันทึก
+   ดักที่จุดเดียวกับ §vanLog (laBlobSave) ทุกปุ่มที่ถอด/ย้ายรถจึงโดนกันหมด ไม่ต้องไล่ทีละปุ่ม
+   ขากลับไม่กัน · หน้างานเปลี่ยนรถขากลับหลังเช็คอินเป็นเรื่องปกติ (เช่น ลูกค้าไปอีกเส้นทาง กลับอีกคัน) */
+var _bkVaRaw=(typeof WeakMap==='function')?new WeakMap():null;
+var _BKVA_F=['vanId','vanGroup','vanSeq','vanReturnId','returnSameVan','vanSplits'];
+function _bkVaRawDays(b, days){
+  var out={};
+  Object.keys(days||{}).forEach(function(dt){
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(b,dt):(b.ops||{}), r={};
+    _BKVA_F.forEach(function(k){ if(o[k]!==undefined) r[k]=(k==='vanSplits')?JSON.parse(JSON.stringify(o[k])):o[k]; });
+    out[dt]=r;
+  });
+  return out;
+}
+function _bkVaToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* ใบนี้วันนี้ "รถไปทำงานแล้ว" หรือยัง */
+function _bkVaDone(b, dt){
+  if(dt < _bkVaToday()) return 'past date';
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,dt):(b.ops||{});
+  var c=o.vanCheckin||{}, p=o.pierCheckin||{};
+  if(c.flow || c.at || +c.noShow>0 || (Array.isArray(c.events)&&c.events.length)) return 'van checked in';
+  if(p.at || p.actualPax!=null) return 'pier checked in';
+  return '';
+}
+function _bkVaOutVans(sig){ var a=JSON.parse(sig||'{}'), v=[];
+  if(a.s) a.s.forEach(function(x){ if(x.v) v.push(x.v); }); else if(a.v) v.push(a.v);
+  return v.sort().join(','); }
+/* รถขาไปที่เคยมี หายหรือถูกเปลี่ยนไหม (เพิ่มรถให้ใบที่ไม่เคยมี = ไม่กัน) */
+function _bkVaLost(A, B){ var a=_bkVaOutVans(A), b=_bkVaOutVans(B); return !!a && a!==b; }
+function _bkVaRevert(b, dt, raw){
+  var o=(typeof bkOpsFor==='function')?bkOpsFor(b,dt):(b.ops=b.ops||{});
+  _BKVA_F.forEach(function(k){ if(raw && raw[k]!==undefined) o[k]=(k==='vanSplits')?JSON.parse(JSON.stringify(raw[k])):raw[k]; else delete o[k]; });
+}
 function bkVanAuditSeed(){
   if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return;
   var from=_bkVaFrom();
   SB_BOOKINGS.forEach(function(b){ if(!b || _bkVaMemo.has(b)) return;
-    var d=_bkVaDays(b, from); if(d) _bkVaMemo.set(b, d); });
+    var d=_bkVaDays(b, from); if(d){ _bkVaMemo.set(b, d); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, d)); } });
 }
+var _bkVaBusy=false;
 function bkVanAuditScan(){
   if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
-  var from=_bkVaFrom(), n=0;
+  if(_bkVaBusy) return 0;
+  var from=_bkVaFrom(), n=0, chg=[];
   SB_BOOKINGS.forEach(function(b){
     if(!b) return;
     var now=_bkVaDays(b, from);
     var old=_bkVaMemo.get(b);
-    if(!old){ if(now) _bkVaMemo.set(b, now); return; }   // object ใหม่ที่ยังไม่เคยเห็น = จุดตั้งต้น
-    if(!now){ _bkVaMemo.delete(b); return; }
+    if(!old){ if(now){ _bkVaMemo.set(b, now); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, now)); } return; }   // object ใหม่ที่ยังไม่เคยเห็น = จุดตั้งต้น
+    if(!now){ _bkVaMemo.delete(b); if(_bkVaRaw) _bkVaRaw.delete(b); return; }
     Object.keys(now).forEach(function(dt){
       if(!(dt in old) || old[dt]===now[dt]) return;      // วันเพิ่งเพิ่ม (แก้วันเดินทาง) มีบันทึกของมันเองอยู่แล้ว
       var txt=_bkVaDesc(old[dt], now[dt]); if(!txt) return;
-      bkV2AddHistory(b, 'van', '🚐 '+txt+' · '+_bkVaDay(dt), 'Van'); n++;
+      var why=_bkVaLost(old[dt], now[dt]) ? _bkVaDone(b, dt) : '';
+      chg.push({b:b, dt:dt, txt:txt, why:why, old:old[dt]});
     });
-    _bkVaMemo.set(b, now);
   });
+  /* §vanGuard · ใบที่รถไปทำงานแล้ว ถามเหตุผลครั้งเดียวต่อการกดหนึ่งครั้ง (ล้างทั้งโปรแกรมก็ถามครั้งเดียว) */
+  var guard=chg.filter(function(c){ return c.why; }), reason='';
+  if(guard.length){
+    var lines=guard.slice(0,12).map(function(c){ return '- '+(c.b.voucherRef||c.b.code||c.b.id)+' · '+_bkVaDay(c.dt)+' · '+c.why+' · '
+      +_bkVaOutVansNm(c.old)+' -> '+_bkVaOutVansNm(JSON.stringify(_bkVaSig((typeof bkOpsRead==='function')?bkOpsRead(c.b,c.dt):(c.b.ops||{})))); });
+    if(guard.length>12) lines.push('... and '+(guard.length-12)+' more');
+    var r=null;
+    _bkVaBusy=true;
+    try{ r=(typeof prompt==='function')?prompt('These bookings were already picked up by van (or the trip date has passed).\n'
+      +'Removing or changing their outbound van changes the van bill and the pickup record.\n\n'+lines.join('\n')
+      +'\n\nType the reason to continue, or press Cancel to keep the van.',''):null; }catch(_){ r=null; }
+    _bkVaBusy=false;
+    reason=String(r||'').trim();
+    if(!reason){
+      var raws=_bkVaRaw;
+      guard.forEach(function(c){ _bkVaRevert(c.b, c.dt, raws&&raws.get(c.b)&&raws.get(c.b)[c.dt]); });
+      chg=chg.filter(function(c){ return !c.why; });
+      try{ if(typeof toast==='function') toast('Van kept on '+guard.length+' booking(s)'); }catch(_){}
+    }
+  }
+  chg.forEach(function(c){
+    bkV2AddHistory(c.b, 'van', '🚐 '+c.txt+' · '+_bkVaDay(c.dt)+(c.why?(' · ⚠ '+({'past date':'เลยวันเดินทางแล้ว','van checked in':'หลังเช็คอินรถแล้ว','pier checked in':'หลังเช็คอินหน้าท่าแล้ว'}[c.why]||c.why)+' · เหตุผล: '+reason):''), 'Van'); n++;
+  });
+  /* จำสภาพใหม่ (ใบที่คืนรถแล้วจะได้ค่าเดิมกลับมา) */
+  SB_BOOKINGS.forEach(function(b){ if(!b || !_bkVaMemo.has(b)) return;
+    var now=_bkVaDays(b, from); if(!now) return;
+    if(JSON.stringify(now)!==JSON.stringify(_bkVaMemo.get(b))){ _bkVaMemo.set(b, now); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, now)); } });
   return n;
 }
+function _bkVaOutVansNm(sig){ var v=_bkVaOutVans(sig); return v ? v.split(',').map(function(x){ var n=_bkVaNm(x); return String(n).split(' · ')[0]; }).join('+') : '(none)'; }
 setTimeout(function(){ try{ bkVanAuditSeed(); }catch(_){} }, 0);
 // Tag → [bg,fg] chip colors for the booking history timeline
 function bkV2HistTagColor(tag){
