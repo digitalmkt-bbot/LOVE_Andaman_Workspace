@@ -11688,7 +11688,7 @@ function _ckLegacySeed(L){
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
 var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate','selfAdd',
-                   'flow','flowAt','flowBy','flowNote'];   /* §vckFlow · สถานะรายแถวก็ต้องไม่หายตอนกด +/- */   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
+                   'flow','flowAt','flowBy','flowNote','lineSent'];   /* §vckLine · ประวัติส่งไลน์ตามเอเจนต์ */   /* §vckFlow · สถานะรายแถวก็ต้องไม่หายตอนกด +/- */   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
   var sl=_ckSlot(kind);
@@ -13125,6 +13125,27 @@ function ckSharedCSS(scope){
   +scope+' .vck-nt{font-size:11px;font-weight:700;line-height:1.35;white-space:normal;'
     +'display:inline-block;max-width:230px;color:#5F5E5A}'
   +scope+' .vck-rsn{margin-top:3px}'
+  /* §vckLine */
+  +scope+' .vck-ln{margin-left:6px;border:1px solid #06C755;background:#06C755;color:#fff;border-radius:7px;padding:2px 7px;font:800 10px inherit;font-family:inherit;cursor:pointer;white-space:nowrap;vertical-align:top}'
+  +scope+' .vck-ln:hover{background:#05b24c}'
+  +scope+' .vck-ln.q{background:#fff;color:#06C755}'+scope+' .vck-ln.q:hover{background:#E9FBF0}'
+  +scope+' .vck-lnsent{color:#06C755;font-weight:800;white-space:nowrap}'
+  +'.vck-lndlg{width:min(560px,96vw)}'
+  +'.vck-lndlg .vck-lnico{width:28px;height:28px;border-radius:8px;background:#06C755;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}'
+  +'.vck-lndlg .vck-lntabs{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden;flex:none;align-self:center}'
+  +'.vck-lndlg .vck-lntabs button{border:0;background:#fff;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+  +'.vck-lndlg .vck-lntabs button+button{border-left:1px solid #EFECE4}'
+  +'.vck-lndlg .vck-lntabs button.on{background:#15201a;color:#fff}'
+  +'.vck-lndlg .vck-lnta{width:100%;box-sizing:border-box;border:1px solid #DCE3EC;border-radius:10px;padding:10px 12px;font:12.5px/1.6 inherit;font-family:inherit;color:#1F2430;background:#FAFBFC;resize:vertical}'
+  +'.vck-lndlg .vck-lnta.mono{font-family:\'DM Mono\',monospace;font-size:11.5px}'
+  +'.vck-lndlg .vck-lnvars{display:flex;flex-wrap:wrap;gap:4px}'
+  +'.vck-lndlg .vck-lnvars button{border:1px solid #DCE3EC;background:#fff;border-radius:6px;padding:2px 7px;font:700 10px \'DM Mono\',monospace;color:#185FA5;cursor:pointer}'
+  +'.vck-lndlg .vck-lnex{width:100%;box-sizing:border-box;margin-bottom:5px}'
+  +'.vck-lndlg .vck-lnex-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:8px}'
+  +'.vck-lndlg .vck-lnex-row .k{font-size:10px;font-weight:800;color:#64748B}'
+  +'.vck-lndlg .vck-lnex-row button{border:1px solid #DCE3EC;background:#fff;border-radius:999px;padding:2px 9px;font:700 10px inherit;font-family:inherit;color:#475569;cursor:pointer}'
+  +'.vck-lndlg .ck-df .k.vck-lncopy{background:#06C755;border-color:#06C755}'
+  +'.vck-lndlg .vck-lnclr{border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:999px;padding:1px 8px;font:700 9.5px inherit;font-family:inherit;cursor:pointer;margin-left:4px;vertical-align:1px}'
   /* แถบสี · กดเปลี่ยนสีได้ */
   +scope+' .vck-lgbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;'
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
@@ -13204,6 +13225,9 @@ function ckSharedCSS(scope){
   +scope+' table.ck-tbl th{text-align:left;font-size:9px;font-weight:700;color:#a5a49d;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border,#E7E4DC);white-space:nowrap;position:sticky;top:var(--ck-th-top,0px);z-index:35;background:#fff;box-shadow:inset 0 -1px 0 var(--border,#E7E4DC)}'
   /* หัวรถ/หัวเรือตรึงใต้หัวคอลัมน์ · แถวข้อมูลอยู่ layer ต่ำกว่า วาดทับไม่ได้ */
   +scope+' table.ck-tbl tr.ck-ghd>td{position:sticky;top:var(--ck-grp-top,26px);z-index:30}'
+  /* §ckJumpHit · แถวที่เด้งไปหา · ส้มอำพันตัดกับเขียว/ฟ้าของหัวคัน · กะพริบแล้วค้างไว้ให้หาเจอ */
+  +'@keyframes ckJumpPulse{0%,100%{box-shadow:inset 0 0 0 3px #F59E0B,inset 0 0 0 999px rgba(245,158,11,.22)}50%{box-shadow:inset 0 0 0 5px #D97706,inset 0 0 0 999px rgba(245,158,11,.38)}}'
+  +scope+' table.ck-tbl tr.ck-jumphit>td{box-shadow:inset 0 0 0 3px #F59E0B,inset 0 0 0 999px rgba(245,158,11,.22) !important;animation:ckJumpPulse .7s ease-in-out 3}'
   +scope+' table.ck-tbl tr.ck-row>td,'+scope+' table.ck-tbl tr.ck-zhead>td,'+scope+' table.ck-tbl tr.ck-warn>td{position:relative;z-index:0}'
   +scope+' table.ck-tbl tr.ck-ghd>td{box-shadow:0 2px 5px -3px rgba(15,23,42,.35)}'
   +scope+' table.ck-tbl td{padding:13px 8px;border-bottom:1px solid #F4F2ED;vertical-align:middle;white-space:nowrap}'
@@ -13326,12 +13350,11 @@ function ckDayHeader(o){
 // แถบการ์ดโปรแกรม/ทริป (เหมือน By-trip) · famFilter/routeFilter + ชื่อฟังก์ชันกรองส่งเข้ามา
 // การ์ดโปรแกรม/ทริป · ตัวเลขบนการ์ด = "รับลูกค้า" แยกโซน PK / KL / มาเอง และสะท้อนผลเช็คอินจริง
 // (done/tot = pax ที่เช็คอินแล้ว / pax ทั้งหมดของโซนนั้นในทริปนั้น) · kind = 'van' | 'pier'
-function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
-  var e=ckEsc;
+/* §vckHead · ตัวนับของการ์ดโปรแกรม แยกออกมาจาก ckRoutePills ให้หัวเช็คอินรถใช้ร่วม
+   ตัวเลขทุกตัว = เดินทางจริง (หัก No-show/CXL) · rst[routeId] = PK/KL/OWN {tot,done,bk} */
+function ckRouteStats(date, kind){
   kind=kind||'van';
   var P=function(pax,k){ return (typeof bookingV2PaxTot==='function')?bookingV2PaxTot(pax||{},k):0; };
-  var ABBR={speedboat:'SB',catamaran:'CAT',sunset:'SS',premium:'PREM',longtail:'LT',private:'PRIV',early:'EARLY',whale:'WS'};
-  var abbr=function(s){ var k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(var w in ABBR){ if(k.indexOf(w)>=0) return ABBR[w]; } var ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(function(x){return x[0]||'';}).join(''):String(s).slice(0,4)).toUpperCase(); };
   var fam={}, rst={}, dA=0,dC=0,dI=0,dF=0;
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
@@ -13380,6 +13403,26 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
     var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(rr.id):null; if(!f) return;
     var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,booked:0,rids:{},locked:0}; a.locked+=lk; a.rids[rr.id]=1;
   });
+  var _lostAll=0;
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    if(!ckTripOn(b,date)) return;
+    var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null; _lostAll+=((L&&L.total)||0);
+  });
+  /* §w5cPills · pier page, ops mode: the heads that arrived / cleared / boarded, the zone boxes and the money still to collect are
+     GET /v1/pier-checkin programmes[] (the booked heads and the booking counts of the hover texts stay what the walk above found) */
+  if(kind==='pier' && !_pckLand && typeof window.laOpsPierProg==='function'){ try{ window.laOpsPierProg(date, fam, rst); }catch(_e){} }
+  /* §w6cPills · Van Check-in page, ops mode: the same pills from GET /v1/van-checkin programmes[] (pax, booked heads per zone, ticked heads) */
+  if(kind==='van' && typeof window.laOpsVanProg==='function'){ try{ window.laOpsVanProg(date, fam, rst); }catch(_e){} }
+  return {fam:fam, rst:rst, dA:dA, dC:dC, dI:dI, dF:dF, lostAll:_lostAll};
+}
+function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
+  var e=ckEsc;
+  kind=kind||'van';
+  var P=function(pax,k){ return (typeof bookingV2PaxTot==='function')?bookingV2PaxTot(pax||{},k):0; };
+  var ABBR={speedboat:'SB',catamaran:'CAT',sunset:'SS',premium:'PREM',longtail:'LT',private:'PRIV',early:'EARLY',whale:'WS'};
+  var abbr=function(s){ var k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(var w in ABBR){ if(k.indexOf(w)>=0) return ABBR[w]; } var ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(function(x){return x[0]||'';}).join(''):String(s).slice(0,4)).toUpperCase(); };
+  var _S=ckRouteStats(date,kind), fam=_S.fam, rst=_S.rst, dA=_S.dA, dC=_S.dC, dI=_S.dI, dF=_S.dF;
   // บล็อกตัวเลขต่อโซน · เขียว = ครบ · เหลือง = ยังไม่ครบ · เทา = ยังไม่เริ่ม · ม่วง = มาเอง (ไม่มีรถรับ)
   var zoneBlock=function(lbl, o, isOwn){
     if(!o || o.tot<=0) return '';
@@ -13393,17 +13436,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
     return '<span title="'+e(lbl)+' · '+(isOwn?('มาเอง '+o.tot+' pax · ไม่มีรถรับ'):('เช็คอินแล้ว '+o.done+' จาก '+o.tot+' pax'))+'" style="display:inline-flex;flex-direction:column;align-items:center;line-height:1;background:'+C.bg+';border-radius:9px;padding:4px 10px"><span style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C.num+'">'+val+'</span><span style="font-size:9px;font-weight:700;color:'+C.lab+';margin-top:2px">'+e(lbl)+(lostHere>0?(' <s style="opacity:.65">'+(o.bk||0)+'</s>'):'')+'</span></span>';
   };
   // §check-in · ยอดรวมทั้งวันต้องเป็น "เดินทางจริง" · เก็บยอดจองเดิมไว้เทียบ
-  var _lostAll=0;
-  (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
-    if(!ckTripOn(b,date)) return;
-    var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null; _lostAll+=((L&&L.total)||0);
-  });
-  /* §w5cPills · pier page, ops mode: the heads that arrived / cleared / boarded, the zone boxes and the money still to collect are
-     GET /v1/pier-checkin programmes[] (the booked heads and the booking counts of the hover texts stay what the walk above found) */
-  if(kind==='pier' && !_pckLand && typeof window.laOpsPierProg==='function'){ try{ window.laOpsPierProg(date, fam, rst); }catch(_e){} }
-  /* §w6cPills · Van Check-in page, ops mode: the same pills from GET /v1/van-checkin programmes[] (pax, booked heads per zone, ticked heads) */
-  if(kind==='van' && typeof window.laOpsVanProg==='function'){ try{ window.laOpsVanProg(date, fam, rst); }catch(_e){} }
+  var _lostAll=_S.lostAll;
   var list=Object.keys(fam).map(function(k){ return fam[k]; }).sort(function(a,b){ return b.pax-a.pax||(b.locked-a.locked); });
   var none=(!famSel && !routeSel);
   var html=(list.length>1?'<button onclick="'+famFn+'(null)" title="แสดงทุกโปรแกรม" style="font-size:12px;border:1px solid '+(none?'#185FA5':'#E7E4DC')+';background:'+(none?'#E6F1FB':'#fff')+';color:'+(none?'#0C447C':'#5F5E5A')+';border-radius:999px;padding:6px 13px;font-weight:'+(none?'700':'600')+';white-space:nowrap;cursor:pointer;font-family:inherit">ทั้งหมด <span style="font-family:\'DM Mono\',monospace">'+(dA+dC+dI+dF)+'</span></button>':'');
@@ -13469,17 +13502,43 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
 // เด้งไปที่แถวหัวรถ/หัวเรือที่กด · เลื่อนให้พ้นหัวตารางที่ตรึงไว้ แล้วไฮไลต์สั้นๆ
 function ckJump(id){
   var el=document.getElementById(id); if(!el) return;
-  var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
-  try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
-  var prev=el.style.boxShadow;
-  el.style.transition='box-shadow .18s'; el.style.boxShadow='inset 0 0 0 2px #0F6E56';
-  setTimeout(function(){ el.style.boxShadow=prev||''; }, 1500);
+  /* §ckJumpBox (2026-11-02) · เจ้าของ: "กดชิปรถแล้วเด้งไปที่ตารางนั้น ตอนนี้ไม่ไป"
+     ตารางของทั้งสองหน้าเลื่อนอยู่ในกล่องของตัวเอง (.vck-tw / .pcs-tw · §vckStay) ไม่ใช่หน้าเว็บ
+     window.scrollTo จึงไม่ขยับอะไร · หา ancestor ที่เลื่อนได้แล้วเลื่อนกล่องนั้นแทน
+     เผื่อหัวตารางที่ตรึงในกล่อง (thead) ไว้ด้วย ไม่งั้นแถวที่เด้งไปโดนหัวตารางบัง */
+  var box=null, pnode=el.parentElement;
+  while(pnode && pnode!==document.body){
+    var ov=getComputedStyle(pnode).overflowY;
+    if((ov==='auto'||ov==='scroll') && pnode.scrollHeight>pnode.clientHeight+2){ box=pnode; break; }
+    pnode=pnode.parentElement;
+  }
+  if(box){
+    /* §ckJumpUp · เจ้าของ: "บางคันอยู่บน กดแล้วไม่เด้งขึ้น" · หัวคัน (tr.ck-ghd>td) เป็น sticky
+       พอเลื่อนผ่านไปแล้ว getBoundingClientRect ของมันคือตำแหน่งที่ "ค้างอยู่ใต้หัวตาราง" ไม่ใช่ตำแหน่งจริง
+       คำนวณจากตรงนั้นได้ค่าเท่า scrollTop เดิมพอดี = ไม่ขยับ · ใช้ offsetTop (ตำแหน่ง layout · sticky ไม่กระทบ) แทน */
+    var th=box.querySelector('thead'); var thH=th?th.getBoundingClientRect().height:0;
+    /* เริ่มจาก <tr> ไม่ใช่ตัว td/div ข้างใน · Chrome คืน offsetTop ของตัวที่ sticky เป็นตำแหน่งที่ค้างอยู่เช่นกัน
+       แต่ <tr> ไม่ได้ sticky (sticky อยู่ที่ td) จึงได้ตำแหน่งจริงในตาราง */
+    var y=0, n=el.closest?(el.closest('tr')||el):el;
+    while(n && n!==box){ y+=n.offsetTop||0; n=n.offsetParent; if(n && n!==box && !box.contains(n)) break; }
+    var top=y-thH-6;
+    try{ box.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ box.scrollTop=Math.max(0,top); }
+  } else {
+    var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
+    try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
+  }
+  /* §ckJumpHit · เจ้าของ: "มีเส้นให้เห็นว่าคันนี้ ปรับสีให้เด่น" · เดิมเส้นเขียวบาง 2px ในกรอบย่อย 1.5 วิ
+     กลืนกับสีหัวคัน · ใหม่: ทั้งแถวหัวคันขอบส้มอำพัน 3px + พื้นอาบส้ม กะพริบ 2 จังหวะ ค้าง 3 วิ (CSS ใน ckSharedCSS) */
+  var tr=(el.closest&&el.closest('tr'))||el;
+  document.querySelectorAll('.ck-jumphit').forEach(function(x){ x.classList.remove('ck-jumphit'); });
+  tr.classList.add('ck-jumphit');
+  setTimeout(function(){ tr.classList.remove('ck-jumphit'); }, 3000);
 }
 // การ์ดรถ/เรือของเส้นทางที่กำลังดูอยู่ · สร้างจาก groups ก้อนเดียวกับตาราง → ตัวเลขตรงกันเสมอ
 // กดแล้วเด้งไปที่หัวคันนั้นในตาราง
-function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
-  var e=ckEsc, isPier=(kind==='pier');
-  if(!gkeys.length) return tailHtml?('<div class="ck-unitbar">'+tailHtml+'</div>'):'';
+function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml, opts){
+  var e=ckEsc, isPier=(kind==='pier'), compact=!!(opts&&opts.compact);   /* §vckHead · compact = ชิปล้วน ไม่มีกรอบแถบ */
+  if(!gkeys.length) return compact?'':(tailHtml?('<div class="ck-unitbar">'+tailHtml+'</div>'):'');
   var chips=gkeys.map(function(k){
     var g=groups[k], uid=isPier?g.bid:g.vid;
     /* §ckPierSelf2 · คนตามมาเองที่ท่าทำให้ขึ้นจริงเกินยอดที่รอรับได้ · ตัวหารต้องขยายตาม
@@ -13502,6 +13561,11 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
     var gt=ckGroupTime(g.rows, (g.rows[0]&&g.rows[0].t&&g.rows[0].t.date)||'');
     var lateCard=(gt.state==='late');
     if(lateCard){ numCol='#A32D2D'; numBg='#FCEBEB'; }
+    if(compact){   /* §vckHead · ชิปบรรทัดเดียว · ชื่อ · เวลา · n/n · ขอบซ้ายสีประจำรถ · พื้นตามสถานะ */
+      return '<button class="vkh-vc'+(full?' full':part?' part':'')+(lateCard?' late':'')+(_sbOn?' sb':'')+'" style="--vc:'+col+'" onclick="ckJump(\''+anchorPrefix+k.replace(/[^A-Za-z0-9_-]/g,'_')+'\')" title="'+e(nm)+' · '+e(rt.name||'')+' · ขึ้นรถแล้ว '+done+'/'+tot+' pax'+(gt.label?(' · รับ '+e(gt.label)):'')+(_sbOn?' · คนขับสแตนบายแล้ว':'')+'">'
+        +'<span class="n">'+e(nm)+'</span>'
+        +'<span class="c ck-mono">'+done+'/'+tot+'</span></button>';   /* §vckHead3 · ไม่มีเวลาบนชิป · ลำดับไม่ได้เรียงตามเวลาอยู่แล้ว · เวลายังอยู่ใน title */
+    }
     return '<button onclick="ckJump(\''+anchorPrefix+k.replace(/[^A-Za-z0-9_-]/g,'_')+'\')" title="'+e(nm)+' · '+e(rt.name||'')+' · '+(isPier?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+'/'+tot+' pax'+(gt.label?(' · รับ '+e(gt.label)):'')+(lateCard?(' · เลยเวลา '+gt.late+' ราย'):'')+' · คลิกเพื่อเด้งไปที่คันนี้" style="display:inline-flex;align-items:center;gap:7px;border:1.5px solid '+(lateCard?'#C0392B':(col+'55'))+';background:'+(lateCard?'#FFF7F6':'#fff')+';border-radius:11px;padding:5px 10px 5px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">'
       +'<span style="width:8px;height:8px;border-radius:50%;background:'+col+';flex:none"></span>'
       +'<span style="font-size:12px;font-weight:700;color:#3a3a36">'+e(nm)+'</span>'
@@ -13509,6 +13573,7 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
       +(gt.label?'<span style="font-family:\'DM Mono\',monospace;font-size:10.5px;color:'+(lateCard?'#A32D2D':'#a5a49d')+'">'+e(gt.label.split('-')[0])+'</span>':'')
       +'<span style="font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;color:'+numCol+';background:'+numBg+';border-radius:7px;padding:2px 8px">'+done+'/'+tot+'</span></button>';
   }).join('');
+  if(compact) return chips;
   return '<div class="ck-unitbar">'
     +'<span class="ck-unitbar-lbl">'+(isPier?'&#128676; เรือวันนี้':'&#128656; รถวันนี้')+'</span>'+chips
     +'<span style="'+(tailHtml?'':'margin-left:auto;')+'font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span>'
@@ -13521,6 +13586,8 @@ function vckSelHtml(bkId,date,kind,st){
   if(st==='wait'||st==='pier') lead='<option value="" selected>'+e(d.lbl)+'</option>';
   var opts=['standby','pending','checkin','cxl','noshow'].map(function(k){
     return '<option value="'+k+'"'+((k===st)?' selected':'')+'>'+e(VCK_SEL_LBL[k])+'</option>'; }).join('');
+  /* §vckBackWait · เจ้าของ: "เทสแล้วกลายเป็น Standby แก้ยังไง" · เดิมถอยกลับเป็น "รอ" ไม่ได้เลย · เพิ่มตัวเลือกล้างสถานะ */
+  if(st==='standby'||st==='pending') opts+='<option value="wait">↩ ล้าง → รอ</option>';
   return '<select class="vck-sel" title="เปลี่ยนสถานะของแถวนี้"'
     +' onchange="vckStatus(\''+bkId+'\',\''+date+'\',\''+kind+'\',this.value)"'
     +' onclick="event.stopPropagation()">'+lead+opts+'</select>';
@@ -13531,8 +13598,151 @@ function vckNoteHtml(ck,st,r,rsn){
   try{ if(r && r._gk) arr=vckArrGet(r._date||_vanCkDate, r._gk); }catch(_){}
   var txt=vckRowNote(ck, st, arr&&arr.at);
   var d=vckStDef(st);
-  var body = txt ? ('<span class="vck-nt">'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
-  return body + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
+  var _by=(ck&&ck.by)?(' title="บันทึกโดย '+ckEsc(ck.by)+(ck.at?(' · '+ckEsc(new Date(ck.at).toLocaleString('th-TH'))):'')+'"'):'';   /* §vckNoteShort · ชี้เมาส์ดูคนบันทึก */
+  /* §vckLine · แถว "ตามแขก" มีปุ่มไลน์ตามเอเจนต์ · ส่งแล้วกี่ครั้งโชว์ต่อท้าย */
+  var _ls=(ck&&Array.isArray(ck.lineSent))?ck.lineSent:[];
+  var _lnOpen=(r&&r.b)?(' onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" style="cursor:pointer"'):'';
+  var lnTxt=_ls.length?('<span class="vck-lnsent"'+_lnOpen+' title="ส่งไลน์ตามเอเจนต์แล้ว '+_ls.length+' ครั้ง · ล่าสุด '+ckEsc(_ls[_ls.length-1].at||'')+' โดย '+ckEsc(_ls[_ls.length-1].by||'')+' · กดเพื่อเปิด/ล้างประวัติ">&#128172; LINE '+ckEsc(_ls[_ls.length-1].at||'')+(_ls.length>1?(' ×'+_ls.length):'')+'</span>'):'';
+  /* §vckLine2 · เจ้าของ: "ให้มีขึ้นมาให้กดได้เลย ไม่ต้องรอสถานะ Pending" · ขึ้นทุกแถวที่ยังไม่จบ (รอ / Standby / ตามแขก) */
+  var lnBtn=((st==='pending'||st==='standby'||st==='wait') && r && r.b)?('<button class="vck-ln'+(st==='wait'?' q':'')+'" onclick="event.stopPropagation();vckLineOpen(\''+ckEsc(r.b.id)+'\',\''+ckEsc(r._date||_vanCkDate)+'\',\''+(r.si!=null?('van#'+r.si):'van')+'\',\''+ckEsc(r._gk||'')+'\')" title="คัดลอกข้อความตามแขกไปส่งไลน์เอเจนต์">&#128172; LINE</button>'):'';
+  var body = txt ? ('<span class="vck-nt"'+_by+'>'+d.ic+' '+txt+(lnTxt?(' · '+lnTxt):'')+'</span>') : (lnTxt?('<span class="vck-nt">'+lnTxt+'</span>'):'<span class="ck-dim">—</span>');
+  return body + lnBtn + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
+}
+/* ══ §vckLine (2026-11-02) · ตามแขกไม่เจอ → คัดลอกข้อความไปส่งไลน์เอเจนต์ ═══════════════════
+   เจ้าของ: "ตอนที่ติดตาม ลค ไปถึงแล้วไม่เจอ เราจะส่งไลน์ไปให้เอเจนต์ตาม · ขอให้ Copy แล้วส่งไลน์เลยได้
+   มีรายละเอียดคร่าว ๆ · เป็นภาษาอังกฤษ กระชับ · ขาดชื่อโปรแกรม วันที่"
+   เทมเพลตเป็นข้อความที่มี {ตัวแปร} · เก็บทั้งบริษัทที่ vck_line_tpl (สตริง) เหมือนสีสถานะ · แก้ได้ในแท็บ "แก้เทมเพลต" ของกล่องเดียวกัน
+   คัดลอกแล้วจด ck.lineSent[] = {at,by} · ช่องบันทึกหน้างานโชว์ "💬 LINE 04:09 ×2" */
+var VCK_LINE_TPL_DEF='LOVE ANDAMAN – guest not found ({date})\n'
+  +'{program} · boat {boatTime} {pier}\n'
+  +'Voucher {voucher} ({agent}) · {guest} · {pax} pax · {guestPhone}\n'
+  +'{hotel}, room {room} · pickup {pickupTime}\n'
+  +'Driver {driver} {driverPhone} at the hotel since {arrivedAt}, guest not at room/lobby.\n'
+  +'Please contact the guest and call the driver back. Van must leave by {deadline}.';
+var VCK_LINE_EXTRA_DEF=['2nd follow-up – still no contact with the guest.','Office: {office}','Guest may also go directly to {pier} pier before {boatTime} (self-arrive).'];
+var VCK_LINE_VARS=[['voucher','เลข voucher'],['agent','ชื่อเอเจนต์'],['guest','ชื่อแขกหลัก'],['pax','จำนวนคน'],['guestPhone','เบอร์แขก'],['hotel','โรงแรม/จุดรับ'],['room','ห้อง'],['pickupTime','เวลานัดรับ'],['van','ชื่อรถ'],['plate','ทะเบียน'],['driver','คนขับ'],['driverPhone','เบอร์คนขับ'],['program','โปรแกรม'],['boatTime','เวลาเรือออก'],['pier','ท่า'],['arrivedAt','เวลาคนขับกดสแตนบาย'],['deadline','ถึง + 15 นาที'],['date','วันที่'],['nth','ครั้งที่ตาม'],['office','เบอร์ออฟฟิศ (ตั้งในเทมเพลต)']];
+function vckLineTpl(){ try{ var v=laBlob().vck_line_tpl; return (typeof v==='string'&&v.trim())?v:VCK_LINE_TPL_DEF; }catch(_){ return VCK_LINE_TPL_DEF; } }
+function vckLineExtras(){ try{ var v=laBlob().vck_line_extras; var a=JSON.parse(v||'null'); return (Array.isArray(a)&&a.length)?a:VCK_LINE_EXTRA_DEF.slice(); }catch(_){ return VCK_LINE_EXTRA_DEF.slice(); } }
+function vckLineOffice(){ try{ return String(laBlob().vck_line_office||''); }catch(_){ return ''; } }
+function vckLineTplSave(){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var t=(document.getElementById('vck-ln-tpl')||{}).value||'', ex=[0,1,2].map(function(i){ return ((document.getElementById('vck-ln-ex'+i)||{}).value||'').trim(); }).filter(Boolean);
+  var off=((document.getElementById('vck-ln-office')||{}).value||'').trim();
+  try{ var b=laBlob();
+    if(t.trim()&&t.trim()!==VCK_LINE_TPL_DEF) b.vck_line_tpl=t; else delete b.vck_line_tpl;
+    if(ex.length&&JSON.stringify(ex)!==JSON.stringify(VCK_LINE_EXTRA_DEF)) b.vck_line_extras=JSON.stringify(ex); else delete b.vck_line_extras;
+    if(off) b.vck_line_office=off; else delete b.vck_line_office;
+    laBlobSave(); }catch(e){ try{ console.warn('[vckLine] template save failed', e&&e.message); }catch(_){} }
+  var S=window._vckLnState; if(S){ S.tab='msg'; S.msg=null; vckLineRender(); }
+}
+function vckLineTplReset(){ if(!confirm('คืนเทมเพลตข้อความตามแขกเป็นค่าเริ่มต้น?')) return; try{ var b=laBlob(); delete b.vck_line_tpl; delete b.vck_line_extras; laBlobSave(); }catch(_){} var S=window._vckLnState; if(S){ S.msg=null; vckLineRender(); } }
+function vckLineData(b,date,kind,gk){
+  var e=function(v){ return String(v==null?'':v).trim(); };
+  var t=(b.trips||[]).filter(function(x){ return x.date===date; })[0]||{};
+  var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+  var ck=ckRead(b,date,kind)||{};
+  var rt=(typeof getRoute==='function'?getRoute(t.routeId):null)||{};
+  var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  var vid=O.vanId; if(gk){ var m=String(gk).split('~'); if(m[0]) vid=m[0]; }
+  var v=(typeof vehGet==='function'?vehGet(vid):null)||{};
+  /* §vckLine5 · เจ้าของ: "รถบางคันอัพเดททะเบียนรายคัน(รายวัน) แล้วไม่ขึ้นตอน copy" · ทะเบียน/คนขับ/เบอร์ ต้องอ่านจากที่หัวคันอ่าน
+     (vanJobsDriverInfo = ค่าที่แก้รายวันในใบงานรถ ถ้ามี · ไม่มีค่อยถอยไปทะเบียนรถ) */
+  var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vid,date):{driver:v.driver||'',phone:v.driverPhone||v.phone||'',plate:v.plate||''};
+  var arr=null; try{ if(gk) arr=vckArrGet(date,gk); }catch(_){}
+  var arrAt=(arr&&arr.at)||ck.flowAt||'';
+  var dead=''; var mm=String(arrAt).match(/(\d{1,2}):(\d{2})/); if(mm){ var mins=(+mm[1])*60+(+mm[2])+15; dead=String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
+  var PIER_EN={tublamu:'Tub Lamu',panwa:'Panwa',ranong:'Ranong'};
+  var pk=rt.pier||''; var pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0;
+  var dEn=''; try{ dEn=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }catch(_){ dEn=date; }
+  var nth=((Array.isArray(ck.lineSent)?ck.lineSent.length:0)+1);
+  return { voucher:e(b.voucherRef||b.code||b.id), agent:e(ag?(ag.name||ag.code):(b.channel||'walk-in')), guest:e(b.leadPax||'-'), pax:pax,
+    guestPhone:e(b.leadPhone||b.phone||b.customerPhone||'-'), hotel:e((typeof ckPickShort==='function'?ckPickShort(b.hotelName||b.pickup):(b.hotelName||b.pickup))||'-'),
+    room:e(b.roomNumber||b.roomNo||'-'), pickupTime:e(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'-'),
+    van:e(v.name||vid||'-'), plate:e((rd.plate&&rd.plate!=='-')?rd.plate:((v.plate&&v.plate!=='-')?v.plate:'')), driver:e(rd.driver||v.driver||'-'), driverPhone:e(rd.phone||v.driverPhone||v.phone||'-'),
+    program:e(rt.name||'-'), boatTime:e((rt.times&&rt.times[0])||'-'), pier:e(PIER_EN[pk]||pk||'-'),
+    arrivedAt:e(arrAt||'-'), deadline:e(dead||'-'), date:dEn, nth:(nth===1?'1st':nth===2?'2nd':nth===3?'3rd':(nth+'th')), office:e(vckLineOffice()||'-') };
+}
+/* §vckLine4 · เจ้าของ: "{plate} ไม่ขึ้น" · รถคันนั้นไม่มีทะเบียนในทะเบียนรถ · เดิมปล่อย {plate} ค้างไว้ในข้อความ
+   ตอนนี้ตัวแปรที่รู้จักแต่ไม่มีค่า → เว้นว่าง (และเก็บช่องว่างซ้ำ) · ตัวแปรที่ไม่รู้จักยังคงไว้ให้เห็นว่าพิมพ์ผิด */
+function vckLineFill(tpl,D){ return String(tpl||'').replace(/\{(\w+)\}/g,function(m,k){ if(D[k]===undefined) return m; return (D[k]!=='' && D[k]!=='-')?String(D[k]):''; }).replace(/\\n/g,'\n')
+  .replace(/[ \t]{2,}/g,' ').replace(/ +(\n|$)/g,'$1')
+  .replace(/ ·\s*(?=\n|$)/g,'').replace(/, room(?=\n|$)/g,'').replace(/ \(\)/g,'').replace(/ · -(?=\n|$)/g,'').replace(/, room -/g,'').replace(/ \(-\)/g,''); }   /* ช่องที่ไม่มีข้อมูล (เบอร์/ห้อง) ตัดทิ้ง ไม่ปล่อย " · -" ค้างในข้อความ */
+function vckLineOpen(bkId,date,kind,gk){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  window._vckLnState={bkId:bkId,date:date,kind:kind,gk:gk||'',tab:'msg',msg:null};
+  vckLineRender();
+}
+function vckLineClose(){ var h=document.getElementById('ck-reason-host'); if(h) h.innerHTML=''; window._vckLnState=null; }
+function vckLineInsert(txt){ var ta=document.getElementById('vck-ln-msg'); if(!ta) return; var S=window._vckLnState; var D=vckLineData((SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }),S.date,S.kind,S.gk); ta.value=(ta.value.replace(/\s+$/,''))+'\n'+vckLineFill(txt,D); S.msg=ta.value; ta.focus(); }
+function vckLineTplVar(k){ var ta=document.getElementById('vck-ln-tpl'); if(!ta) return; var a=ta.selectionStart||ta.value.length, z=ta.selectionEnd||a; ta.value=ta.value.slice(0,a)+'{'+k+'}'+ta.value.slice(z); ta.focus(); ta.selectionStart=ta.selectionEnd=a+k.length+2; }
+function vckLineTab(t){ var S=window._vckLnState; if(!S) return; var ta=document.getElementById('vck-ln-msg'); if(ta) S.msg=ta.value; S.tab=t; vckLineRender(); }
+function vckLineRender(){
+  var S=window._vckLnState; if(!S) return; var e=ckEsc;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b){ vckLineClose(); return; }
+  var D=vckLineData(b,S.date,S.kind,S.gk);
+  var msg=(S.msg!=null)?S.msg:vckLineFill(vckLineTpl(),D);
+  var canEdit=!(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations'));
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var tabs='<span class="vck-lntabs"><button class="'+(S.tab==='msg'?'on':'')+'" onclick="vckLineTab(\'msg\')">ข้อความ</button>'+(canEdit?('<button class="'+(S.tab==='tpl'?'on':'')+'" onclick="vckLineTab(\'tpl\')">&#9998; แก้เทมเพลต</button>'):'')+'</span>';
+  var body;
+  if(S.tab==='tpl'){
+    var ex=vckLineExtras();
+    body='<div class="lb">เทมเพลต · ใส่ {ตัวแปร} ตรงไหนก็ได้ · ตั้งครั้งเดียวใช้ทั้งบริษัท</div>'
+      +'<textarea id="vck-ln-tpl" class="vck-lnta mono" rows="7">'+e(vckLineTpl())+'</textarea>'
+      +'<div class="lb">ตัวแปร · คลิกเพื่อแทรก</div><div class="vck-lnvars">'+VCK_LINE_VARS.map(function(v){ return '<button onclick="vckLineTplVar(\''+v[0]+'\')" title="'+e(v[1])+'">{'+v[0]+'}</button>'; }).join('')+'</div>'
+      +'<div class="lb">ประโยคเสริม (ปุ่ม "เติม" ในแท็บข้อความ)</div>'
+      +[0,1,2].map(function(i){ return '<input id="vck-ln-ex'+i+'" class="ck-inp vck-lnex" value="'+e(ex[i]||'')+'" placeholder="ว่าง = ไม่มีปุ่ม">'; }).join('')
+      +'<div class="lb">เบอร์ออฟฟิศ · ใช้กับ {office}</div><input id="vck-ln-office" class="ck-inp" style="width:200px" value="'+e(vckLineOffice())+'" placeholder="076-xxx-xxxx">';
+  } else {
+    var ex2=vckLineExtras();
+    body='<div class="lb">ข้อความ (EN) · แก้ได้ก่อนคัดลอก</div>'
+      +'<textarea id="vck-ln-msg" class="vck-lnta" rows="8" oninput="window._vckLnState&&(window._vckLnState.msg=this.value)">'+e(msg)+'</textarea>'
+      +(ex2.length?('<div class="vck-lnex-row"><span class="k">เติม:</span>'+ex2.map(function(x){ return '<button onclick="vckLineInsert(\''+e(x).replace(/'/g,'&#39;')+'\')">+ '+e(x.length>34?(x.slice(0,32)+'…'):x)+'</button>'; }).join('')+'</div>'):'')
+      +(D.arrivedAt==='-'?'<div class="ck-fn" style="color:#A32D2D;margin-top:6px">ยังไม่มีเวลาที่คนขับกดสแตนบายถึงจุดรับ · {arrivedAt}/{deadline} จึงว่าง — กดสแตนบายที่หัวคันก่อน หรือพิมพ์เวลาเอง</div>':'');
+  }
+  var sent=(ckRead(b,S.date,S.kind)||{}).lineSent||[];
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)vckLineClose()" class="ck-ovl"><div class="ck-dlg vck-lndlg">'
+   +'  <div class="ck-dh"><span class="vck-lnico">&#128172;</span><div style="flex:1;min-width:0"><div class="t1">ข้อความตามแขก · ส่งไลน์เอเจนต์</div>'
+   +'    <div class="t2">'+e(D.agent)+' · '+e(D.voucher)+' · '+e(D.guest)+(sent.length?(' · <span style="color:#06C755;font-weight:700">ส่งแล้ว '+sent.length+' ครั้ง ล่าสุด '+e(sent[sent.length-1].at||'')+'</span> <button class="vck-lnclr" onclick="vckLineClearLog()" title="ล้างประวัติการส่งไลน์ของแถวนี้ (กรณีกดทดสอบ/กดผิด)">ล้างประวัติ</button>'):'')+'</div></div>'
+   +     tabs+'<button class="x" onclick="vckLineClose()">&times;</button></div>'
+   +'  <div class="ck-db">'+body+'</div>'
+   +'  <div class="ck-df">'
+   +(S.tab==='tpl'
+      ? '<button class="c" onclick="vckLineTplReset()">&#8634; คืนค่าเริ่มต้น</button><span style="flex:1"></span><button class="c" onclick="vckLineTab(\'msg\')">ยกเลิก</button><button class="k" onclick="vckLineTplSave()">บันทึกเทมเพลต</button>'
+      : '<span class="ck-fn" style="margin:0;align-self:center">คัดลอกแล้วระบบจดไว้ในแถวว่า "LINE '+e(ckNowHM())+' · '+e(ckMe())+'"</span><span style="flex:1"></span>'
+        +(D.guestPhone&&D.guestPhone!=='-'?('<a class="c" href="tel:'+e(D.guestPhone)+'" style="text-decoration:none;display:inline-flex;align-items:center">&#128222; โทรแขก</a>'):'')
+        +'<button class="k vck-lncopy" onclick="vckLineCopy()">&#128203; คัดลอกข้อความ</button>')
+   +'  </div>'
+   +'</div></div>';
+}
+/* §vckLine3 · เจ้าของ: "ลองเทสแล้วล้างไม่ได้" · ล้างประวัติส่งไลน์ของแถว (ปุ่มในหัวกล่อง) */
+function vckLineClearLog(){
+  var S=window._vckLnState; if(!S) return;
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b) return;
+  var cur=ckRead(b,S.date,S.kind)||{}; var n=(cur.lineSent||[]).length;
+  if(!confirm('ล้างประวัติส่งไลน์ '+n+' ครั้งของแถวนี้?')) return;
+  var o={}; Object.keys(cur).forEach(function(k){ o[k]=cur[k]; }); o.lineSent=[];
+  ckWrite(b,S.date,S.kind,o); ckPersist(); S.msg=null; vckLineRender(); if(typeof ckAfter==='function') ckAfter(S.kind);
+}
+function vckLineCopy(){
+  var S=window._vckLnState; if(!S) return; var ta=document.getElementById('vck-ln-msg'); if(!ta) return;
+  var txt=ta.value;
+  var done=function(){
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===S.bkId; }); if(!b) return;
+    if(typeof ckGuard==='function' && ckGuard()){
+      var cur=ckRead(b,S.date,S.kind)||{}, o={}; Object.keys(cur).forEach(function(k){ o[k]=cur[k]; });
+      o.lineSent=(Array.isArray(cur.lineSent)?cur.lineSent.slice():[]); o.lineSent.push({at:ckNowHM(), by:ckMe()});
+      ckWrite(b,S.date,S.kind,o); ckPersist(); }
+    var btn=document.querySelector('.vck-lncopy'); if(btn){ btn.textContent='✓ คัดลอกแล้ว'; btn.disabled=true; }
+    setTimeout(function(){ vckLineClose(); if(typeof ckAfter==='function') ckAfter(S.kind); }, 700);
+  };
+  var fired=false, once=function(){ if(fired) return; fired=true; done(); };
+  var fallback=function(){ ta.select(); try{ document.execCommand('copy'); }catch(_){} once(); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(once, fallback); setTimeout(function(){ if(!fired) fallback(); }, 900); return; } }catch(_){}   /* clipboard API ค้างได้ตอนไม่มี permission · กันไว้ด้วยเวลา */
+  fallback();
 }
 /* §pickShort (2026-09-03) · ชื่อจุดรับที่ลงท้ายด้วย (self-arrive) ยาวเกินช่อง
    และซ้ำกับสิ่งที่คอลัมน์โซนบอกอยู่แล้ว · ตัดเฉพาะตอนแสดงผล ไม่แตะข้อมูล
@@ -15830,8 +16040,10 @@ function vckRowSt(ck){
 function vckRowNote(ck, st, arrAt){
   ck=ck||{};
   var e=ckEsc;
+  /* §vckNoteShort · เจ้าของ: "รายละเอียดขวาสุด ปรับให้กระชับ" · ไอคอน ✓ กับช่อง Status บอก "ขึ้นรถแล้ว" อยู่แล้ว
+     เหลือ เวลา · คนบันทึก */
   if(st==='checkin'){ var hm=''; try{ hm=ck.at?new Date(ck.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):''; }catch(_){}
-    return 'ขึ้นรถแล้ว'+(hm?(' '+hm):'')+(ck.by?(' · '+e(ck.by)):''); }
+    return hm||'ขึ้นรถแล้ว'; }   /* ชื่อคนบันทึกไม่ขึ้นในช่อง (เจ้าของ: "ตรวจได้ทีหลัง") · อยู่ใน title ของช่องแทน */
   var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[], last=null;
   for(var i=ev.length-1;i>=0;i--){ if(ev[i] && +ev[i].pax>0){ last=ev[i]; break; } }
   if(st==='cxl'||st==='noshow'||st==='pier'){
@@ -15846,7 +16058,7 @@ function vckRowNote(ck, st, arrAt){
       +(tries>0?(' · วนกลับแล้ว '+tries+' รอบ'):'');
   }
   if(st==='pending') return (ck.flowNote?e(ck.flowNote):'ไม่เจอแขก · กำลังตาม')+(ck.flowAt?(' '+e(ck.flowAt)):'');
-  if(st==='standby') return 'สแตนบายถึงจุดแรกแล้ว'+((arrAt||ck.flowAt)?(' '+e(arrAt||ck.flowAt)):'');
+  if(st==='standby') return 'ถึงจุดแรก'+((arrAt||ck.flowAt)?(' '+e(arrAt||ck.flowAt)):'');   /* §vckNoteShort */
   return '';
 }
 /* ── เปลี่ยนสถานะจาก dropdown ── */
@@ -15872,6 +16084,7 @@ function vckStatus(bkId,date,kind,val){
       ckToggle(bkId,date,kind); }
     vckSetFlow(bkId,date,kind,val); ckPersist(); ckAfter(kind); return;
   }
+  if(val==='wait'){ vckSetFlow(bkId,date,kind,'',''); ckPersist(); ckAfter(kind); return; }   /* §vckBackWait · ล้าง flow กลับเป็น รอ */
   ckAfter(kind);
 }
 /* ── หน้าต่างเลือกสี ── */
@@ -16116,6 +16329,11 @@ function vckArrChip(date,gk,vanName,rows){
 // ══ §เช็คอินรถ (Van Check-in) ══
 var _vanCkDate = (typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
 var _vckFam=null, _vckRoute=null;
+/* §vckPier · เจ้าของ: "เพิ่มชิปกรองท่าเรือ" · ตัวกรองท่าของหน้ารถ (ทุกท่า / ทับละมุ / พันวา) · ซ้อนบนตัวกรองโปรแกรม
+   ท่าของทริป = routes.pier (pckPierOf) · ทริปภาคพื้นไม่มีท่า → ผ่านเฉพาะตอน "ทุกท่า" */
+var _vckPier=null;
+function vckSetPier(p){ _vckPier=(_vckPier===p)?null:p; renderVanCheckin(); }
+function vckPierOk(rid){ return !_vckPier || pckPierOf(rid)===_vckPier; }
 function vanCkDateShift(delta){ var d=new Date(_vanCkDate+'T12:00:00'); d.setDate(d.getDate()+delta); _vanCkDate=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(d):d.toISOString().slice(0,10); renderVanCheckin(); }
 function vanCkToday(){ _vanCkDate=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderVanCheckin(); }
 function vckSetFam(f){ _vckFam=(_vckFam===f)?null:f; _vckRoute=null; renderVanCheckin(); }
@@ -16249,10 +16467,12 @@ function vckSheetCSS(){
   +S+' .vck-sel{padding:2px 4px;font-size:10.5px;max-width:114px;border-width:1.5px;border-radius:6px}'
   /* บันทึกหน้างาน · เหตุผลจริงยาวกว่าบรรทัดเดียวเสมอ ("ไม่มา 07:02 · อื่นๆ · เลื่อนวัน รออัปเดต")
      ตัดทิ้งแล้วเหลือแต่ต้นประโยค อ่านไม่ได้ความ · ให้สองบรรทัด จำกัดด้วย max-height */
+  /* §vckNoteShort · 352 → 250px · ข้อความสั้นลงแล้ว (เวลา · คนบันทึก) ช่องกว้างเดิมเหลือแต่ที่ว่าง */
   +S+' tr.ck-row>td:nth-child(17){white-space:normal;overflow:hidden;line-height:1.3;'
-    +'width:352px;min-width:352px;max-width:352px;padding:2px 8px}'
-  +S+' thead th:nth-child(17){width:352px;min-width:352px;max-width:352px}'
-  +S+' .vck-nt{max-width:336px;max-height:28px;white-space:normal;overflow:hidden;'
+    +'width:250px;min-width:250px;max-width:250px;padding:2px 8px}'
+  +S+' thead th:nth-child(17){width:250px;min-width:250px;max-width:250px}'
+  +S+' tr.ck-gsp>td{height:10px;padding:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important}'   /* §vckGap */
+  +S+' .vck-nt{max-width:234px;max-height:28px;white-space:normal;overflow:hidden;'
     +'line-height:1.3;font-size:10.5px;display:inline-block;vertical-align:top}'
   +S+' .vck-rsn{display:inline !important;margin:0 0 0 5px !important}'
   +S+' .ck-rsn{font-size:9.5px;padding:1px 7px;max-width:200px;vertical-align:top}'
@@ -16314,6 +16534,9 @@ function vckFitPane(){
     var w=document.querySelector('#vancheckin-host .vck-tw'); if(!w) return;
     var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
     if(w._vh!==h){ w._vh=h; w.style.maxHeight=h+'px'; }
+    /* §vckStick · หัวตรึงแล้ว หน้าเว็บไม่ควรเลื่อนซ้อนอีกชั้น · หักส่วนที่ยังล้นจอออกจากกล่องตาราง (เหมือน §pckHead9) */
+    var de=document.documentElement, over=de.scrollHeight-de.clientHeight;
+    if(over>0){ h=Math.max(260,h-over); w._vh=h; w.style.maxHeight=h+'px'; }
   });
 }
 if(!window._vckFitBound){
@@ -16361,6 +16584,298 @@ function vckStopRow(st){
     + '<td class="ck-c ck-in">'+d+'</td><td class="ck-in">'+stat+'</td>'
     + '</tr>';
 }
+/* ══ §vckHead (2026-11-02) · หัวเช็คอินรถ จัดโครงเดียวกับเช็คอินหน้าท่า ═════════════
+   เจ้าของ: "ปรับดีไซน์ Header อิงเช็คอินหน้าท่า" · แล้ว "ปรับส่วนรถให้กระชับเล็กลง"
+   ของเดิม: หัวเรื่อง + ckDayHeader (สองแถว) + การ์ดโปรแกรมตัวใหญ่ + แถบ "รถวันนี้" การ์ดละ 2 บรรทัด
+   45 คันกิน 4 แถว + ค้นหา/แถบสีลอยอยู่คนละบรรทัด · รวมแล้วหัวสูงเกือบครึ่งจอก่อนถึงตาราง
+   ใหม่: แถบวัน (เลขวันใหญ่ · วันนี้ · KPI ขวา) → สองคอลัมน์
+     ซ้าย  การ์ด "โปรแกรมวันนี้" แถวละโปรแกรม พื้นสีโปรแกรม + แถบคืบหน้า · กางดู variant ได้ (PK/KL/มาเอง เป็นชิปเล็ก)
+     ขวา   การ์ด "รถ" ชิปบรรทัดเดียว ชื่อ·เวลา·n/n (45 คัน = 2 แถว) · การ์ด "ค้นหา" · การ์ด "ตัวกรอง" (สถานะ + แถบสี)
+   ตัวเลขมาจาก ckRouteStats ก้อนเดียวกับการ์ดเดิม · ตัวกรอง _vckFam/_vckRoute ตัวเดิม ทำงานเหมือนเดิม
+   CSS ใช้ชื่อชุด .pgf/.pgv/.pgz เดียวกับหน้าท่า (คัดลอกมาใส่ scope ของหน้านี้) จะได้หน้าตาเหมือนกันจริง */
+var _vckProgOpen={};
+function vckProgToggle(fid){ if(_vckProgOpen[fid]) delete _vckProgOpen[fid]; else _vckProgOpen[fid]=1; renderVanCheckin(); }
+function vckProgData(date){
+  var S=ckRouteStats(date,'van');
+  var list=Object.keys(S.fam).map(function(k){ return S.fam[k]; }).sort(function(a,b){ return b.pax-a.pax||(b.locked-a.locked); });
+  return list.map(function(a){
+    var rids=Object.keys(a.rids).sort(function(x,y){ return String(pckDepOf(x)).localeCompare(String(pckDepOf(y)))||x.localeCompare(y); });
+    var tot=0, done=0, own=0;
+    var V={}; rids.forEach(function(rid){
+      var R=S.rst[rid]||{PK:{tot:0,done:0,bk:0},KL:{tot:0,done:0,bk:0},OWN:{tot:0,done:0,bk:0}};
+      V[rid]={R:R, pax:R.PK.tot+R.KL.tot+R.OWN.tot, bk:(R.PK.bk||0)+(R.KL.bk||0)+(R.OWN.bk||0),
+              open:(typeof bookingV2IsRouteOpenOn!=='function')||bookingV2IsRouteOpenOn(rid,date), dep:pckDepOf(rid)};
+      tot+=R.PK.tot+R.KL.tot; done+=R.PK.done+R.KL.done; own+=R.OWN.tot;
+    });
+    /* §vckHead2 · ชิปท่าเรือของโปรแกรม · pax เดินทางจริงแยกตามท่าของแต่ละ variant */
+    var piers={}, pord=[]; rids.forEach(function(rid){ var pk=pckPierOf(rid); if(!pk) return; if(!(pk in piers)){ piers[pk]=0; pord.push(pk); } piers[pk]+=V[rid].pax; });
+    var allLand=rids.every(function(rid){ return (typeof laIsLandRoute==='function') && laIsLandRoute(rid); });
+    return {f:a.fam, pax:a.pax, booked:a.booked, lost:Math.max(0,a.booked-a.pax), rids:rids, v:V, tot:tot, done:done, own:own, piers:piers, pord:pord, allLand:allLand};
+  }).filter(function(A){
+    /* §vckHead2 · เจ้าของ: "Activity ออก" · โปรแกรมภาคพื้น (Activities · โชว์) ที่ไม่มีรถรับเลย ไม่ใช่งานของหน้านี้
+       Transfer / City tour ยังอยู่ เพราะมีรถรับจริง (tot>0) */
+    return !(A.allLand && A.tot===0);
+  });
+}
+function vckProgStatus(A){
+  if(!A.pax && !A.booked) return ['ยังไม่มี booking','#F1EFE8','#8a8a82'];
+  if(!A.tot) return ['มาเอง','#F4E8FB','#6B289A'];
+  if(A.done>=A.tot) return ['ครบ','#DCF4E8','#0F6E56'];
+  if(A.done>0) return ['รับอยู่ · เหลือ '+(A.tot-A.done),'#FBF0DD','#8A5B00'];
+  return ['ยังไม่เริ่ม','#F1EFE8','#8a8a82'];
+}
+function vckPierBar(date){
+  var cnt={}, tot=0;
+  vckProgData(date).forEach(function(A){ A.rids.forEach(function(rid){ var pk=pckPierOf(rid); if(!pk) return; cnt[pk]=(cnt[pk]||0)+A.v[rid].pax; tot+=A.v[rid].pax; }); });
+  var ks=Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a]; });
+  if(ks.length<2) return '';   /* มีท่าเดียวก็ไม่ต้องมีปุ่ม (เหมือนหน้าท่า) */
+  var b=function(k,lbl,n){ return '<button class="vkh-pb'+((_vckPier===k)?' on':'')+'" onclick="vckSetPier('+(k?('\''+k+'\''):'null')+')" title="'+ckEsc(lbl)+'">'+ckEsc(lbl)+'<b class="ck-mono">'+n+'</b></button>'; };
+  return '<span class="vkh-piers">'+b(null,'ทุกท่า',tot)+ks.map(function(k){ return b(k, PCK_PIER_LBL[k]||k, cnt[k]); }).join('')+'</span>';
+}
+function vckProgList(date){
+  var e=ckEsc, list=vckProgData(date);
+  if(_vckPier){   /* §vckPier · เหลือเฉพาะ variant ของท่าที่เลือก · ยอดของแถวคิดใหม่จาก variant ที่เหลือ */
+    list=list.map(function(A){
+      var keep=A.rids.filter(function(rid){ return pckPierOf(rid)===_vckPier; });
+      if(!keep.length) return null;
+      var B={}; for(var k in A) B[k]=A[k];
+      B.rids=keep; B.pax=0; B.booked=0; B.tot=0; B.done=0; B.own=0; B.piers={}; B.pord=[_vckPier];
+      keep.forEach(function(rid){ var V=A.v[rid]; B.pax+=V.pax; B.booked+=V.bk; B.tot+=V.R.PK.tot+V.R.KL.tot; B.done+=V.R.PK.done+V.R.KL.done; B.own+=V.R.OWN.tot; });
+      B.piers[_vckPier]=B.pax; B.lost=Math.max(0,B.booked-B.pax);
+      return B;
+    }).filter(Boolean);
+  }
+  if(!list.length) return '<div class="pgh-empty">ไม่มีโปรแกรม'+(_vckPier?('ที่ท่า'+(PCK_PIER_LBL[_vckPier]||_vckPier)):'')+'ในวันนี้</div>';
+  return list.map(function(A){
+    var famOn=(_vckFam===A.f.id)||(_vckRoute&&A.v[_vckRoute]);
+    var op=!!_vckProgOpen[A.f.id] || !!famOn;
+    var st=vckProgStatus(A), bar=A.tot?Math.round(A.done*100/A.tot):0;
+    var live=A.rids.filter(function(rid){ return A.v[rid].open; }).length;
+    var _col=A.f.color||'#8b909c', _bg=famOn?pckTint(_col,.80):pckTint(_col,.93), _ink=pckShade(_col,.62);
+    var out='<div class="pgf'+(famOn?' on':'')+'" style="background:'+_bg+';box-shadow:inset 4px 0 0 '+(famOn?_col:pckTint(_col,.55))+'">'
+      +'<button class="pgf-h" style="color:'+_ink+'" onclick="vckSetFam(\''+A.f.id+'\')" title="กรองเฉพาะ '+e(A.f.name)+'">'
+        +'<span class="pgf-cv'+(op?' op':'')+'" onclick="event.stopPropagation();vckProgToggle(\''+A.f.id+'\')" title="'+(op?'พับ':'กางดู variant')+'">&#9656;</span>'
+        +'<i style="background:'+_col+'"></i>'
+        +'<span class="pgf-nm">'+e(A.f.name)+'</span>'
+        +'<span class="pgf-px ck-mono">'+A.pax+(A.lost>0?(' <s>'+A.booked+'</s>'):'')+'</span>'
+        +(A.rids.length>1?('<span class="pgf-vn">'+live+' variant</span>'):'')
+        +A.pord.map(function(pk){ return '<span class="pgf-pier" title="'+e((PCK_PIER_LBL[pk]||pk))+' · '+A.piers[pk]+' pax">'+e(PCK_PIER_LBL[pk]||pk)+' <b class="ck-mono">'+A.piers[pk]+'</b></span>'; }).join('')
+        +'<span class="pgf-sp"></span>'
+        +(A.tot>0?('<span class="pgf-rd" title="ขึ้นรถแล้ว '+A.done+' จาก '+A.tot+' pax ที่มีรถรับ">ขึ้นรถ <b class="ck-mono">'+A.done+'/'+A.tot+'</b></span>'):'')
+        +(A.lost>0?('<span class="pgf-due" title="จอง '+A.booked+' · เดินทางจริง '+A.pax+'">หาย '+A.lost+'</span>'):'')
+        +'<span class="pgf-st" style="background:'+st[1]+';color:'+st[2]+'">'+st[0]+'</span>'
+      +'</button>'
+      +'<div class="pgf-bar"><s style="width:'+bar+'%;background:'+_col+'"></s></div>';
+    if(op){
+      out+='<div class="pgf-vars">'+A.rids.map(function(rid){
+        var V=A.v[rid], R=V.R, lbl=pckVarLbl(A.f,rid), dep=V.dep||'', _vbg=pckTint(_col,.965);
+        if(!V.open) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ไม่ออกวันนี้">'
+          +'<span class="pgv-nm">'+e(lbl)+'</span>'+(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
+          +'<span class="pgv-off">ไม่ออกวันนี้</span></div>';
+        var von=(_vckRoute===rid);
+        return '<button class="pgv'+(von?' on':'')+'" style="background:'+(von?pckTint(_col,.86):_vbg)+';border-left-color:'+(von?_col:pckTint(_col,.62))+'" '
+          +'onclick="vckSetRoute(\''+rid+'\')" title="'+e(lbl)+(dep?(' · ออก '+dep):'')+' · ขึ้นรถแล้ว '+(R.PK.done+R.KL.done)+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ · คลิกกรองเฉพาะทริปนี้">'
+          +'<span class="pgv-nm">'+e(lbl)+'</span>'
+          +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
+          +'<span class="pgv-px ck-mono">'+V.pax+' pax'+(V.bk>V.pax?(' <s>'+V.bk+'</s>'):'')+'</span>'
+          +'<span class="pgv-z">'+pckZbox('PK',R.PK.done,R.PK.tot)+pckZbox('KL',R.KL.done,R.KL.tot)+pckZbox('มาเอง',0,R.OWN.tot,true)+'</span>'
+          +'</button>';
+      }).join('')+'</div>';
+    }
+    return out+'</div>';
+  }).join('');
+}
+function vckSelName(date){
+  if(!_vckFam && !_vckRoute) return 'ทุกโปรแกรม';
+  var out=''; vckProgData(date).forEach(function(A){
+    if(_vckRoute && A.v[_vckRoute]) out=A.f.name+' · '+pckVarLbl(A.f,_vckRoute);
+    else if(!_vckRoute && _vckFam===A.f.id) out=A.f.name; });
+  return out||'ทุกโปรแกรม';
+}
+function vckDayBar(date, o){
+  var e=ckEsc, isToday=(date===((typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):''));
+  var _d=new Date(date+'T00:00');
+  var dnum=_d.toLocaleDateString('en-GB',{day:'numeric'}), dowLong=_d.toLocaleDateString('en-GB',{weekday:'long'});
+  var dmy=_d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase();
+  var brand=(_vckFam||_vckRoute)?vckSelName(date):(_vckPier?('ท่า'+(PCK_PIER_LBL[_vckPier]||_vckPier)):'LOVE ANDAMAN');
+  return '<div class="vkh-day">'
+    +'<button class="vkh-nav" onclick="vanCkDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>'
+    +'<label class="vkh-dt" title="เลือกวันที่"><b class="vkh-dnum">'+e(dnum)+'</b>'
+      +'<span class="vkh-dcol"><span class="vkh-dow">'+e(dowLong)+'</span><span class="vkh-dmy">'+e(dmy)+'</span></span>'
+      +'<input type="date" value="'+e(date)+'" onclick="event.stopPropagation();try{this.showPicker()}catch(_){}" onchange="if(this.value)vckPickDay(this.value)"></label>'
+    +(isToday?'<span class="vkh-today">วันนี้</span>':'<button class="vkh-back" onclick="vanCkToday()" title="กลับไปวันนี้">&#8617; กลับวันนี้</button>')
+    +'<button class="vkh-nav" onclick="vanCkDateShift(1)" title="วันถัดไป">&rsaquo;</button>'
+    +'<span class="vkh-sp"></span><div class="vkh-brand'+((_vckFam||_vckRoute||_vckPier)?' on':'')+'">'+e(brand)+'</div><span class="vkh-sp"></span>'
+    +'<div class="vkh-kpi">'
+      +'<span class="vkh-k">รถ <b class="ck-mono">'+o.vans+'</b> คัน · จอง <b class="ck-mono">'+o.booked+'</b> pax</span>'
+      +(o.kpiHtml||'')
+      +'<span class="vkh-k vkh-tot">รวม <b class="ck-mono">'+o.totalPax+'</b> pax <small class="ck-mono">'+e(o.totalBreak||'')+'</small></span>'
+    +'</div></div>';
+}
+/* §vckHead3 · เจ้าของ: "แบบ B · รถทีมเดียวกันอยู่ใกล้กัน เว้นวรรคเล็กน้อยต่อทีมอื่น"
+   แถวละโปรแกรม/variant (ลำดับเดียวกับตาราง: ตามลำดับที่ gkeys โผล่) · ป้ายซ้าย = จุดสี + ชื่อ + จำนวนคัน
+   ในแถว จับรถทีมเดียวกันไว้ด้วยกัน · ทีม = รถบริษัท / รถร่วมแต่ละเจ้า (ownership + partnerName)
+   รถบริษัทก่อน แล้วรถร่วมเรียงตามชื่อเจ้า · ภายในทีมคงลำดับเดิม · ระหว่างทีมเว้นช่องเล็กน้อย */
+function vckVanTeam(vid){
+  var v=(typeof vehGet==='function'?vehGet(vid):null)||{};
+  if(v.ownership==='partner') return {k:'p:'+String(v.partnerName||'').trim().toLowerCase(), lbl:String(v.partnerName||'').trim()||'รถร่วม', own:false};
+  return {k:'own', lbl:'รถบริษัท', own:true};
+}
+function vckVanRows(groups, gkeys, date){
+  var e=ckEsc, rows=[], byR={};
+  gkeys.forEach(function(k){
+    var g=groups[k], rid=g.routeId||'';
+    if(!byR[rid]){ byR[rid]={rid:rid, keys:[]}; rows.push(byR[rid]); }
+    byR[rid].keys.push(k);
+  });
+  if(!rows.length) return '';
+  var famN={}; (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(x){ var ff=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(x.id):null; if(ff) famN[ff.id]=(famN[ff.id]||0)+1; });
+  return rows.map(function(R){
+    var rt=(typeof getRoute==='function'?getRoute(R.rid):null)||{};
+    var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(R.rid):null;
+    var lbl=f?(f.name+((famN[f.id]||0)>1?(' · '+pckVarLbl(f,R.rid)):'')):(rt.name||'—');
+    var col=rt.color||(f&&f.color)||'#8b909c';
+    /* §vckHead4 · เจ้าของ: "ควรเรียงตามแถวที่เรียงไว้ไหม" · ใช่ · ลำดับชิป = ลำดับคันในตาราง (ที่จัดไว้ในใบงานรถ) เป๊ะ
+       ไม่จัดกลุ่มทีมใหม่แล้ว · แค่เว้นช่องตรงรอยต่อเมื่อคันถัดไปเป็นคนละทีม (ทีมเดียวกันที่จัดไว้ติดกันก็ยังติดกันเหมือนเดิม) */
+    var runs=[], cur=null;
+    R.keys.forEach(function(k){ var T=vckVanTeam(groups[k].vid);
+      if(!cur || cur.k!==T.k){ cur={k:T.k, t:T, keys:[]}; runs.push(cur); }
+      cur.keys.push(k); });
+    var chips=runs.map(function(T){
+      return '<span class="vkh-team" title="'+e(T.t.lbl)+' · '+T.keys.length+' คัน">'
+        +T.keys.map(function(k){ return ckUnitBar(groups,[k],'van','vckg-','',{compact:true}); }).join('')+'</span>';
+    }).join('');
+    return '<div class="vkh-vrow"><span class="vkh-vlbl" style="color:'+pckShade(col,.62)+'" title="'+e(lbl)+'"><i style="background:'+col+'"></i>'+e(lbl)+'<small class="ck-mono">'+R.keys.length+'</small></span>'
+      +'<div class="vkh-vchips">'+chips+'</div></div>';
+  }).join('');
+}
+function vckHeadCard(id, title, headHtml, bodyHtml){
+  return '<div class="vkh-card" data-blk="'+id+'"><div class="vkh-chd"><span class="vkh-ct">'+ckEsc(title)+'</span>'+(headHtml||'')+'</div>'+bodyHtml+'</div>';
+}
+function vckHeadHtml(o){
+  var date=o.date, progHtml=vckProgList(date);
+  var nProg=(progHtml.match(/class="pgf[" ]/g)||[]).length;   /* §vckPier · นับจากที่แสดงจริง (หลังกรองท่า) */
+  var allBtn=(_vckFam||_vckRoute)?'<button class="vkh-allbtn" onclick="vckSetFam(null)" title="เลิกกรอง แสดงทุกโปรแกรม">&#10005; ทุกโปรแกรม</button>':'';
+  var prog=vckHeadCard('prog','โปรแกรมวันนี้',
+    (nProg?('<span class="vkh-cnt">'+nProg+' โปรแกรม</span>'):'')+vckPierBar(date)+'<span class="vkh-csp"></span>'+allBtn,
+    '<div class="vkh-plist">'+progHtml+'</div>');
+  var vans=vckHeadCard('vans','รถ',
+    '<span class="vkh-selnm">'+ckEsc(vckSelName(date))+'</span><span class="vkh-cnt dark">รถทั้งหมด '+o.nVans+'</span>'
+      +'<span class="vkh-hint">แถวละโปรแกรม · รถทีมเดียวกันอยู่ติดกัน · กดเพื่อเด้งไปที่คันนั้น</span><span class="vkh-csp"></span>'
+      +'<button class="vkh-ico" onclick="nav(document.querySelector(\'[data-view=vanjobs]\'))" title="ไปหน้าใบงานรถ">&#128203;</button>'
+      +'<button class="vkh-ico" onclick="nav(document.querySelector(\'[data-view=piercheckin]\'))" title="ไปหน้าเช็คอินหน้าท่า">&#9875;</button>',
+    '<div class="vkh-vans vkh-vans-b">'+(o.vansHtml||'<span class="vkh-none">— ยังไม่มีรถที่จัดไว้ —</span>')+'</div>');
+  /* §vckHead2 · "ฝั่งขวาให้กระชับอีก" · ค้นหากับตัวกรองอยู่แถวเดียวกันในการ์ดเดียว ไม่มีหัวการ์ด */
+  var filt='<div class="vkh-card" data-blk="filters"><div class="vkh-fwrap">'+vckSearchBox()+(o.kpiHtml||'')+'<span class="vkh-csp"></span>'+vckLegendBtn()+'</div></div>';
+  return '<div class="vkh">'+o.dayHtml
+    +'<div class="vkh-grid"><div class="vkh-col">'+prog+'</div><div class="vkh-col">'+vans+filt+'</div></div>'
+    +vckLegend()+'</div>';
+}
+function vckHeadCSS(){
+  var H='#vancheckin-host';
+  return ''
+  /* §vckStick · เจ้าของ: "ตรึงส่วนนี้ไว้" · สูตรเดียวกับหัวหน้าท่า (§pkhStick) · ดึงออกถึงขอบ .main แล้วตรึงที่ 0 */
+  +H+' .vkh{position:sticky;top:0;z-index:60;background:#E4E7EC;margin:-22px -22px 10px -14px;padding:11px 22px 11px 14px;'
+    +'border-bottom:1px solid #DCE0E6;box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
+  +'#view-vancheckin{padding-bottom:0 !important}'
+  +H+' .vkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
+  +H+' .vkh-nav{width:26px;height:26px;flex:none;border-radius:50%;border:1px solid #DFE3E9;background:#fff;color:#5F5E5A;font-size:15px;line-height:1;cursor:pointer;font-family:inherit}'
+  +H+' .vkh-nav:hover{border-color:#185FA5;color:#185FA5}'
+  +H+' .vkh-dt{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:#15201a}'
+  +H+' .vkh-dt input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
+  +H+' .vkh-dnum{font-size:32px;font-weight:800;line-height:1;letter-spacing:-1.2px;font-family:\'DM Mono\',monospace}'
+  +H+' .vkh-dcol{display:flex;flex-direction:column;line-height:1.1}'
+  +H+' .vkh-dow{font-size:15px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .vkh-dmy{font-size:10px;font-weight:700;color:#98A0AC;letter-spacing:.1em}'
+  +H+' .vkh-today{background:#15201a;color:#fff;border-radius:999px;padding:3px 11px;font-size:10.5px;font-weight:800}'
+  +H+' .vkh-back{border:1px solid #DFE3E9;background:#fff;border-radius:999px;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+  +H+' .vkh-back:hover{border-color:#185FA5;color:#185FA5}'
+  +H+' .vkh-sp{flex:1}'
+  +H+' .vkh-brand{font-size:17px;font-weight:700;letter-spacing:.42em;color:#15201a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw}'
+  +H+' .vkh-brand.on{letter-spacing:-.2px;font-weight:800}'
+  +H+' .vkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
+  +H+' .vkh-kpi>span{border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;white-space:nowrap}'
+  +H+' .vkh-k{background:#fff;border:1px solid #DFE3E9;color:#3C3B37}'
+  +H+' .vkh-k b{font-size:13px}'
+  +H+' .vkh-tot b{font-size:14px}'
+  +H+' .vkh-tot small{font-size:10px;color:#a5a49d}'
+  +H+' .vkh-grid{display:grid;grid-template-columns:minmax(380px,36%) minmax(0,1fr);gap:10px;align-items:start}'
+  +H+' .vkh-col{display:flex;flex-direction:column;gap:8px;min-width:0}'
+  +H+' .vkh-card{background:#fff;border:1px solid #DFE3E9;border-radius:11px;overflow:hidden}'
+  +H+' .vkh-chd{display:flex;align-items:center;gap:8px;padding:5px 11px;border-bottom:1px solid #EFECE4;min-height:30px}'
+  +H+' .vkh-ct{font-size:12.5px;font-weight:800;color:#15201a;white-space:nowrap}'
+  +H+' .vkh-cnt{font-size:10px;font-weight:700;background:#F1EFE8;color:#5F5E5A;border-radius:999px;padding:2px 8px;white-space:nowrap}'
+  +H+' .vkh-cnt.dark{background:#15201a;color:#fff}'
+  +H+' .vkh-selnm{font-size:12px;font-weight:600;color:#5F5E5A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}'
+  +H+' .vkh-hint{font-size:10px;color:#a5a49d;white-space:nowrap}'
+  +H+' .vkh-csp{flex:1}'
+  +H+' .vkh-ico{width:25px;height:25px;border-radius:50%;border:1px solid #DFE3E9;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0}'
+  +H+' .vkh-ico:hover{border-color:#185FA5}'
+  +H+' .vkh-piers{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden;background:#fff;flex:none;margin-left:4px}'
+  +H+' .vkh-pb{border:0;background:none;padding:3px 9px;font:700 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer;white-space:nowrap}'
+  +H+' .vkh-pb+.vkh-pb{border-left:1px solid #EFECE4}'
+  +H+' .vkh-pb.on{background:#15201a;color:#fff}'
+  +H+' .vkh-pb b{font-weight:700;opacity:.6;margin-left:4px}'
+  +H+' .vkh-allbtn{border:1px solid #185FA5;background:#E6F1FB;color:#0C447C;border-radius:999px;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;cursor:pointer}'
+  +H+' .vkh-plist{max-height:300px;overflow-y:auto;overscroll-behavior:contain}'
+  +H+' .vkh-plist::-webkit-scrollbar{width:6px}'+H+' .vkh-plist::-webkit-scrollbar-thumb{background:#DAD6CC;border-radius:3px}'
+  +H+' .pgh-empty{padding:10px;font-size:11.5px;color:#a5a49d;text-align:center}'
+  /* รายการโปรแกรม · ชุดเดียวกับหน้าท่า */
+  +H+' .pgf{border-bottom:1px solid rgba(255,255,255,.85)}'
+  +H+' .pgf-h{display:flex;align-items:center;gap:7px;width:100%;border:0;background:none;text-align:left;padding:5px 9px 4px;cursor:pointer;font-family:inherit}'
+  +H+' .pgf-h:hover{background:rgba(255,255,255,.45)}'
+  +H+' .pgf-cv{width:15px;height:15px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#8a8a82;flex:none;border:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.75);transition:transform .12s}'
+  +H+' .pgf-cv.op{transform:rotate(90deg)}'+H+' .pgf-cv:hover{border-color:#185FA5;color:#185FA5}'
+  +H+' .pgf-h>i{width:8px;height:8px;border-radius:50%;flex:none}'
+  +H+' .pgf-nm{font-size:15px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pgf-px{font-size:12px;font-weight:700;flex:none;opacity:.82}'
+  +H+' .pgf-px s{color:#A32D2D;opacity:.7;font-weight:500}'
+  +H+' .pgf-vn{font-size:9.5px;font-weight:700;background:rgba(255,255,255,.7);border-radius:999px;padding:1px 7px;flex:none;opacity:.85}'
+  +H+' .pgf-pier{font-size:9.5px;font-weight:700;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:999px;padding:1px 7px;flex:none;color:#5F5E5A;white-space:nowrap}'
+  +H+' .pgf-pier b{font-size:10.5px;color:#15201a;margin-left:2px}'
+  +H+' .pgf-sp{flex:1}'
+  +H+' .pgf-rd{font-size:10px;font-weight:700;color:#5F5E5A;white-space:nowrap}'+H+' .pgf-rd b{color:#0F6E56;font-size:11.5px}'
+  +H+' .pgf-due{font-size:9.5px;font-weight:800;color:#7A4A00;background:#FBF0DD;border-radius:999px;padding:1px 7px;white-space:nowrap}'
+  +H+' .pgf-st{font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap;flex:none}'
+  +H+' .pgf-bar{height:3px;background:rgba(255,255,255,.6);overflow:hidden}'+H+' .pgf-bar s{display:block;height:100%;text-decoration:none}'
+  +H+' .pgf-vars{padding:2px 0 4px 30px}'
+  +H+' .pgv{display:flex;align-items:center;gap:6px;width:100%;border:0;border-left:2px solid #E7E4DC;background:none;text-align:left;padding:3px 9px 3px 7px;cursor:pointer;font-family:inherit}'
+  +H+' .pgv:hover{filter:brightness(.97)}'+H+' .pgv.off{opacity:.5;cursor:default}'
+  +H+' .pgv-nm{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px}'
+  +H+' .pgv-tm{font-size:11px;color:#6b6a63;background:rgba(255,255,255,.75);border-radius:5px;padding:1px 6px;flex:none}'
+  +H+' .pgv-px{font-size:11px;color:#8a8a82;flex:none}'+H+' .pgv-px s{color:#A32D2D}'
+  +H+' .pgv-off{font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:999px;padding:1px 7px}'
+  +H+' .pgv-z{display:inline-flex;gap:3px;margin-left:auto;flex:none}'
+  +H+' .pgz{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:1px 7px;font-size:9px;font-weight:700;white-space:nowrap}'
+  +H+' .pgz b{font-size:11px;font-family:\'DM Mono\',monospace}'
+  /* ชิปรถ · บรรทัดเดียว */
+  +H+' .vkh-vans{display:flex;flex-wrap:wrap;gap:3px 4px;padding:6px 10px 7px}'
+  +H+' .vkh-none{font-size:10.5px;color:#a5a49d}'
+  +H+' .vkh-vans-b{flex-direction:column;align-items:stretch;gap:3px}'
+  +H+' .vkh-vrow{display:flex;align-items:flex-start;gap:6px;min-width:0}'
+  +H+' .vkh-vlbl{flex:none;width:190px;display:inline-flex;align-items:center;gap:5px;height:20px;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .vkh-vlbl>i{width:7px;height:7px;border-radius:50%;flex:none}'
+  +H+' .vkh-vlbl small{font-size:9.5px;font-weight:600;color:#8a8a82;margin-left:1px}'
+  +H+' .vkh-vchips{display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;min-width:0}'
+  +H+' .vkh-team{display:inline-flex;flex-wrap:wrap;gap:3px 3px;margin-right:9px}'
+  +H+' .vkh-team:last-child{margin-right:0}'
+  +H+' .vkh-vc{display:inline-flex;align-items:center;gap:4px;height:20px;border:1px solid #DFE3E9;border-left:3px solid var(--vc,#5F5E5A);background:#F7F6F2;border-radius:5px;padding:0 6px 0 5px;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +H+' .vkh-vc:hover{filter:brightness(.96)}'
+  +H+' .vkh-vc .n{font-size:10.5px;font-weight:800;color:#15201a}'
+  +H+' .vkh-vc .t{font-size:9px;color:#8a8a82}'
+  +H+' .vkh-vc .c{font-size:10.5px;font-weight:800;color:#5F5E5A}'
+  +H+' .vkh-vc.part{background:#FFF8EC;border-color:#F0D9A8}'+H+' .vkh-vc.part .c{color:#7A4A00}'
+  +H+' .vkh-vc.full{background:#F1FAF5;border-color:#BFE3D1}'+H+' .vkh-vc.full .c{color:#0F6E56}'
+  +H+' .vkh-vc.late{background:#FCEBEB;border-color:#E6C9C3}'+H+' .vkh-vc.late .c,'+H+' .vkh-vc.late .t{color:#A32D2D}'
+  +H+' .vkh-vc.sb .n::after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#12A46F;margin-left:4px;vertical-align:middle;box-shadow:0 0 0 2px #D6F2E6}'
+  /* ค้นหา · ตัวกรอง */
+  +H+' .vkh-fwrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:6px 10px}'
+  +H+' .vkh-fwrap .vck-q{flex:1;min-width:220px;height:28px !important;font-size:12px !important;border-radius:8px;margin-right:4px}'
+  +H+' .vkh-fwrap>span{border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap}'
+  +H+' .vkh-fwrap .vck-lgt{margin:0}'
+  +H+' .vkh .vck-lgbar{margin-top:8px}'
+  +'@media (max-width:1100px){'+H+' .vkh-grid{grid-template-columns:1fr}'+H+' .vkh-brand{display:none}}';
+}
 function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
   /* §vckStay (2026-10-09) · "Van Check-in ติ๊กแล้วเด้ง" · ตารางเลื่อนอยู่ในกล่องของตัวเอง (.vck-tw)
@@ -16386,6 +16901,7 @@ function renderVanCheckin(){
     if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN = ส่งกลับ ไม่ใช่รับขึ้นรถ
     if(_vckRoute){ if(t.routeId!==_vckRoute) return; }
     else if(_vckFam){ var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(t.routeId):null; if(!f||f.id!==_vckFam) return; }
+    if(!vckPierOk(t.routeId)) return;   /* §vckPier */
     if(!vckQMatch(b, date)) return;   /* §vckSrch */
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var z=(typeof bookingV2EffZone==='function')?bookingV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
@@ -16439,6 +16955,7 @@ function renderVanCheckin(){
     if(_vckRoute){ if(r.t.routeId!==_vckRoute) return; }
     else if(_vckFam){ var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(r.t.routeId):null;
       if(!f||f.id!==_vckFam) return; }
+    if(!vckPierOk(r.t.routeId)) return;   /* §vckPier */
     if(!vckQMatch(r.b, date)) return;
     var mk=r.vanId+'~'+(r.t.routeId||'');
     var MG=(groups[mk]=groups[mk]||{vid:r.vanId, routeId:r.t.routeId||'', zone:r.t.zone||'PK',
@@ -16526,7 +17043,9 @@ function renderVanCheckin(){
     var _gEdge=_sbNow?'#12A46F':(_gAny?(c[1]||'#3A6FF7'):'#DFE3E9');
     /* §vckSheet · --vc สีประจำรถตัวจริง (ใช้ตอน hover) · --vbg2 พื้นอ่อนของคันนั้น */
     var _gv=' style="--vc:'+(c[1]||'#3A6FF7')+';--vbg2:'+soft+';--vedge:'+_gEdge+'"';
-    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':(_gAny?' vck-gon':' vck-gpale'))+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
+    /* §vckGap · เจ้าของ: "ให้มีช่องว่างระหว่างรถหน่อย" · แถวเว้นโปร่งก่อนหัวคันแต่ละคัน · ไม่ sticky ไม่มีพื้น */
+    bodyHtml+='</tbody><tbody><tr class="ck-gsp"><td colspan="17"></td></tr>'
+      +'<tr class="ck-ghd'+(_sbNow?' vck-sb':(_gAny?' vck-gon':' vck-gpale'))+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
@@ -16596,14 +17115,13 @@ function renderVanCheckin(){
         +kchip('#FCEBEB','#A32D2D','No-show',sN,'ไม่ได้ขึ้นรถและยังไม่มีใครยืนยันว่ามาถึงท่า')
         +kchip('#FBF3E6','#8A5B00','CXL',sC,'ยกเลิกหน้างาน')
         +kchip('#F4E8FB','#6B289A','ไปเจอที่ท่า',sP,'ไปเองที่ท่า/ไปรถคันอื่น · ยังถือว่าเดินทาง รอหน้าท่ายืนยัน');
-  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+vckSheetCSS()+ckStrandCSS('#vancheckin-host')+'</style>'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินรถ</h1>'
-    +'<span style="font-size:11px;color:#8a8a82">บันทึกคนขึ้นรถจริง → ป้าย No-show ไปโผล่ที่ By trip · date และส่งต่อ Pier Check-in</span></div>'
-    +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
-                  kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
-                  totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
-    +ckUnitBar(groups, gkeys, 'van', 'vckg-', vckSearchBox()+vckLegendBtn())
-    +vckLegend()
+  /* §vckHead · หัวใหม่ · โครงเดียวกับเช็คอินหน้าท่า (ดูบล็อกเหนือฟังก์ชันนี้)
+     pills.html ของการ์ดตัวใหญ่ไม่ใช้แล้ว · ยอดรวม/หาย ยังมาจาก ckRoutePills ก้อนเดิม */
+  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+vckSheetCSS()+ckStrandCSS('#vancheckin-host')+vckHeadCSS()+'</style>'
+    +vckHeadHtml({date:date, kpiHtml:kpi, nVans:gkeys.length,
+                  vansHtml:vckVanRows(groups, gkeys, date),   /* §vckHead3 · แถวละโปรแกรม · ทีมติดกัน */
+                  dayHtml:vckDayBar(date, {vans:gkeys.length, booked:pills.booked, kpiHtml:'', totalPax:pills.total,
+                    totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})})
     +'<div class="ck-card vck-card"><div class="vck-tw"><table class="ck-tbl vck-sheet"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th>'
@@ -21317,7 +21835,10 @@ function pckKitchenRender(){
     sum+=(+amt||0);
     if((taGet(K.date,bid)||{}).meal) nSent++; else nDue++;
   });
-  h.innerHTML='<div onclick="if(event.target===this)pckKitchenClose()" style="position:fixed;inset:0;'
+  /* §kitKeep · หน้าต่างครัววาดใหม่ทุกครั้งที่หน้าท่าวาดใหม่ (ทุก 60 วิ + ทุกครั้งที่อีกเครื่องเช็คอิน ~1 วิ)
+     เดิมเขียน innerHTML ทับทั้งก้อน → กล่องเลื่อนกลับไปบนสุด = "เด้ง" ขณะกำลังอ่าน/กดลำล่าง ๆ
+     ตอนนี้ ของเหมือนเดิมเป๊ะ = ไม่แตะเลย · ของเปลี่ยน = วาดใหม่แล้วคืนตำแหน่งเลื่อนเดิม */
+  var _kh='<div onclick="if(event.target===this)pckKitchenClose()" style="position:fixed;inset:0;'
    +'background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9000;display:flex;align-items:center;'
    +'justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
    +'<div style="background:#F6F7F9;border-radius:16px;width:min(840px,96vw);max-height:90vh;display:flex;'
@@ -21337,10 +21858,14 @@ function pckKitchenRender(){
        +'<button onclick="pckKitchenClose()" style="background:transparent;border:none;font-size:20px;'
          +'color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
      +'</div></div>'
-   +'<div style="padding:16px 20px;overflow:auto;flex:1">'
+   +'<div id="pck-kit-sc" style="padding:16px 20px;overflow:auto;flex:1">'
      +(cards||'<div style="font-size:12.5px;color:#94A3B8;text-align:center;padding:28px 0">'
               +'วันนี้ยังไม่มีเรือที่ต้องสั่งอาหาร</div>')
    +'</div></div></div>';
+  if(h._kitHtml===_kh && h.firstChild) return;
+  var _sc0=document.getElementById('pck-kit-sc'), _st=_sc0?_sc0.scrollTop:0;
+  h.innerHTML=_kh; h._kitHtml=_kh;
+  if(_st){ var _sc1=document.getElementById('pck-kit-sc'); if(_sc1) _sc1.scrollTop=_st; }
 }
 /* ═══ §mealSlip · ใบสั่งอาหาร ════════════════════════════════════════════════
    ภาษาไทยทั้งใบ · คนอ่านคือแม่ครัว ไม่ใช่ลูกค้า
@@ -28780,7 +29305,17 @@ let _vehMonth=(bookingV2LocalYMD(new Date())).slice(0,7);   // 'YYYY-MM'
 let _vehCalMonth=(bookingV2LocalYMD(new Date())).slice(0,7); // detail-panel status calendar month
 function vehCalShift(n){ const [y,m]=_vehCalMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
 function vehMonthShift(n){ const [y,m]=_vehMonth.split('-').map(Number); const d=new Date(y,m-1+n,1); _vehMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVehicles(); }
-function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(bkOpsRead(b,date).vanId!==id)return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
+/* §vehMxFast · เจ้าของ: "คลิกในหน้า Transfer Fleet ช้า ดีเลย์"
+   ของเดิมกวาด SB_BOOKINGS ทั้งก้อนต่อ "ช่อง" · 73 คัน × 30 วัน = 2,190 ช่อง × หลายพันใบ = สิบล้านรอบต่อการวาดหนึ่งครั้ง
+   ตอนนี้เดินใบจองครั้งเดียวต่อวัน แล้วจำไว้ (ดัชนี vid → จำนวนงาน) · ล้างทุกครั้งที่วาดหน้าใหม่หรือช่องเดียว (_vehJobIdxGen) */
+var _vehJobIdx={}, _vehJobIdxGen=0, _vehJobIdxSeen=-1;
+function _vehJobIdxBump(){ _vehJobIdxGen++; }
+function _vehDayJobN(id,date){
+  if(_vehJobIdxSeen!==_vehJobIdxGen){ _vehJobIdx={}; _vehJobIdxSeen=_vehJobIdxGen; }
+  let m=_vehJobIdx[date];
+  if(!m){ m=_vehJobIdx[date]={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const vid=bkOpsRead(b,date).vanId; if(!vid)return; let n=0; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) n++; }); if(n) m[vid]=(m[vid]||0)+n; }); }
+  return m[id]||0;
+}
 function _vehDayCellInner(v,date){
   const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
   const routes=_vehDayRoutes(v,date);
@@ -28813,7 +29348,7 @@ function _vehDayCellInner(v,date){
   const rnBadge=_rnMore?`<span title="วันนี้วิ่ง ${_rnTot} รอบ (คนละเวลา) — ใบงานรถแยกใบตามรอบ" style="position:absolute;bottom:-5px;left:-5px;height:13px;padding:0 3px;border-radius:7px;background:#fff;border:1.5px solid #5B289A;color:#5B289A;font-size:7.5px;line-height:10px;font-weight:800;letter-spacing:-.02em">&times;${_rnTot}</span>`:'';
   const jbBadge=(routes.length>0&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
   const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
+  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:4px auto;width:26px;height:22px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -28859,12 +29394,26 @@ function vehDayPopup(id,date){
           +'</div>'; }).join('')
     +'</div>'):'';
   const routes=_vehDayRoutes(v,date);
-  const fams=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[];
-  const rBtn=f=>{ const on=routes.includes(f.id); const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(f.id,date):{pax:0,pickup:0}; const paxChip=dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''; const chk=on?'<span style="width:15px;height:15px;border-radius:4px;background:#fff;color:'+f.color+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">&#10003;</span>':'<span style="width:15px;height:15px;border-radius:4px;border:1.5px solid '+f.color+';flex:none"></span>'; return `<button onclick="vehDayToggleRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px">${chk}<span style="flex:1">${e(f.name)}</span>${paxChip}<span style="font-size:10px;font-family:'DM Mono',monospace;opacity:.85">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')} · ${zl}</span></button>`; };
+  /* §vehPopPier · เจ้าของ: "รูป 2 ควรกรองแยกท่าเรือให้เรา" · แท็บ ทุกท่า/ท่า… · เฉพาะทริปเรือของเรา เรียงตามเวลาออก
+     Transfer / City tour / กิจกรรม พับไว้ท้าย (กางด้วย _vehPopLand) · เส้นทางที่เลือกอยู่แล้วแสดงเสมอ */
+  const _ST=_vehDayStats(date);
+  const famsAll=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[];
+  const _isLand=rid=>(typeof laIsLandRoute==='function')&&laIsLandRoute(rid);
+  const marine=famsAll.filter(f=>!_isLand(f.id)), land=famsAll.filter(f=>_isLand(f.id));
+  const pierCnt={}; marine.forEach(f=>{ const pk=pckPierOf(f.id)||'other'; pierCnt[pk]=(pierCnt[pk]||0)+1; });
+  const piers=Object.keys(pierCnt).sort((a,b)=>pierCnt[b]-pierCnt[a]);
+  if(window._vehPopPier && !pierCnt[window._vehPopPier]) window._vehPopPier=null;
+  const pSel=window._vehPopPier||null;
+  const _pb=(on,extra)=>`border:0;border-left:1px solid #EFECE4;padding:3px 10px;font:700 10.5px inherit;font-family:inherit;cursor:pointer;${on?'background:#15201a;color:#fff':'background:#fff;color:#5F5E5A'};${extra||''}`;
+  const pierTabs=piers.length>1?`<span style="margin-left:auto;display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden"><button onclick="window._vehPopPier=null;vehDayPopup('${id}','${date}')" style="${_pb(!pSel,'border-left:0')}">ทุกท่า</button>${piers.map(pk=>`<button onclick="window._vehPopPier='${pk}';vehDayPopup('${id}','${date}')" style="${_pb(pSel===pk)}">${e((typeof PCK_PIER_LBL!=='undefined'&&PCK_PIER_LBL[pk])||pk)} <b style="font-family:'DM Mono',monospace;opacity:.7">${pierCnt[pk]}</b></button>`).join('')}</span>`:'';
+  const depOf=rid=>(typeof pckDepOf==='function')?pckDepOf(rid):'';
+  const fams=marine.filter(f=>!pSel||pckPierOf(f.id)===pSel||routes.includes(f.id)).sort((a,b)=>String(depOf(a.id)).localeCompare(String(depOf(b.id)))||String(a.name).localeCompare(String(b.name)));
+  const landSel=land.filter(f=>routes.includes(f.id)), landRest=land.filter(f=>!routes.includes(f.id));
+  const rBtn=f=>{ const on=routes.includes(f.id); const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=_ST.dm[f.id]||{pax:0,pickup:0}; const _nv=(SB_VEHICLES||[]).filter(vv=>vv.active&&_vehDayRoutes(vv,date).includes(f.id)).length; const paxChip=`<span style="display:inline-flex;flex-direction:column;align-items:flex-end;gap:1px;line-height:1.1">${dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''}<span style="font-size:9px;opacity:.8;white-space:nowrap">รถแล้ว <b style="font-family:'DM Mono',monospace">${_nv}</b></span></span>`; const _dep=depOf(f.id); const chk=on?'<span style="width:15px;height:15px;border-radius:4px;background:#fff;color:'+f.color+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">&#10003;</span>':'<span style="width:15px;height:15px;border-radius:4px;border:1.5px solid '+f.color+';flex:none"></span>'; return `<button onclick="vehDayToggleRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px">${chk}<span style="width:20px;height:20px;border-radius:6px;background:${on?'rgba(255,255,255,.25)':f.color};color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')}</span><span style="flex:1;min-width:0"><span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e(f.name)}</span><span style="display:block;font-size:10px;opacity:.75;font-weight:500">${_dep?('ออก '+e(_dep)+' · '):''}${zl}</span></span>${paxChip}</button>`; };
   const sBtn=(val,lbl,col)=>`<button onclick="vehDaySetStatus('${id}','${date}','${val}')" style="flex:1;border:1px solid ${st===val?col:'#ddd'};background:${st===val?col:'#fff'};color:${st===val?'#fff':'#555'};border-radius:7px;padding:7px 0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${lbl}</button>`;
   const ov=document.createElement('div'); ov.id='veh-day-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;font-family:"DM Sans",sans-serif';
-  ov.innerHTML=`<div style="background:#fff;border-radius:14px;width:380px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.28)" onclick="event.stopPropagation()">
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;width:440px;max-width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid #eee">
       <div><div style="font-size:14px;font-weight:800;color:#1B2A55">${e(v.name||id)}</div><div style="font-size:11px;color:#8a8a82">${e(dlbl)} · โซนหลัก ${e(v.zoneBase)}</div></div>
       <button onclick="vehDayClose()" style="background:transparent;border:none;font-size:20px;color:#999;cursor:pointer">&times;</button>
@@ -28876,9 +29425,9 @@ function vehDayPopup(id,date){
         <button onclick="vehDayClose();vehStatusOpen('${id}')" style="margin-left:auto;background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:#185FA5">จัดการช่วงสถานะ (จาก–ถึง)</button>
       </div>
       ${(st==='off'||st==='maintenance')?`<div style="background:#FCF4F2;border:1px solid #F0D9D2;border-radius:8px;padding:9px 11px;font-size:11.5px;color:#A32D2D;margin-bottom:4px">รถ${st==='maintenance'?'ติดซ่อม':'หยุดวิ่ง'}วันนี้ — แนะนำไม่จัดเส้นทาง (แก้สถานะที่หน้าสถานะก่อน)</div>`:`
-      <div style="font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px">วิ่งเส้นทางไหนวันนี้ <span style="color:#bbb;font-weight:500">· เลือกได้หลายเส้นทางถ้าวิ่งหลายงาน</span></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px;flex-wrap:wrap">วิ่งโปรแกรมไหนวันนี้ <span style="color:#bbb;font-weight:500">· เลือกได้หลายโปรแกรม</span>${pierTabs}</div>
       ${routes.length>=2?`<div style="background:#EEF5FC;border:1px solid #CFE3F5;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#185FA5;margin-bottom:8px;font-weight:600">🚐 วันนี้วิ่ง ${routes.length} เส้นทาง — จะเลือกได้ในทุกเส้นทางตอนจัดรถ (Van Assign)</div>`:''}
-      <div style="margin-bottom:4px;max-height:280px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${routes.length?`<button onclick="vehDayClearRoutes('${id}','${date}')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างทั้งหมด</button>`:''}</div>`}
+      <div style="margin-bottom:4px;max-height:300px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${landSel.map(rBtn).join('')}${landRest.length?(window._vehPopLand?`<div style="font-size:10px;color:#8a8a82;font-weight:700;margin:6px 0 4px">Transfer · City tour · กิจกรรม</div>${landRest.map(rBtn).join('')}<button onclick="window._vehPopLand=false;vehDayPopup('${id}','${date}')" style="border:1px dashed #CBD5E1;background:#fff;border-radius:8px;padding:5px 10px;font-size:10.5px;font-weight:700;color:#64748B;cursor:pointer;font-family:inherit;width:100%">พับโปรแกรมอื่น</button>`:`<button onclick="window._vehPopLand=true;vehDayPopup('${id}','${date}')" style="border:1px dashed #CBD5E1;background:#fff;border-radius:8px;padding:5px 10px;font-size:10.5px;font-weight:700;color:#64748B;cursor:pointer;font-family:inherit;width:100%;margin-top:2px">+ โปรแกรมอื่น (Transfer · City tour · กิจกรรม) ${landRest.length}</button>`):''}${routes.length?`<button onclick="vehDayClearRoutes('${id}','${date}')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างทั้งหมด</button>`:''}</div>`}
       <div style="font-size:11px;color:#185FA5;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:12px;margin-bottom:8px">งานวันนี้ · ${jobs.length}</div>
       ${_rndHtml}
       ${jrows}
@@ -28888,7 +29437,7 @@ function vehDayPopup(id,date){
   ov.onclick=ev=>{ if(ev.target===ov && ov._d) vehDayClose(); };
   document.body.appendChild(ov);
 }
-function _vehDayRefresh(id,date){ const v=vehGet(id); const cell=document.getElementById('vehcell-'+id+'-'+date); if(cell&&v) cell.innerHTML=_vehDayCellInner(v,date); if(document.getElementById('veh-day-modal')) vehDayPopup(id,date); }
+function _vehDayRefresh(id,date){ if(typeof _vehJobIdxBump==='function') _vehJobIdxBump(); const v=vehGet(id); const cell=document.getElementById('vehcell-'+id+'-'+date); if(cell&&v) cell.innerHTML=_vehDayCellInner(v,date); if(document.getElementById('veh-day-modal')) vehDayPopup(id,date); }
 function vehDaySetZone(id,date,z){ const v=vehGet(id); if(!v)return; v.dayZone=v.dayZone||{}; if(z){ v.dayZone[date]=z; } else { delete v.dayZone[date]; } vehLog(id,'zone',date+' · โซน '+(z||'ตามหลัก')); sbVehiclesPersist(); _vehDayRefresh(id,date); }
 // ── Per-day route/program assignment (which program a van runs that day) ──
 const VEH_FAM_ABBR={similan:'SM',surin:'SR',phiphi:'PP',krabi:'KB',whaleshark:'WS'};
@@ -28931,21 +29480,145 @@ function _vehGroupsForDay(routeId,day){
   let withVan=0,woVan=0; set.forEach(k=>{ if(vanByKey[k])withVan++; else woVan++; });
   return {total:set.size, withVan, woVan};
 }
+/* §vehMxHead (2026-11-02) · เจ้าของ: "ปรับดีไซน์หน้านี้ · เน้นแต่โปรแกรมที่เราใช้พอ · Header ให้กระชับที่สุด เพราะที่ใช้หลักคือตารางล่าง"
+   เดิม: หัว KPI 4 กล่อง + การ์ดสรุปจัดรถต่อโปรแกรม + คำอธิบายสีของ ROUTES ทุกเส้น (60-70 ชิป 7 บรรทัด) · ตารางเริ่มที่ ~580px
+   ใหม่: แถบเดียวในหัวตาราง = วันที่เลือก · จัดแล้ว N คัน · ชิปต่อโปรแกรมที่มีงาน/มีรถวันนั้น (เลขโปรแกรม · ชื่อย่อ · จำนวนคัน)
+         + บรรทัดคำอธิบายสีเฉพาะโปรแกรมที่มีรถในเดือนนี้ (ที่ไม่อยู่ในแถบวันแล้ว) · ที่เหลือพับไว้หลัง "+ N โปรแกรมที่ไม่ได้ใช้" */
+var _vehLegendAll=false;
+function vehLegendToggle(){ _vehLegendAll=!_vehLegendAll; renderVehicles(); }
+/* §vehMxFold · เจ้าของ: "เพิ่มที่แบบยุบได้ · มีหัวทีมหลักและรถที่อยู่ในทีมนั้น ๆ" · จำต่อเครื่อง (localStorage) ไม่ใช่ทั้งบริษัท
+   key: own / rented / partner / partner|<ซัพ> · ยุบ partner = ซ่อนทุกซัพข้างใน */
+var _vehMxFold=(function(){ try{ return JSON.parse(localStorage.getItem('veh_mx_fold')||'{}')||{}; }catch(_){ return {}; } })();
+function vehMxFold(k){ if(_vehMxFold[k]) delete _vehMxFold[k]; else _vehMxFold[k]=1; try{ localStorage.setItem('veh_mx_fold',JSON.stringify(_vehMxFold)); }catch(_){} renderVehicles(); }
+function _vehMxHidden(k,pk){ return !!(_vehMxFold[k] || (pk&&_vehMxFold[pk])); }
+function vehMxFoldAll(on){ _vehMxFold={}; if(on){ ['own','rented','partner'].forEach(k=>_vehMxFold[k]=1); } try{ localStorage.setItem('veh_mx_fold',JSON.stringify(_vehMxFold)); }catch(_){} renderVehicles(); }
+function _vehMonthUsedRoutes(){
+  var used={}; var [my,mm]=_vehMonth.split('-').map(Number); var n=new Date(my,mm,0).getDate();
+  (SB_VEHICLES||[]).forEach(function(v){ if(!v.active) return;
+    for(var d=1;d<=n;d++){ var ds=_vehMonth+'-'+String(d).padStart(2,'0'); _vehDayRoutes(v,ds).forEach(function(r){ used[r]=1; }); } });
+  return used;
+}
+/* §vehMxFast · เจ้าของ: "คลิกในหน้า Transfer Fleet ช้า ดีเลย์"
+   _vehRouteDemand / _vehGroupsForDay กวาด SB_BOOKINGS ทั้งก้อน (หลายพันใบ) ต่อเส้นทาง · แถบสรุปเรียกรวม ~190 รอบต่อการวาด
+   และวาดใหม่ทุกคลิกช่อง · รวบเป็นรอบเดียว: เดินใบจองครั้งเดียว ได้ทั้ง demand และกรุ๊ปของทุกเส้นทางในวันนั้น */
+function _vehDayStats(day){
+  const dm={}, grp={};
+  const D=rid=>(dm[rid]=dm[rid]||{pax:0,pickup:0});
+  const G=rid=>(grp[rid]=grp[rid]||{set:new Set(),vanByKey:{}});
+  (SB_BOOKINGS||[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    (b.trips||[]).forEach(t=>{
+      if(t.date!==day||!t.routeId)return; if(t.bookingMode==='charter')return;
+      const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0);
+      const d=D(t.routeId); d.pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT') d.pickup+=p;
+      const g=G(t.routeId), ops=b.ops||{};
+      const addG=(gn,vid)=>{ if(!gn)return; const k=z+'|'+gn; g.set.add(k); if(vid)g.vanByKey[k]=vid; };
+      if(Array.isArray(ops.vanSplits)&&ops.vanSplits.length){ ops.vanSplits.forEach(sp=>addG(sp.vanGroup,sp.vanId)); }
+      else addG(ops.vanGroup,ops.vanId);
+    });
+  });
+  const out={dm:{},grp:{}};
+  Object.keys(dm).forEach(k=>{ out.dm[k]=dm[k]; });
+  Object.keys(grp).forEach(k=>{ let withVan=0,woVan=0; grp[k].set.forEach(kk=>{ if(grp[k].vanByKey[kk])withVan++; else woVan++; }); out.grp[k]={total:grp[k].set.size,withVan,woVan}; });
+  return out;
+}
 function _vehMatrixSummaryHTML(day){
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const rts=(typeof ROUTES!=='undefined'&&ROUTES)||[];
+  const ST=_vehDayStats(day), Z0={pax:0,pickup:0}, G0={total:0,withVan:0,woVan:0};
+  const _dm=rid=>ST.dm[rid]||Z0, _grp=rid=>ST.grp[rid]||G0;
   const counts={}; let avail=0, busy=0;
   (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const rs=_vehDayRoutes(v,day); if(rs.length){ rs.forEach(r=>counts[r]=(counts[r]||0)+1); } else if(st==='available'){ avail++; } });
-  let dlbl=day; try{ dlbl=new Date(day+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short'}); }catch(_){}
-  const cards=rts.filter(r=>{ const dm=_vehRouteDemand(r.id,day); return counts[r.id]||dm.pax; }).map(r=>{ const z=(typeof _vehRouteZone==='function')?_vehRouteZone(r.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const nv=counts[r.id]||0; const dm=_vehRouteDemand(r.id,day); const grp=_vehGroupsForDay(r.id,day); const needFlag=(dm.pickup>0&&nv===0)?'<span style="font-size:8.5px;color:#A32D2D;background:#FCEBEB;border-radius:5px;padding:0 4px;margin-left:4px;font-weight:700">ยังไม่จัดรถ</span>':''; const grpChip=grp.total?`<span style="font-size:9px;color:#534AB7;font-weight:700"><span style="font-family:'DM Mono',monospace;font-size:11px">${grp.total}</span>ก${grp.woVan?` <span style="color:#A32D2D">·${grp.woVan}✗</span>`:''}</span>`:''; const _ok=grp.total>0&&grp.woVan===0&&!(dm.pickup>0&&nv===0); const _corner=(grp.total>0||dm.pickup>0)?`<span title="${_ok?'จัดรถครบ':'ยังจัดรถไม่ครบ'}" style="position:absolute;top:-5px;left:-5px;width:13px;height:13px;border-radius:50%;background:${_ok?'#1D9E75':'#C0392B'};color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700;box-shadow:0 0 0 2px #fff">${_ok?'&#10003;':'&#10005;'}</span>`:''; return `<div style="position:relative;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid ${dm.pickup>0&&nv===0?'#F0D0C8':'rgba(0,0,0,.07)'};border-left:3px solid ${r.color};border-radius:8px;padding:3px 8px">${_corner}<span style="width:15px;height:15px;border-radius:4px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">${_vehRouteAbbr(r.id)}</span><div style="min-width:0;flex:1"><div style="font-size:11px;font-weight:700;color:#1B2A55;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}${needFlag}</div><div style="font-size:9px;color:#8a8a82;line-height:1.2">${zl} · <span style="color:#185FA5;font-weight:600">ลค ${dm.pax}</span>${dm.pickup<dm.pax?` <span style="color:#aaa">(รับ ${dm.pickup})</span>`:''}${grpChip?' · '+grpChip:''}</div></div><div style="text-align:right;flex:none"><span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:${r.color}">${nv}</span><span style="font-size:9px;color:#8a8a82"> คัน</span></div></div>`; }).join('');
-  const extras=[];
-  if(avail) extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#0F6E56;background:#E9F7EF;border:1px solid #C4E6D5;border-radius:7px;padding:5px 10px">✓ พร้อม·ยังไม่จัด <b style="font-family:'DM Mono',monospace">${avail}</b></span>`);
-  if(busy) extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#854F0B;background:#FAEEDA;border:1px solid #EAD9B0;border-radius:7px;padding:5px 10px">🔧 ซ่อม/หยุด <b style="font-family:'DM Mono',monospace">${busy}</b></span>`);
+  let dlbl=day; try{ dlbl=new Date(day+'T12:00:00').toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short'}); }catch(_){}
+  /* §vehMxPier · เจ้าของ: "แถบโปรแกรมด้านบน แยกท่าเรือ เอาเฉพาะโปรแกรมของเรา"
+     ของเรา = ทริปเรือ (ไม่ใช่ land kind: Transfer / City tour / กิจกรรม) · จัดกล่องตามท่า (routes.pier) · ท่าที่มีรถมากขึ้นก่อน */
+  const isLand=rid=>(typeof laIsLandRoute==='function')&&laIsLandRoute(rid);
+  const chipOf=x=>{ const r=x.r, nv=x.nv, dm=x.dm, grp=x.grp;
+      const need=(dm.pickup>0&&nv===0), notFull=grp.total>0&&grp.woVan>0;
+      const z=(typeof _vehRouteZone==='function')?_vehRouteZone(r.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—';
+      const tip=`${r.name} · ${zl} · ลูกค้า ${dm.pax}${dm.pickup<dm.pax?` (รับ ${dm.pickup})`:''}${grp.total?` · ${grp.total} กรุ๊ป${grp.woVan?` (${grp.woVan} ยังไม่มีรถ)`:''}`:''}${need?' · ยังไม่จัดรถ':''}`;
+      return `<span class="vmx-chip${nv?'':' z'}${need||notFull?' warn':''}" title="${esc(tip)}">`
+        +`<i style="background:${r.color}">${_vehRouteAbbr(r.id)}</i>${esc(_vehRouteShort(r.id))}<b style="color:${nv?r.color:'#A32D2D'}">${nv}</b>`
+        +(notFull?`<em title="${grp.woVan} กรุ๊ปยังไม่มีรถ">✗${grp.woVan}</em>`:'')+`</span>`; };
+  const dayList=rts.filter(r=>counts[r.id]||_dm(r.id).pax).map(r=>({r,nv:counts[r.id]||0,dm:_dm(r.id),grp:_grp(r.id)})).sort((a,b)=>b.nv-a.nv||b.dm.pax-a.dm.pax);
+  const byPier={}, pord=[];
+  dayList.filter(x=>!isLand(x.r.id)).forEach(x=>{ const pk=pckPierOf(x.r.id)||'other'; if(!byPier[pk]){ byPier[pk]={vans:0,items:[]}; pord.push(pk); } byPier[pk].vans+=x.nv; byPier[pk].items.push(x); });
+  pord.sort((a,b)=>byPier[b].vans-byPier[a].vans);
+  const PCOL={tublamu:['#185FA5','#BFD3EA','#F3F7FC'],panwa:['#A32D2D','#F0C9C3','#FDF5F3'],ranong:['#0F6E56','#BFE3D1','#F1FAF5'],other:['#5F5E5A','#E1DED5','#F7F6F2']};
+  const todayChips=pord.map(pk=>{ const c=PCOL[pk]||PCOL.other; const lbl=(typeof PCK_PIER_LBL!=='undefined'&&PCK_PIER_LBL[pk])||(pk==='other'?'ไม่ระบุท่า':pk);
+    return `<span class="vmx-pier" style="border-color:${c[1]};background:${c[2]}"><span class="vmx-plbl" style="color:${c[0]}">${esc(lbl)} <b>${byPier[pk].vans} คัน</b></span>${byPier[pk].items.map(chipOf).join('')}</span>`; }).join('');
+  const landToday=dayList.filter(x=>isLand(x.r.id));   /* Transfer / City tour / กิจกรรม ที่มีงานวันนี้ · ไปอยู่บรรทัดล่าง */
   const tot=Object.values(counts).reduce((a,b)=>a+b,0);
-  let totG=0,totGwo=0; rts.forEach(r=>{ const g=_vehGroupsForDay(r.id,day); totG+=g.total; totGwo+=g.woVan; });
-  const grpHdr=totG?` · <b style="color:#534AB7">${totG} กรุ๊ป</b>${totGwo?` <span style="color:#A32D2D;font-weight:700">(${totGwo} ยังไม่มีรถ)</span>`:''}`:'';
-  return `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px"><span style="font-size:11.5px;font-weight:700;color:#1B2A55">สรุปการจัดรถ</span><span style="font-size:10.5px;color:#8a8a82">· ${dlbl} · จัดแล้ว ${tot} คัน${grpHdr}</span></div>
-  ${cards?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:5px;margin-bottom:4px">${cards}</div>`:`<div style="font-size:11px;color:#c7c5bb;padding:3px 0 4px">ยังไม่ได้จัดรถวันนี้ · คลิกช่องในตารางเพื่อสลับโปรแกรม</div>`}
-  ${extras.length?`<div style="display:flex;gap:6px;flex-wrap:wrap">${extras.join('')}</div>`:''}`;
+  let totG=0,totGwo=0; rts.forEach(r=>{ const g=_grp(r.id); totG+=g.total; totGwo+=g.woVan; });
+  /* บรรทัดสี · โปรแกรมที่มีรถในเดือนนี้ แต่ไม่ได้อยู่ในแถบวันที่เลือก */
+  const inDay={}; rts.forEach(r=>{ if((counts[r.id]||_dm(r.id).pax)&&!isLand(r.id)) inDay[r.id]=1; });
+  const used=_vehMonthUsedRoutes();
+  const monthOnly=rts.filter(r=>used[r.id]&&!inDay[r.id]&&!landToday.some(x=>x.r.id===r.id));
+  const rest=rts.filter(r=>!used[r.id]&&!inDay[r.id]&&!landToday.some(x=>x.r.id===r.id));
+  const lg=r=>`<span class="vmx-lg" title="${esc(r.name)}"><i style="background:${r.color}">${_vehRouteAbbr(r.id)}</i>${esc(_vehRouteShort(r.id))}</span>`;
+  return `<div class="vmx-bar">`
+    +`<span class="vmx-day" title="วันที่เลือกในตาราง · คลิกหัววันเพื่อเปลี่ยน">${esc(dlbl)}</span>`
+    +`<span class="vmx-tot">จัดแล้ว ${tot} คัน</span>`
+    +(totG?`<span class="vmx-grp">${totG} กรุ๊ป${totGwo?` <b>· ${totGwo} ยังไม่มีรถ</b>`:''}</span>`:'')
+    +`<span class="vmx-sep"></span>`
+    +(todayChips||`<span class="vmx-none">ยังไม่ได้จัดรถวันนี้ · คลิกช่องในตารางเพื่อสลับโปรแกรม</span>`)
+    +`<span class="vmx-sp"></span>`
+    +(avail?`<span class="vmx-st ok" title="รถที่ตั้งสถานะพร้อมแต่ยังไม่ได้จัด">✓ พร้อม·ยังไม่จัด <b>${avail}</b></span>`:'')
+    +(busy?`<span class="vmx-st bad" title="รถซ่อม/หยุดวันนี้">🔧 ซ่อม/หยุด <b>${busy}</b></span>`:'')
+    +`</div>`
+    +`<div class="vmx-legend">`
+    +`<span class="vmx-foldall" title="ยุบ/กางทีมรถในตาราง"><button onclick="vehMxFoldAll(false)">กางหมด</button><button onclick="vehMxFoldAll(true)">ยุบหมด</button></span>`
+    +(landToday.length?`<span class="vmx-lgk">อื่น ๆ วันนี้</span>${landToday.map(x=>chipOf(x)).join('')}`:'')
+    +(monthOnly.length?`<span class="vmx-lgk">ใช้ในเดือนนี้ด้วย</span>${monthOnly.map(lg).join('')}`:'')
+    +(rest.length?(_vehLegendAll
+        ?`<span class="vmx-lgk">ไม่ได้ใช้</span>${rest.map(lg).join('')}<button class="vmx-more" onclick="vehLegendToggle()">พับ</button>`
+        :`<button class="vmx-more" onclick="vehLegendToggle()">+ ${rest.length} โปรแกรมที่ไม่ได้ใช้</button>`):'')
+    +`<span class="vmx-sp"></span>`
+    +`<span class="vmx-key"><i style="background:#E9F7EF;border-color:#C4E6D5"></i>พร้อม</span><span class="vmx-key"><i style="background:#FAEEDA;border-color:#EAD9B0"></i>ซ่อม</span><span class="vmx-key"><i style="background:#FCEBEB;border-color:#F0D0C8"></i>หยุด</span><span class="vmx-key">เลข = pax · มุมขวา = เลขงาน</span>`
+    +`</div>`;
+}
+function vehMatrixCSS(){
+  var H='#vehicles-host';
+  return '<style id="vmx-style">'
+  +H+' .vmx-bar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:2px 0 4px}'
+  +H+' .vmx-day{font-size:11.5px;font-weight:800;color:#1B2A55;white-space:nowrap}'
+  +H+' .vmx-tot{font-size:10px;font-weight:700;background:#15201a;color:#fff;border-radius:999px;padding:2px 8px;white-space:nowrap}'
+  +H+' .vmx-grp{font-size:10px;font-weight:700;color:#534AB7;white-space:nowrap}'+H+' .vmx-grp b{color:#A32D2D}'
+  +H+' .vmx-sep{width:1px;height:16px;background:#DCE3EC;margin:0 3px}'
+  +H+' .vmx-sp{flex:1}'
+  +H+' .vmx-pier{display:inline-flex;align-items:center;gap:4px;border:1px solid;border-radius:9px;padding:2px 5px 2px 3px}'
+  +H+' .vmx-plbl{font-size:10px;font-weight:800;background:#fff;border-radius:6px;padding:2px 7px;white-space:nowrap}'+H+' .vmx-plbl b{font-family:\'DM Mono\',monospace;color:#64748B;font-weight:700}'
+  +H+' .vmx-legend .vmx-chip{font-size:9.5px;padding:1px 6px 1px 2px}'+H+' .vmx-legend .vmx-chip i{width:14px;height:14px;font-size:8px}'
+  +H+' .vmx-chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#15201a;background:#fff;border:1px solid #E5E9EF;border-radius:999px;padding:2px 7px 2px 3px;white-space:nowrap}'
+  +H+' .vmx-chip i,'+H+' .vmx-lg i{width:16px;height:16px;border-radius:5px;color:#fff;font:700 8.5px \'DM Mono\',monospace;font-style:normal;display:inline-flex;align-items:center;justify-content:center;flex:none}'
+  +H+' .vmx-chip b{font:700 11px \'DM Mono\',monospace}'
+  +H+' .vmx-chip.z{opacity:.55}'+H+' .vmx-chip.warn{border-color:#F0D0C8;background:#FFF7F5}'
+  +H+' .vmx-chip em{font:700 9px \'DM Mono\',monospace;font-style:normal;color:#A32D2D;background:#FCEBEB;border-radius:5px;padding:0 4px}'
+  +H+' .vmx-none{font-size:10.5px;color:#a5a49d}'
+  +H+' .vmx-st{font-size:10px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}'+H+' .vmx-st b{font-family:\'DM Mono\',monospace}'
+  +H+' .vmx-st.ok{color:#0F6E56;background:#E9F7EF;border:1px solid #C4E6D5}'+H+' .vmx-st.bad{color:#854F0B;background:#FAEEDA;border:1px solid #EAD9B0}'
+  +H+' .vmx-legend{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:0 0 3px;font-size:9.5px;color:#8a8a82}'
+  +H+' .vmx-lgk{font-weight:800;letter-spacing:.04em;margin-right:2px;white-space:nowrap}'
+  +H+' .vmx-lg{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:600;color:#3F4654;white-space:nowrap;margin-right:4px}'
+  +H+' .vmx-lg i{width:14px;height:14px;font-size:8px;border-radius:4px}'
+  +H+' .vmx-more{border:1px dashed #CBD5E1;background:transparent;border-radius:999px;padding:1px 8px;font:700 9.5px inherit;font-family:inherit;color:#64748B;cursor:pointer}'
+  +H+' .vmx-key{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-left:6px}'
+  +H+' .vmx-key i{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid}'
+  /* §vehMxTree · เยื้องตามชั้น + เส้นแนวตั้งของทีม */
+  +H+' tr.vmx-d1>td.vmx-nm{padding:3px 11px 3px 42px;position:relative}'
+  +H+' tr.vmx-d2>td.vmx-nm{padding:3px 11px 3px 58px;position:relative}'
+  +H+' tr.vmx-gsub>td.vmx-nm{padding:4px 11px 3px 30px;position:relative;border-bottom:0.5px solid rgba(0,0,0,.03)}'
+  +H+' tr.vmx-d1>td.vmx-nm::before,'+H+' tr.vmx-d2>td.vmx-nm::before,'+H+' tr.vmx-gsub>td.vmx-nm::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:1px;background:#E5E9EF}'
+  +H+' tr.vmx-d2>td.vmx-nm::after{content:"";position:absolute;left:36px;top:0;bottom:0;width:1px;background:#EEF1F5}'
+  +H+' tr.vmx-d1>td.vmx-nm>span:first-child::before{content:"";position:absolute;left:19px;top:50%;width:9px;height:1px;background:#E5E9EF}'
+  +H+' tr.vmx-d2>td.vmx-nm>span:first-child::before{content:"";position:absolute;left:36px;top:50%;width:9px;height:1px;background:#EEF1F5}'
+  +H+' .vmx-cv{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;border:1px solid #E3E0D7;background:#fff;color:#8a8a82;font-size:9px;vertical-align:-2px;transition:transform .12s}'
+  +H+' .vmx-cv.op{transform:rotate(90deg)}'
+  +H+' tr.vmx-ghd:hover td,'+H+' tr.vmx-gsub:hover td{background:#F3F6FA !important}'
+  +H+' .vmx-foldall{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden}'
+  +H+' .vmx-foldall button{border:0;background:#fff;padding:2px 8px;font:700 9.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+  +H+' .vmx-foldall button+button{border-left:1px solid #EFECE4}'
+  +'</style>';
 }
 function vehDaySetStatus(id,date,s){ const v=vehGet(id); if(!v)return; v.dayStatus=v.dayStatus||{}; if(s){ v.dayStatus[date]=s; } else { delete v.dayStatus[date]; } const LB={available:'พร้อม',maintenance:'ซ่อม',off:'หยุด'}; vehLog(id,'status',date+' · '+(s?LB[s]:'ล้างสถานะ')); sbVehiclesPersist(); _vehDayRefresh(id,date); }
 function vehDayClose(){ const m=document.getElementById('veh-day-modal'); if(m) m.remove(); }
@@ -29141,11 +29814,13 @@ function vehBuildGrouped(list, rowFn, hd, subhd){
   let html='';
   [['own','รถบริษัท','#185FA5'],['rented','รถเช่า','#0F6E56'],['partner','รถร่วม','#534AB7']].forEach(([key,lbl,col])=>{
     const cv=list.filter(v=>(v.ownership||'own')===key).slice().sort(_vehNameCmp); if(!cv.length) return;
-    html+=hd(col,lbl,cv.length);
+    /* §vehMxFold · ส่ง key ของกลุ่ม/ทีมให้ตัววาดด้วย (hd(col,lbl,n,key) · subhd(s,n,key,parentKey) · rowFn(v,key,parentKey))
+       ตัววาดเดิมของแท็บอื่นรับแค่พารามิเตอร์แรก ๆ ไม่กระทบ · แท็บตารางเดือนใช้ทำยุบ/กาง */
+    html+=hd(col,lbl,cv.length,key);
     if(key==='partner'){
       const sups={}; cv.forEach(v=>{ const s=(v.partnerName||'').trim()||'(ไม่ระบุซัพ)'; (sups[s]=sups[s]||[]).push(v); });
-      Object.keys(sups).sort().forEach(s=>{ html+=subhd(s,sups[s].length); html+=sups[s].slice().sort(_vehNameCmp).map(rowFn).join(''); });
-    } else { html+=cv.map(rowFn).join(''); }
+      Object.keys(sups).sort().forEach(s=>{ const sk=key+'|'+s; html+=subhd(s,sups[s].length,sk,key); html+=sups[s].slice().sort(_vehNameCmp).map(v=>rowFn(v,sk,key)).join(''); });
+    } else { html+=cv.map(v=>rowFn(v,key,null)).join(''); }
   });
   return html;
 }
@@ -29234,6 +29909,7 @@ function vehDetailPanel(id, jobsT, today, initials, TYLBL){
 }
 function renderVehicles(){
   const host=document.getElementById('vehicles-host'); if(!host) return;
+  if(typeof _vehJobIdxBump==='function') _vehJobIdxBump();   /* §vehMxFast · ดัชนีงานต่อช่องสร้างใหม่ทุกครั้งที่วาด */
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const inp='border:1px solid var(--border,#e5e5e5);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit';
   const th='padding:8px 10px;text-align:left;font-size:9.5px;color:#8a8a82;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.08)';
@@ -29380,27 +30056,21 @@ function renderVehicles(){
     const hCell='position:sticky;top:var(--vehhdr-top,92px);z-index:2;background:#fafafa;padding:4px 0;text-align:center;font-weight:500;border-bottom:0.5px solid rgba(0,0,0,.06);min-width:34px;cursor:pointer';
     const headCells=dates.map(ds=>{ const dt=new Date(ds+'T12:00:00'); const dow=dt.getDay(); const dn=dt.getDate(); const isToday=ds===todayStr; const isSel=ds===sumDay; const we=(dow===0||dow===6);
       return `<th onclick="vehSumSelectDay('${ds}')" title="ดูสรุปวันนี้" style="${hCell};${isSel?'background:#185FA5':isToday?'background:#E6F1FB;border-bottom:2px solid #185FA5':''}"><div style="font-size:9px;color:${isSel?'#cfe2f5':isToday?'#185FA5':(we?'#A05A1A':'#999')}">${DOW[dow]}</div><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:${isSel?700:400};color:${isSel?'#fff':isToday?'#185FA5':'#666'}">${dn}</div></th>`; }).join('');
-    const rowFn=v=>{
-      const cells=dates.map(ds=>`<td id="vehcell-${v.id}-${ds}" onclick="vehDayCellClick('${v.id}','${ds}')" oncontextmenu="event.preventDefault();vehDayPopup('${v.id}','${ds}')" title="คลิก = สลับโปรแกรม · คลิกขวา = รายละเอียด" style="text-align:center;border-bottom:0.5px solid rgba(0,0,0,.04);${ds===sumDay?'background:#EEF5FC':ds===todayStr?'background:#F3F8FE':''}">${_vehDayCellInner(v,ds)}</td>`).join('');
-      return `<tr><td style="position:sticky;left:0;background:#fff;padding:6px 11px;border-bottom:0.5px solid rgba(0,0,0,.04);white-space:nowrap;z-index:1;${v.active?'':'opacity:.55'}"><span style="font-weight:600;font-size:13px;color:#1B2A55">${esc(v.name||v.id)}</span>${v.plate&&v.plate!=='-'?` <span style="font-size:10px;color:#aaa;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</td>${cells}</tr>`;
+    /* §vehMxTight · เจ้าของ: "บีบตารางให้กระชับหน่อย" · แถวจาก ~53px เหลือ ~32px · padding ช่องเป็น 0 · ช่องสี 26×22 */
+    const rowFn=(v,gk,pk)=>{
+      const cells=dates.map(ds=>`<td id="vehcell-${v.id}-${ds}" onclick="vehDayCellClick('${v.id}','${ds}')" oncontextmenu="event.preventDefault();vehDayPopup('${v.id}','${ds}')" title="คลิก = สลับโปรแกรม · คลิกขวา = รายละเอียด" style="text-align:center;padding:0;border-bottom:0.5px solid rgba(0,0,0,.04);${ds===sumDay?'background:#EEF5FC':ds===todayStr?'background:#F3F8FE':''}">${_vehDayCellInner(v,ds)}</td>`).join('');
+      /* §vehMxTree · เจ้าของ: "รถบริษัท → Love1, Love2 · รถร่วม → GM → GM1, GM2" · เยื้องตามชั้น + เส้นต้นไม้ (CSS .vmx-d1/.vmx-d2) */
+      return `<tr class="vmx-row ${pk?'vmx-d2':'vmx-d1'}"${_vehMxHidden(gk,pk)?' style="display:none"':''}><td class="vmx-nm" style="position:sticky;left:0;background:#fff;border-bottom:0.5px solid rgba(0,0,0,.04);white-space:nowrap;z-index:1;${v.active?'':'opacity:.55'}"><span style="font-weight:700;font-size:12px;color:#1B2A55">${esc(v.name||v.id)}</span>${v.plate&&v.plate!=='-'?` <span style="font-size:9.5px;color:#AAB2BF;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</td>${cells}</tr>`;
     };
     const colspanN=dates.length+1;
-    const gHd=(col,lbl,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:8px 11px;background:#fbfbfc;border-bottom:0.5px solid rgba(0,0,0,.05)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px"></span> <span style="font-weight:700;font-size:12.5px;color:#1B2A55">${lbl}</span> <span style="color:#8a8a82;font-size:11px">· ${n}</span></td></tr>`;
-    const gSub=(s,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:6px 11px 4px 24px;background:#fff"><span style="font-size:11.5px;font-weight:700;color:#534AB7">&#9679; ${esc(s)}</span> <span style="font-size:9.5px;color:#8a8a82">${n}</span></td></tr>`;
+    const _fold=(k,on)=>`<span class="vmx-cv${on?'':' op'}" title="${on?'กางทีมนี้':'ยุบทีมนี้'}">&#9656;</span>`;
+    const gHd=(col,lbl,n,k)=>`<tr class="vmx-ghd" onclick="vehMxFold('${k}')"><td colspan="${colspanN}" style="position:sticky;left:0;padding:6px 11px 5px;background:#F6F8FB;border-bottom:1px solid #EEF2F6;cursor:pointer;user-select:none">${_fold(k,!!_vehMxFold[k])}<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px;margin:0 6px 0 6px"></span><span style="font-size:12.5px;font-weight:800;color:${col}">${lbl}</span> <span style="font-size:10px;color:#94A3B8;font-weight:600;margin-left:4px">${n} คัน</span>${_vehMxFold[k]?'<span style="font-size:9.5px;color:#B4B2A9;margin-left:8px">ยุบอยู่ · กดเพื่อกาง</span>':''}</td></tr>`;
+    const gSub=(s,n,k,pk)=>`<tr class="vmx-gsub" onclick="vehMxFold('${k.replace(/'/g,"\\'")}')"${_vehMxHidden(null,pk)?' style="display:none"':''}><td class="vmx-nm" colspan="${colspanN}" style="position:sticky;left:0;background:#fff;cursor:pointer;user-select:none">${_fold(k,!!_vehMxFold[k])}<span style="font-size:11.5px;font-weight:800;color:#534AB7;margin-left:6px">${esc(s)}</span> <span style="font-size:9.5px;color:#94A3B8;font-weight:600;margin-left:4px">${n} คัน</span>${_vehMxFold[k]?'<span style="font-size:9.5px;color:#B4B2A9;margin-left:8px">ยุบอยู่ · กดเพื่อกาง</span>':''}</td></tr>`;
     const matrixRows=vehBuildGrouped(SB_VEHICLES.filter(_vehOwnerMatch), rowFn, gHd, gSub);
     body=`
-      <div id="veh-matrix-scroll" style="overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:12px;background:#fff;max-height:calc(100vh - var(--topbar,0) - 232px)">
+      <div id="veh-matrix-scroll" style="overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:12px;background:#fff;max-height:calc(100vh - var(--topbar,0) - 120px)">
       <div id="veh-matrix-stickytop" style="position:sticky;top:0;z-index:45;background:#fff;padding:4px 12px 4px;box-shadow:0 5px 8px -7px rgba(0,0,0,.22)">
-      <div id="veh-matrix-summary" style="margin-bottom:4px">${_vehMatrixSummaryHTML(sumDay)}</div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:2px;flex-wrap:wrap">
-        <div style="display:flex;gap:9px;font-size:10.5px;color:#8a8a82;flex-wrap:wrap;align-items:center">
-          ${((typeof ROUTES!=='undefined'&&ROUTES)||[]).map(r=>`<span title="${esc(r.name)}"><span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:14px;border-radius:3px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;vertical-align:-2px">${_vehRouteAbbr(r.id)}</span> ${esc(_vehRouteShort(r.id))}</span>`).join('')}
-          <span style="border-left:1px solid #e5e5e5;padding-left:9px"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#E9F7EF;border:1px solid #C4E6D5;vertical-align:-1px"></span> พร้อม</span>
-          <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#FAEEDA;vertical-align:-1px"></span> ซ่อม</span>
-          <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#FCEBEB;vertical-align:-1px"></span> หยุด</span>
-          <span>มุมขวา = เลขงาน</span>
-        </div>
-      </div>
+      <div id="veh-matrix-summary">${_vehMatrixSummaryHTML(sumDay)}</div>
       </div>
         <table style="border-collapse:collapse;font-size:12px"><thead><tr><th style="position:sticky;left:0;top:var(--vehhdr-top,92px);background:#fafafa;text-align:left;padding:6px 11px;font-weight:500;color:#8a8a82;min-width:150px;border-bottom:0.5px solid rgba(0,0,0,.06);z-index:4">รถ</th>${headCells}</tr></thead><tbody>${matrixRows}</tbody></table>
       </div>
@@ -29434,12 +30104,18 @@ function renderVehicles(){
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">${cards||'<div style="color:#8a8a82">ไม่มีรถ active</div>'}</div>`;
   }
-  host.innerHTML=`
-    <div style="padding:2px 26px 22px;font-family:'DM Sans',sans-serif">
-      ${vehHeader}
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">${tabGroup}${matrixCtrls}</div>
-      ${body}
-    </div>`;
+  /* §vehMxHead · แท็บตารางเดือน: หัวทั้งหมดยุบเหลือแถวเดียว (ชื่อ · แท็บ · เดือน · ตัวกรอง · ตัวเลขรถ · + เพิ่มรถ)
+     §vehMxHead2 · ต่อมาใช้กับทุกแท็บ */
+  const _mxKpi=`<span style="display:inline-flex;align-items:center;gap:10px;font-size:11px;font-weight:700;color:#475569;white-space:nowrap;margin-left:auto">`
+    +`<span><b style="font-size:14px;color:#15201a;font-family:'DM Mono',monospace">${nActiveV}</b> คัน <span style="color:#94A3B8;font-weight:600">PK ${nPKv} · KL ${nKLv}</span></span>`
+    +`<span style="color:#0F6E56"><b style="font-size:14px;font-family:'DM Mono',monospace">${nAvailV}</b> พร้อม</span>`
+    +(nMaintV>0?`<button onclick="vehSetTab('status')" title="ดูรถซ่อม/หยุด" style="display:inline-flex;align-items:baseline;gap:4px;background:#FBF0DD;border:1px solid #F0D9A8;border-radius:999px;padding:2px 9px;font:700 11px inherit;font-family:inherit;color:#7A4A00;cursor:pointer"><b style="font-size:13px;font-family:'DM Mono',monospace">${nMaintV}</b> ซ่อม/หยุด${_firstMaint?(' · '+esc(_firstMaint.name||'')):''} &rsaquo;</button>`:'')
+    +`<span><b style="font-size:14px;color:#15201a;font-family:'DM Mono',monospace">${cap}</b> ที่นั่ง</span></span>`
+    +`<button onclick="vehSetTab('registry');vehFormOpen()" style="background:#15201a;color:#fff;border:0;border-radius:999px;padding:6px 12px;font:700 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap">+ เพิ่มรถ</button>`;
+  const _mxHead=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:16px;font-weight:800;letter-spacing:-.3px;color:#1A1A1A;white-space:nowrap">Transfer Fleet</span>${tabGroup}${matrixCtrls}${_mxKpi}</div>`;
+  /* §vehMxHead2 · เจ้าของ: "ปรับ header ให้เหมือนกับของตารางเดือนเลย" · ทุกแท็บใช้หัวแถวเดียว · vehHeader เดิมไม่วาดแล้ว */
+  host.innerHTML=`${vehMatrixCSS()}<div style="padding:2px 26px 14px;font-family:'DM Sans',sans-serif">${_mxHead}${body}</div>`;
   // sticky day-header offset = height of the pinned summary/legend block (so วันที่ pins right below it)
   requestAnimationFrame(()=>{ const st=document.getElementById('veh-matrix-stickytop'), sc=document.getElementById('veh-matrix-scroll'); if(st&&sc) sc.style.setProperty('--vehhdr-top', st.offsetHeight+'px'); });
 }
@@ -30498,6 +31174,11 @@ function pxTrip(date, bid){
     }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
+    /* §pxNoMeal (2026-11-02) · owner: "กดไม่มีอาหารในหน้ามอบงานไป ตัวนี้จะอัพเดทตอนไหน"
+       หน้ามอบงานตั้ง '-' = วันนี้ลำนี้ไม่มีอาหาร · mvForTrip คืน null แล้วบรรทัดนี้ตกไปใช้สูตรของเส้นทาง ยังคิดค่าอาหารเต็ม
+       ไม่มีอาหาร = ค่าอาหาร ฿0 ทันที (ของจริง) · ยกเว้นมียอดจริงที่ส่งร้านไปแล้ว หรือแก้เองรายวัน (ทับต่อด้านล่าง) */
+    if(r.id==='meal' && real==null && typeof mvTripRaw==='function' && mvTripRaw(date,bid)==='-'){
+      real=0; src='r'; why='ตั้งไว้ว่าวันนี้ไม่มีอาหาร (หน้ามอบงาน) · เดิมสูตร ฿'+Math.round(est||0).toLocaleString(); }
     /* §pxOvr (2026-10-30) · owner "รายละเอียดค่าใช้จ่ายรายลำ ให้ User Override ได้เลย แต่เป็นแค่ของวันนั้น ๆ"
        เก็บใน trip_actuals['วันที่::ลำ'].ovr[บรรทัด] = {amt,by,at} · ที่เดียวกับปิดยอด/ออกจริง → ไม่แตะแผนของเส้นทาง ไม่ลามไปวันอื่น
        ตัวเลขที่กรอก = ช่อง "Used" ที่เห็น (หลังหัก VAT ซื้อแล้ว) · ทับทุกชั้น (สูตร · แผน · ของจริงจากหน้าอื่น) */
@@ -30744,6 +31425,16 @@ function pxCSS(){ return ''
  +'#trippl-host table.sum tr.nosail td.netc{background:#FAFBFC}'
  +'#trippl-host table.sum tr.nosail .num,#trippl-host table.sum tr.nosail .net{color:#A9B2BC}'
  +'#trippl-host table.sum tr.nosail .bn b{color:#7C8794}'
+ /* §pxPierGrp */
+ +'#trippl-host table.sum tr.pgh td{background:#F1F4F9;padding:9px 14px;font-size:12px;color:#16265C;border-top:1.5px solid #D5DCE8;text-align:left;cursor:default}'
+ +'#trippl-host table.sum tr.pgh .pgd{display:inline-block;width:9px;height:9px;border-radius:5px;margin-right:8px;vertical-align:1px}'
+ +'#trippl-host table.sum tr.pgh .pgm{margin-left:10px;font-weight:500;color:#64748B;font-size:11px}'
+ +'#trippl-host table.sum tr.pgs td{background:color-mix(in srgb,var(--pc) 9%,#fff) !important;border-top:2px solid var(--pc);border-bottom:2px solid var(--pc);font-weight:700;cursor:default}'
+ +'#trippl-host table.sum tr.pgs td.l{box-shadow:inset 5px 0 0 var(--pc);padding-left:16px;font-size:12.5px;color:var(--pc)}'
+ +'#trippl-host table.sum tr.pgs td.l b{font-size:13.5px;font-weight:800;margin-left:6px}'
+ +'#trippl-host table.sum tr.pgs td.l small{display:block;font-size:10.5px;font-weight:600;color:#64748B;margin-top:2px}'
+ +'#trippl-host table.sum tr.pgs .pgsx{display:inline-block;background:var(--pc);color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:.02em}'
+ +'#trippl-host table.sum tr.pgs + tr.pgh td{border-top:14px solid #fff}'
  +'#trippl-host .pnet{display:flex;align-items:center;gap:8px;background:rgba(16,185,129,.09);'
    +'border:1px solid rgba(16,185,129,.22);padding:0 12px;border-radius:999px;height:30px;flex:none}'
  +'#trippl-host .pnet > div:last-child{display:flex;align-items:baseline;gap:8px}'
@@ -31573,7 +32264,7 @@ function pxDaily(e){
       +'<span class="pill pu">'+D.filter(function(t){ return t.closed; }).length+' locked</span></div></div>'
     +'</div>';
 
-  var sumRows=D.map(function(t){
+  var pxSumRow=function(t){
     /* §pxNoSail · ลำที่ไม่ได้ออกต้องไม่ขึ้นแถบแดง 100% · ไม่มีรายได้ ไม่มีต้นทุน ไม่มีอะไรให้เทียบ */
     var loss=t.profit<0, ratio=t.rev?Math.min(140, t.cost/t.rev*100):(t.noSail?0:100);
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
@@ -31599,7 +32290,7 @@ function pxDaily(e){
         +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
           +(t.noSail?'ไม่ได้ออก':('Cost '+Math.round(ratio)+'%'))+'</span>'
         +'<span class="b">'+(t.noSail?'—':(t.be?('B/E '+t.be+' pax'):'—'))+'</span></div></td></tr>';
-  }).join('');
+  };
   var totRow='<tr class="tot"><td class="l">Σ Day total · '+SAIL.length+' boat'+(SAIL.length===1?'':'s')
     +(nNo?(' <span class="nsx">+'+nNo+' ไม่ได้ออก</span>'):'')+'</td>'
     +'<td class="c"><span class="num mut">—</span></td>'
@@ -31613,6 +32304,41 @@ function pxDaily(e){
     +(fShow?pxFamCells(tSale, tFam, tFamPax+' pax'):'')
     +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:#4F46E5"></i></div>'
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
+
+  /* §pxPierGrp (2026-11-02) · owner: "แยกเป็นท่าเรือให้หน่อย"
+     ดูทุกท่า + มีเรือมากกว่า 1 ท่า → หัวท่า · แถวเรือของท่านั้น · รวมของท่า แล้วค่อย Σ ทั้งวัน
+     ตัวเลขรวมท่าคิดแบบเดียวกับแถว Σ (ลำที่ไม่ได้ออกไม่นับกำไร) · เลือกท่าเดียวจากตัวกรอง = ตารางเดิม */
+  var pxTPier=function(t){ var r=t.route||{}; if(r.pier) return r.pier;
+    var op=(typeof TRIPS!=='undefined'&&TRIPS[_px.date])?TRIPS[_px.date][t.bid]:null;
+    var rt=(op&&op.route&&typeof getRoute==='function')?getRoute(op.route):null; return (rt&&rt.pier)||''; };
+  var PG={}, PGO=[];
+  D.forEach(function(t){ var k=pxTPier(t); if(!PG[k]){ PG[k]=[]; PGO.push(k); } PG[k].push(t); });
+  var PL=(typeof PO_PIERS!=='undefined')?PO_PIERS:[];
+  PGO.sort(function(a,b){ var ia=PL.findIndex(function(p){ return p.k===a; }), ib=PL.findIndex(function(p){ return p.k===b; });
+    return (ia<0?99:ia)-(ib<0?99:ib); });
+  var sumRows;
+  if(_px.pier || PGO.length<2) sumRows=D.map(pxSumRow).join('');
+  else sumRows=PGO.map(function(k){
+    var L=PG[k], S=L.filter(function(t){ return !t.noSail; }), P=PL.filter(function(p){ return p.k===k; })[0]||{t:(k||'ไม่ระบุท่า'),c:'#64748B'};
+    var r=0,c2=0,pf=0,px=0,bk=0,fm=0,fp=0;
+    L.forEach(function(t){ r+=t.rev; c2+=t.cost; px+=t.px.tot; bk+=t.px.bk; });
+    S.forEach(function(t){ pf+=t.profit; var F=t.fam||{}; fm+=(F.cost||0); fp+=(F.pax||0); });
+    var ng=pf<0, pp=px?Math.round(pf/px):0, rt=r?Math.round(c2/r*100):0, nNoP=L.length-S.length;
+    var bc=rt>=100?'#E11D48':(rt>=70?'#F59E0B':'#10B981');
+    var head='<tr class="pgh"><td colspan="'+(fShow?9:7)+'"><span class="pgd" style="background:'+e(P.c||'#64748B')+'"></span>'
+      +'<b>'+e(P.t||P.n||k)+'</b><span class="pgm">'+S.length+' boat'+(S.length===1?'':'s')+(nNoP?(' · +'+nNoP+' ไม่ได้ออก'):'')+' · '+px+' pax</span></td></tr>';
+    var sub='<tr class="pgs" style="--pc:'+e(P.c||'#64748B')+'"><td class="l"><span class="pgsx">Σ รวมท่า</span><b>'+e(String(P.t||P.n||k).split(' · ')[0])+'</b><small>'+S.length+' boat'+(S.length===1?'':'s')+(nNoP?(' · +'+nNoP+' ไม่ได้ออก'):'')+'</small></td>'
+      +'<td class="c"><span class="num mut">—</span></td>'
+      +'<td class="c"><span class="num n">'+px+'</span><div class="per">'+bk+' bookings</div></td>'
+      +'<td><span class="num n">'+pxN(r)+'</span><div class="per n">avg '+pxN(r/Math.max(1,px))+' / pax</div></td>'
+      +'<td><span class="num cost n">'+pxN(c2)+'</span><div class="per n">avg '+pxN(c2/Math.max(1,px))+' / pax</div></td>'
+      +(!S.length?'<td class="netc"><span class="net mut n">—</span><div class="per">ไม่ได้ออกทั้งท่า</div></td>'
+        :('<td class="netc'+(ng?' neg':'')+'"><span class="net'+(ng?' neg':'')+' n">'+(ng?'−':'+')+pxN(Math.abs(pf))+'</span>'
+        +'<div class="per '+(ng?'negp':'pos')+' n">'+(pp<0?'−':'+')+pxN(Math.abs(pp))+' / pax'+(r?(' · '+Math.round(pf/r*100)+'%'):'')+'</div></td>'))
+      +(fShow?pxFamCells(pf+fm, fm, fp?(fp+' pax'):''):'')
+      +'<td><div class="bars"><i style="width:'+Math.min(100,rt)+'%;background:'+bc+'"></i></div>'
+        +'<div class="bmeta"><span class="a" style="color:'+bc+'">Cost '+rt+'%</span><span class="b"></span></div></td></tr>';
+    return head+L.map(pxSumRow).join('')+sub; }).join('');
 
   var GORD=pxGOrd(D);
   /* §revFlag · รายได้ต่อหัวของลำนี้ต่ำกว่าค่าเฉลี่ยของวันมากผิดปกติ = น่าจะกรอกใบจองผิด
