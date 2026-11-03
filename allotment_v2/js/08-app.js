@@ -2697,7 +2697,7 @@ window._laReloadData=function(pre){
   var d=(pre && typeof pre==='object') ? pre : null;
   if(!d){ try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; } }
   try{
-    if(Array.isArray(d.sb_bookings)) SB_BOOKINGS=d.sb_bookings;
+    if(Array.isArray(d.sb_bookings)){ SB_BOOKINGS=d.sb_bookings; try{ if(typeof bkVanAuditSeed==='function') bkVanAuditSeed(); }catch(_){} }   /* §vanLog */
     if(Array.isArray(d.sb_invoices)) SB_INVOICES=d.sb_invoices;
     if(Array.isArray(d.sb_payments)) SB_PAYMENTS=d.sb_payments;
     if(Array.isArray(d.sb_deposits)) SB_DEPOSITS=d.sb_deposits;
@@ -3160,6 +3160,7 @@ window._laCkApply=function(date, recs){
     var n=0;
     for(var id in srv){ if(at[id]!=null){ SB_BOOKINGS[at[id]]=srv[id]; n++; } }
     if(!n) return false;
+    try{ if(typeof bkVanAuditSeed==='function') bkVanAuditSeed(); }catch(_){}   /* §vanLog · ของจากเซิร์ฟเวอร์ = จุดตั้งต้น ไม่ใช่ฝีมือคนนี้ */
     try{
       var blob=laBlob();
       if(blob && Array.isArray(blob.sb_bookings) && blob.sb_bookings!==SB_BOOKINGS){
@@ -3192,6 +3193,7 @@ window._laCkApply=function(date, recs){
   }catch(e){ try{ console.warn('[ckDay] apply failed', e && e.message); }catch(_){} return false; }
 };
 function laBlobSave(){
+  try{ if(typeof bkVanAuditScan==='function') bkVanAuditScan(); }catch(_){}   /* §vanLog · ก่อนเขียน · บันทึกประวัติลงใบไปพร้อมกัน */
   try{
     var str=JSON.stringify(_laBlob||{});
     _laBlobRaw=str;                      // เขียนเองแล้วแคชยังตรง → รอบหน้าไม่ต้อง parse ใหม่
@@ -12542,7 +12544,9 @@ function ckNoShowBadge(b, date){
   var stage=(s.stage==='pier')?'ท่าเรือ':'รถรับ';
   var full=(s.noShow>=s.booked);
   var tip='No-show '+s.noShow+'/'+s.booked+' คน ('+stage+')'+(s.at?(' · '+s.at):'')+(s.reasonText?(' · '+s.reasonText):'')+' — บันทึกจากหน้าเช็คอิน · ไม่ได้แก้ยอดจอง/ราคา (สรุปที่ Travel Summary)';
-  return '<span class="t2-ckns'+(full?' t2-ckns-full':'')+'" title="'+ckEsc(tip)+'">&#9888; No-show '+s.noShow+(s.at?(' · '+ckEsc(s.at)):'')+'</span>';
+  /* §cuFit · ป้ายเต็ม "No-show 1 · 05:14" กว้าง ~115px ในช่องลูกค้า 269px ดันปุ่ม +N ล้นไปทับช่อง AD ("3 จอง 4" มองไม่เห็น)
+     ย่อเป็น "NS 1" · เวลา/เหตุผล/ขั้นอยู่ใน title ครบเหมือนเดิม · แถวแดงกับช่อง AD บอกอยู่แล้ว */
+  return '<span class="t2-ckns'+(full?' t2-ckns-full':'')+'" title="'+ckEsc(tip)+'">&#9888; NS '+s.noShow+'</span>';
 }
 
 // ── modal เหตุผล ─────────────────────────────────────────────────────────
@@ -29141,6 +29145,19 @@ function bkUpgPierOf(rid){
 }
 function bkUpgRouteName(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return (r&&r.name)||rid||''; }
 var _bkUpg=null;
+/* ══ §upgUi2 (2026-11-03) · หน้าต่าง Upgrade แบบใหม่ · ตามบอร์ด 5-7 ใน canvas "Upgrade 2 แบบ" ═════════════
+   owner: "User ยังงง บางที สำหรับการอัพเกรด" → "เอาให้เลือกทริปก่อน แต่ขอแบบกระชับ" → "ชื่อทริปขึ้นไม่ครบ จะงง" → "เหตุผลพิมพ์ได้ด้วย"
+   ① ไปทริปไหน (บรรทัดเดียวต่อทริป · เวลา · ชื่อเต็ม · ว่าง N · ที่ไม่พอบอกว่าไม่พอ/เต็ม · แยกท่าเดิม/ต่างท่า)
+   ② ใครขอให้ย้าย → ลูกค้าขอ/เราสัญญาไว้ = สัญญากับลูกค้า (+ ลำที่สัญญา) · เราย้ายเอง = เติมที่นั่ง · ยังไม่เลือกทริป กดไม่ได้
+   ③ เหตุผล (ปุ่มลัด + พิมพ์เอง)
+   ขวา = ตั๋วใหม่ของลูกค้า · บอกว่ากดแล้วจะเกิดอะไร · ปุ่มยืนยันบอกผล → bookingV2UpgApply(true) (หน้าสรุปแยกไม่ต้องแล้ว ตั๋วคือหน้าสรุป)
+   ข้อมูลที่เขียนลงใบเหมือนเดิมทุกอย่าง (bookingV2UpgApply ตัวเดิม ตรวจที่นั่ง/ลำซ้ำตอนกด) · สีตามป้ายบนใบ: ม่วง = เติมที่นั่ง · เขียวน้ำทะเล + ดาวเหลือง = สัญญา */
+var _UPG_C={ fill:['#6B289A','#F7F1FC','#4A1D6E'], promise:['#0F766E','#E6F6F2','#115E59'] };
+/* ลำที่ยังรับคนใบนี้ได้ · ลำเดียวพอดี = เลือกให้เลย */
+function _bkUpgRoomBoats(U){ var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }), t=bkUpgTripOn(b,U.date,U.from);
+  var pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot((t&&t.pax)||{}):0;
+  return ((typeof baBoatsForRoute==='function')?baBoatsForRoute(U.date,U.to):[]).filter(function(x){ var cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,U.date):0;
+    return !(cap>0 && cap-((typeof baAssignedPax==='function')?baAssignedPax(U.date,x.boatId):0)<pax); }); }
 /* ══ §upgVan (2026-10-17) · Upgrade ทั้งคัน ═══════════════════════════════════════════════
    owner: "พรุ่งนี้ Similan Cat กับ Similan Speed ว่าง · จะอัพเกรดบางคันขึ้นไป เพื่อปรับเรือ Speed เหลือ 3 เครื่อง ประหยัดต้นทุน"
    ถาม "มันต้องย้ายทั้งคันไหม" → ไม่ · รถคันเดิม ลูกค้าชุดเดิม แค่ลงท่าแล้วขึ้นเรืออีกลำ (ท่าเดียวกัน)
@@ -37241,6 +37258,142 @@ function bkB2cOvrDayOpen(date){
     +L.map(function(b){ var x=bkB2cOvrPending(b)[0]; return '<div onclick="bkB2cOvrOpen(\''+e(b.id)+'\')" style="padding:10px 18px;border-bottom:1px solid #F3F2EE;cursor:pointer;display:flex;gap:10px;align-items:baseline"><b style="width:110px">'+e(b.voucherRef||b.id)+'</b><span style="flex:1;color:#4B5160">'+e(b.leadPax||'')+'</span><span style="color:#9B1C1C;font-weight:700">'+e(x.label)+' &rarr; '+e(x.to||'—')+'</span></div>'; }).join('')+'</div>';
   document.body.appendChild(o);
 }
+/* ══ §vanLog (2026-11-03) · ประวัติการจัดรถลงในใบจอง ═══════════════════════════════════
+   เคส 3 Nov: GYG2Q88XBVYH ถูกรับไปแล้ว (เช็คอินรถ 07:26) แต่ชื่อรถหายจากใบ · 7678 ผู้ใช้ยืนยันว่าจัดรถแล้ว
+   แต่ในระบบไม่มี · ตอบไม่ได้ทั้งคู่ เพราะการจัด/ถอด/ย้ายกลุ่ม/เปลี่ยนคันไม่เคยถูกบันทึก
+   ทางจัดรถมีหลายสิบทาง (โหมดจัดรถ · ลาก · กลุ่ม · ใบงานรถ · ล้างทั้งโปรแกรม · แยกจุดรับ ...)
+   ไล่ใส่ทีละจุดจะตกหล่นแน่ → ดักที่จุดเดียวที่ทุกทางต้องผ่าน คือ laBlobSave
+   จำ "สภาพรถ" ของแต่ละใบไว้ (WeakMap ผูกกับตัว object) · ตอนบันทึกเทียบของใหม่กับที่จำไว้ ต่างกัน = คนบนเครื่องนี้แก้ → ลงประวัติ
+   ของที่มาจากเซิร์ฟเวอร์ (โหลด/รีเฟรช/§ckDay) เป็น object ใหม่ · ตั้งต้นใหม่ทันที (bkVanAuditSeed) ไม่ลงชื่อคนนี้แทนคนอื่น
+   ดูเฉพาะทริปตั้งแต่ 3 วันก่อนเป็นต้นไป · งานเก่าไม่มีใครจัดรถแล้ว และสแกนเร็ว */
+var _bkVaMemo=(typeof WeakMap==='function')?new WeakMap():null;
+function _bkVaFrom(){ var d=new Date(Date.now()-3*864e5); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _bkVaSig(o){
+  o=o||{};
+  return { v:o.vanId||'', g:+o.vanGroup||0, r:o.vanReturnId||'',
+    s:(Array.isArray(o.vanSplits)&&o.vanSplits.length)
+      ? o.vanSplits.map(function(x){ x=x||{}; return {v:x.vanId||'', g:+x.vanGroup||0, r:x.vanReturnId||'', p:+x.pax||0}; })
+      : null };
+}
+function _bkVaDays(b, from){
+  var out={}, any=false;
+  (b.trips||[]).forEach(function(t){
+    if(!t || !t.date || t.date<from || out[t.date]) return;
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(b,t.date):(b.ops||{});
+    out[t.date]=JSON.stringify(_bkVaSig(o)); any=true;
+  });
+  return any?out:null;
+}
+function _bkVaNm(id){ if(!id) return '—'; try{ return (typeof vehName==='function')?vehName(id):id; }catch(_){ return id; } }
+function _bkVaDay(d){ var m=String(d||'').match(/^\d{4}-(\d{2})-(\d{2})$/); if(!m) return d||'';
+  return (+m[2])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[1]-1]; }
+function _bkVaSplitTxt(a){ return a.map(function(x){ return x.p+' คน '+_bkVaNm(x.v)+(x.g?(' ก.'+x.g):''); }).join(' / '); }
+/* คำบรรยายของการเปลี่ยน 1 วัน · null = ไม่มีอะไรที่คนอ่านต้องรู้ */
+function _bkVaDesc(A, B){
+  var a=JSON.parse(A||'{"v":"","g":0,"r":"","s":null}'), b=JSON.parse(B||'{"v":"","g":0,"r":"","s":null}');
+  var parts=[], verb='แก้รถ';
+  if(a.s || b.s){
+    var sa=a.s?_bkVaSplitTxt(a.s):(_bkVaNm(a.v)+(a.g?(' ก.'+a.g):'')+' (ไม่แยก)');
+    var sb=b.s?_bkVaSplitTxt(b.s):(_bkVaNm(b.v)+(b.g?(' ก.'+b.g):'')+' (ไม่แยก)');
+    if(sa!==sb){ parts.push('ขารับ '+sa+' → '+sb); verb=(!a.s&&b.s)?'แยกรถ':((a.s&&!b.s)?'รวมรถ':'แก้รถแยก'); }
+  } else {
+    if(a.v!==b.v){ parts.push('ขารับ '+_bkVaNm(a.v)+' → '+_bkVaNm(b.v)); verb=(!a.v)?'จัดรถ':((!b.v)?'ถอดรถ':'เปลี่ยนรถ'); }
+    if(a.g!==b.g){ parts.push('กลุ่ม '+(a.g||'—')+' → '+(b.g||'—')); if(a.v===b.v) verb='ย้ายกลุ่ม'; }
+  }
+  if(a.r!==b.r){ parts.push('ขากลับ '+_bkVaNm(a.r)+' → '+_bkVaNm(b.r)); if(!parts[1] && parts.length===1) verb=(!a.r)?'จัดรถขากลับ':((!b.r)?'ถอดรถขากลับ':'เปลี่ยนรถขากลับ'); }
+  return parts.length ? (verb+' · '+parts.join(' · ')) : null;
+}
+/* ══ §vanGuard (2026-11-03) · กันรถหายจากใบที่รถไปรับแล้ว ═══════════════════════════════
+   7678 / GYG2Q88XBVYH: รถไปรับแล้ว (มีเช็คอินรถ) แต่ต่อมาชื่อรถหายจากใบ → ยอดวางบิลรถผิด และหน้า By trip ขึ้น "ยังไม่จัดรถ"
+   ใบที่ (1) มีผลเช็คอินรถ/หน้าท่าของวันนั้นแล้ว หรือ (2) วันเดินทางผ่านไปแล้ว
+   ถ้ารถขาไปจะถูกถอดหรือเปลี่ยน · ต้องพิมพ์เหตุผล · กดยกเลิก = คืนรถเดิมให้ก่อนบันทึก
+   ดักที่จุดเดียวกับ §vanLog (laBlobSave) ทุกปุ่มที่ถอด/ย้ายรถจึงโดนกันหมด ไม่ต้องไล่ทีละปุ่ม
+   ขากลับไม่กัน · หน้างานเปลี่ยนรถขากลับหลังเช็คอินเป็นเรื่องปกติ (เช่น ลูกค้าไปอีกเส้นทาง กลับอีกคัน) */
+var _bkVaRaw=(typeof WeakMap==='function')?new WeakMap():null;
+var _BKVA_F=['vanId','vanGroup','vanSeq','vanReturnId','returnSameVan','vanSplits'];
+function _bkVaRawDays(b, days){
+  var out={};
+  Object.keys(days||{}).forEach(function(dt){
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(b,dt):(b.ops||{}), r={};
+    _BKVA_F.forEach(function(k){ if(o[k]!==undefined) r[k]=(k==='vanSplits')?JSON.parse(JSON.stringify(o[k])):o[k]; });
+    out[dt]=r;
+  });
+  return out;
+}
+function _bkVaToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* ใบนี้วันนี้ "รถไปทำงานแล้ว" หรือยัง */
+function _bkVaDone(b, dt){
+  if(dt < _bkVaToday()) return 'past date';
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,dt):(b.ops||{});
+  var c=o.vanCheckin||{}, p=o.pierCheckin||{};
+  if(c.flow || c.at || +c.noShow>0 || (Array.isArray(c.events)&&c.events.length)) return 'van checked in';
+  if(p.at || p.actualPax!=null) return 'pier checked in';
+  return '';
+}
+function _bkVaOutVans(sig){ var a=JSON.parse(sig||'{}'), v=[];
+  if(a.s) a.s.forEach(function(x){ if(x.v) v.push(x.v); }); else if(a.v) v.push(a.v);
+  return v.sort().join(','); }
+/* รถขาไปที่เคยมี หายหรือถูกเปลี่ยนไหม (เพิ่มรถให้ใบที่ไม่เคยมี = ไม่กัน) */
+function _bkVaLost(A, B){ var a=_bkVaOutVans(A), b=_bkVaOutVans(B); return !!a && a!==b; }
+function _bkVaRevert(b, dt, raw){
+  var o=(typeof bkOpsFor==='function')?bkOpsFor(b,dt):(b.ops=b.ops||{});
+  _BKVA_F.forEach(function(k){ if(raw && raw[k]!==undefined) o[k]=(k==='vanSplits')?JSON.parse(JSON.stringify(raw[k])):raw[k]; else delete o[k]; });
+}
+function bkVanAuditSeed(){
+  if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return;
+  var from=_bkVaFrom();
+  SB_BOOKINGS.forEach(function(b){ if(!b || _bkVaMemo.has(b)) return;
+    var d=_bkVaDays(b, from); if(d){ _bkVaMemo.set(b, d); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, d)); } });
+}
+var _bkVaBusy=false;
+function bkVanAuditScan(){
+  if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
+  if(_bkVaBusy) return 0;
+  var from=_bkVaFrom(), n=0, chg=[];
+  SB_BOOKINGS.forEach(function(b){
+    if(!b) return;
+    var now=_bkVaDays(b, from);
+    var old=_bkVaMemo.get(b);
+    if(!old){ if(now){ _bkVaMemo.set(b, now); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, now)); } return; }   // object ใหม่ที่ยังไม่เคยเห็น = จุดตั้งต้น
+    if(!now){ _bkVaMemo.delete(b); if(_bkVaRaw) _bkVaRaw.delete(b); return; }
+    Object.keys(now).forEach(function(dt){
+      if(!(dt in old) || old[dt]===now[dt]) return;      // วันเพิ่งเพิ่ม (แก้วันเดินทาง) มีบันทึกของมันเองอยู่แล้ว
+      var txt=_bkVaDesc(old[dt], now[dt]); if(!txt) return;
+      var why=_bkVaLost(old[dt], now[dt]) ? _bkVaDone(b, dt) : '';
+      chg.push({b:b, dt:dt, txt:txt, why:why, old:old[dt]});
+    });
+  });
+  /* §vanGuard · ใบที่รถไปทำงานแล้ว ถามเหตุผลครั้งเดียวต่อการกดหนึ่งครั้ง (ล้างทั้งโปรแกรมก็ถามครั้งเดียว) */
+  var guard=chg.filter(function(c){ return c.why; }), reason='';
+  if(guard.length){
+    var lines=guard.slice(0,12).map(function(c){ return '- '+(c.b.voucherRef||c.b.code||c.b.id)+' · '+_bkVaDay(c.dt)+' · '+c.why+' · '
+      +_bkVaOutVansNm(c.old)+' -> '+_bkVaOutVansNm(JSON.stringify(_bkVaSig((typeof bkOpsRead==='function')?bkOpsRead(c.b,c.dt):(c.b.ops||{})))); });
+    if(guard.length>12) lines.push('... and '+(guard.length-12)+' more');
+    var r=null;
+    _bkVaBusy=true;
+    try{ r=(typeof prompt==='function')?prompt('These bookings were already picked up by van (or the trip date has passed).\n'
+      +'Removing or changing their outbound van changes the van bill and the pickup record.\n\n'+lines.join('\n')
+      +'\n\nType the reason to continue, or press Cancel to keep the van.',''):null; }catch(_){ r=null; }
+    _bkVaBusy=false;
+    reason=String(r||'').trim();
+    if(!reason){
+      var raws=_bkVaRaw;
+      guard.forEach(function(c){ _bkVaRevert(c.b, c.dt, raws&&raws.get(c.b)&&raws.get(c.b)[c.dt]); });
+      chg=chg.filter(function(c){ return !c.why; });
+      try{ if(typeof toast==='function') toast('Van kept on '+guard.length+' booking(s)'); }catch(_){}
+    }
+  }
+  chg.forEach(function(c){
+    bookingV2AddHistory(c.b, 'van', '🚐 '+c.txt+' · '+_bkVaDay(c.dt)+(c.why?(' · ⚠ '+({'past date':'เลยวันเดินทางแล้ว','van checked in':'หลังเช็คอินรถแล้ว','pier checked in':'หลังเช็คอินหน้าท่าแล้ว'}[c.why]||c.why)+' · เหตุผล: '+reason):''), 'Van'); n++;
+  });
+  /* จำสภาพใหม่ (ใบที่คืนรถแล้วจะได้ค่าเดิมกลับมา) */
+  SB_BOOKINGS.forEach(function(b){ if(!b || !_bkVaMemo.has(b)) return;
+    var now=_bkVaDays(b, from); if(!now) return;
+    if(JSON.stringify(now)!==JSON.stringify(_bkVaMemo.get(b))){ _bkVaMemo.set(b, now); if(_bkVaRaw) _bkVaRaw.set(b, _bkVaRawDays(b, now)); } });
+  return n;
+}
+function _bkVaOutVansNm(sig){ var v=_bkVaOutVans(sig); return v ? v.split(',').map(function(x){ var n=_bkVaNm(x); return String(n).split(' · ')[0]; }).join('+') : '(none)'; }
+setTimeout(function(){ try{ bkVanAuditSeed(); }catch(_){} }, 0);
 /* ══ §b2cChg (2026-10-08) · บอกในแถวของบุคกิ้งว่า B2C แก้อะไรมา ══════════════════════════
    เจ้าของ: "บุคกิ้ง B2C sync อัตโนมัติ ถ้ามีการแก้มาจากฝั่ง B2C มันจะเปลี่ยนแบบเงียบ ๆ
    ทาง By trip date ทำยังไงให้รู้ว่ามีการแก้ไข" → "ให้โชว์ในบรรทัดของบุคกิ้งนั้น ๆ เลย
@@ -48858,6 +49011,23 @@ function _btOtherSection(date, rows, rids){
   </div>`;
 }
 
+/* §cuFit (2026-11-03) · ช่องลูกค้า (Layer view) เป็น nowrap · ชื่อ + ป้าย (CXL / NS / ล็อก / +N) ยาวเกินช่อง = ล้นทับช่อง AD
+   หลังวาด วัดทุกช่อง · ล้นเท่าไร หดชื่อ (ตัดด้วย …) เท่านั้น ไม่ต่ำกว่า 60px · ชื่อเต็มอยู่ใน title ของชื่ออยู่แล้ว
+   อ่านทุกช่องก่อนแล้วค่อยเขียน (ไม่สลับอ่าน/เขียน) · 199 ช่อง ~3 ms */
+function btCuFit(){
+  var cells=document.querySelectorAll('td.t2-cu'), w=[];
+  cells.forEach(function(td){
+    var ld=td.querySelector(':scope > .t2-lead'); if(!ld) return;
+    var R=td.getBoundingClientRect().right-(parseFloat(getComputedStyle(td).paddingRight)||0), mx=0;
+    for(var i=0;i<td.children.length;i++){ var k=td.children[i], ps=getComputedStyle(k).position;
+      if(ps==='absolute'||ps==='fixed') continue;
+      var r=k.getBoundingClientRect(); if(r.height && r.right>mx) mx=r.right; }
+    var over=mx-R;
+    if(over>1) w.push([ld, Math.max(60, Math.floor(ld.getBoundingClientRect().width-over-2))]);
+  });
+  w.forEach(function(x){ x[0].style.maxWidth=x[1]+'px'; });
+  return w.length;
+}
 
 
 

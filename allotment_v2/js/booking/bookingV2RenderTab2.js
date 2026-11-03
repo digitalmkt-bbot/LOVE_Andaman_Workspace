@@ -1,4 +1,5 @@
 function bookingV2RenderTab2(){
+  try{ requestAnimationFrame(function(){ try{ btCuFit(); }catch(_){} }); }catch(_){}   /* §cuFit · ผู้เรียกเอา HTML ไปวางก่อนเฟรมถัดไป */
   if(typeof bookingV2HealOvnLegs==='function') bookingV2HealOvnLegs();   // §OVN · a return leg must never carry a pickup
   /* §ovnSpan · ตัวซ่อมเดิมผมไปแขวนไว้ใน renderVanJobs ซึ่งทำงานต่อเมื่อเปิดหน้าใบงานรถ
      ใบค้างเกาะเป็นเรื่องของเรือ คนที่ต้องเห็นคือคนจ่ายเรือ · ย้ายมาที่หน้า By trip */
