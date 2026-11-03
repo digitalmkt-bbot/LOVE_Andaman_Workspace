@@ -6705,6 +6705,14 @@
         "type": "text"
       },
       {
+        "name": "editby",
+        "type": "text"
+      },
+      {
+        "name": "editat",
+        "type": "text"
+      },
+      {
         "name": "at",
         "type": "text"
       },

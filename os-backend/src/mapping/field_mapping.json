@@ -7271,6 +7271,16 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "editby": {
+      "source": "editBy",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "editat": {
+      "source": "editAt",
+      "kind": "scalar",
+      "db_type": "text"
+    },
     "at": {
       "source": "at",
       "kind": "scalar",
