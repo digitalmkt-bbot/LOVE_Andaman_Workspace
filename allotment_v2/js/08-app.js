@@ -32885,10 +32885,29 @@ function bkV2UpgModal(){
     return '<button type="button" data-upg-to="'+e(x.rid)+'" onclick="bkV2UpgPick(\'to\',\''+q(x.rid)+'\')" style="display:flex;align-items:center;gap:8px;padding:'+(on?'6px 9px':'7px 10px')+';border-radius:8px;border:'+(on?('2px solid '+C[0]):('1px solid '+LINE))+';background:'+(on?C[1]:'#fff')+';font-family:inherit;text-align:left;cursor:pointer;font-size:12.5px;color:'+INK+'">'
       +'<span style="font-family:\'DM Mono\',monospace;font-size:11px;color:'+MUT+';flex:none">'+e(tm)+'</span><span style="flex:1;min-width:0;line-height:1.3;font-weight:'+(on?700:500)+'">'+e(x.name)+'</span>'
       +'<span style="font-size:11.5px;font-weight:700;flex:none;color:'+(x.free==null?MUT:(x.free>=5?'#15803D':'#B45309'))+'">'+(x.free==null?'-':(laT('ว่าง')+' '+x.free))+'</span></button>'; };
+  /* §upgFold (2026-11-04) · owner: "ของท่าไหน โชว์ท่านั้นก่อน ส่วนต่างท่ายุบไว้ก่อน ถ้าอยากเห็นค่อยกด · กลัว User เห็นเยอะ ๆ จะสับสน"
+     ท่าอื่นยุบเป็นบรรทัดเดียว · กางให้เองเมื่อ (1) ท่าเดิมไม่มีทริปที่พอ (2) ทริปที่เลือกไว้อยู่ท่าอื่น (3) ท่าเดิมไม่มีทริปอื่นเลย */
+  var _room=function(x){ return x.free==null || x.free>=pax; };
+  var _sameT=T.filter(function(x){ return x.pier===fromPier; }), _sameOk=_sameT.some(_room);
+  var _selOther=!!(U.to && T.some(function(x){ return x.rid===U.to && x.pier!==fromPier; }));
+  var _auto=(!_sameOk || _selOther), _openO=!!(U.showOther || _auto);
+  var _otherP=piers.filter(function(p){ return p!==fromPier; });
+  var _otherN=T.filter(function(x){ return x.pier!==fromPier && _room(x); }).length;
+  var _fold='';
+  if(_otherP.length){
+    var _pn=_otherP.map(function(p){ return pnm(p); }).join(' · ');
+    if(!_openO) _fold='<button type="button" data-upg-fold="open" onclick="_bkUpg.showOther=true;bkV2UpgModal()" style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;border:1px dashed #E7C58F;background:#FFFBF3;border-radius:8px;padding:7px 10px;font-family:inherit;font-size:12.5px;color:#8A5B00;cursor:pointer;text-align:left">'
+      +'<span aria-hidden="true">&#9656;</span><b>'+e(_pn)+'</b><span>· '+e(laT('ต่างท่า'))+' · '+_otherN+' '+e(laT('ทริปที่ว่าง'))+'</span><span style="margin-left:auto;font-size:11.5px;color:'+MUT+'">'+e(laT('กดเพื่อดู'))+'</span></button>';
+    else if(!_auto) _fold='<button type="button" data-upg-fold="close" onclick="_bkUpg.showOther=false;bkV2UpgModal()" style="grid-column:1 / -1;justify-self:start;border:0;background:transparent;font-family:inherit;font-size:12px;color:'+MUT+';cursor:pointer;padding:0 2px">&#9662; '+e(laT('ซ่อนท่าอื่น'))+'</button>';
+  }
+  var _sameNote=(!_sameOk && _otherP.length)?('<div data-upg-samefull="1" style="grid-column:1 / -1;font-size:12px;font-weight:700;color:#B45309">'+e(_sameT.length?laT('ท่าเดิมไม่มีทริปที่พอ · ดูท่าอื่นด้านล่าง'):laT('ท่าเดิมไม่มีทริปอื่น · ดูท่าอื่นด้านล่าง'))+'</div>'):'';
   var trips=T.length?('<div style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px 10px;align-items:start">'
+      +((!_sameT.length)?_sameNote:'')
       +piers.map(function(p){ var same=(p===fromPier);
+        if(!same && !_openO) return '';
         return '<div data-upg-pier="'+e(p)+'" style="font-size:11.5px;font-weight:700;line-height:1.3;padding-top:7px;color:'+(same?'#0F766E':'#B45309')+'">'+e(pnm(p))+'<br><span data-upg-piertag="'+(same?'same':'other')+'" style="font-weight:500;color:'+MUT+'">'+e(same?laT('ท่าเดิม'):laT('ต่างท่า'))+'</span></div>'
-          +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">'+T.filter(function(x){ return x.pier===p; }).map(tile).join('')+'</div>'; }).join('')+'</div>')
+          +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">'+T.filter(function(x){ return x.pier===p; }).map(tile).join('')+'</div>'
+          +(same?(_sameNote+_fold):''); }).join('')+'</div>')
     : '<div style="padding:12px;text-align:center;color:#A32D2D;font-size:12.5px">'+laT('วันนี้ไม่มีโปรแกรมอื่นที่มีเรือวิ่ง')+'</div>';
   /* ② ใครขอ */
   var who=function(k,big,sub,tag){ var on=(K===k), c=_UPG_C[k], dis=!U.to;
