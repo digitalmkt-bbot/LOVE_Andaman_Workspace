@@ -78,6 +78,20 @@
     if(!r || !r.demand) return undefined;
     return { pax: num(r.demand.pax), pickup: num(r.demand.pickup) };
   });
+  /* §vehMxHead · _vehDayStats(day) (lk-inbox 11-02) counts every programme's heads, pickups and van groups in one walk over the bookings
+     loaded here, which hold only the dates this browser read. The van board has the same figures for every programme of the day. */
+  wrap('_vehDayStats', function(orig, a){
+    var b = board(a[0]); if(!b || !Array.isArray(b.routes)) return undefined;
+    var out = { dm: {}, grp: {} };
+    b.routes.forEach(function(r){
+      if(!r || !r.route_id) return;
+      if(r.demand) out.dm[r.route_id] = { pax: num(r.demand.pax), pickup: num(r.demand.pickup) };
+      if(r.groups_with_van != null && r.groups_without_van != null) {
+        out.grp[r.route_id] = { total: num(r.groups_with_van) + num(r.groups_without_van), withVan: num(r.groups_with_van), woVan: num(r.groups_without_van) };
+      }
+    });
+    return out;
+  });
   wrap('_vehGroupsForDay', function(orig, a){
     var r = boardRoute(a[1], a[0]);
     if(!r || r.groups_with_van == null || r.groups_without_van == null) return undefined;
