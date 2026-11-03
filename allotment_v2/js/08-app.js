@@ -2741,7 +2741,7 @@ window._laReloadData=function(pre){
   var d=(pre && typeof pre==='object') ? pre : null;
   if(!d){ try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; } }
   try{
-    if(Array.isArray(d.sb_bookings)) SB_BOOKINGS=d.sb_bookings;
+    if(Array.isArray(d.sb_bookings)){ SB_BOOKINGS=d.sb_bookings; try{ if(typeof bkVanAuditSeed==='function') bkVanAuditSeed(); }catch(_){} }   /* §vanLog */
     if(Array.isArray(d.sb_invoices)) SB_INVOICES=d.sb_invoices;
     if(Array.isArray(d.sb_payments)) SB_PAYMENTS=d.sb_payments;
     if(Array.isArray(d.sb_deposits)) SB_DEPOSITS=d.sb_deposits;
@@ -5650,6 +5650,7 @@ window._laCkApply=function(date, recs){
     var n=0;
     for(var id in srv){ if(at[id]!=null){ SB_BOOKINGS[at[id]]=srv[id]; n++; } }
     if(!n) return false;
+    try{ if(typeof bkVanAuditSeed==='function') bkVanAuditSeed(); }catch(_){}   /* §vanLog · ของจากเซิร์ฟเวอร์ = จุดตั้งต้น ไม่ใช่ฝีมือคนนี้ */
     try{
       var blob=laBlob();
       if(blob && Array.isArray(blob.sb_bookings) && blob.sb_bookings!==SB_BOOKINGS){
@@ -5682,6 +5683,7 @@ window._laCkApply=function(date, recs){
   }catch(e){ try{ console.warn('[ckDay] apply failed', e && e.message); }catch(_){} return false; }
 };
 function laBlobSave(){
+  try{ if(typeof bkVanAuditScan==='function') bkVanAuditScan(); }catch(_){}   /* §vanLog · ก่อนเขียน · บันทึกประวัติลงใบไปพร้อมกัน */
   try{
     var str=JSON.stringify(_laBlob||{});
     _laBlobRaw=str;                      // เขียนเองแล้วแคชยังตรง → รอบหน้าไม่ต้อง parse ใหม่
@@ -41839,6 +41841,76 @@ function bkV2AddHistory(bk, kind, text, tag){
   if(!Array.isArray(bk.history)) bk.history=[];
   bk.history.push({at:new Date().toISOString(), kind:kind||'note', text:text||'', tag:tag||'', by:laBy()});
 }
+/* ══ §vanLog (2026-11-03) · ประวัติการจัดรถลงในใบจอง ═══════════════════════════════════
+   เคส 3 Nov: GYG2Q88XBVYH ถูกรับไปแล้ว (เช็คอินรถ 07:26) แต่ชื่อรถหายจากใบ · 7678 ผู้ใช้ยืนยันว่าจัดรถแล้ว
+   แต่ในระบบไม่มี · ตอบไม่ได้ทั้งคู่ เพราะการจัด/ถอด/ย้ายกลุ่ม/เปลี่ยนคันไม่เคยถูกบันทึก
+   ทางจัดรถมีหลายสิบทาง (โหมดจัดรถ · ลาก · กลุ่ม · ใบงานรถ · ล้างทั้งโปรแกรม · แยกจุดรับ ...)
+   ไล่ใส่ทีละจุดจะตกหล่นแน่ → ดักที่จุดเดียวที่ทุกทางต้องผ่าน คือ laBlobSave
+   จำ "สภาพรถ" ของแต่ละใบไว้ (WeakMap ผูกกับตัว object) · ตอนบันทึกเทียบของใหม่กับที่จำไว้ ต่างกัน = คนบนเครื่องนี้แก้ → ลงประวัติ
+   ของที่มาจากเซิร์ฟเวอร์ (โหลด/รีเฟรช/§ckDay) เป็น object ใหม่ · ตั้งต้นใหม่ทันที (bkVanAuditSeed) ไม่ลงชื่อคนนี้แทนคนอื่น
+   ดูเฉพาะทริปตั้งแต่ 3 วันก่อนเป็นต้นไป · งานเก่าไม่มีใครจัดรถแล้ว และสแกนเร็ว */
+var _bkVaMemo=(typeof WeakMap==='function')?new WeakMap():null;
+function _bkVaFrom(){ var d=new Date(Date.now()-3*864e5); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _bkVaSig(o){
+  o=o||{};
+  return { v:o.vanId||'', g:+o.vanGroup||0, r:o.vanReturnId||'',
+    s:(Array.isArray(o.vanSplits)&&o.vanSplits.length)
+      ? o.vanSplits.map(function(x){ x=x||{}; return {v:x.vanId||'', g:+x.vanGroup||0, r:x.vanReturnId||'', p:+x.pax||0}; })
+      : null };
+}
+function _bkVaDays(b, from){
+  var out={}, any=false;
+  (b.trips||[]).forEach(function(t){
+    if(!t || !t.date || t.date<from || out[t.date]) return;
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(b,t.date):(b.ops||{});
+    out[t.date]=JSON.stringify(_bkVaSig(o)); any=true;
+  });
+  return any?out:null;
+}
+function _bkVaNm(id){ if(!id) return '—'; try{ return (typeof vehName==='function')?vehName(id):id; }catch(_){ return id; } }
+function _bkVaDay(d){ var m=String(d||'').match(/^\d{4}-(\d{2})-(\d{2})$/); if(!m) return d||'';
+  return (+m[2])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[1]-1]; }
+function _bkVaSplitTxt(a){ return a.map(function(x){ return x.p+' คน '+_bkVaNm(x.v)+(x.g?(' ก.'+x.g):''); }).join(' / '); }
+/* คำบรรยายของการเปลี่ยน 1 วัน · null = ไม่มีอะไรที่คนอ่านต้องรู้ */
+function _bkVaDesc(A, B){
+  var a=JSON.parse(A||'{"v":"","g":0,"r":"","s":null}'), b=JSON.parse(B||'{"v":"","g":0,"r":"","s":null}');
+  var parts=[], verb='แก้รถ';
+  if(a.s || b.s){
+    var sa=a.s?_bkVaSplitTxt(a.s):(_bkVaNm(a.v)+(a.g?(' ก.'+a.g):'')+' (ไม่แยก)');
+    var sb=b.s?_bkVaSplitTxt(b.s):(_bkVaNm(b.v)+(b.g?(' ก.'+b.g):'')+' (ไม่แยก)');
+    if(sa!==sb){ parts.push('ขารับ '+sa+' → '+sb); verb=(!a.s&&b.s)?'แยกรถ':((a.s&&!b.s)?'รวมรถ':'แก้รถแยก'); }
+  } else {
+    if(a.v!==b.v){ parts.push('ขารับ '+_bkVaNm(a.v)+' → '+_bkVaNm(b.v)); verb=(!a.v)?'จัดรถ':((!b.v)?'ถอดรถ':'เปลี่ยนรถ'); }
+    if(a.g!==b.g){ parts.push('กลุ่ม '+(a.g||'—')+' → '+(b.g||'—')); if(a.v===b.v) verb='ย้ายกลุ่ม'; }
+  }
+  if(a.r!==b.r){ parts.push('ขากลับ '+_bkVaNm(a.r)+' → '+_bkVaNm(b.r)); if(!parts[1] && parts.length===1) verb=(!a.r)?'จัดรถขากลับ':((!b.r)?'ถอดรถขากลับ':'เปลี่ยนรถขากลับ'); }
+  return parts.length ? (verb+' · '+parts.join(' · ')) : null;
+}
+function bkVanAuditSeed(){
+  if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return;
+  var from=_bkVaFrom();
+  SB_BOOKINGS.forEach(function(b){ if(!b || _bkVaMemo.has(b)) return;
+    var d=_bkVaDays(b, from); if(d) _bkVaMemo.set(b, d); });
+}
+function bkVanAuditScan(){
+  if(!_bkVaMemo || typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
+  var from=_bkVaFrom(), n=0;
+  SB_BOOKINGS.forEach(function(b){
+    if(!b) return;
+    var now=_bkVaDays(b, from);
+    var old=_bkVaMemo.get(b);
+    if(!old){ if(now) _bkVaMemo.set(b, now); return; }   // object ใหม่ที่ยังไม่เคยเห็น = จุดตั้งต้น
+    if(!now){ _bkVaMemo.delete(b); return; }
+    Object.keys(now).forEach(function(dt){
+      if(!(dt in old) || old[dt]===now[dt]) return;      // วันเพิ่งเพิ่ม (แก้วันเดินทาง) มีบันทึกของมันเองอยู่แล้ว
+      var txt=_bkVaDesc(old[dt], now[dt]); if(!txt) return;
+      bkV2AddHistory(b, 'van', '🚐 '+txt+' · '+_bkVaDay(dt), 'Van'); n++;
+    });
+    _bkVaMemo.set(b, now);
+  });
+  return n;
+}
+setTimeout(function(){ try{ bkVanAuditSeed(); }catch(_){} }, 0);
 // Tag → [bg,fg] chip colors for the booking history timeline
 function bkV2HistTagColor(tag){
   const m={
@@ -41847,7 +41919,8 @@ function bkV2HistTagColor(tag){
     'Reschedule':['#E6F1FB','#185FA5'], 'Cancel':['#FCEBEB','#A32D2D'], 'Refund':['#FCEBEB','#A32D2D'],
     'Credit':['#FAEEDA','#854F0B'], 'Notify':['#FBF0DD','#7A4A00'], 'Weather':['#FCEBEB','#A32D2D'],
     'FOC':['#FAEEDA','#854F0B'], 'Extra':['#E1F5EE','#0F6E56'],
-    'B2C':['#FFEDD5','#C2410C'], 'Seen':['#F1EFE8','#5F5E5A']   /* §b2cChg */
+    'B2C':['#FFEDD5','#C2410C'], 'Seen':['#F1EFE8','#5F5E5A'],   /* §b2cChg */
+    'Van':['#E1F5EE','#0F6E56']   /* §vanLog */
   };
   return m[tag]||['#F1EFE8','#5F5E5A'];
 }
