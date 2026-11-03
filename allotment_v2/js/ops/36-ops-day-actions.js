@@ -305,6 +305,8 @@
       flowAt: r.flow_at || null,
       flowBy: r.flow_by || null,
       flowNote: r.flow_note || null,
+      /* §vckLine · the LINE follow-ups copied for this row ("💬 LINE hh:mm ×n"); server-owned */
+      lineSent: (Array.isArray(r.line_sent) ? r.line_sent : []).map(function(x){ return { at: x.at || '', by: x.by || '' }; }),
       reinstate: r.reinstate ? clone(r.reinstate) : null,
       selfAdd: r.self_add ? clone(r.self_add) : null,
       events: (Array.isArray(r.events) ? r.events : []).map(function(e){
@@ -752,7 +754,35 @@
      that write changed: a field the earlier write changed and this one left at the old value gets the earlier value. */
   var ckFlight = {};
   function sameVal(x, y){ return JSON.stringify(x === undefined ? null : x) === JSON.stringify(y === undefined ? null : y); }
+  /* §vckLine · vckLineCopy adds one line to ck.lineSent and vckLineClearLog empties it, both through ckWrite. The whole-record
+     PUT carries no log (and the server refuses its counts), so a write whose only change is the log goes to
+     POST|DELETE …/checkins/{kind}/{slot}/line-sent; the server stamps the clock and the login. */
+  function lineSentOnly(base, val){
+    if(!val || typeof val !== 'object' || !Array.isArray(val.lineSent)) return null;
+    var was = Array.isArray(base.lineSent) ? base.lineSent.length : 0, now = val.lineSent.length;
+    if(now === was) return null;
+    var rest = Object.keys(val).concat(Object.keys(base)).filter(function(k){ return k !== 'lineSent' && k !== '_s'; });
+    if(rest.some(function(k){ return !sameVal(val[k], base[k]); })) return null;
+    return now === 0 ? 'DELETE' : (now === was + 1 ? 'POST' : null);
+  }
+  function lineSentServer(b, date, kind, method){
+    var trips = Array.isArray(b.trips) ? b.trips : [];
+    var trip = trips.find(function(t){ return t && t.date === date; }) || trips[0];
+    if(!trip || !trip.opsTripId){ O.fail('LINE log not saved', new Error('This booking has no operation-backend trip on ' + date)); return Promise.resolve(null); }
+    var target = parseCheckinKindAndSlot(kind);
+    var path = '/operations/trip-ops/' + enc(trip.opsTripId) + '/checkins/' + enc(target.kind) + '/' + enc(target.slot) + '/line-sent';
+    return O.queue(function(){ return O.call(method, path, method === 'POST' ? {} : undefined); }).then(function(res){
+      if(res && res.trip) mergeTripOperations(b, date, res.trip);
+      O.wrote('trip-checkin');
+      if(window._vckLnState && typeof window.vckLineRender === 'function'){ try{ window.vckLineRender(); }catch(_){} }
+      if(typeof window.ckAfter === 'function'){ try{ window.ckAfter(kind); }catch(_){} }
+      return res;
+    }, function(e){ O.fail(method === 'POST' ? 'LINE send not logged' : 'LINE log not cleared', e); return null; });
+  }
+
   wrap('ckWrite', function(orig, b, date, kind, val){
+    var ls = lineSentOnly((typeof window.ckRead === 'function' ? window.ckRead(b, date, kind) : null) || {}, val);
+    if(ls){ lineSentServer(b, date, kind, ls); return val; }
     // Server-first check-in write: do not mutate local ops until server responds,
     // except return a pending promise while keeping UI responsive
     var key = (b && b.id) + '|' + date + '|' + kind, prior = ckFlight[key];

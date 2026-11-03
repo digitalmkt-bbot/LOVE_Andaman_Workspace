@@ -121,6 +121,9 @@
     vck_status_colors: { title: 'Van check-in colours', wait: 0 },
     vck_bar_style: { title: 'Van check-in row style', wait: 0 },
     bop2_templates: { title: 'Boat Operation templates', wait: 0 },
+    vck_line_tpl: { title: 'Van check-in LINE template', wait: 0 },
+    vck_line_extras: { title: 'Van check-in LINE extra lines', wait: 0 },
+    vck_line_office: { title: 'Van check-in LINE office', wait: 0 },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -208,6 +211,37 @@
     if(!cfgCell.loaded){ cfgCell.miss(); return {}; }
     var v = ent(key).value; return (v && typeof v === 'object') ? v : {};
   }
+
+  /* §vckLine · vckLineTpl / vckLineExtras / vckLineOffice (08) read laBlob(); vckLineTplSave / vckLineTplReset wrote it. The saved
+     template and lines win; empty ones read as legacy's built-in VCK_LINE_TPL_DEF and VCK_LINE_EXTRA_DEF. */
+  function lineVal(key){ if(!cfgCell.loaded){ cfgCell.miss(); return null; } return ent(key).value; }
+  wrap('vckLineTpl', function(orig){
+    var v = lineVal('vck_line_tpl');
+    return (typeof v === 'string' && v.trim()) ? v : (typeof VCK_LINE_TPL_DEF !== 'undefined' ? VCK_LINE_TPL_DEF : orig());
+  });
+  wrap('vckLineExtras', function(orig){
+    var v = lineVal('vck_line_extras');
+    return (Array.isArray(v) && v.length) ? v.slice() : (typeof VCK_LINE_EXTRA_DEF !== 'undefined' ? VCK_LINE_EXTRA_DEF.slice() : orig());
+  });
+  wrap('vckLineOffice', function(orig){ var v = lineVal('vck_line_office'); return typeof v === 'string' ? v : ''; });
+  function lineSaved(){
+    if(window._vckLnState && typeof window.vckLineRender === 'function'){ try{ window.vckLineRender(); }catch(_){} }
+  }
+  wrap('vckLineTplSave', function(orig){
+    if(typeof window.ckGuard === 'function' && !window.ckGuard()) return;
+    var val = function(id){ var el = document.getElementById(id); return el ? String(el.value || '') : ''; };
+    var t = val('vck-ln-tpl'), ex = [0, 1, 2].map(function(i){ return val('vck-ln-ex' + i).trim(); }).filter(Boolean);
+    var def = typeof VCK_LINE_TPL_DEF !== 'undefined' ? VCK_LINE_TPL_DEF : '', exDef = typeof VCK_LINE_EXTRA_DEF !== 'undefined' ? VCK_LINE_EXTRA_DEF : [];
+    cfgWrite('vck_line_tpl', t.trim() && t.trim() !== def ? t : '');
+    cfgWrite('vck_line_extras', ex.length && JSON.stringify(ex) !== JSON.stringify(exDef) ? ex : []);
+    cfgWrite('vck_line_office', val('vck-ln-office').trim());
+    lineSaved();
+  });
+  wrap('vckLineTplReset', function(orig){
+    if(!window.confirm('คืนเทมเพลตข้อความตามแขกเป็นค่าเริ่มต้น?')) return;
+    cfgWrite('vck_line_tpl', ''); cfgWrite('vck_line_extras', []);
+    lineSaved();
+  });
 
   /* rc_status_colors · rcStatusColors (08) and rcSaveStatusColor (08): a falsy hex deletes that status */
   wrap('rcStatusColors', function(orig){ return O.clone(liveOf('rc_status_colors')); });
