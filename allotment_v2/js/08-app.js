@@ -16133,7 +16133,9 @@ function ckNoShowBadge(b, date){
   var stage=(s.stage==='pier')?'ท่าเรือ':'รถรับ';
   var full=(s.noShow>=s.booked);
   var tip='No-show '+s.noShow+'/'+s.booked+' คน ('+stage+')'+(s.at?(' · '+s.at):'')+(s.reasonText?(' · '+s.reasonText):'')+' — บันทึกจากหน้าเช็คอิน · ไม่ได้แก้ยอดจอง/ราคา (สรุปที่ Travel Summary)';
-  return '<span class="t2-ckns'+(full?' t2-ckns-full':'')+'" title="'+ckEsc(tip)+'">&#9888; No-show '+s.noShow+(s.at?(' · '+ckEsc(s.at)):'')+'</span>';
+  /* §cuFit · ป้ายเต็ม "No-show 1 · 05:14" กว้าง ~115px ในช่องลูกค้า 269px ดันปุ่ม +N ล้นไปทับช่อง AD ("3 จอง 4" มองไม่เห็น)
+     ย่อเป็น "NS 1" · เวลา/เหตุผล/ขั้นอยู่ใน title ครบเหมือนเดิม · แถวแดงกับช่อง AD บอกอยู่แล้ว */
+  return '<span class="t2-ckns'+(full?' t2-ckns-full':'')+'" title="'+ckEsc(tip)+'">&#9888; NS '+s.noShow+'</span>';
 }
 
 // ── modal เหตุผล ─────────────────────────────────────────────────────────
@@ -57570,7 +57572,25 @@ function bkV2OtherToggleAll(){
   if(typeof bkV2Render==='function') bkV2Render();
 }
 
+/* §cuFit (2026-11-03) · ช่องลูกค้า (Layer view) เป็น nowrap · ชื่อ + ป้าย (CXL / NS / ล็อก / +N) ยาวเกินช่อง = ล้นทับช่อง AD
+   หลังวาด วัดทุกช่อง · ล้นเท่าไร หดชื่อ (ตัดด้วย …) เท่านั้น ไม่ต่ำกว่า 60px · ชื่อเต็มอยู่ใน title ของชื่ออยู่แล้ว
+   อ่านทุกช่องก่อนแล้วค่อยเขียน (ไม่สลับอ่าน/เขียน) · 199 ช่อง ~3 ms */
+function btCuFit(){
+  var cells=document.querySelectorAll('td.t2-cu'), w=[];
+  cells.forEach(function(td){
+    var ld=td.querySelector(':scope > .t2-lead'); if(!ld) return;
+    var R=td.getBoundingClientRect().right-(parseFloat(getComputedStyle(td).paddingRight)||0), mx=0;
+    for(var i=0;i<td.children.length;i++){ var k=td.children[i], ps=getComputedStyle(k).position;
+      if(ps==='absolute'||ps==='fixed') continue;
+      var r=k.getBoundingClientRect(); if(r.height && r.right>mx) mx=r.right; }
+    var over=mx-R;
+    if(over>1) w.push([ld, Math.max(60, Math.floor(ld.getBoundingClientRect().width-over-2))]);
+  });
+  w.forEach(function(x){ x[0].style.maxWidth=x[1]+'px'; });
+  return w.length;
+}
 function bkV2RenderTab2(){
+  try{ requestAnimationFrame(function(){ try{ btCuFit(); }catch(_){} }); }catch(_){}   /* §cuFit · ผู้เรียกเอา HTML ไปวางก่อนเฟรมถัดไป */
   if(typeof bkV2HealOvnLegs==='function') bkV2HealOvnLegs();   // §OVN · a return leg must never carry a pickup
   /* §ovnSpan · ตัวซ่อมเดิมผมไปแขวนไว้ใน renderVanJobs ซึ่งทำงานต่อเมื่อเปิดหน้าใบงานรถ
      ใบค้างเกาะเป็นเรื่องของเรือ คนที่ต้องเห็นคือคนจ่ายเรือ · ย้ายมาที่หน้า By trip */
