@@ -198,6 +198,34 @@
     wl.__ops=true; window.bookingV2B2CList=wl;
   }
 
+  /* §b2cOvrSeen · what Love Kingdom's push left waiting comes with the booking (b2c_held), so By trip needs no history to show the flag.
+     POST /v1/bookings/{id}/b2c-held/use|keep · server first; "use" writes the values and gives the fields back to Love Kingdom */
+  var OVR_ORDER=['hotelname','pickuparea','pickupzone','pickupself','dropoffhotelname','dropoffsame'];
+  var origOvrPending=window.bkB2cOvrPending, origOvrDecide=window.bkB2cOvrDecide;
+  if(typeof origOvrPending==='function' && !origOvrPending.__ops){
+    var op=function(b){
+      if(!O.enabled()) return origOvrPending.apply(this, arguments);
+      var H=(b && b.b2cHeld) || {};
+      return OVR_ORDER.filter(function(c){ return H[c] && !H[c].decided_at; }).map(function(c){ return { col:c, label:H[c].label, from:H[c].from, to:H[c].to, at:H[c].at }; });
+    };
+    op.__ops=true; window.bkB2cOvrPending=op;
+  }
+  if(typeof origOvrDecide==='function' && !origOvrDecide.__ops){
+    var od=function(bkId, how){
+      if(!O.enabled()) return origOvrDecide.apply(this, arguments);
+      if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return null;
+      var b=byLocal(bkId); if(!b || !b.opsId) return null;
+      return window.laOpsBookingAction(bkId, 'b2c-held/'+how, {}, function(){}, how==='use'?'Use B2C':'Keep ours', true).then(function(j){
+        if(!j) return null;
+        if(typeof window.bkB2cOvrClose==='function') window.bkB2cOvrClose();
+        (j.warnings||[]).forEach(function(w){ if(w && w.code==='pickup_area_unmatched') alert(w.message); });
+        try{ if(typeof window.renderPierCheckin==='function' && document.getElementById('view-piercheckin') && document.getElementById('view-piercheckin').classList.contains('active')) window.renderPierCheckin(); }catch(_){}
+        return j;
+      });
+    };
+    od.__ops=true; window.bkB2cOvrDecide=od;
+  }
+
   /* Reviewed on one order · server first (POST /v1/bookings/{id}/b2c-seen) · resolves true when the order is settled */
   var origSeen=window.bookingV2B2CSeen;
   if(typeof origSeen==='function' && !origSeen.__ops){

@@ -1,11 +1,15 @@
 function bookingV2AssignBoat(bkId, boatId, date){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   const _d = bkOpsDate(b, date);   // which travel day this assignment belongs to
+  if(typeof bkUpgPromiseGuard==='function' && !bkUpgPromiseGuard(b, _d, boatId||'', 'By trip')) return;   /* §upgPromise */
   // §boatSplit · เลือกเรือลำเดียวทั้งที่บุคกิ้งแยกลงหลายลำอยู่ → ต้องยืนยันก่อน ไม่งั้นการแยกหายเงียบ
   const _sp0=(typeof bkBoatSplits==='function')?bkBoatSplits(b,_d):null;
   if(_sp0){ if(!confirm('บุคกิ้งนี้แยกลง '+_sp0.length+' ลำอยู่\nเลือกลำเดียวจะยกเลิกการแยกทั้งหมด — ยืนยันไหม')) return; delete bkOpsFor(b,_d).boatSplits; }
   if(boatId){
-    const _chDates=[...new Set((b.trips||[]).map(t=>t.date).filter(Boolean))];
+    /* §chkDay (2026-11-02) · ใบ 2 วัน 2 เกาะ (TKL Tours · 5 พ.ย. Surin → 6 พ.ย. Similan) เลือก Verona ให้วันที่ 6 ไม่ได้
+       เพราะ Verona เป็นเรือเหมาของอีกใบในวันที่ 5 · ของเดิมเช็คทุกวันของใบ ตั้งแต่สมัยเรือลำเดียววิ่งทุกวัน
+       ตอนนี้เรือผูกรายวันแล้ว (§per-trip ops) · เช็คเฉพาะวันที่กำลังจัด เหมือนเช็คความจุด้านล่าง */
+    const _chDates=[_d].filter(Boolean);
     for(let ci=0; ci<_chDates.length; ci++){ if(baCharterBoatIds(_chDates[ci]).has(boatId)){ const _bo=(BOATS||[]).find(x=>x.id===boatId); alert('เรือ '+((_bo&&_bo.name)||boatId)+' ถูกใช้เป็นเหมาลำ (Charter) วันที่ '+_chDates[ci]+' · เลือกให้ลูกค้า seat ไม่ได้'); return; } }
     const bo=(BOATS||[]).find(x=>x.id===boatId);
     const cap=(typeof boatCapFor==='function')?boatCapFor(boatId,_d):(bo?(+bo.cap||0):0);   // §cap override รายวัน
@@ -45,6 +49,7 @@ function bookingV2AssignBoat(bkId, boatId, date){
     }
   }
   bkOpsFor(b, _d).boatId = boatId || null;
+  if(typeof bkUpgPromiseCommit==='function') bkUpgPromiseCommit(b, _d, boatId||'');   /* §upgPromise */
   acctPersistBookings();
   // re-render whichever surface is showing
   /* §btBoatPick · เลือกเรือจากหน้า By trip นอกโหมดเรือ · ต้องวาดหน้า By trip ใหม่ด้วย (เดิมวาดหน้า Boat Assign) */

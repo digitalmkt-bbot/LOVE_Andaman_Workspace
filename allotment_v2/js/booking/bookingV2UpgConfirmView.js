@@ -28,6 +28,7 @@ function bookingV2UpgConfirmView(c){
       +row(laT('วันที่เดินทาง'), e(c.date))
       +row(laT('เก็บเพิ่ม'), c.charge>0?('<span style="color:#7A4A00">&#3647;'+e(c.charge.toLocaleString())+'</span>'):('<span style="font-weight:600;color:#8a8a82">'+e(laT('ไม่เก็บ'))+'</span>'))
       +row(laT('เหตุผล'), e(c.reason))
+      +row(laT('ประเภท'), c.kind==='promise'?('<span style="color:#0F766E"><span style="color:#EAB308">&#9733;</span> '+e(laT('สัญญากับลูกค้า'))+' &middot; '+e(c.boatNm||'')+'</span>'):('<span style="color:#6B289A">'+e(laT('เติมที่นั่ง'))+'</span>'))   /* §upgPromise */
     +'</div>'
     +'<div style="font-size:11.5px;color:#8a8a82;line-height:1.5">'+e(laT('กดยืนยันแล้ว ที่นั่งย้ายไปโปรแกรมใหม่ทันที · เรือเดิมถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมปลายทาง'))+'</div>'
     +'</div>'

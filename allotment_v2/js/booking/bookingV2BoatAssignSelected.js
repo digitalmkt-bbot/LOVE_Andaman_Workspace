@@ -10,6 +10,8 @@ function bookingV2BoatAssignSelected(date, routeId, boatId){
   ids.forEach(id=>{
     const b=SB_BOOKINGS.find(x=>x.id===id); if(!b) return;
     if(!(b.trips||[]).some(t=>t.routeId===routeId && (t.date||'')===date)) return;   // only rows on this trip
+    const _pu=(typeof bkUpgPromise==='function')?bkUpgPromise(b,date):null;   /* §upgPromise · สัญญาลำอื่นไว้ = ข้าม */
+    if(_pu && _pu.boatId && _pu.boatId!==boatId){ (window._upgSkipG=window._upgSkipG||[]).push((b.leadPax||b.customerName||id)+' ('+bkUpgBoatNm(_pu.boatId)+')'); return; }
     let ok=true;
     const dates=[...new Set((b.trips||[]).map(t=>t.date).filter(Boolean))];
     for(let di=0; di<dates.length; di++){ const d=dates[di];
@@ -22,6 +24,7 @@ function bookingV2BoatAssignSelected(date, routeId, boatId){
     else skipped.push(b.leadPax||b.customerName||id);
   });
   acctPersistBookings();
+  if(window._upgSkipG && window._upgSkipG.length){ alert('Not moved - GUARANTEED to another boat: '+window._upgSkipG.join(', ')+'\nMove them one by one if you really must.'); window._upgSkipG=[]; }   /* §upgPromise */
   if(skipped.length) alert('Assigned '+done+' booking(s) to '+((bo&&bo.name)||boatId)+'.\nSkipped '+skipped.length+' - would exceed cap '+cap+' (+'+TOL+'): '+skipped.join(', ')+'\n\nEmergency only: assign a skipped row on its own to raise this boat\'s capacity for the day (reason required).');
   if(typeof bookingV2Render==='function') bookingV2Render();
 }

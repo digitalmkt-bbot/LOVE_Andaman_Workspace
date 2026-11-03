@@ -140,8 +140,10 @@
       qty: num(c.qty),
       unitCost: num(c.unit_cost),
       cost: num(c.cost),
-      warehouse: c.warehouse || 'tublamu',
-      location: warehouseLabel(c.warehouse),
+      warehouse: c.warehouse || (c.pier ? '' : 'tublamu'),
+      /* §poRpPier · a part used at the pier never left a Fleet warehouse */
+      location: c.pier ? 'คลังท่า ' + ((typeof LA_PIER_NAME !== 'undefined' && LA_PIER_NAME[c.pier] && LA_PIER_NAME[c.pier].en) || c.pier) : warehouseLabel(c.warehouse),
+      src: c.pier ? 'pier_fix' : undefined, pier: c.pier || undefined, pierMoveId: c.pier_move_id || undefined, poItemId: c.fix_item_id || undefined, fixQty: c.fix_qty != null ? +c.fix_qty : undefined,
       boatId: c.boat_id || '',
       engineId: c.engine_id || null,
       engineLabel: c.engine_label || '',
@@ -723,10 +725,13 @@
 
   wrap('flConsumeDelete', function(orig, id){
     if(!id) return null;
-    if(!confirm('ลบรายการเบิกนี้และคืนยอดเข้าคลัง?')) return null;
+    var rec = listConsumables().find(function(x){ return x && x.id === id; });
+    var part = !!(rec && rec.pier);   // §poRpPier · the part goes back to the pier's stock, the masks stay repaired
+    if(!confirm(part ? ('ลบรายการนี้? อะไหล่ ' + rec.qty + ' ' + (rec.unit || '') + ' จะคืนเข้าคลังท่า') : 'ลบรายการเบิกนี้และคืนยอดเข้าคลัง?')) return null;
     return O.queue(function(){
       return O.del('/v1/fleet/consumables/' + enc(id));
     }).then(function(){
+      if(part && O.pierStockStale) O.pierStockStale(rec.pier);
       return refetchStockAndMemos().then(function(){
         O.wrote('fleet-consumable-void');
         redrawStock();

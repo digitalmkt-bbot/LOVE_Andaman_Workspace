@@ -705,6 +705,7 @@
     "bkV2BoatClearTrip": "allotment_v2/js/booking/bookingV2BoatClearTrip.js",
     "bkV2CharterCap": "allotment_v2/js/booking/bookingV2CharterCap.js",
     "bkV2AltWhoType": "allotment_v2/js/booking/bookingV2AltWhoType.js",
-    "bkV2AltWhoPicked": "allotment_v2/js/booking/bookingV2AltWhoPicked.js"
+    "bkV2AltWhoPicked": "allotment_v2/js/booking/bookingV2AltWhoPicked.js",
+    "bkV2UpgKindHtml": "allotment_v2/js/booking/bookingV2UpgKindHtml.js"
   }
 }

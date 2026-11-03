@@ -9,7 +9,13 @@ function bookingV2LockFormFields(){
   const isBulk = f.scope==='bulk';
   if(!Array.isArray(f.dow)) f.dow=[];
   const agentDatalist = (typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).map(a=>`<option value="${esc(a.name)}"></option>`).join('');
-  const routeOpts = (typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>`<option value="${r.id}" ${f.routeId===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
+  /* §lkRouteSea (2026-11-01) · owner "lock seat กรองให้เหลือแต่เส้นทางของเรา" · เฉพาะเส้นทางเรือ (ไม่มี City tour / รับส่ง / โชว์)
+     เกณฑ์เดียวกับทั้งระบบ laIsLandRoute() · จัดกลุ่มตามท่า เรียงตามลำดับที่ตั้งไว้ · ล็อกเก่าที่ผูกเส้นทางบกอยู่แล้วยังโชว์ (แก้ได้ ไม่หาย) */
+  const _lkR = (typeof ROUTES!=='undefined'?ROUTES:[]).filter(r=>r && (r.id===f.routeId || typeof laIsLandRoute!=='function' || !laIsLandRoute(r.id)));
+  if(typeof laRouteOrdCmp==='function') _lkR.sort((a,c)=>laRouteOrdCmp(a.id,c.id));
+  const _lkP=[]; _lkR.forEach(r=>{ const p=r.pier||''; if(_lkP.indexOf(p)<0) _lkP.push(p); });
+  const routeOpts = _lkP.map(p=>`<optgroup label="${esc((typeof laPierName==='function')?laPierName(p||'other'):(p||'-'))}">`
+    + _lkR.filter(r=>(r.pier||'')===p).map(r=>`<option value="${r.id}" ${f.routeId===r.id?'selected':''}>${esc(r.name)}</option>`).join('') + '</optgroup>').join('');
   const scopeBtn = (val,lbl)=>`<button ${_dis} onclick="bookingV2LockSetField('scope','${val}')" style="border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 13px;background:${f.scope===val?'#C0392B':'#fff'};color:${f.scope===val?'#fff':'#9a3b21'};border-radius:6px">${lbl}</button>`;
   // §lkBulk · ติ๊กวันในสัปดาห์ · ไม่ติ๊ก = ทุกวัน
   const DOWL=['อา','จ','อ','พ','พฤ','ศ','ส'];

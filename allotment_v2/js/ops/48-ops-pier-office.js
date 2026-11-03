@@ -52,7 +52,7 @@
   var O = window.laOps; if(!O || !O.pier) return;
   var P = O.pier, clone = P.clone, text = P.text, nul = P.nul, enc = encodeURIComponent;
   var L = {};
-  ['paCell', 'paHasJob', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
+  ['paCell', 'paHasJob', 'paPayOf', 'poBal', 'poBoatStage', 'poSheetPending', 'plCheckBoat', 'poBoatSum', 'poBoatCarry', 'poCloseOpen', 'poCloseSave', 'poFixSave', 'poIssueOpen', 'poIssueDraft', 'poIssueSave', 'poIsPrint',
    'renderPierOffice', 'renderPierAtt', 'paRoutesByCode', 'paRouteCode', 'poUnassigned'].forEach(function(n){ L[n] = window[n]; });
 
   function ready(){ return P.enabled() && P.loaded; }
@@ -659,6 +659,9 @@
     else if(m.type === 'xfer_out') o.from = 'to|' + ((m.transfer && m.transfer.to_pier) || '');
     else if(m.type === 'xfer_back' || m.type === 'xfer_short') o.from = 'xfer|' + (m.transfer_id || '');
     if(m.fine_baht > 0){ o.fine = m.fine_baht; o.finePaid = m.fine_status === 'paid' || m.fine_status === 'waived'; }
+    /* §poRpPier · a repair names its boat in for_boat_id; a part_use says what it mended and what it cost */
+    if(m.for_boat_id){ if(m.type === 'part_use') o.forBoat = m.for_boat_id; else o.boatId = m.for_boat_id; }
+    if(m.type === 'part_use'){ o.fixItem = m.fix_item_id || ''; o.fixQty = +m.fix_qty || 0; o.unitCost = +m.unit_cost || 0; o.cost = +m.cost || 0; o.consumeId = m.consumable_id || ''; }
     return o;
   }
   function swapMoves(sent, serverMoves){
@@ -858,6 +861,37 @@
       return false;
     });
   };
+
+  /* §poRepPart · §poRpPier · "repair done" · server first: POST …/stock/repair-done takes the masks out of repair and the parts out of the
+     pier's stock, and puts each part on the boat's cost. Nothing changes here until it answers; a part short is legacy's "save anyway". */
+  window.poFixSave = function(itemId){
+    if(!ready()) return L.poFixSave.apply(this, arguments);
+    if(typeof window.poGuard === 'function' && !window.poGuard()) return undefined;
+    if(window._poFix && window._poFix.itemId === itemId) window.poFixSync();
+    var S = window._poFix || { boat: '', parts: [], note: '' };
+    var f = window.poNum(window.poV('pofix')), w = window.poNum(window.poV('pofixw'));
+    var parts = (S.parts || []).filter(function(p){ return p.q > 0; }).map(function(p){ return { item_id: p.id, qty: p.q }; });
+    if(f + w <= 0){ if(parts.length) window.alert('ใส่จำนวนที่ซ่อมเสร็จก่อน'); else { window._poFix = null; window.poModalClose(); } return undefined; }
+    var pier = window._poPier, body = Object.assign({ date: window._poDate, item_id: itemId, fixed: f, written_off: w, parts: parts }, who(pier));
+    if(S.boat) body.boat_id = S.boat;
+    if(text(S.note)) body.note = text(S.note);
+    var url = '/v1/pier-office/' + enc(pier) + '/stock/repair-done';
+    function send(b){ return O.queue(function(){ return O.call('POST', url, b); }); }
+    return send(body).catch(function(e){
+      if(!(e && e.code === 'stock_short') || !window.confirm(e.message + '\nบันทึกต่อจะทำให้ยอดพร้อมใช้ติดลบ · ไปนับสต็อกทีหลัง · ยืนยัน?')) throw e;
+      return send(Object.assign({}, body, { allow_short: true }));
+    }).then(function(out){
+      (out.moves || []).forEach(function(m){ moves().push(fromServerMove(m)); });
+      putBalances(pier, out.balances);
+      window._poFix = null;
+      if(O.fleetStock && O.fleetStock.refetch) O.fleetStock.refetch().catch(function(){});
+      O.wrote('pier');
+      window.poModalClose(); window.renderPierOffice();
+      return true;
+    }, function(e){ O.fail('Repair not saved', e); return false; });
+  };
+  /* a repair's part voided on the Fleet side: the stock and moves shown here are stale */
+  O.pierStockStale = function(pier){ delete fresh['stock|' + pier]; delete fresh['moves|' + pier]; };
 
   /* fines · PIER_CFG.finePay[moveId] = { st: 'paid'|'waived', how, note } */
   var fineBase = null;

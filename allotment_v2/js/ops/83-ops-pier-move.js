@@ -96,7 +96,13 @@
     if(why === 'other' && !note) return err('เหตุผล "อื่น ๆ" ต้องพิมพ์รายละเอียด');
     var body = { boat_id: pick.value, reason: why }; if(note) body.note = note;
     var drawer = !!document.getElementById('pck-drawer');
-    O.queue(function(){ return O.post('/operations/trip-ops/' + enc(t.opsTripId) + '/pier-move', body); }).then(function(res){
+    var move = function(b2){ return O.queue(function(){ return O.post('/operations/trip-ops/' + enc(t.opsTripId) + '/pier-move', b2); }); };
+    move(body).catch(function(e){       // §upgPromise · the boat the customer was promised needs a reason to leave
+      if(!(e && e.code === 'guaranteed_boat') || !O.boats || !O.boats.promiseReason) throw e;
+      var why = O.boats.promiseReason(b, t.date || date, pick.value);
+      if(!why) throw e;
+      return move(Object.assign({}, body, { promise_reason: why }));
+    }).then(function(res){
       if(res && res.trip && O.boats && O.boats.applyOps) O.boats.applyOps(b, typeof g('bkOpsDate') === 'function' ? window.bkOpsDate(b, date) : date, res.trip.operations);
       delete ctxs[keyOf(bkId, date)];
       if(typeof g('pckMoveClose') === 'function') window.pckMoveClose();

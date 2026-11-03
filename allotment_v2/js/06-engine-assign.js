@@ -202,7 +202,8 @@ function flDocBetter(existing, doc){
   if(doc.renewStatus==='processing') return true;                      // ที่กำลังยื่นอยู่ สำคัญกว่าเสมอ
   if(existing.renewStatus==='done' && doc.renewStatus!=='done') return true;
   if(!existing.exp && doc.exp) return true;                            // มีวันที่ ดีกว่าไม่มี
-  if(doc.exp && existing.exp && doc.exp>existing.exp) return true;     // ใบที่หมดทีหลัง คือใบใหม่กว่า
+  var _fx=function(v){ return (typeof laFixBEDate==='function')?laFixBEDate(v):v; };   /* §beDate2 · ปี พ.ศ. ที่หลุดเข้ามา (2570) ห้ามชนะใบจริง */
+  if(doc.exp && existing.exp && _fx(doc.exp)>_fx(existing.exp)) return true;     // ใบที่หมดทีหลัง คือใบใหม่กว่า
   return false;
 }
 /* ใบปัจจุบันของเรือลำนี้ ประเภทนี้ · typeId ตาม FL_DOC_TYPES */
