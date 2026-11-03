@@ -194,6 +194,7 @@ async function relLoad() {                                           // operatio
   }));
   const data = {};
   OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
+  await _loopYield();                                                  // §loadYield · let queued requests run before the sync assemble
   const tA = Date.now();
   const blob = osRepo.assembleBlob(data);
   const asm = Date.now() - tA;
@@ -2287,14 +2288,17 @@ function _buildLoadQueued(version, m){
 }
 function _buildLoadNow(version, m){
   const t0 = Date.now(); _lagMax = 0;
-  const promise = relLoad().then(blob => {
+  const promise = relLoad().then(async blob => {
     const tQ = Date.now();
+    await _loopYield();                                          /* §loadYield */
     const inner = JSON.stringify(blob);
     const tS1 = Date.now();
+    await _loopYield();
     const str = JSON.stringify({data:inner, version,
       updated_by:m.updated_by, updated_at:m.updated_at});
     const tS2 = Date.now();
     _loadCache = { version, str }; _loadBuiltAt = Date.now();   /* §loadGap */
+    loadCompressed(_loadCache, 'br').catch(()=>{});              /* §loadZipOnce · start now, every browser asks for br */
     const mu = process.memoryUsage();
     console.log(`[load-build] v${version} total=${tS2-t0}ms query=${tQ-t0}ms stringify1=${tS1-tQ}ms stringify2=${tS2-tS1}ms `
       + `out=${(str.length/1048576).toFixed(1)}MB rss=${(mu.rss/1048576).toFixed(0)}MB heap=${(mu.heapUsed/1048576).toFixed(0)}MB maxLag=${_lagMax}ms`);
@@ -2343,12 +2347,26 @@ function sendLoadPayload(req, res, cache){
   const enc = pickEncoding(req);
   if(!enc){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
   if(cache[enc]){ res.writeHead(200,_jsonHead(enc)); return res.end(cache[enc]); }
-  compress(enc, cache.str, BR_DYNAMIC, (err,buf)=>{
-    if(err){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
-    cache[enc] = buf;   // remember it → every later hit on this version is instant
-    res.writeHead(200,_jsonHead(enc)); res.end(buf);
-  });
+  loadCompressed(cache, enc).then(
+    buf => { res.writeHead(200,_jsonHead(enc)); res.end(buf); },
+    ()  => { res.writeHead(200,_jsonHead(null)); res.end(cache.str); });
 }
+/* §loadZipOnce (2026-11-03) · เดิม cache[enc] ถูกเติมหลังบีบเสร็จ → ทุกแท็บที่รอก้อนใหม่อยู่พร้อมกัน (debounce §loadGap
+   ปล่อยออกมาทีเดียวทั้งกอง) ต่างคนต่างสั่ง brotli ก้อน 55 MB ของเวอร์ชันเดียวกันซ้ำ · threadpool มี 4 เส้น จึงเข้าคิวกันเป็นรอบ ๆ
+   ตอนนี้บีบครั้งเดียวต่อเวอร์ชันต่อ encoding · คนที่มาระหว่างนั้นเกาะ promise เดิม · พังแล้วล้างช่องให้รอบหน้าลองใหม่ */
+function loadCompressed(cache, enc){
+  const k = '_zp_' + enc;
+  if(!cache[k]) cache[k] = new Promise((ok, bad) => compress(enc, cache.str, BR_DYNAMIC, (err, buf) => {
+    if(err){ cache[k] = null; return bad(err); }
+    cache[enc] = buf;   // remember it → every later hit on this version is instant
+    ok(buf);
+  }));
+  return cache[k];
+}
+/* §loadYield (2026-11-03) · assembleBlob + stringify สองชั้นรวม ~1.2 วิ รันติดกันใน tick เดียว ([loop-lag] 2–3 วิ ทุกรอบ rebuild)
+   ระหว่างนั้น /api/version /api/ck /api/v1/_batch /api/attach ค้างหมด · คั่นด้วย setImmediate ให้คำขอที่รอคิวได้วิ่งก่อน
+   งานรวมเท่าเดิม แต่ช่วงที่บล็อกยาวสุดเหลือขั้นเดียว (~0.5 วิ) */
+function _loopYield(){ return new Promise(r => setImmediate(r)); }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
 function sseBroadcast(obj){ const msg='data: '+JSON.stringify(obj)+'\n\n'; sseClients.forEach(r=>{ try{ r.write(msg); }catch(e){ sseClients.delete(r); } }); }

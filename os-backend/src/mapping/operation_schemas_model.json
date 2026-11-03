@@ -6031,6 +6031,26 @@
       {
         "name": "note",
         "type": "text"
+      },
+      {
+        "name": "src",
+        "type": "text"
+      },
+      {
+        "name": "pier",
+        "type": "text"
+      },
+      {
+        "name": "poitemid",
+        "type": "text"
+      },
+      {
+        "name": "fixqty",
+        "type": "bigint"
+      },
+      {
+        "name": "piermoveid",
+        "type": "text"
       }
     ],
     "primary_key": "id",
@@ -6686,6 +6706,30 @@
       },
       {
         "name": "at",
+        "type": "text"
+      },
+      {
+        "name": "forboat",
+        "type": "text"
+      },
+      {
+        "name": "fixitem",
+        "type": "text"
+      },
+      {
+        "name": "fixqty",
+        "type": "bigint"
+      },
+      {
+        "name": "unitcost",
+        "type": "double precision"
+      },
+      {
+        "name": "cost",
+        "type": "double precision"
+      },
+      {
+        "name": "consumeid",
         "type": "text"
       }
     ],
