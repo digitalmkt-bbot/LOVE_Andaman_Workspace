@@ -32866,7 +32866,10 @@ function bkV2UpgModal(){
   if(old) old.remove();
   var ov=document.createElement('div'); ov.id='bkv2-upg-ov'; ov.className='la-modal';
   ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(20,24,22,.42);display:flex;align-items:center;justify-content:center;padding:16px';
-  ov.onclick=function(ev){ if(ev.target===ov) bkV2UpgModalClose(); };
+  /* §upgDrag · ลากเลือกข้อความในช่องเหตุผลจนเลยขอบแล้วปล่อยเมาส์บนพื้นหลัง = เบราว์เซอร์ส่ง click ให้พื้นหลัง → หน้าต่างปิด งานที่กรอกหาย
+     ปิดด้วยพื้นหลังได้ก็ต่อเมื่อ "กดลง" บนพื้นหลังด้วย (ไม่ใช่แค่ปล่อย) */
+  var _dn=null; ov.onmousedown=function(ev){ _dn=ev.target; };
+  ov.onclick=function(ev){ if(ev.target===ov && _dn===ov) bkV2UpgModalClose(); _dn=null; };
   var INK='#14233F', MUT='#5B6472', LINE='#E4E2DA';
   var K=U.kind||'', C=_UPG_C[K]||['#14233F','#EEF0F4','#14233F'];
   var fromPier=bkUpgPierOf(U.from), pnm=function(p){ return (typeof laPierName==='function')?laPierName(p):p; };
@@ -32911,7 +32914,7 @@ function bkV2UpgModal(){
   var reasonH='<div style="display:flex;gap:6px;flex-wrap:wrap;opacity:'+(rOn?'1':'.4')+'">'+chipsL.map(function(c){ return '<button type="button"'+(rOn?'':' disabled')+' onclick="bkV2UpgChip(\''+q(c)+'\')" style="border:1px solid '+LINE+';background:#fff;color:'+MUT+';border-radius:20px;padding:4px 10px;font-family:inherit;font-size:12px;cursor:pointer">'+e(c)+'</button>'; }).join('')+'</div>'
     +'<label style="display:flex;flex-direction:column;gap:4px;opacity:'+(rOn?'1':'.4')+'"><span style="font-size:11.5px;color:'+MUT+'">'+e(laT('พิมพ์เพิ่มได้ · กดปุ่มด้านบนเพื่อใส่คำให้เร็ว'))+'</span>'
     +'<input id="bkupg-reason" type="text"'+(rOn?'':' disabled')+' value="'+e(U.reason)+'" oninput="_bkUpg.reason=this.value" placeholder="'+e(laT('พิมพ์เหตุผล'))+'" style="border:1px solid #D0D5DD;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:'+INK+';box-sizing:border-box;width:100%"></label>';
-  var left='<div data-upg-left="1" style="flex:1 1 520px;min-width:0;padding:16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:92vh;box-sizing:border-box">'
+  var left='<div data-upg-left="1" style="flex:1 1 520px;min-width:0;padding:16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;overscroll-behavior:contain;max-height:92vh;box-sizing:border-box">'
     +'<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-size:17px;color:'+INK+'">&#10548; Upgrade</b><span style="font-size:12px;color:'+MUT+'">'+e((b&&(b.leadPax||b.customerName))||U.bkId)+' · '+pax+' pax · '+e(U.date)+' · '+e(laT('ตอนนี้'))+' '+e(bkUpgRouteName(U.from))+'</span></div>'
     +step(1, laT('ไปทริปไหน'), pax+' pax · '+U.date, true)+trips
     +step(2, laT('ใครขอให้ย้าย'), '', !!U.to)+whoH+boatH
@@ -32957,7 +32960,7 @@ function bkV2UpgModal(){
     +right+'<div style="flex:1"></div>'
     +'<button type="button" data-upg-go="1"'+(ready?'':' disabled')+' onclick="bkV2UpgApply(true)" style="border:0;background:'+(ready?C[0]:'#D5D8DE')+';color:#fff;border-radius:10px;padding:12px;font-family:inherit;font-size:13.5px;font-weight:700;cursor:'+(ready?'pointer':'not-allowed')+'">'+e(btnT)+'</button>'
     +'<button type="button" onclick="bkV2UpgModalClose()" style="border:0;background:transparent;color:'+MUT+';font-family:inherit;font-size:12.5px;padding:4px;cursor:pointer">'+e(laT('ยกเลิก'))+'</button></div>';
-  ov.innerHTML='<div role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;width:min(960px,96vw);max-height:94vh;display:flex;flex-wrap:wrap;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'IBM Plex Sans Thai\',\'DM Sans\',sans-serif">'+left+rightW+'</div>';
+  ov.innerHTML='<div role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;width:min(960px,96vw);max-height:94vh;display:flex;flex-wrap:wrap;overflow:auto;overscroll-behavior:contain;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'IBM Plex Sans Thai\',\'DM Sans\',sans-serif">'+left+rightW+'</div>';
   document.body.appendChild(ov);
   bkV2UpgTicket();
   if(_upgSc){ var nl=ov.querySelector('[data-upg-left]'); if(nl) nl.scrollTop=_upgSc; }   /* §upgStay */
