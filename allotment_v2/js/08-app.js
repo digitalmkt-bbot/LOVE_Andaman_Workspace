@@ -13118,7 +13118,9 @@ function vbRenderSheet(host){
                +'<button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
     :('<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>'
       +'<button class="vbx-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
-      +'<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · '+e(VB_PIER_SH[pier]||pier)+(_vb.van?(' · '+e(((typeof vehGet==='function'&&vehGet(_vb.van))||{}).name||_vb.van)+' '+e('เท่านั้น')):'')+'</button>');
+      +(_vb.van?('<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · '+e(VB_PIER_SH[pier]||pier)+' · '+e(((typeof vehGet==='function'&&vehGet(_vb.van))||{}).name||_vb.van)+' '+e('เท่านั้น')+'</button>')
+        :('<button class="vbx-btn" onclick="vbPrintSplit()" title="ทุกคันในรอบนี้ · คันละหน้า · กดครั้งเดียว">&#128424; พิมพ์แยกคัน</button>'
+         +'<button class="vbx-btn pri" onclick="vbPrint()" title="ทุกคันรวมในใบเดียว (แบบเดิม)">&#128424; พิมพ์รวม · '+e(VB_PIER_SH[pier]||pier)+'</button>')));   /* §vbSplit */
   host.innerHTML=vbCss()+vbxCss()+'<style>'+pcVbCss()+'</style><div class="vbx">'
     + vbxTop(A, vbB(T.bill).replace('฿',''), e(_vb.sup), 'รอบ '+e(vbPerLbl())+' '+e(vbMoLbl())+' · '+e(VB_PIER_LBL[pier]||pier), acts)
     + chips
@@ -13210,6 +13212,26 @@ function renderVanBill(){
    สรุปรอบบิล = เอกสารภายใน (A4 แนวนอน) แยกก้อนตามท่า
    ใบวางบิล = ส่งให้เจ้าของรถเซ็น (A4 แนวตั้ง) · ต่อเจ้า ต่อท่า · ไม่มีราคาขาย/กำไร
    (ของเดิมพิมพ์ภาพหน้าจอ ซึ่งมีราคาขายและกำไรของเราติดไปด้วย) · ฉบับภายใน = มีราคาขาย/กำไร */
+/* ══ §vbSplit (2026-11-04) · owner: "แบบปริ้นรวม ทำให้เลือกสองแบบ แบบเดิม กับแบบแยกคัน"
+   แยกคัน = ใบวางบิลรายคันของทุกคันในรอบนี้ · กดครั้งเดียว ได้เอกสารเดียว คันละหน้า (ใช้ตัวพิมพ์รายคันตัวเดียวกัน · §vbVanPrint) */
+var _vbCap=null;
+function vbPrintSplit(internal, daily){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var pier=_vb.pier||'panwa', keepV=_vb.van, rows;
+  _vb.van=''; try{ rows=vbRows().filter(function(r){ return vbPk(r.routeId)===pier; }); } finally { _vb.van=keepV; }
+  var ids=[]; rows.forEach(function(r){ if(r.vanId && ids.indexOf(r.vanId)<0) ids.push(r.vanId); });
+  var nm=function(id){ var v=(typeof vehGet==='function')?vehGet(id):null; return String((v&&v.name)||id); };
+  ids.sort(function(x,y){ return nm(x).localeCompare(nm(y),'th',{numeric:true}); });
+  if(!ids.length){ alert('No van trips in this period.'); return; }
+  _vbCap=[];
+  try{ ids.forEach(function(id){ _vb.van=id; vbPrint(internal, daily); }); }
+  finally{ var cap=_vbCap; _vbCap=null; _vb.van=keepV; window._vbLastSplit=cap; }
+  var w=window.open('','_blank'); if(!w) return;
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(daily?'สรุปรายวัน ':'ใบวางบิล ')+e(_vb.sup)+' · '+e('แยกคัน')+' '+ids.length+'</title>'
+    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
+    +'<style>'+cap[0].css+'</style></head><body>'+cap.map(function(c){ return '<div class="vbpg">'+c.html+'</div>'; }).join('')+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 700);
+}
 function vbPrint(internal, daily){
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
   var N=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
@@ -13240,7 +13262,13 @@ function vbPrint(internal, daily){
     +'.sig{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:30px;page-break-inside:avoid}'
     +'.sig div{text-align:center;font-size:10.5px;color:#374151}.sig div:before{content:"";display:block;border-bottom:1px dotted #6B7280;height:30px;margin-bottom:6px}'
     +'.sig i{font-style:normal;display:block;font-size:9px;color:#6B7280;margin-top:3px}'
-    +'.foot{margin-top:14px;display:flex;justify-content:space-between;font-size:8.5px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:5px}';
+    +'.foot{margin-top:14px;display:flex;justify-content:space-between;font-size:8.5px;color:#9CA3AF;border-top:1px solid #E5E7EB;padding-top:5px}'
+    /* §vbOnePage (2026-11-04) · owner: "ปรับให้อยู่ในหน้าเดียวกันให้ครบ ไม่เปลืองกระดาษ" · ใบรายคัน (~10-15 เที่ยว) เคยล้นไปหน้า 2 แค่ช่องเซ็น
+       ใบรายคัน: ไม่มีแถบหัววัน (คอลัมน์วันที่บอกอยู่แล้ว) · แถวเตี้ยลง · ช่องเซ็น/ท้ายใบชิดขึ้น · ใบรวมทุกคันหน้าตาเดิม */
+    +(_vb.van?('@page{margin:9mm}td{padding:2px 6px}.sub{font-size:8.5px}.ph{padding-bottom:6px}.meta{margin-top:6px}.meta div{padding:3px 8px}'
+      +'table{margin-top:6px}.grid2{margin-top:6px;gap:12px}.words{margin-top:6px;padding:5px 9px}.note{margin-top:4px;line-height:1.45}'
+      +'.sig{margin-top:14px;gap:18px}.sig div:before{height:22px;margin-bottom:4px}.foot{margin-top:8px}'):'')
+    +'.vbpg{page-break-after:always;break-after:page}.vbpg:last-child{page-break-after:auto;break-after:auto}';
   var head=function(title, en, tag){
     return '<div class="ph"><div class="co"><b>LOVE ANDAMAN</b><i>บริษัท เลิฟ ไอส์แลนด์ จำกัด (Love Island Co., Ltd.)<br>ภูเก็ต · ฝ่ายปฏิบัติการ</i></div>'
       +'<div class="doc"><i>'+en+'</i><b>'+title+'</b>'+(tag||'')+'</div></div>';
@@ -13307,7 +13335,7 @@ function vbPrint(internal, daily){
       var rn=((typeof getRoute==='function'?getRoute(r.routeId):null)||{}).name||r.routeId||'';
       var pk=Object.keys(r.areas||{}).map(vbArea).join(', ')||'—', dp=Object.keys(r.drops||{}).map(vbArea).join(', ');
       var dh='';
-      if(r.date!==last){ last=r.date; dh='<tr class="day"><td class="l" colspan="'+cols+'">'+e(new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long'}))+'</td></tr>'; }
+      if(r.date!==last && !keepV){ last=r.date; dh='<tr class="day"><td class="l" colspan="'+cols+'">'+e(new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long'}))+'</td></tr>'; }
       i++;
       return dh+'<tr class="'+(i%2?'':'z')+'"><td class="l">'+i+'</td><td class="l">'+e(r.date.slice(8,10)+'/'+r.date.slice(5,7))+'</td>'
         +'<td class="l"><span class="cd" style="background:'+C.col+'">'+e(C.c)+'</span><b>'+e(rn)+'</b>'+(r.ret?' <b style="color:#9A5B00">(ขากลับ)</b>':'')
@@ -13374,6 +13402,7 @@ function vbPrint(internal, daily){
       +sig(['ผู้วางบิล','เจ้าของรถ'],['ผู้รับวางบิล','LOVE ANDAMAN'],['ผู้อนุมัติจ่าย',''])
       +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+e(_vTag)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+'</span></div>';
   }
+  if(_vbCap){ _vbCap.push({html:html, css:css}); return; }   /* §vbSplit · เก็บไว้รวมเป็นเอกสารเดียว */
   var w=window.open('','_blank'); if(!w) return;
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':((daily?'สรุปรายวัน ':'ใบวางบิล ')+e(_vb.sup)))+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
