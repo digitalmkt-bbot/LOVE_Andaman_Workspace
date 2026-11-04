@@ -193,8 +193,9 @@ function tmPaxOfBoat(bid, ds){
       var en=tmClean((typeof tmEnDef==='function')?tmEnDef(b.id,p):(tmGet(b.id,p.key,'enName')||p.name||''));
       var th=tmClean((typeof tmThDef==='function')?tmThDef(b.id,p):tmGet(b.id,p.key,'thName'));
       var dob=(typeof tmDobNorm==='function')?tmDobNorm(tmGet(b.id,p.key,'dob')):tmGet(b.id,p.key,'dob');
+      var _nc=String((typeof tmNatDef==='function')?tmNatDef(b.id,p,b):(p.natCode||'TH')).toUpperCase();
       out.push({ b:b, p:p, name:en, th:th, id:tmGet(b.id,p.key,'idNo'), laser:tmGet(b.id,p.key,'idLaser'), dob:dob, remark:tmGet(b.id,p.key,'remark'),
-                 nat:tmNatLabel(p), natCode:String(p.natCode||'TH').toUpperCase(), g:tmGender(en||p.name), vc:b.voucherRef||b.code||b.id }); }); }); });
+                 nat:tmNatLabel({natCode:_nc}), natCode:_nc,   /* §tmPax4 · สัญชาติจากช่องกรอก (ค่าตั้งต้น = ใบจอง) */ g:tmGender(en||p.name), vc:b.voucherRef||b.code||b.id }); }); }); });
   return out;
 }
 function tmExport(bid, ds){

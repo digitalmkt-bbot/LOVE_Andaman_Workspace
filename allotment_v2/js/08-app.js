@@ -6412,14 +6412,14 @@ function insSetField(bkId,pk,field,val){ const s=insEnsure(); const k=insKey(bkI
    owner: "ขอเพิ่มช่อง ชื่อ-สกุลไทย · ชื่อ-สกุลอังกฤษ · เลขบัตร 13 หลัก · เลขหลังบัตร · วันเกิด · Remark เฉพาะฝั่งระนอง แก้ตรงหน้า Manifest"
    เก็บใน insurance_overrides[bkId::pk] (map ค่าเป็น JSON ทั้งก้อน · บันทึกขึ้นเซิร์ฟเวอร์อยู่แล้ว ไม่ต้องแก้ schema) ร่วมกับ age/nat ของหน้า Insurance
    เลขบัตร: เก็บเฉพาะตัวเลข 13 หลัก · ตรวจเลขท้าย (mod 11) · แสดงเป็น 1-2345-67890-12-3 */
-var TM_FIELDS=[['thName','ชื่อ-สกุล ไทย',190],['enName','ชื่อ-สกุล อังกฤษ',190],['idNo','เลขบัตรประชาชน',150],['idLaser','เลขหลังบัตร',130],['dob','วันเกิด',100],['remark','Remark',0]];
+var TM_FIELDS=[['thName','ชื่อ-สกุล ไทย',190],['enName','ชื่อ-สกุล อังกฤษ',190],['nat','สัญชาติ',120],['idNo','เลขบัตรประชาชน',150],['idLaser','เลขหลังบัตร',130],['dob','วันเกิด',100],['remark','Remark',0]];
 function tmIsRanongRoute(rid){ var r=(typeof getRoute==='function')?getRoute(rid):null; return !!(r && r.pier==='ranong'); }
 function tmIdDigits(v){ return String(v||'').replace(/[^0-9]/g,'').slice(0,13); }
 function tmIdOk(v){ var d=tmIdDigits(v); if(d.length!==13) return false; var sum=0; for(var i=0;i<12;i++) sum+=(+d[i])*(13-i); return ((11-(sum%11))%10)===(+d[12]); }
 function tmIdFmt(v){ var d=tmIdDigits(v); return d.length===13 ? (d[0]+'-'+d.slice(1,5)+'-'+d.slice(5,10)+'-'+d.slice(10,12)+'-'+d[12]) : d; }
 function tmIdSpaced(v){ var d=tmIdDigits(v); return d.length===13 ? (d[0]+' '+d.slice(1,5)+' '+d.slice(5,10)+' '+d.slice(10,12)+' '+d[12]) : d; }
 function tmGet(bkId,pk,f){ return String(insEff(bkId,pk,f,'')||'').trim(); }
-function tmSet(bkId,pk,f,val){ var v=String(val||'').trim(); if(f==='idNo') v=tmIdDigits(v); if(f==='idLaser') v=v.toUpperCase().replace(/[^A-Z0-9]/g,''); if(f==='dob') v=tmDobNorm(v); insSetField(bkId,pk,f,v); }
+function tmSet(bkId,pk,f,val){ var v=String(val||'').trim(); if(f==='idNo') v=tmIdDigits(v); if(f==='idLaser') v=v.toUpperCase().replace(/[^A-Z0-9]/g,''); if(f==='dob') v=tmDobNorm(v); if(f==='nat') v=tmNatNorm(v); insSetField(bkId,pk,f,v); }
 /* ครบ = มี ชื่ออังกฤษ + เลขบัตรถูกต้อง + วันเกิด (ชื่อไทย/เลขหลังบัตร/Remark ไม่บังคับ) */
 function tmPaxOk(bkId,p){ return !!(tmEnDef(bkId,p) && tmIdOk(tmGet(bkId,p.key,'idNo')) && tmDobOk(tmGet(bkId,p.key,'dob'))); }   /* §tmPax2 · รับ p (ใช้ค่าตั้งต้นจากชื่อในใบจอง) */
 /* §tmPax3 (2026-11-04) · owner "อันนี้มี 10 คน ต้องขึ้นให้ใส่ 10 คน" · ใบจองมี N คนแต่ใส่ชื่อมาแค่หัวหน้า → เติมแถวว่างให้ครบ N (key = ลำดับผู้โดยสาร เก็บที่เดิม insurance_overrides) */
@@ -6465,6 +6465,20 @@ function tmDobPicked(dp){
 }
 /* แถวกางออกค้างไว้ · จำว่ากางแถวไหนอยู่ → ตอนหน้าวาดใหม่ (คนอื่นบันทึกใบจอง / auto refresh) ยังกางอยู่เหมือนเดิม */
 window._tmPaxOpen = window._tmPaxOpen || {};
+/* §tmPax4 (2026-11-04) · owner "ต้องเพิ่มช่องที่ระบุสัญชาติด้วยไหม เพราะเอกสารให้ ตม. ต้องแจ้งสัญชาติ" · เก็บเป็นรหัส 2 ตัว (TH, MM, CN …) ค่าตั้งต้น = สัญชาติในใบจอง (คน/หัวหน้า) · ไม่มี = TH
+   ช่องพิมพ์ + รายการให้เลือก (datalist) · พิมพ์รหัสหรือชื่ออังกฤษก็ได้ เช่น TH / Thai / Chinese */
+function tmNatDef(bkId,p,b){ var v=tmGet(bkId,p.key,'nat'); if(v) return v; var c=String(p.natCode||(b&&b.leadNationality)||'TH').toUpperCase(); return c.length>3?'TH':c; }
+function tmNatNorm(v){
+  v=String(v||'').trim(); if(!v) return '';
+  var L=(typeof bkV2AllNats==='function')?bkV2AllNats():((typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[]);
+  var u=v.toUpperCase().split('·')[0].trim();
+  var hit=L.find(function(x){ return x.code===u; }) || L.find(function(x){ return String(x.name||'').toUpperCase()===u; }) || L.find(function(x){ return String(x.name||'').toUpperCase().indexOf(u)===0; });
+  return hit?hit.code:(/^[A-Z]{2,3}$/.test(u)?u:'');
+}
+function tmNatList(){
+  var L=(typeof bkV2AllNats==='function')?bkV2AllNats():((typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[]);
+  return '<datalist id="tm-natlist">'+L.map(function(x){ return '<option value="'+x.code+'">'+String(x.name||'').replace(/[<>&"]/g,'')+'</option>'; }).join('')+'</datalist>';
+}
 function tmBkStatus(b){ var L=tmPaxList(b), n=0, ok=0; L.forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++; if(tmPaxOk(b.id,p)) ok++; }); return {n:n, ok:ok, miss:n-ok}; }
 function tmChip(b){ var st=tmBkStatus(b); if(!st.n) return '';
   var ok=(st.miss===0);
@@ -6480,6 +6494,7 @@ function tmInputChange(el, bkId, pk){
   var f=el.getAttribute('data-f'); tmSet(bkId,pk,f,el.value);
   if(f==='idNo') el.value=tmIdFmt(el.value);
   if(f==='dob') el.value=tmDobNorm(el.value);   /* §tmPax2 */
+  if(f==='nat'){ el.value=tmNatNorm(el.value)||tmGet(bkId,pk,'nat'); el.title=(typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(el.value):''; }   /* §tmPax4 */
   tmInputLive(el);
   /* ป้ายบนแถวใบจอง · อัปเดตที่เดียวโดยไม่วาดหน้าใหม่ (คนกำลังพิมพ์อยู่) */
   try{ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); document.querySelectorAll('[data-tmchip="'+bkId+'"]').forEach(function(h){ h.innerHTML=tmChip(b); }); }catch(_){}
@@ -6496,26 +6511,26 @@ function tmGridHtml(b){
   var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var ro=!(typeof window.laCanEditArea!=='function' || window.laCanEditArea('operations') || window.laCanEditArea('pier'));
   var L=tmPaxList(b).filter(function(p){ return p.lead || p.pad || (p.name||'').trim(); });   /* §tmPax3 */
-  var cols='22px 190px 190px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
+  var cols='22px 190px 190px 120px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax4 · +สัญชาติ */   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
   var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px"><b style="font-size:12px;color:#14233F">&#129706; ข้อมูลผู้เดินทาง · ตม. ทะเลพม่า</b>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px"><b style="font-size:12px;color:#14233F">&#129706; ข้อมูลผู้เดินทาง · ตม. ทะเลพม่า</b>'
     +'<span style="font-size:11px;color:#5B6472">'+L.length+' คน · พิมพ์แล้วบันทึกเอง · Enter/↓ ไปคนถัดไป · ช่องสีแดง = ยังขาด (ชื่ออังกฤษ · เลขบัตร · วันเกิด) · วันเกิดพิมพ์ วว/ดด/ปปปป หรือกด &#128197;</span></div>'
-    +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0"><span></span>'
+    +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0 6px"><span></span>'
     +TM_FIELDS.map(function(f){ return '<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
   L.forEach(function(p){
     var ok=tmPaxOk(b.id,p);
     var _pn=L.indexOf(p)+1;   /* §tmPax3 · ลำดับคน */
-    h+='<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;align-items:center;padding:4px 0;border-top:1px solid #EEF0F3">'
+    h+='<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;align-items:center;padding:7px 0;border-top:1px solid #EEF0F3">'   /* §tmPax4 · เว้นแถวห่างขึ้น */
       +'<span title="'+(p.lead?'Lead · ':('คนที่ '+_pn+' · '))+e(p.name||'(ยังไม่มีชื่อในใบจอง)')+'" style="width:18px;height:18px;border-radius:50%;background:'+(ok?'#15803D':'#B45309')+';color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center">'+(ok?'&#10003;':'!')+'</span>';
     TM_FIELDS.forEach(function(f){
       var k=f[0], v=tmGet(b.id,p.key,k); if(k==='idNo') v=tmIdFmt(v);
-      if(k==='thName') v=tmThDef(b.id,p); else if(k==='enName') v=tmEnDef(b.id,p); else if(k==='dob') v=tmDobNorm(v);   /* §tmPax2 · ชื่อไทยในใบจอง → ช่องไทย */
+      if(k==='thName') v=tmThDef(b.id,p); else if(k==='enName') v=tmEnDef(b.id,p); else if(k==='dob') v=tmDobNorm(v); else if(k==='nat') v=tmNatDef(b.id,p,b);   /* §tmPax2 · ชื่อไทยในใบจอง → ช่องไทย */
       var ph=(k==='dob')?'วว/ดด/ปปปป':f[1];
       var mono=(k==='idNo'||k==='idLaser'||k==='dob');
       var need=(k==='enName'&&!v)||(k==='dob'&&!tmDobOk(v))||(k==='idNo'&&!tmIdOk(v));
       var bad=(k==='idNo'&&tmIdDigits(v).length===13&&!tmIdOk(v))||(k==='dob'&&!!v&&!tmDobOk(v));
       var iid='tmi-'+String(b.id+'-'+p.key+'-'+k).replace(/[^A-Za-z0-9_-]/g,'_');   /* §tmPax2 · มี id ให้ _laRerender คืนโฟกัส/เคอร์เซอร์ได้ */
-      var inp='<input id="'+iid+'" data-f="'+k+'" value="'+e(v)+'" placeholder="'+e(ph)+'"'+(ro?' disabled':'')+(k==='idNo'?' inputmode="numeric" maxlength="17"':'')+(k==='dob'?' maxlength="10" autocomplete="off"':'')
+      var inp='<input id="'+iid+'" data-f="'+k+'" value="'+e(v)+'" placeholder="'+e(ph)+'"'+(ro?' disabled':'')+(k==='idNo'?' inputmode="numeric" maxlength="17"':'')+(k==='dob'?' maxlength="10" autocomplete="off"':'')+(k==='nat'?' list="tm-natlist" autocomplete="off" title="'+e((typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(v):'')+'"':'')
         +' onchange="tmInputChange(this,\''+e(b.id)+'\',\''+e(p.key)+'\')" oninput="tmInputLive(this)" onkeydown="tmInputKey(event,this)" onclick="event.stopPropagation()"'
         +' style="width:100%;min-width:0;box-sizing:border-box;border:1px solid '+(bad?'#D92D20':(need?'#EBA6A6':'#D9DDE4'))+';background:'+(need?'#FFF5F5':'#fff')+';border-radius:6px;padding:4px 7px;font-size:12px;color:#14233F;font-family:'+(mono?"'DM Mono',monospace":'inherit')+'">';
       if(k==='dob' && !ro){
@@ -6528,6 +6543,7 @@ function tmGridHtml(b){
     h+='</div>';
   });
   if(!L.length) h+='<div style="font-size:12px;color:#8A9099;padding:6px 0">ยังไม่มีรายชื่อผู้เดินทางในใบนี้ · ใส่ชื่อในใบจองก่อน</div>';
+  h+=tmNatList();   /* §tmPax4 */
   return h+'</div>';
 }
 function insToggleReviewed(bkId,pk){ const s=insEnsure(); const k=insKey(bkId,pk); const o=s[k]=s[k]||{}; o.reviewed=!o.reviewed; o.at=Date.now(); insPersist(); renderInsurance(); }
