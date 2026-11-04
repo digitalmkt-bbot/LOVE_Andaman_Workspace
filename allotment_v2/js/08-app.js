@@ -6541,9 +6541,7 @@ function tmGridHtml(b){
   var ro=!(typeof window.laCanEditArea!=='function' || window.laCanEditArea('operations') || window.laCanEditArea('pier'));
   var L=tmPaxList(b).filter(function(p){ return p.lead || p.pad || (p.name||'').trim(); });   /* §tmPax3 */
   var cols='22px 190px 190px 120px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax4 · +สัญชาติ */   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
-  var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px"><b style="font-size:12px;color:#14233F">&#129706; ข้อมูลผู้เดินทาง · ตม. ทะเลพม่า</b>'
-    +'<span style="font-size:11px;color:#5B6472">'+L.length+' คน</span></div>'   /* §tmPax6 · owner "อันนี้เอาออกเลยก็ได้" · ตัดคำอธิบายยาว */
+  var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit;padding:6px 0 14px">'   /* §tmPax7 · owner "ตัดหัวข้อออก · อยากให้มีระยะห่างของขอบล่าง" */
     +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0 6px"><span></span>'
     +TM_FIELDS.map(function(f){ return '<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
   L.forEach(function(p){
