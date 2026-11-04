@@ -1121,7 +1121,7 @@
     {v:'fl-work',t:'Fleet Work',a:'fleet'},{v:'fl-deployment',t:'Fleet Deployment',a:'fleet'},{v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},
-    {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-ranong',t:'Ranong · ตารางการทำงาน',a:'pier'},{v:'pol-ranong',t:'Ranong · ใบอนุญาต',a:'pier'},{v:'pop-ranong',t:'Ranong · เงินสดย่อย',a:'pier'},{v:'pok-ranong',t:'Ranong · ตั๋วอุทยาน',a:'pier'},
+    {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-ranong',t:'Ranong · ตารางการทำงาน',a:'pier'},{v:'pol-ranong',t:'Ranong · ใบอนุญาต',a:'pier'},{v:'pop-ranong',t:'Ranong · เงินสดย่อย',a:'pier'},{v:'pok-ranong',t:'Ranong · ตั๋วอุทยาน',a:'pier'},{v:'pot-ranong',t:'Ranong · เอกสาร ตม.',a:'pier'},
     {v:'rep-ops',t:'Operations Report',a:'operations'},{v:'rep-fleet',t:'Fleet Report',a:'fleet'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
@@ -1210,6 +1210,8 @@
     ['panwa','tublamu','ranong'].forEach(function(k){ if(!set['pop-'+k] && set['po-'+k]) set['pop-'+k]=1; });
     /* §pkTk2 · ตั๋วอุทยานเพิ่มใหม่ · ยกให้คนที่ถือหน้าเบิก-คืนของท่านั้นอยู่แล้วเหมือนกัน */
     ['panwa','tublamu','ranong'].forEach(function(k){ if(!set['pok-'+k] && set['po-'+k]) set['pok-'+k]=1; });
+    /* §tmDoc · เอกสาร ตม. ระนอง · ยกให้คนที่ถือหน้าเบิก-คืนของท่าระนองเหมือนกัน */
+    if(!set['pot-ranong'] && set['po-ranong']) set['pot-ranong']=1;
     return set;
   }
   function laPermViewList(perms){ var set=laExpandPerms(perms); if(!set) return LA_NAV.map(function(n){return n.v;}); return LA_NAV.filter(function(n){return set[n.v];}).map(function(n){return n.v;}); }

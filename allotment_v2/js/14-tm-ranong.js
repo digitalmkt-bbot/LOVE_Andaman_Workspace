@@ -1,0 +1,197 @@
+/* ══ §tmDoc (2026-11-04) · Pier Office › Ranong › เอกสาร ตม. ═══════════════════════════════════
+   owner: "แต่ละลำต้องออกเอกสารหน้าตาแบบนี้" (ไฟล์ ชุดเอกสาร ตม. TRI-STAR.xlsx) · "ข้อมูลเรือและลูกเรือ แยกไปใน Pier Office ของ Ranong"
+   ส่วน 1 · ข้อมูลเรือ (ชื่อบนเอกสาร · สัญชาติ · ทะเบียน · ระวาง · ผู้ควบคุม · ลูกเรือ · ท่า · ตัวแทน) ลำละชุด · กรอกครั้งเดียว
+          เก็บเป็น JSON string ใน laBlob().tm_boats → ขึ้นเซิร์ฟเวอร์ทาง app_meta (smerge) เหมือน rc_status_colors · ไม่ต้องแก้ schema
+   ส่วน 2 · ออกเอกสารรายวัน · ทุกลำที่วิ่งเส้นทางท่าระนองวันนั้น · ดาวน์โหลด Excel ต่อลำ
+          ใช้ไฟล์ต้นฉบับของทีมเป็นแม่แบบ (assets/tm_ranong_template.xlsx) · ExcelJS โหลดจาก cdnjs ตอนกดครั้งแรก · สไตล์/ผสานช่อง/สูตรคงเดิม
+          ระบบเติมแค่ข้อมูล · รายชื่อผู้โดยสารจาก §tmPax (By trip / Insurance) · แผ่นเพิ่ม "ข้อมูลประกอบ" ท้ายชุด (ชื่อไทย · เลขหลังบัตร · วันเกิด · Remark) */
+var _tmDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+var _tmPier='ranong', _tmOpen={};
+var TM_DEF={ nat:'พม่า', natEn:'Myanmar', reg:'Myanmar', port:'ท่าเทียบเรือแกรนด์อันดามัน - เกาะสอง', embark:'ท่าเรือแกรนด์อันดามัน', dest:'เกาะสอง - พม่า',
+             agent:'บริษัท เลิฟ ไอแลนด์ จำกัด', writeAt:'ท่าเรือแกรนด์อันดามัน', from:'เกาะสอง-พม่า', position:'ท่าเรือแกรนด์อันดามัน' };
+function tmE(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function tmBoatsRead(){ var v; try{ v=laBlob().tm_boats; }catch(_){ return {}; } if(typeof v==='string'){ try{ v=JSON.parse(v); }catch(_){ v=null; } } return (v&&typeof v==='object')?v:{}; }
+function tmBoatsWrite(m){ try{ var d=laBlob(); d.tm_boats=JSON.stringify(m||{}); laBlobSave(); }catch(e){ console.warn('[tmDoc] save failed', e); } }
+function tmBoatRec(bid){ var m=tmBoatsRead(), b=(typeof getBoat==='function')?getBoat(bid):null;
+  var r=Object.assign({ name:(b&&b.name)||bid, nat:TM_DEF.nat, reg:TM_DEF.reg, master:'', gross:'', net:'', port:TM_DEF.port, position:TM_DEF.position, agent:TM_DEF.agent, embark:TM_DEF.embark, dest:TM_DEF.dest, crew:[] }, m[bid]||{});
+  if(!Array.isArray(r.crew)) r.crew=[]; return r; }
+function tmBoatSet(bid, f, v){ var m=tmBoatsRead(); var r=Object.assign({}, tmBoatRec(bid)); r[f]=String(v||'').trim(); r.by=(typeof laBy==='function')?laBy():''; r.at=new Date().toISOString(); m[bid]=r; tmBoatsWrite(m); }
+function tmCrewSet(bid, i, f, v){ var m=tmBoatsRead(); var r=Object.assign({}, tmBoatRec(bid)); r.crew=r.crew.slice(); r.crew[i]=Object.assign({}, r.crew[i]||{}); r.crew[i][f]=String(v||'').trim(); m[bid]=r; tmBoatsWrite(m); }
+function tmCrewAdd(bid){ var m=tmBoatsRead(); var r=Object.assign({}, tmBoatRec(bid)); r.crew=r.crew.concat([{name:'', rank:r.crew.length?'Crew':'Captain', nat:TM_DEF.natEn, doc:''}]); m[bid]=r; tmBoatsWrite(m); renderPierTm(); }
+function tmCrewDel(bid, i){ var m=tmBoatsRead(); var r=Object.assign({}, tmBoatRec(bid)); if(!confirm('Remove this crew member?')) return; r.crew=r.crew.filter(function(_,k){ return k!==i; }); m[bid]=r; tmBoatsWrite(m); renderPierTm(); }
+function tmSetDate(ds){ if(!ds) return; _tmDate=ds; renderPierTm(); }
+function tmShiftDate(n){ var d=new Date(_tmDate+'T12:00:00'); d.setDate(d.getDate()+n); tmSetDate(d.toISOString().slice(0,10)); }
+/* ใบจองของท่าระนองในวันนั้น · แยกตามลำ */
+function tmDayBoats(ds){
+  var by={}, order=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(!b || ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    (b.trips||[]).forEach(function(t){
+      if(!t || t.date!==ds || !tmIsRanongRoute(t.routeId)) return;
+      var O=(typeof bkOpsRead==='function')?bkOpsRead(b,ds):(b.ops||{});
+      var bid=O.boatId||t.charterBoatId||'';
+      var k=bid||'__none';
+      if(!by[k]){ by[k]={bid:bid, routeId:t.routeId, bks:[], pax:0, ok:0, n:0}; order.push(k); }
+      by[k].bks.push(b);
+      var st=tmBkStatus(b); by[k].n+=st.n; by[k].ok+=st.ok;
+      by[k].pax+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    });
+  });
+  return order.map(function(k){ return by[k]; });
+}
+/* ลำที่ควรมีข้อมูล ตม. · เรือในกองที่ท่าระนอง + ลำที่เคยจัดบนเส้นทางระนอง ±45 วัน + ลำที่เคยกรอกไว้ */
+function tmBoatList(){
+  var ids={}, out=[];
+  (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){ if(b && (b.pier==='ranong' || b.homePier==='ranong')) ids[b.id]=1; });
+  var t0=new Date();
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){ (b&&b.trips||[]).forEach(function(t){
+    if(!t||!t.date||!tmIsRanongRoute(t.routeId)) return;
+    var dd=Math.abs((new Date(t.date+'T12:00:00')-t0)/864e5); if(dd>45) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,t.date):(b.ops||{}); var bid=O.boatId||t.charterBoatId; if(bid) ids[bid]=1; }); });
+  Object.keys(tmBoatsRead()).forEach(function(k){ ids[k]=1; });
+  Object.keys(ids).forEach(function(id){ out.push({ id:id, boat:(typeof getBoat==='function')?getBoat(id):null }); });
+  out.sort(function(a,b){ return String((a.boat&&a.boat.name)||a.id).localeCompare(String((b.boat&&b.boat.name)||b.id)); });
+  return out;
+}
+function renderPierTm(pier){
+  if(pier) _tmPier=pier;
+  var host=document.getElementById('pt-host-'+_tmPier); if(!host) return;
+  var e=tmE, ro=(typeof poCanEdit==='function')?!poCanEdit():false;
+  var inp=function(bid,f,v,ph,w){ return '<label style="display:flex;flex-direction:column;gap:3px;font-size:10.5px;font-weight:700;color:#5B6472;'+(w?('width:'+w+'px'):'flex:1 1 160px')+';min-width:0">'+e(ph)
+    +'<input value="'+e(v)+'"'+(ro?' disabled':'')+' onchange="tmBoatSet(\''+e(bid)+'\',\''+f+'\',this.value)" style="border:1px solid #D9DDE4;border-radius:7px;padding:6px 8px;font-family:inherit;font-size:12.5px;font-weight:500;color:#14233F;min-width:0"></label>'; };
+  var L=tmBoatList();
+  var boatsHtml=L.length?L.map(function(x){
+    var r=tmBoatRec(x.id), open=!!_tmOpen[x.id], nm=(x.boat&&x.boat.name)||x.id;
+    var done=!!(r.master && r.crew.length && r.crew.every(function(c){ return c.name; }));
+    var crew=r.crew.map(function(c,i){ return '<div style="display:grid;grid-template-columns:28px minmax(0,1.4fr) 110px 110px minmax(0,1fr) 28px;gap:6px;align-items:center">'
+        +'<span style="font-size:11.5px;color:#8A9099;text-align:center">'+(i+1)+'</span>'
+        +'<input value="'+e(c.name)+'" placeholder="Mr.U Sein Din"'+(ro?' disabled':'')+' onchange="tmCrewSet(\''+e(x.id)+'\','+i+',\'name\',this.value)" style="border:1px solid #D9DDE4;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;min-width:0">'
+        +'<input value="'+e(c.rank)+'" placeholder="Captain / Crew"'+(ro?' disabled':'')+' onchange="tmCrewSet(\''+e(x.id)+'\','+i+',\'rank\',this.value)" style="border:1px solid #D9DDE4;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;min-width:0">'
+        +'<input value="'+e(c.nat)+'" placeholder="Myanmar"'+(ro?' disabled':'')+' onchange="tmCrewSet(\''+e(x.id)+'\','+i+',\'nat\',this.value)" style="border:1px solid #D9DDE4;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;min-width:0">'
+        +'<input value="'+e(c.doc)+'" placeholder="เลขหนังสือเดินทางลูกเรือ"'+(ro?' disabled':'')+' onchange="tmCrewSet(\''+e(x.id)+'\','+i+',\'doc\',this.value)" style="border:1px solid #D9DDE4;border-radius:7px;padding:5px 8px;font-family:\'DM Mono\',monospace;font-size:12px;min-width:0">'
+        +(ro?'<span></span>':'<button type="button" onclick="tmCrewDel(\''+e(x.id)+'\','+i+')" aria-label="ลบ" style="border:0;background:transparent;color:#B42318;cursor:pointer;font-size:14px">&times;</button>')+'</div>'; }).join('');
+    return '<section style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;overflow:hidden;margin-bottom:10px">'
+      +'<button type="button" onclick="_tmOpen[\''+e(x.id)+'\']=!_tmOpen[\''+e(x.id)+'\'];renderPierTm()" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:0;background:'+(open?'#F7F7F4':'#fff')+';font-family:inherit;text-align:left;cursor:pointer">'
+        +'<span style="font-size:12px;color:#8A9099">'+(open?'&#9662;':'&#9656;')+'</span><b style="font-size:13.5px;color:#14233F">'+e(nm)+'</b>'
+        +(r.name&&r.name!==nm?'<span style="font-size:12px;color:#5B6472">บนเอกสาร: '+e(r.name)+'</span>':'')
+        +'<span style="margin-left:auto;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;'+(done?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00')+'">'+(done?('ครบ · ลูกเรือ '+r.crew.length+' คน'):'ยังไม่ครบ')+'</span>'
+        +(r.at?'<span style="font-size:11px;color:#8A9099">แก้ล่าสุด '+e(r.by||'')+' · '+e(String(r.at).slice(0,10))+'</span>':'')+'</button>'
+      +(open?('<div style="padding:4px 14px 14px;display:flex;flex-direction:column;gap:10px;border-top:1px solid #EEECE6">'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'+inp(x.id,'name',r.name,'ชื่อเรือบนเอกสาร',200)+inp(x.id,'nat',r.nat,'สัญชาติเรือ (ไทย)',120)+inp(x.id,'reg',r.reg,'ทะเบียนเรือ (ท่า · วันที่ · เลขที่)')+inp(x.id,'gross',r.gross,'ระวางทั้งลำ',90)+inp(x.id,'net',r.net,'ระวางบรรทุก',90)+'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'+inp(x.id,'master',r.master,'ชื่อผู้ควบคุมเรือ',220)+inp(x.id,'port',r.port,'ท่าเรือเดินทางผ่านเข้าออก')+inp(x.id,'position',r.position,'ตำแหน่งเรือในท่า')+'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'+inp(x.id,'embark',r.embark,'ท่าที่ผู้โดยสารลงเรือ')+inp(x.id,'dest',r.dest,'ท่าที่ผู้โดยสารขึ้นจากเรือ')+inp(x.id,'agent',r.agent,'ตัวแทนเรือ')+'</div>'
+        +'<div><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><b style="font-size:12px;color:#14233F">ลูกเรือ (ตม.4/1 · ตม.36)</b><span style="font-size:11px;color:#5B6472">คนแรกคือผู้ควบคุมเรือ · ลำดับตามใบ</span>'
+          +(ro?'':'<button type="button" onclick="tmCrewAdd(\''+e(x.id)+'\')" style="margin-left:auto;border:1px solid #D0D5DD;background:#fff;border-radius:7px;padding:4px 10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">+ เพิ่มลูกเรือ</button>')+'</div>'
+          +'<div style="display:grid;grid-template-columns:28px minmax(0,1.4fr) 110px 110px minmax(0,1fr) 28px;gap:6px;font-size:10.5px;font-weight:700;color:#5B6472;margin-bottom:4px"><span></span><span>ชื่อ-สกุล</span><span>ตำแหน่ง</span><span>สัญชาติ</span><span>หนังสือเดินทางลูกเรือ</span><span></span></div>'
+          +'<div style="display:flex;flex-direction:column;gap:5px">'+(crew||'<span style="font-size:12px;color:#8A9099">ยังไม่มีลูกเรือ</span>')+'</div></div>'
+        +'</div>'):'')+'</section>'; }).join('')
+    :'<div style="padding:18px;text-align:center;color:#8A9099;font-size:12.5px">ยังไม่มีเรือที่วิ่งเส้นทางท่าระนอง · จัดเรือในใบจองก่อน รายชื่อลำจะขึ้นที่นี่</div>';
+  var D=tmDayBoats(_tmDate);
+  var dayHtml=D.length?D.map(function(g){
+    var nm=g.bid?(((typeof getBoat==='function')&&getBoat(g.bid))||{}).name||g.bid:'(ยังไม่จัดเรือ)';
+    var rec=g.bid?tmBoatRec(g.bid):null, crewOk=!!(rec&&rec.master&&rec.crew.length);
+    var rn=(((typeof getRoute==='function')&&getRoute(g.routeId))||{}).name||g.routeId;
+    return '<div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 190px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #EEECE6;font-size:12.5px">'
+      +'<b style="color:#14233F">'+e(nm)+'</b><span style="color:#5B6472">'+e(rn)+' · '+g.bks.length+' ใบ</span><span><b>'+g.pax+'</b> คน</span>'
+      +'<span style="font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 9px;justify-self:start;'+(g.ok===g.n&&g.n?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00')+'">&#129706; ผู้โดยสาร '+g.ok+'/'+g.n+'</span>'
+      +'<span style="font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 9px;justify-self:start;'+(crewOk?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00')+'">'+(g.bid?(crewOk?('ลูกเรือ '+rec.crew.length+' คน'):'ยังไม่มีข้อมูลเรือ'):'—')+'</span>'
+      +(g.bid?'<button type="button" onclick="tmExport(\''+e(g.bid)+'\',\''+e(_tmDate)+'\')" style="border:0;background:#1B2A55;color:#fff;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;justify-self:start">&#128229; ดาวน์โหลด Excel ชุด ตม.</button>':'<span style="font-size:11.5px;color:#B42318">จัดเรือก่อนถึงออกเอกสารได้</span>')+'</div>'; }).join('')
+    :'<div style="padding:18px;text-align:center;color:#8A9099;font-size:12.5px">วันนี้ไม่มีใบจองเส้นทางท่าระนอง</div>';
+  var dLbl=(function(){ try{ return new Date(_tmDate+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){ return _tmDate; } })();
+  host.innerHTML='<div style="font-family:\'IBM Plex Sans Thai\',\'DM Sans\',sans-serif;color:#14233F;padding:16px 18px;max-width:1240px">'
+    +'<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px"><b style="font-size:18px">&#129706; เอกสาร ตม. · ทะเลพม่า</b><span style="font-size:12.5px;color:#5B6472">Ranong · ชุดเอกสารตรวจคนเข้าเมืองต่อลำ (ตม.2/1 · 3/1 · 4/1 · 36 · 33 · บัญชีจำนวน · คำสั่งเจ้าหน้าที่)</span></div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:22px;height:22px;border-radius:50%;background:#1B2A55;color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">1</span><b style="font-size:14px">ออกเอกสารรายวัน</b>'
+      +'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px"><button type="button" onclick="tmShiftDate(-1)" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;width:28px;height:28px;cursor:pointer">&lsaquo;</button>'
+      +'<button type="button" onclick="laDatePop(\'tmSetDate\',_tmDate,event)" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;padding:4px 12px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">'+e(dLbl)+'</button>'
+      +'<button type="button" onclick="tmShiftDate(1)" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;width:28px;height:28px;cursor:pointer">&rsaquo;</button>'
+      +'<button type="button" onclick="tmSetDate((typeof bkV2LocalYMD===\'function\')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10))" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;padding:4px 10px;font-family:inherit;font-size:12px;cursor:pointer">วันนี้</button></span></div>'
+    +'<div style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;overflow:hidden;margin-bottom:18px"><div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 190px;gap:10px;padding:7px 14px;font-size:10.5px;font-weight:700;color:#5B6472"><span>เรือ</span><span>เส้นทาง</span><span>ผู้โดยสาร</span><span>ข้อมูล ตม.</span><span>ข้อมูลเรือ</span><span></span></div>'+dayHtml+'</div>'
+    +'<div style="font-size:11.5px;color:#5B6472;margin:-10px 0 18px">ผู้โดยสารที่ข้อมูลยังไม่ครบ ยังออกเอกสารได้ (ช่องว่าง) · กรอกที่ By trip date (กางแถวใบจอง) หรือหน้า Insurance</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:22px;height:22px;border-radius:50%;background:#1B2A55;color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">2</span><b style="font-size:14px">ข้อมูลเรือและลูกเรือ</b><span style="font-size:12px;color:#5B6472">กรอกครั้งเดียว ใช้ทุกวัน · แก้เมื่อลูกเรือเปลี่ยน</span></div>'
+    +boatsHtml+'</div>';
+}
+/* ── Excel ───────────────────────────────────────────────────────────────── */
+var TM_TEMPLATE_URL='assets/tm_ranong_template.xlsx';
+function tmLoadExcelJS(){
+  if(window.ExcelJS) return Promise.resolve();
+  return new Promise(function(res,rej){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=res; s.onerror=function(){ rej(new Error('ExcelJS load failed')); }; document.head.appendChild(s); });
+}
+var TM_MONTH_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function tmGender(nm){ var s=String(nm||'').trim().toLowerCase(); if(/^(mrs|ms|miss|นาง|นางสาว|น\.ส\.)/.test(s)) return 'f'; if(/^(mr|นาย|mstr|master)/.test(s)) return 'm'; return ''; }
+function tmNatLabel(p){ var c=String(p.natCode||'').toUpperCase(); if(!c||c==='TH'||c==='THA') return 'THAI'; try{ if(typeof insNatLabel==='function'){ var l=String(insNatLabel(c)||'').split('·')[0].trim(); if(l) return l.toUpperCase(); } }catch(_){} return c; }
+function tmClean(s){ return String(s||'').replace(/[\u200b\u200c\u200d\ufeff]/g,'').replace(/\s+/g,' ').trim(); }
+/* รายชื่อผู้โดยสารของลำนั้นวันนั้น · ตามใบจอง · lead ก่อน */
+function tmPaxOfBoat(bid, ds){
+  var out=[]; tmDayBoats(ds).filter(function(g){ return g.bid===bid; }).forEach(function(g){
+    g.bks.forEach(function(b){ tmPaxList(b).forEach(function(p){ if(!p.lead && !(p.name||'').trim()) return;
+      var en=tmClean(tmGet(b.id,p.key,'enName')||p.name||'');
+      out.push({ b:b, p:p, name:en, th:tmClean(tmGet(b.id,p.key,'thName')), id:tmGet(b.id,p.key,'idNo'), laser:tmGet(b.id,p.key,'idLaser'), dob:tmGet(b.id,p.key,'dob'), remark:tmGet(b.id,p.key,'remark'),
+                 nat:tmNatLabel(p), natCode:String(p.natCode||'TH').toUpperCase(), g:tmGender(en||p.name), vc:b.voucherRef||b.code||b.id }); }); }); });
+  return out;
+}
+function tmExport(bid, ds){
+  var btn=event&&event.currentTarget; if(btn){ btn.disabled=true; btn.textContent='กำลังสร้าง…'; }
+  var done=function(){ if(btn){ btn.disabled=false; btn.innerHTML='&#128229; ดาวน์โหลด Excel ชุด ตม.'; } };
+  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=1').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
+  .then(function(buf){ var wb=new ExcelJS.Workbook(); return wb.xlsx.load(buf); })
+  .then(function(wb){ return tmFill(wb, bid, ds).xlsx.writeBuffer(); })
+  .then(function(out){ var nm=(tmBoatRec(bid).name||bid).replace(/[\\/:*?"<>|]/g,'-');
+    var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ตม-'+nm+'-'+ds+'.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    done(); })
+  .catch(function(err){ done(); alert('Could not build the document: '+(err&&err.message||err)); });
+}
+function tmFill(wb, bid, ds){
+  var R=tmBoatRec(bid), P=tmPaxOfBoat(bid, ds), crew=R.crew.filter(function(c){ return c.name; });
+  var d=new Date(ds+'T12:00:00'), dd=d.getDate(), mi=d.getMonth(), be=d.getFullYear()+543;
+  var set=function(ws, addr, v){ if(!ws) return; var c=ws.getCell(addr); c.value=(v===undefined?null:v); };
+  var clr=function(ws, r0, r1, cols){ if(!ws) return; for(var r=r0;r<=r1;r++) cols.forEach(function(c){ ws.getCell(c+r).value=null; }); };
+  /* ตม.2/1 */
+  var s1=wb.getWorksheet('รายการเกี่ยวกับพาหนะ');
+  set(s1,'K4',TM_DEF.writeAt); set(s1,'I7',dd); set(s1,'K7',TM_MONTH_TH[mi]); set(s1,'M7',be);
+  set(s1,'B20',R.name); set(s1,'I20',R.port); set(s1,'B23',new Date(Date.UTC(be, mi, dd)));   /* UTC · ExcelJS เขียนเป็น UTC ถ้าใช้เวลาเครื่องจะถอยไปวันก่อน */ set(s1,'I23',R.nat);
+  set(s1,'B26',R.master); set(s1,'B29',R.reg); set(s1,'G29',R.agent); set(s1,'B32',R.gross?+R.gross||R.gross:null); set(s1,'I32',R.net?+R.net||R.net:null); set(s1,'B35',R.position);
+  set(s1,'A54',crew.length+' คน'); set(s1,'D54',' '+P.length+' คน');
+  /* ตม.3/1 · 3 หน้า · หน้า 1 คอลัมน์ B-G · หน้า 2-3 คอลัมน์ A-F */
+  var pages=[ {ws:wb.getWorksheet('บัญชีคนโดยสาร'), r0:16, n:25, idx:'B', nm:'C', nat:'D', id:'E', em:'F', dis:'G', ship:'C10'},
+              {ws:wb.getWorksheet('บัญชีคนโดยสาร (2)'), r0:16, n:20, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F', ship:null},
+              {ws:wb.getWorksheet('บัญชีคนโดยสาร (3)'), r0:16, n:25, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F', ship:null} ];
+  var k=0;
+  pages.forEach(function(pg, pi){
+    if(!pg.ws) return;
+    if(pg.ship) set(pg.ws, pg.ship, R.name);
+    for(var r=0;r<pg.n;r++){ var row=pg.r0+r, x=P[k];
+      if(x){ k++; set(pg.ws,pg.idx+row,k); set(pg.ws,pg.nm+row,x.name); set(pg.ws,pg.nat+row,x.nat); set(pg.ws,pg.id+row,x.id?tmIdSpaced(x.id):null);
+             set(pg.ws,pg.em+row,r===0?R.embark:'"'); set(pg.ws,pg.dis+row,r===0?R.dest:'"'); }
+      else { set(pg.ws,pg.idx+row,(pi===0&&r===0)?1:null); set(pg.ws,pg.nm+row,null); set(pg.ws,pg.nat+row,null); set(pg.ws,pg.id+row,null); set(pg.ws,pg.em+row,null); set(pg.ws,pg.dis+row,null); }
+    }
+    try{ set(pg.ws,'D13',R.nat); }catch(_){}
+  });
+  /* ตม.4/1 ลูกเรือ */
+  var s4=wb.getWorksheet('บัญชีคนประจำพาหนะ');
+  if(s4){ set(s4,'B12',R.nat==='พม่า'?'Myanmar':R.nat); set(s4,'D12',R.embark);
+    for(var r=0;r<25;r++){ var row=15+r, c=crew[r]; set(s4,'A'+row,r+1);
+      set(s4,'B'+row,c?c.name:null); set(s4,'C'+row,c?c.rank:null); set(s4,'D'+row,c?c.nat:null); set(s4,'F'+row,c?c.doc:null); } }
+  /* ตม.36 · ชื่อลูกเรือเป็นสูตรอ้าง ตม.4/1 อยู่แล้ว */
+  /* ตม.33 */
+  var s33=wb.getWorksheet('ตม.33'); if(s33){ set(s33,'M6',TM_DEF.writeAt); set(s33,'C22',TM_DEF.from); }
+  /* บัญชีแสดงจำนวน */
+  var sN=wb.getWorksheet('บัญชีแสดงจำนวนคนโดยสาร ')||wb.getWorksheet('บัญชีแสดงจำนวนคนโดยสาร');
+  if(sN){ var nat={}, ord=[]; P.forEach(function(x){ var key=x.nat; if(!nat[key]){ nat[key]={m:0,f:0}; ord.push(key); } if(x.g==='f') nat[key].f++; else nat[key].m++; });
+    for(var r=9;r<=20;r++){ set(sN,'A'+r,null); set(sN,'B'+r,null); set(sN,'C'+r,null); set(sN,'D'+r,null); set(sN,'E'+r,null); }
+    ord.slice(0,12).forEach(function(key,i){ var r=9+i; set(sN,'A'+r,key.charAt(0)+key.slice(1).toLowerCase()); set(sN,'B'+r,nat[key].m); set(sN,'C'+r,nat[key].f); set(sN,'D'+r,nat[key].m+nat[key].f); set(sN,'E'+r,i===0?'Temporary\nBoarder':null); });
+    var cm=0, cf=0; crew.forEach(function(c){ if(tmGender(c.name)==='f') cf++; else cm++; });
+    set(sN,'G9',R.nat==='พม่า'?'Myanmar':R.nat); set(sN,'H9',cm); set(sN,'I9',cf); set(sN,'J9',cm+cf); }
+  /* แผ่นเพิ่ม · ข้อมูลประกอบ (ชื่อไทย · เลขหลังบัตร · วันเกิด · Remark) */
+  var sx=wb.getWorksheet('ข้อมูลประกอบ'); if(sx) wb.removeWorksheet(sx.id);
+  sx=wb.addWorksheet('ข้อมูลประกอบ');
+  sx.columns=[{width:6},{width:14},{width:32},{width:32},{width:20},{width:18},{width:14},{width:12},{width:28}];
+  sx.addRow(['ข้อมูลประกอบผู้โดยสาร · '+R.name+' · '+dd+' '+TM_MONTH_TH[mi]+' '+be]).font={bold:true,size:14};
+  sx.addRow([]);
+  var hdr=sx.addRow(['#','Voucher','ชื่อ-สกุล ไทย','ชื่อ-สกุล อังกฤษ','เลขบัตรประชาชน','เลขหลังบัตร','วันเกิด','สัญชาติ','Remark']); hdr.font={bold:true};
+  hdr.eachCell(function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEF1F6'}}; c.border={bottom:{style:'thin'}}; });
+  P.forEach(function(x,i){ sx.addRow([i+1, x.vc, x.th, x.name, x.id?tmIdFmt(x.id):'', x.laser, x.dob, x.nat, x.remark]); });
+  sx.addRow([]); sx.addRow(['ลูกเรือ']).font={bold:true};
+  crew.forEach(function(c,i){ sx.addRow([i+1,'',c.name,'',c.doc,'','',c.nat,c.rank]); });
+  return wb;
+}
