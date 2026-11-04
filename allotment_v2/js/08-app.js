@@ -6483,7 +6483,7 @@ function tmGridAlign(){
       var tr=g.closest('tr'), prev=tr&&tr.previousElementSibling; while(prev && !prev.classList.contains('t2-row')) prev=prev.previousElementSibling;
       var cu=prev&&prev.querySelector('td.t2-cu'), first=prev&&prev.cells&&prev.cells[0]; if(!cu||!first) return;
       var pad=(cu.offsetLeft-first.offsetLeft)+(parseFloat(getComputedStyle(cu).paddingLeft)||0)-(parseFloat(getComputedStyle(g.parentNode).paddingLeft)||0)-30;
-      g.style.paddingLeft=(pad>0?Math.round(pad):0)+'px';
+      g.style.marginLeft=(pad>0?Math.round(pad):0)+'px';   /* §tmPax8 · ใช้ margin ไม่ใช่ padding → กรอบน้ำเงินตอนกรอกเริ่มที่ตาราง ไม่ลากไปสุดซ้าย */
     }catch(_){}
   });
 }
