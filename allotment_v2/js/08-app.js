@@ -6475,6 +6475,20 @@ function tmNatNorm(v){
   var hit=L.find(function(x){ return x.code===u; }) || L.find(function(x){ return String(x.name||'').toUpperCase()===u; }) || L.find(function(x){ return String(x.name||'').toUpperCase().indexOf(u)===0; });
   return hit?hit.code:(/^[A-Z]{2,3}$/.test(u)?u:'');
 }
+/* §tmPax5 (2026-11-04) · owner "ขยับช่องชื่อภาษาไทยให้ตรงกับช่องชื่อ Customer" · หลังวาด วัดตำแหน่งคอลัมน์ Customer (td.t2-cu) ของแถวใบจองด้านบน
+   แล้วดันตารางไปทางขวาเท่านั้น (ลบความกว้างวงกลมสถานะ 22px + ช่องว่าง 8px) · ทำเฉพาะใน By trip (แถว tr.t2-paxrow) · วัดใหม่เมื่อย่อ/ขยายหน้าต่าง */
+function tmGridAlign(){
+  document.querySelectorAll('tr.t2-paxrow .tm-grid').forEach(function(g){
+    try{
+      var tr=g.closest('tr'), prev=tr&&tr.previousElementSibling; while(prev && !prev.classList.contains('t2-row')) prev=prev.previousElementSibling;
+      var cu=prev&&prev.querySelector('td.t2-cu'), first=prev&&prev.cells&&prev.cells[0]; if(!cu||!first) return;
+      var pad=(cu.offsetLeft-first.offsetLeft)+(parseFloat(getComputedStyle(cu).paddingLeft)||0)-(parseFloat(getComputedStyle(g.parentNode).paddingLeft)||0)-30;
+      g.style.paddingLeft=(pad>0?Math.round(pad):0)+'px';
+    }catch(_){}
+  });
+}
+function tmGridAlignQ(){ if(window._tmAlignQ) return; window._tmAlignQ=1; requestAnimationFrame(function(){ window._tmAlignQ=0; tmGridAlign(); }); }
+try{ if(!window.__tmAlignRs){ window.__tmAlignRs=1; window.addEventListener('resize', tmGridAlignQ); } }catch(_){}
 function tmNatList(){
   var L=(typeof bkV2AllNats==='function')?bkV2AllNats():((typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[]);
   return '<datalist id="tm-natlist">'+L.map(function(x){ return '<option value="'+x.code+'">'+String(x.name||'').replace(/[<>&"]/g,'')+'</option>'; }).join('')+'</datalist>';
@@ -6544,6 +6558,7 @@ function tmGridHtml(b){
   });
   if(!L.length) h+='<div style="font-size:12px;color:#8A9099;padding:6px 0">ยังไม่มีรายชื่อผู้เดินทางในใบนี้ · ใส่ชื่อในใบจองก่อน</div>';
   h+=tmNatList();   /* §tmPax4 */
+  tmGridAlignQ();   /* §tmPax5 */
   return h+'</div>';
 }
 function insToggleReviewed(bkId,pk){ const s=insEnsure(); const k=insKey(bkId,pk); const o=s[k]=s[k]||{}; o.reviewed=!o.reviewed; o.at=Date.now(); insPersist(); renderInsurance(); }
