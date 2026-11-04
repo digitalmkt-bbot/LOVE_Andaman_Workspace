@@ -13106,7 +13106,7 @@ function vbRenderSheet(host){
   var DY=vbDayAgg(rows, extras, st, pier), NN=function(n){ return Math.round(+n||0).toLocaleString('en-US'); };
   var daily = DY.length ? ('<div class="vbx-dy"><div class="hh"><b>สรุปรายวัน</b><span>'+DY.length+' วัน · '+e(_vb.sup)+' · '+e(VB_PIER_SH[pier]||pier)+(_vb.van?(' · เฉพาะ '+e(vName(_vb.van))):'')+'</span><i></i>'
       +'<button class="vbx-btn sm" onclick="vbPrint(1,1)" title="มีราคาขายและกำไร · ใช้ภายใน">ฉบับภายใน</button>'
-      +'<button class="vbx-btn sm pri" onclick="vbPrint(0,1)">&#128424; พิมพ์สรุปรายวัน</button></div>'
+      +'<button class="vbx-btn sm pri" onclick="vbPrint(0,1)">&#128424; พิมพ์สรุปรายวัน'+(_vb.van?(' · '+e(((typeof vehGet==='function'&&vehGet(_vb.van))||{}).name||_vb.van)):'')+'</button></div>'
     +'<table><thead><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th class="b">เรียกเก็บ</th><th>ราคาขาย</th><th>กำไร</th></tr></thead><tbody>'
     + DY.map(function(g){ var gp=g.sale-g.bill;
         return '<tr><td class="l">'+e(vbDayLbl(g.ds))+'</td><td>'+g.trips+'</td><td>'+g.pax+'</td><td>'+(g.out?(g.pax/g.out).toFixed(2):'—')+'</td><td>'+NN(g.base)+'</td>'
@@ -13118,7 +13118,7 @@ function vbRenderSheet(host){
                +'<button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
     :('<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>'
       +'<button class="vbx-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
-      +'<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · '+e(VB_PIER_SH[pier]||pier)+'</button>');
+      +'<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · '+e(VB_PIER_SH[pier]||pier)+(_vb.van?(' · '+e(((typeof vehGet==='function'&&vehGet(_vb.van))||{}).name||_vb.van)+' '+e('เท่านั้น')):'')+'</button>');
   host.innerHTML=vbCss()+vbxCss()+'<style>'+pcVbCss()+'</style><div class="vbx">'
     + vbxTop(A, vbB(T.bill).replace('฿',''), e(_vb.sup), 'รอบ '+e(vbPerLbl())+' '+e(vbMoLbl())+' · '+e(VB_PIER_LBL[pier]||pier), acts)
     + chips
@@ -13287,7 +13287,14 @@ function vbPrint(internal, daily){
   } else {
     var pier=_vb.pier||'panwa', st=vbStateOf(vbKey()), keepV=_vb.van; _vb.van='';
     var rows; try{ rows=vbRows().filter(function(r){ return vbPk(r.routeId)===pier; }); } finally { _vb.van=keepV; }
-    var extras=(st.extra||[]).filter(function(x){ return vbXPier(x)===pier; });
+    /* §vbVanPrint (2026-11-04) · owner เลือกแบบ 1 "พิมพ์เฉพาะคันที่เลือก" · เดิมพิมพ์ทุกคันเสมอแม้เลือกคันไว้บนจอ
+       เลือกคันไว้ = ใบวางบิล/สรุปรายวันของคันนั้นคันเดียว · หัวใบมีชื่อคัน+ทะเบียน · เลขที่ต่อท้ายชื่อคัน (ไม่ชนใบรวม)
+       รถนอก (extra) เป็นของทั้งเจ้า ไม่ผูกคัน → ไม่ใส่ในใบรายคัน (เหมือนหน้าจอ) */
+    var _vSel=keepV?((typeof vehGet==='function')?vehGet(keepV):null):null;
+    if(keepV) rows=rows.filter(function(r){ return r.vanId===keepV; });
+    var _vNm=keepV?String((_vSel&&_vSel.name)||keepV):'', _vPl=(_vSel&&_vSel.plate&&_vSel.plate!=='-')?String(_vSel.plate):'';
+    var _vTag=keepV?(' · '+_vNm+(_vPl?(' ('+_vPl+')'):'')):'', _vNo=keepV?('-'+_vNm.replace(/[^A-Za-z0-9\u0E00-\u0E7F]/g,'')):'';
+    var extras=keepV?[]:(st.extra||[]).filter(function(x){ return vbXPier(x)===pier; });
     var IN2=!!internal, tb=0, tex=0, tcut=0, tsale=0, tpax=0, cs={}, vs={};
     var cols=IN2?11:9, last='', i=0;
     var body=rows.map(function(r){
@@ -13323,9 +13330,9 @@ function vbPrint(internal, daily){
       DY.forEach(function(g){ TR+=g.trips; TO+=g.out; });
       var dcols=IN2?10:8;
       html=head('สรุปรายวันค่ารถร่วม','DAILY SUMMARY · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
-        +'<div class="meta"><div style="grid-column:span 2"><i>เจ้าของรถ</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
+        +'<div class="meta"><div style="grid-column:span 2"><i>เจ้าของรถ</i><b>'+e(_vb.sup)+e(_vTag)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
         +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
-        +'<div><i>อ้างอิงใบวางบิล</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+'</b></div></div>'
+        +'<div><i>อ้างอิงใบวางบิล</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+e(_vNo)+'</b></div></div>'
         +'<table><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>เรียกเก็บ</th>'+(IN2?'<th>ราคาขาย</th><th>กำไร</th>':'')+'</tr>'
         +(DY.length?DY.map(function(g,k){ var gp=g.sale-g.bill;
             return '<tr class="'+(k%2?'z':'')+'"><td class="l"><b>'+e(vbDayLbl(g.ds,1))+'</b><div class="sub">'+e(Object.keys(g.vans).map(function(id){ var v=(typeof vehGet==='function')?vehGet(id):null; return (v&&v.name)||id; }).join(' · '))+'</div></td>'
@@ -13337,12 +13344,12 @@ function vbPrint(internal, daily){
         +'<div class="words"><b>ยอดเรียกเก็บรวม (ตัวอักษร)</b> &nbsp; '+e(typeof pcBahtText==='function'?pcBahtText(tb):'')+'</div>'
         +'<div class="note">เที่ยว = จำนวนคันที่วิ่ง (รวมขากลับ) · คน = ลูกค้าที่ขึ้นรถจริง · รายละเอียดทีละเที่ยวอยู่ในใบวางบิลเลขที่อ้างอิงด้านบน</div>'
         +sig(['ผู้จัดทำ','ฝ่ายปฏิบัติการ'],['ผู้ตรวจสอบ',IN2?'ฝ่ายบัญชี':'เจ้าของรถ'],['ผู้อนุมัติ',''])
-        +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+' · สรุปรายวัน</span></div>';
+        +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+e(_vTag)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+' · สรุปรายวัน</span></div>';
     } else
     html=head('ใบวางบิลค่ารถร่วม','BILLING NOTE · VAN SUPPLIER', IN2?'<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>':'<div class="tag">ฉบับเจ้าของรถ</div>')
-      +'<div class="meta"><div style="grid-column:span 2"><i>ผู้วางบิล (เจ้าของรถ)</i><b>'+e(_vb.sup)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
+      +'<div class="meta"><div style="grid-column:span 2"><i>ผู้วางบิล (เจ้าของรถ)</i><b>'+e(_vb.sup)+e(_vTag)+'</b><div class="sub">รถที่วิ่ง '+e(Object.keys(vs).join(' · ')||'—')+'</div></div>'
       +'<div><i>ท่า</i><b>'+e(VB_PIER_LBL[pier]||pier)+'</b></div><div><i>รอบบิล</i><b>'+e(rnd)+'</b></div>'
-      +'<div><i>เลขที่</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+'</b></div></div>'
+      +'<div><i>เลขที่</i><b>VB-'+(y+543)+'-'+mm+'-'+_vb.per+'-'+(pier==='tublamu'?'TL':pier==='panwa'?'PN':String(pier).toUpperCase().slice(0,2))+e(_vNo)+'</b></div></div>'
       +'<table><tr><th class="l">#</th><th class="l">วันที่</th><th class="l">งาน · รับ → ส่ง</th><th class="l">รถ</th><th>คน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>รวม</th>'
       +(IN2?'<th>ราคาขาย</th><th>กำไร</th>':'')+'</tr>'
       +(body||'<tr><td colspan="'+cols+'" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
@@ -13365,7 +13372,7 @@ function vbPrint(internal, daily){
       +'<div class="words"><b>จำนวนเงิน (ตัวอักษร)</b> &nbsp; '+e(typeof pcBahtText==='function'?pcBahtText(tb):'')+'</div>'
       +'<div class="note">คน = ลูกค้าที่ขึ้นรถจริง · ขากลับ = เที่ยวรับกลับจากท่า · โปรดตรวจและเซ็นรับรองยอด แล้วส่งคืนฝ่ายปฏิบัติการ</div>'
       +sig(['ผู้วางบิล','เจ้าของรถ'],['ผู้รับวางบิล','LOVE ANDAMAN'],['ผู้อนุมัติจ่าย',''])
-      +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+'</span></div>';
+      +'<div class="foot"><span>พิมพ์ '+e(stamp)+'</span><span>'+e(_vb.sup)+e(_vTag)+' · '+e(VB_PIER_LBL[pier]||pier)+' · '+e(rnd)+'</span></div>';
   }
   var w=window.open('','_blank'); if(!w) return;
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+(_vb.mode==='ov'?'สรุปรอบบิลรถร่วม':((daily?'สรุปรายวัน ':'ใบวางบิล ')+e(_vb.sup)))+'</title>'
