@@ -6487,6 +6487,20 @@ function tmGridAlign(){
     }catch(_){}
   });
 }
+/* §tmPax6 (2026-11-04) · owner "ตอนจะกรอกรายชื่อ ขึ้นสีของกรอบทั้งหมดให้เลย User จะได้รู้ว่าทำรายชื่อของบุคกิ้งนี้อยู่"
+   โฟกัสเข้าช่องใดในตาราง → ตารางทั้งก้อนขึ้นกรอบน้ำเงิน + แถวใบจองด้านบน (By trip) เป็นสีฟ้าอ่อน · ออกจากตาราง → กลับปกติ */
+(function(){
+  if(window.__tmActHook) return; window.__tmActHook=1;
+  try{ var st=document.createElement('style'); st.textContent='.tm-grid.tm-active{outline:2px solid #2E5BFF;outline-offset:6px;border-radius:8px;background:#F4F7FF}'
+    +' tr.t2-row.tm-active-row>td{background:#EAF0FF!important;box-shadow:inset 0 -2px 0 #2E5BFF}'; document.head.appendChild(st); }catch(_){}
+  var set=function(g,on){ if(!g) return; g.classList.toggle('tm-active',on);
+    var tr=g.closest('tr.t2-paxrow'), prev=tr&&tr.previousElementSibling; while(prev && !prev.classList.contains('t2-row')) prev=prev.previousElementSibling;
+    if(prev) prev.classList.toggle('tm-active-row',on); };
+  document.addEventListener('focusin', function(ev){ var g=ev.target&&ev.target.closest&&ev.target.closest('.tm-grid'); if(!g) return;
+    document.querySelectorAll('.tm-grid.tm-active').forEach(function(o){ if(o!==g) set(o,false); }); set(g,true); });
+  document.addEventListener('focusout', function(ev){ var g=ev.target&&ev.target.closest&&ev.target.closest('.tm-grid'); if(!g) return;
+    setTimeout(function(){ var a=document.activeElement; if(!(a && a.closest && a.closest('.tm-grid')===g)) set(g,false); }, 0); });
+})();
 function tmGridAlignQ(){ if(window._tmAlignQ) return; window._tmAlignQ=1; requestAnimationFrame(function(){ window._tmAlignQ=0; tmGridAlign(); }); }
 try{ if(!window.__tmAlignRs){ window.__tmAlignRs=1; window.addEventListener('resize', tmGridAlignQ); } }catch(_){}
 function tmNatList(){
@@ -6508,17 +6522,18 @@ function tmInputChange(el, bkId, pk){
   var f=el.getAttribute('data-f'); tmSet(bkId,pk,f,el.value);
   if(f==='idNo') el.value=tmIdFmt(el.value);
   if(f==='dob') el.value=tmDobNorm(el.value);   /* §tmPax2 */
-  if(f==='nat'){ el.value=tmNatNorm(el.value)||tmGet(bkId,pk,'nat'); el.title=(typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(el.value):''; }   /* §tmPax4 */
+  if(f==='nat' && el.tagName!=='SELECT'){ el.value=tmNatNorm(el.value)||tmGet(bkId,pk,'nat'); }   /* §tmPax4 */
   tmInputLive(el);
   /* ป้ายบนแถวใบจอง · อัปเดตที่เดียวโดยไม่วาดหน้าใหม่ (คนกำลังพิมพ์อยู่) */
   try{ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); document.querySelectorAll('[data-tmchip="'+bkId+'"]').forEach(function(h){ h.innerHTML=tmChip(b); }); }catch(_){}
 }
 function tmInputKey(ev, el){
   if(ev.key!=='Enter' && ev.key!=='ArrowDown' && ev.key!=='ArrowUp') return;
+  if(el.tagName==='SELECT' && ev.key!=='Enter') return;   /* §tmPax6 · ลูกศรใน dropdown = เลือกสัญชาติ */
   ev.preventDefault();
   var f=el.getAttribute('data-f'), tb=el.closest('.tm-grid'); if(!tb) return;
-  var L=[].slice.call(tb.querySelectorAll('input[data-f="'+f+'"]')), i=L.indexOf(el), n=L[i+(ev.key==='ArrowUp'?-1:1)];
-  if(n){ n.focus(); n.select(); }
+  var L=[].slice.call(tb.querySelectorAll('[data-f="'+f+'"]')), i=L.indexOf(el), n=L[i+(ev.key==='ArrowUp'?-1:1)];
+  if(n){ n.focus(); if(n.select && n.tagName==='INPUT') n.select(); }
 }
 /* ตารางกรอกต่อใบจอง · ใช้ทั้ง By trip (แถวกางออก) และ Insurance */
 function tmGridHtml(b){
@@ -6528,7 +6543,7 @@ function tmGridHtml(b){
   var cols='22px 190px 190px 120px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax4 · +สัญชาติ */   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
   var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit">'
     +'<div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px"><b style="font-size:12px;color:#14233F">&#129706; ข้อมูลผู้เดินทาง · ตม. ทะเลพม่า</b>'
-    +'<span style="font-size:11px;color:#5B6472">'+L.length+' คน · พิมพ์แล้วบันทึกเอง · Enter/↓ ไปคนถัดไป · ช่องสีแดง = ยังขาด (ชื่ออังกฤษ · เลขบัตร · วันเกิด) · วันเกิดพิมพ์ วว/ดด/ปปปป หรือกด &#128197;</span></div>'
+    +'<span style="font-size:11px;color:#5B6472">'+L.length+' คน</span></div>'   /* §tmPax6 · owner "อันนี้เอาออกเลยก็ได้" · ตัดคำอธิบายยาว */
     +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0 6px"><span></span>'
     +TM_FIELDS.map(function(f){ return '<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
   L.forEach(function(p){
@@ -6547,6 +6562,13 @@ function tmGridHtml(b){
       var inp='<input id="'+iid+'" data-f="'+k+'" value="'+e(v)+'" placeholder="'+e(ph)+'"'+(ro?' disabled':'')+(k==='idNo'?' inputmode="numeric" maxlength="17"':'')+(k==='dob'?' maxlength="10" autocomplete="off"':'')+(k==='nat'?' list="tm-natlist" autocomplete="off" title="'+e((typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(v):'')+'"':'')
         +' onchange="tmInputChange(this,\''+e(b.id)+'\',\''+e(p.key)+'\')" oninput="tmInputLive(this)" onkeydown="tmInputKey(event,this)" onclick="event.stopPropagation()"'
         +' style="width:100%;min-width:0;box-sizing:border-box;border:1px solid '+(bad?'#D92D20':(need?'#EBA6A6':'#D9DDE4'))+';background:'+(need?'#FFF5F5':'#fff')+';border-radius:6px;padding:4px 7px;font-size:12px;color:#14233F;font-family:'+(mono?"'DM Mono',monospace":'inherit')+'">';
+      if(k==='nat'){   /* §tmPax6 · dropdown "ชื่อ · รหัส" (รายการเดียวกับใบจอง, ไม่เอา OTHER) · แทน datalist ที่หน้าตาไม่คุม */
+        var _NL=(typeof bkV2AllNats==='function')?bkV2AllNats():[]; var _has=_NL.some(function(x){ return x.code===v; });
+        inp='<select id="'+iid+'" data-f="nat"'+(ro?' disabled':'')+' onchange="tmInputChange(this,\''+e(b.id)+'\',\''+e(p.key)+'\')" onkeydown="tmInputKey(event,this)" onclick="event.stopPropagation()"'
+          +' style="width:100%;min-width:0;box-sizing:border-box;border:1px solid #D9DDE4;background:#fff;border-radius:6px;padding:4px 4px;font-size:12px;color:#14233F;font-family:inherit;height:26px">'
+          +(_has?'':'<option value="'+e(v)+'" selected>'+e(v)+'</option>')
+          +_NL.filter(function(x){ return x.code!=='OTHER'; }).map(function(x){ return '<option value="'+e(x.code)+'"'+(x.code===v?' selected':'')+'>'+e(x.name)+' · '+e(x.code)+'</option>'; }).join('')+'</select>';
+      }
       if(k==='dob' && !ro){
         inp='<span style="position:relative;display:flex;align-items:center;gap:3px;min-width:0">'+inp
           +'<button type="button" title="เลือกจากปฏิทิน" onclick="event.stopPropagation();tmDobPick(this)" style="flex:none;width:24px;height:24px;border:1px solid #D9DDE4;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0">&#128197;</button>'
@@ -6557,7 +6579,6 @@ function tmGridHtml(b){
     h+='</div>';
   });
   if(!L.length) h+='<div style="font-size:12px;color:#8A9099;padding:6px 0">ยังไม่มีรายชื่อผู้เดินทางในใบนี้ · ใส่ชื่อในใบจองก่อน</div>';
-  h+=tmNatList();   /* §tmPax4 */
   tmGridAlignQ();   /* §tmPax5 */
   return h+'</div>';
 }
