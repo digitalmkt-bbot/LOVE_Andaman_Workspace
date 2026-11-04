@@ -189,8 +189,11 @@ function tmClean(s){ return String(s||'').replace(/[\u200b\u200c\u200d\ufeff]/g,
 function tmPaxOfBoat(bid, ds){
   var out=[]; tmDayBoats(ds).filter(function(g){ return g.bid===bid; }).forEach(function(g){
     g.bks.forEach(function(b){ tmPaxList(b).forEach(function(p){ if(!p.lead && !(p.name||'').trim()) return;
-      var en=tmClean(tmGet(b.id,p.key,'enName')||p.name||'');
-      out.push({ b:b, p:p, name:en, th:tmClean(tmGet(b.id,p.key,'thName')), id:tmGet(b.id,p.key,'idNo'), laser:tmGet(b.id,p.key,'idLaser'), dob:tmGet(b.id,p.key,'dob'), remark:tmGet(b.id,p.key,'remark'),
+      /* §tmPax2 · ชื่อไทยในใบจอง → คอลัมน์ไทย (ไม่ไปโผล่ช่องอังกฤษ) · ชื่ออังกฤษ → คอลัมน์อังกฤษ · ค่าที่กรอกในช่องชนะ */
+      var en=tmClean((typeof tmEnDef==='function')?tmEnDef(b.id,p):(tmGet(b.id,p.key,'enName')||p.name||''));
+      var th=tmClean((typeof tmThDef==='function')?tmThDef(b.id,p):tmGet(b.id,p.key,'thName'));
+      var dob=(typeof tmDobNorm==='function')?tmDobNorm(tmGet(b.id,p.key,'dob')):tmGet(b.id,p.key,'dob');
+      out.push({ b:b, p:p, name:en, th:th, id:tmGet(b.id,p.key,'idNo'), laser:tmGet(b.id,p.key,'idLaser'), dob:dob, remark:tmGet(b.id,p.key,'remark'),
                  nat:tmNatLabel(p), natCode:String(p.natCode||'TH').toUpperCase(), g:tmGender(en||p.name), vc:b.voucherRef||b.code||b.id }); }); }); });
   return out;
 }
