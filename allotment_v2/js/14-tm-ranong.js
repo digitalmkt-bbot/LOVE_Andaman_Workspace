@@ -188,7 +188,7 @@ function tmClean(s){ return String(s||'').replace(/[\u200b\u200c\u200d\ufeff]/g,
 /* รายชื่อผู้โดยสารของลำนั้นวันนั้น · ตามใบจอง · lead ก่อน */
 function tmPaxOfBoat(bid, ds){
   var out=[]; tmDayBoats(ds).filter(function(g){ return g.bid===bid; }).forEach(function(g){
-    g.bks.forEach(function(b){ tmPaxList(b).forEach(function(p){ if(!p.lead && !(p.name||'').trim()) return;
+    g.bks.forEach(function(b){ tmPaxList(b).forEach(function(p){ if(!p.lead && !p.pad && !(p.name||'').trim()) return;   /* §tmPax3 · แถวว่างที่เติมให้ครบจำนวนคนก็ออกเอกสาร */
       /* §tmPax2 · ชื่อไทยในใบจอง → คอลัมน์ไทย (ไม่ไปโผล่ช่องอังกฤษ) · ชื่ออังกฤษ → คอลัมน์อังกฤษ · ค่าที่กรอกในช่องชนะ */
       var en=tmClean((typeof tmEnDef==='function')?tmEnDef(b.id,p):(tmGet(b.id,p.key,'enName')||p.name||''));
       var th=tmClean((typeof tmThDef==='function')?tmThDef(b.id,p):tmGet(b.id,p.key,'thName'));

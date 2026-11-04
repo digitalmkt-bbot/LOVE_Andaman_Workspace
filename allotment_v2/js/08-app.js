@@ -6422,7 +6422,14 @@ function tmGet(bkId,pk,f){ return String(insEff(bkId,pk,f,'')||'').trim(); }
 function tmSet(bkId,pk,f,val){ var v=String(val||'').trim(); if(f==='idNo') v=tmIdDigits(v); if(f==='idLaser') v=v.toUpperCase().replace(/[^A-Z0-9]/g,''); if(f==='dob') v=tmDobNorm(v); insSetField(bkId,pk,f,v); }
 /* ครบ = มี ชื่ออังกฤษ + เลขบัตรถูกต้อง + วันเกิด (ชื่อไทย/เลขหลังบัตร/Remark ไม่บังคับ) */
 function tmPaxOk(bkId,p){ return !!(tmEnDef(bkId,p) && tmIdOk(tmGet(bkId,p.key,'idNo')) && tmDobOk(tmGet(bkId,p.key,'dob'))); }   /* §tmPax2 · รับ p (ใช้ค่าตั้งต้นจากชื่อในใบจอง) */
-function tmPaxList(b){ return (typeof insBkPax==='function')?insBkPax(b):[]; }
+/* §tmPax3 (2026-11-04) · owner "อันนี้มี 10 คน ต้องขึ้นให้ใส่ 10 คน" · ใบจองมี N คนแต่ใส่ชื่อมาแค่หัวหน้า → เติมแถวว่างให้ครบ N (key = ลำดับผู้โดยสาร เก็บที่เดิม insurance_overrides) */
+function tmPaxList(b){
+  var L=(typeof insBkPax==='function')?insBkPax(b):[]; var N=0;
+  (b.trips||[]).forEach(function(t){ if(t && tmIsRanongRoute(t.routeId) && typeof bkV2PaxAllTot==='function') N=Math.max(N, bkV2PaxAllTot(t.pax||{})); });
+  L.forEach(function(p,i){ if(i>0 && i<N && !(p.name||'').trim()) p.pad=true; });
+  while(L.length<N){ L.push({key:String(L.length-1), name:'', natCode:'', pad:true}); }
+  return L;
+}
 /* §tmPax2 (2026-11-04) · owner "ชื่อภาษาไทย ถ้ามีแล้ว ควรไปอยู่ในช่องชื่อภาษาไทย · วันเกิดขอแบบกดเลือกได้และพิมพ์ได้ · User อื่นลงบุคแล้วอัพเดท มันเด้ง"
    ชื่อในใบจองเป็นไทย → ใช้เป็นค่าตั้งต้นช่อง "ชื่อ-สกุล ไทย" (ช่องอังกฤษเว้นว่างให้กรอก) · ชื่ออังกฤษ → ค่าตั้งต้นช่องอังกฤษ
    ค่าตั้งต้นใช้ทั้งตารางกรอก/สถานะครบ/ไฟล์ Excel โดยไม่ต้องกด save ซ้ำ · ถ้าแก้ในช่องแล้วค่าที่แก้ชนะ */
@@ -6458,7 +6465,7 @@ function tmDobPicked(dp){
 }
 /* แถวกางออกค้างไว้ · จำว่ากางแถวไหนอยู่ → ตอนหน้าวาดใหม่ (คนอื่นบันทึกใบจอง / auto refresh) ยังกางอยู่เหมือนเดิม */
 window._tmPaxOpen = window._tmPaxOpen || {};
-function tmBkStatus(b){ var L=tmPaxList(b), n=0, ok=0; L.forEach(function(p){ if(!(p.name||'').trim() && !p.lead) return; n++; if(tmPaxOk(b.id,p)) ok++; }); return {n:n, ok:ok, miss:n-ok}; }
+function tmBkStatus(b){ var L=tmPaxList(b), n=0, ok=0; L.forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++; if(tmPaxOk(b.id,p)) ok++; }); return {n:n, ok:ok, miss:n-ok}; }
 function tmChip(b){ var st=tmBkStatus(b); if(!st.n) return '';
   var ok=(st.miss===0);
   return '<span class="t2-tmchip" data-tm="'+(ok?'ok':'miss')+'" title="'+(ok?'ข้อมูล ตม. ครบทุกคน':('ข้อมูล ตม. ยังไม่ครบ '+st.miss+' คน · กางแถวเพื่อกรอก'))+'" style="display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:800;white-space:nowrap;'
@@ -6488,17 +6495,18 @@ function tmInputKey(ev, el){
 function tmGridHtml(b){
   var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var ro=!(typeof window.laCanEditArea!=='function' || window.laCanEditArea('operations') || window.laCanEditArea('pier'));
-  var L=tmPaxList(b).filter(function(p){ return p.lead || (p.name||'').trim(); });
+  var L=tmPaxList(b).filter(function(p){ return p.lead || p.pad || (p.name||'').trim(); });   /* §tmPax3 */
   var cols='22px 190px 190px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
   var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit">'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px"><b style="font-size:12px;color:#14233F">&#129706; ข้อมูลผู้เดินทาง · ตม. ทะเลพม่า</b>'
-    +'<span style="font-size:11px;color:#5B6472">พิมพ์แล้วบันทึกเอง · Enter/↓ ไปคนถัดไป · ช่องสีแดง = ยังขาด (ชื่ออังกฤษ · เลขบัตร · วันเกิด) · วันเกิดพิมพ์ วว/ดด/ปปปป หรือกด &#128197;</span></div>'
+    +'<span style="font-size:11px;color:#5B6472">'+L.length+' คน · พิมพ์แล้วบันทึกเอง · Enter/↓ ไปคนถัดไป · ช่องสีแดง = ยังขาด (ชื่ออังกฤษ · เลขบัตร · วันเกิด) · วันเกิดพิมพ์ วว/ดด/ปปปป หรือกด &#128197;</span></div>'
     +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0"><span></span>'
     +TM_FIELDS.map(function(f){ return '<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
   L.forEach(function(p){
     var ok=tmPaxOk(b.id,p);
+    var _pn=L.indexOf(p)+1;   /* §tmPax3 · ลำดับคน */
     h+='<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;align-items:center;padding:4px 0;border-top:1px solid #EEF0F3">'
-      +'<span title="'+(p.lead?'Lead · ':'')+e(p.name||'')+'" style="width:18px;height:18px;border-radius:50%;background:'+(ok?'#15803D':'#B45309')+';color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center">'+(ok?'&#10003;':'!')+'</span>';
+      +'<span title="'+(p.lead?'Lead · ':('คนที่ '+_pn+' · '))+e(p.name||'(ยังไม่มีชื่อในใบจอง)')+'" style="width:18px;height:18px;border-radius:50%;background:'+(ok?'#15803D':'#B45309')+';color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center">'+(ok?'&#10003;':'!')+'</span>';
     TM_FIELDS.forEach(function(f){
       var k=f[0], v=tmGet(b.id,p.key,k); if(k==='idNo') v=tmIdFmt(v);
       if(k==='thName') v=tmThDef(b.id,p); else if(k==='enName') v=tmEnDef(b.id,p); else if(k==='dob') v=tmDobNorm(v);   /* §tmPax2 · ชื่อไทยในใบจอง → ช่องไทย */
