@@ -69642,10 +69642,52 @@ function poPersist(){
     d.pier_licenses=PIER_LICENSES; d.pier_cfg=PIER_CFG;
     d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT; d.pier_sect=PIER_SECT;
     d.pier_sheet=PIER_SHEET;   // §poSheet
+    var _sig=poSaveSig();   /* §poSaveSt · มีอะไรเปลี่ยนจริงไหม · ไม่เปลี่ยน = ไม่ต้องรอคำตอบจากเซิร์ฟเวอร์ */
     if(typeof laBlobSave==='function') laBlobSave();
     else localStorage.setItem((typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'), JSON.stringify(d));
-  }catch(e){ console.warn('pier office persist failed', e); }
+    if(_sig!==_poSaveLastSig){ _poSaveLastSig=_sig; poSaveStart(); }
+  }catch(e){ console.warn('pier office persist failed', e); poSaveShow('err','บันทึกในเครื่องไม่สำเร็จ · '+(e&&e.message||e)); }
 }
+/* ══ §poSaveSt (2026-11-04) · owner "เบิกผ้าเช็ดตัวตอนเช้าเสร็จ ตอนเย็นหายหมด" (Panwa 4 พ.ย.) ═══════════════
+   เซิร์ฟเวอร์ไม่มีรายการของเช้านั้นเลย = ของอยู่แค่ในเครื่อง ส่งไม่ขึ้น (เซสชันหมด/ไม่มีสิทธิ์/เน็ตหลุด) แล้วคนหน้าท่าไม่รู้
+   ของเดิมบอกแค่แถบล่างจอซึ่งมองข้ามง่าย · ตอนนี้ทุกครั้งที่หน้า Pier Office บันทึก จะมีป้ายมุมขวาบนบอกผลเป็นขั้น
+     ⏳ กำลังส่งขึ้นระบบ…  →  ✓ ขึ้นระบบแล้ว HH:MM  หรือ  ✗ ยังไม่ขึ้นระบบ · เหตุผล [ลองใหม่]
+   วิธีรู้ผล: ชั้น sync ตั้ง window.__savedAt เมื่อเซิร์ฟเวอร์ตอบ 200 · ขึ้นแถบ #la-saveerr เมื่อไม่สำเร็จ
+   รอเกิน 20 วิ ไม่มีคำตอบ = ถือว่ายังไม่ขึ้น (เน็ตช้า/หลุด) ป้ายแดงค้างจนกว่าจะสำเร็จ · ไม่มีทางเงียบ */
+var _poSaveLastSig='', _poSaveAt=0, _poSaveTimer=null;
+function poSaveSig(){ try{ return JSON.stringify([PIER_MOVES.length, PIER_MOVES.length?PIER_MOVES[PIER_MOVES.length-1]:0, Object.keys(PIER_SHEET).length, JSON.stringify(PIER_SHEET).length, JSON.stringify(PIER_DUTY).length, JSON.stringify(PIER_SHIFT).length, JSON.stringify(PIER_JOB).length, JSON.stringify(PIER_TEAM).length, PIER_ITEMS.length, PIER_STAFF.length, PIER_LICENSES.length, JSON.stringify(PIER_CFG).length, PIER_CODES.length, PIER_SECT.length, PIER_KINDS.length]); }catch(_){ return String(Date.now()); } }
+function poSaveStart(){
+  _poSaveAt=Date.now(); poSaveShow('wait','กำลังส่งขึ้นระบบ…');
+  if(_poSaveTimer) clearInterval(_poSaveTimer);
+  _poSaveTimer=setInterval(poSaveTick, 500); poSaveTick();
+}
+function poSaveTick(){
+  try{
+    var er=document.getElementById('la-saveerr');
+    if(er && er.offsetParent!==null){ poSaveShow('err', (er.textContent||'ส่งขึ้นระบบไม่สำเร็จ').replace(/ลองใหม่.*$/,'').trim()); return; }
+    if((window.__savedAt||0) >= _poSaveAt){ clearInterval(_poSaveTimer); _poSaveTimer=null;
+      var t=new Date(window.__savedAt); poSaveShow('ok','ขึ้นระบบแล้ว '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')); return; }
+    var w=Date.now()-_poSaveAt;
+    if(w>20000) poSaveShow('err','ยังไม่ขึ้นระบบ · รอคำตอบ '+Math.round(w/1000)+' วิ (เน็ตช้าหรือหลุด)');
+    else if(w>4000) poSaveShow('wait','กำลังส่งขึ้นระบบ… '+Math.round(w/1000)+' วิ');
+  }catch(_){}
+}
+function poSaveShow(kind,msg){
+  var el=document.getElementById('po-savest');
+  if(!el){ el=document.createElement('div'); el.id='po-savest'; document.body.appendChild(el);
+    el.style.cssText='position:fixed;bottom:18px;right:14px;z-index:100000;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:20px;font:700 12.5px/1.2 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.14);transition:opacity .25s;max-width:min(92vw,460px)'; }
+  var C={wait:['#FEF6E7','#7A4A00','#F0C36B'], ok:['#E6F6F2','#0F766E','#8DD5C3'], err:['#FDECEA','#A3251A','#F0A39A']}[kind]||['#eee','#333','#ccc'];
+  el.dataset.kind=kind; el.style.background=C[0]; el.style.color=C[1]; el.style.border='1.5px solid '+C[2]; el.style.opacity='1'; el.style.display='flex';
+  var ic=kind==='ok'?'&#10003;':(kind==='err'?'&#10007;':'&#9203;');
+  el.innerHTML='<span style="font-size:14px">'+ic+'</span><span style="white-space:normal">'+String(msg).replace(/[<>]/g,'')+'</span>'
+    +(kind==='err'?'<button onclick="poSaveRetry()" style="margin-left:4px;border:1px solid currentColor;background:#fff;color:inherit;border-radius:12px;padding:3px 9px;font:700 11.5px system-ui;cursor:pointer">ลองใหม่</button>':'')
+    +'<button onclick="document.getElementById(\'po-savest\').style.display=\'none\'" title="ปิด" style="border:0;background:transparent;color:inherit;font-size:14px;cursor:pointer;padding:0 2px;opacity:.6">&times;</button>';
+  if(el._hid) clearTimeout(el._hid);
+  if(kind==='ok') el._hid=setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ if(el.style.opacity==='0') el.style.display='none'; },300); }, 6000);
+}
+function poSaveRetry(){ _poSaveAt=Date.now(); poSaveShow('wait','กำลังส่งใหม่…'); try{ if(typeof window.laRetrySaveNow==='function') window.laRetrySaveNow(); else if(typeof laBlobSave==='function') laBlobSave(); }catch(_){} if(!_poSaveTimer) _poSaveTimer=setInterval(poSaveTick,500); }
+/* ออกจากหน้า Pier Office แล้วป้าย "สำเร็จ" ไม่ต้องค้าง · ป้ายแดงค้างต่อ (ยังมีของไม่ขึ้น) */
+document.addEventListener('click', function(ev){ try{ var a=ev.target&&ev.target.closest&&ev.target.closest('.nav-item'); if(!a) return; var el=document.getElementById('po-savest'); if(el && el.dataset.kind==='ok') el.style.display='none'; }catch(_){} }, true);
 function poCanEdit(){
   try{
     if(typeof window.laCanEditArea!=='function') return true;
