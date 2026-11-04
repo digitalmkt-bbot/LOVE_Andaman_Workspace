@@ -11549,6 +11549,12 @@ function vsSave(rec){
     leg:((rec.leg==='ret'||rec.leg==='both')?rec.leg:'out'),
     phone:String(rec.phone||'').trim(),
     note:String(rec.note||'').trim(),
+    /* §vsPay · เก็บเงินจากจุดแวะ (เช่น ค่ารถของคนติดรถ) · amt 0 = ไม่เก็บ · who: pier หน้าท่าเก็บ · driver คนขับเก็บ · office โอนเข้าบริษัท
+       got = เก็บแล้ว (กดใน Travel Summary) · ค่าเดิมของ got/gotBy/gotAt คงไว้ตอนแก้จุดแวะ ยกเว้นยอดเปลี่ยน */
+    pay: (function(){ var a=Math.max(0, Math.round((parseFloat(rec.payAmt)||0)*100)/100); if(!(a>0)) return null;
+      var op=old.pay||{}, same=(+op.amt===a);
+      return { amt:a, who:(rec.payWho==='driver'||rec.payWho==='office')?rec.payWho:'pier', method:(rec.payMethod==='transfer'?'transfer':'cash'),
+               got: same?!!op.got:false, gotBy: same?(op.gotBy||''):'', gotAt: same?(op.gotAt||''):'' }; })(),
     vanId: rec.vanId!==undefined ? (rec.vanId||null) : (old.vanId||null),
     vanGroup: rec.vanGroup!==undefined ? (+rec.vanGroup||0) : (+old.vanGroup||0),
     vanSeq: rec.vanSeq!==undefined ? (+rec.vanSeq||0) : (+old.vanSeq||0),
@@ -11581,6 +11587,34 @@ function vsPickKind(kind, el){
   /* ช่องจำนวนคนมีความหมายเฉพาะกับคน · ของโชว์ไว้ก็มีแต่จะทำให้กรอกผิด */
   const row=document.getElementById('vs-pax-row');
   if(row) row.style.display = (kind==='cargo') ? 'none' : '';
+}
+/* §vsPay · ปุ่มในหน้าต่างจุดแวะ */
+function vsPaySet(k, v){
+  var h=document.getElementById('vs-'+k); if(h) h.value=v;
+  document.querySelectorAll('#vs-'+k+'-pills .loc-pill').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-v')===String(v)); });
+  if(k==='payon'){ var r=document.getElementById('vs-pay-more'); if(r) r.style.display=(v==='1')?'':'none';
+    if(v==='1'){ var a=document.getElementById('vs-payamt'); if(a){ setTimeout(function(){ try{ a.focus(); }catch(_){} },30); } } }
+  if(k==='paywho'){ var m=document.getElementById('vs-paymeth-row'); if(m) m.style.display=(v==='office')?'none':''; if(v==='office') vsPaySet('paymeth','transfer'); }
+}
+function vsPayFill(p){
+  var a=document.getElementById('vs-payamt'); if(a) a.value=(p&&p.amt)?p.amt:'';
+  vsPaySet('paywho', (p&&p.who)||'pier'); vsPaySet('paymeth', (p&&p.method)||'cash'); vsPaySet('payon', (p&&p.amt>0)?'1':'0');
+}
+/* §vsPay · Travel Summary · จุดแวะที่มีเงินของวันนั้น (ตามท่า/เส้นทางที่กรองอยู่) */
+function tsStopPays(date){
+  var out=[];
+  Object.keys(VAN_STOPS||{}).forEach(function(k){ var v=VAN_STOPS[k]; if(!v||!v.pay||!(+v.pay.amt>0)) return;
+    var p=vsParse(k); if(p.date!==date) return;
+    if(typeof laRouteIdOk==='function' && !laRouteIdOk(p.routeId)) return;
+    if(typeof tsScopeKeep==='function' && !tsScopeKeep(p.routeId)) return;
+    out.push({k:k, s:v, routeId:p.routeId, amt:+v.pay.amt, who:v.pay.who||'pier', method:v.pay.method||'cash', got:!!v.pay.got}); });
+  return out;
+}
+function tsStopGot(k, on){
+  var v=VAN_STOPS[k]; if(!v||!v.pay) return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('pier') && !window.laGuardEdit('operations')) return;
+  v.pay.got=!!on; v.pay.gotBy=on?((typeof laBy==='function')?laBy():''):''; v.pay.gotAt=on?new Date().toISOString():'';
+  vsPersist(); if(typeof renderTravelSum==='function') renderTravelSum();
 }
 function vsPickLeg(leg, el){
   const v=(leg==='ret'||leg==='both')?leg:'out';
@@ -11625,6 +11659,7 @@ function vsOpen(date, routeId, opt){
   set('vs-van', opt.vanId||''); set('vs-grp', opt.vanGroup||0);
   set('vs-label',''); set('vs-pax','1'); set('vs-time',''); set('vs-place','');
   set('vs-zone',''); set('vs-phone',''); set('vs-note','');
+  vsPayFill(null);   /* §vsPay */
   _vsFillAreas('');
   vsPickKind('staff', _vsKindPillEl('staff'));
   vsPickLeg('out', _vsLegPillEl('out'));
@@ -11643,6 +11678,7 @@ function vsEditOpen(k){
   set('vs-label', v.label||''); set('vs-pax', v.pax||1); set('vs-time', v.time||'');
   set('vs-place', v.place||''); set('vs-zone', v.zone||''); set('vs-phone', v.phone||'');
   set('vs-note', v.note||'');
+  vsPayFill(v.pay||null);   /* §vsPay */
   _vsFillAreas(v.areaId||'');
   vsPickKind(v.kind==='cargo'?'cargo':'staff', _vsKindPillEl(v.kind==='cargo'?'cargo':'staff'));
   { const _lg=vsLegOf(v); vsPickLeg(_lg, _vsLegPillEl(_lg)); }
@@ -11672,7 +11708,9 @@ function vsSubmit(){
     areaId, zone: _ar ? (_ar.name||'') : String(val('vs-zone')||'').trim(),
     leg: val('vs-leg'),
     phone:val('vs-phone'), note:val('vs-note'),
+    payAmt:(val('vs-payon')==='1')?val('vs-payamt'):0, payWho:val('vs-paywho'), payMethod:val('vs-paymeth'),
     vanId: val('vs-van')||null, vanGroup: +val('vs-grp')||0 };
+  if(val('vs-payon')==='1' && !((parseFloat(val('vs-payamt'))||0)>0)){ alert('Enter the amount to collect, or choose No charge'); return; }   /* §vsPay */
   if(!rec.date || !rec.routeId){ alert('Stop must belong to a programme on a date'); return; }
   /* §vanStop · กติกา "ที่นั่งไม่พอ" ถูกเช็คตอนเลือกรถ ซึ่งเกิดก่อนจุดแวะจะมีอยู่
      ถ้าไม่เช็คซ้ำตรงนี้ การเพิ่มคนติดรถทีหลังจะดันรถเกินความจุแบบเงียบ ๆ
@@ -31912,6 +31950,11 @@ function renderTravelSum(){
     if(d+p>v){ nCotLeft++; return; }     // หัก+โอนออก เกินยอด · ยังถือว่าตัวเลขไม่นิ่ง
     sumDeduct+=d; sumPayout+=p;
   });
+  /* §vsPay · เงินจากจุดแวะ · เฉพาะ "หน้าท่าเก็บ" เข้าลิ้นชักหน้าท่า (เก็บแล้ว = รับเข้า · ยังไม่เก็บ = ค้าง)
+     คนขับเก็บ / โอนเข้าบริษัท ไม่ผ่านมือหน้าท่า · แสดงในตารางจุดแวะให้ตามเก็บ แต่ไม่บวกยอดหน้าท่า */
+  var VSP=(typeof tsStopPays==='function')?tsStopPays(date):[], vsPierGot=0, vsPierDue=0, vsElse=0;
+  VSP.forEach(function(x){ if(x.who!=='pier'){ vsElse+=x.amt; return; }
+    if(x.got){ if(x.method==='transfer') sumTf+=x.amt; else sumCash+=x.amt; vsPierGot+=x.amt; } else { sumDue+=x.amt; vsPierDue+=x.amt; } });
   var sumIn=sumCash+sumTf+sumCard;
   /* §tsComm · ค่าคอมคือเงินที่คนขายเก็บไว้ ไม่เคยเข้าบริษัท ต้องหักออกเหมือนเงินจ่ายออก
      ของเดิมหักแต่ sumPayout · "เหลือเข้าบริษัท" จึงสูงกว่าที่เข้าจริงเท่ากับยอดค่าคอม */
@@ -32255,7 +32298,20 @@ function renderTravelSum(){
     +'<th>โน้ต COT</th><th>จัดการเงิน COT<span class="ts-thsub">หักบิล / โอนออก</span></th>'
     +'<th class="c">สถานะ</th></tr></thead><tbody>'
     +(mbody||'<tr><td colspan="11" class="ts-empty">วันนี้ไม่มียอดที่ต้องเก็บหน้างานและไม่มีของขายเพิ่ม</td></tr>')
-    +'</tbody></table></div></div></div>';
+    +'</tbody></table></div></div>'
+    /* §vsPay · ตารางเงินจากจุดแวะ */
+    +(VSP.length?('<div class="ts-card" data-ts-vspay="1" style="margin-top:12px"><div style="padding:10px 14px 4px;font-weight:800;font-size:13px">&#128205; '+e('เงินจากจุดแวะ (ไม่ใช่ลูกค้า)')
+        +' <span style="font-weight:600;color:var(--ink3,#6B7280);font-size:12px">· '+VSP.length+' '+e('รายการ')+' · '+money(VSP.reduce(function(n,x){ return n+x.amt; },0))
+        +(vsPierGot?(' · '+e('หน้าท่าเก็บแล้ว')+' '+money(vsPierGot)):'')+(vsPierDue?(' · '+e('หน้าท่ายังไม่เก็บ')+' '+money(vsPierDue)):'')+(vsElse?(' · '+e('คนขับ/โอน')+' '+money(vsElse)+' '+e('ไม่นับในลิ้นชัก')):'')+'</span></div>'
+      +'<div class="ts-scroll"><table class="ts-tbl"><thead><tr><th>'+e('จุดแวะ')+'</th><th>'+e('เส้นทาง · รถ')+'</th><th>'+e('คนเก็บ')+'</th><th>'+e('วิธีรับเงิน')+'</th><th class="r">'+e('ยอด')+'</th><th class="c">'+e('สถานะ')+'</th></tr></thead><tbody>'
+      +VSP.map(function(x){ var s0=x.s, rn=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId, vn=s0.vanId?(((typeof vehGet==='function'?vehGet(s0.vanId):null)||{}).name||s0.vanId):'—';
+          var who={pier:'หน้าท่า',driver:'คนขับ',office:'โอนเข้าบริษัท'}[x.who]||x.who, mth={cash:'เงินสด',transfer:'โอนเงิน'}[x.method]||x.method;
+          var st=x.got?('<span class="ts-chip g">'+e('เก็บแล้ว')+(s0.pay.gotBy?(' · '+e(s0.pay.gotBy)):'')+'</span> <button type="button" onclick="tsStopGot(\''+e(x.k)+'\',false)" style="border:0;background:transparent;color:#6B7280;cursor:pointer;font-size:11px">'+e('ยกเลิก')+'</button>')
+            :('<button type="button" onclick="tsStopGot(\''+e(x.k)+'\',true)" style="border:1px solid #0F766E;background:#fff;color:#0F766E;border-radius:7px;padding:3px 10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">&#10003; '+e('เก็บแล้ว')+'</button>');
+          return '<tr><td><b>'+e(s0.label||'')+'</b><div class="ts-tel">'+e(s0.kind==='cargo'?'ของ':('คนติดรถ '+(+s0.pax||0)+' คน'))+' · '+e(s0.place||'')+(s0.time?(' · '+e(s0.time)):'')+'</div></td>'
+            +'<td>'+e(rn)+'<div class="ts-tel">'+e(vn)+'</div></td><td>'+e(who)+'</td><td>'+e(mth)+'</td><td class="r"><b>'+money(x.amt)+'</b></td><td class="c">'+st+'</td></tr>'; }).join('')
+      +'</tbody></table></div></div>'):'')
+    +'</div>';
 
   // ══ ส่วน 4 · manifest เต็ม ══
   // §tsCxlRows · ใบที่ยกเลิกต่อท้ายกลุ่มเส้นทางเดียวกัน · เรียงหลังใบที่ยังเดินทาง
