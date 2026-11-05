@@ -67101,7 +67101,9 @@ function bkV2LtJoinMax(){
   if(ltn && d) (d.trips || []).forEach(function(t){
     if(!t.routeId) return;
     if(ltn.applies.length && ltn.applies.indexOf(t.routeId) < 0) return;
-    A += bkV2PaxTot(t.pax, 'ad'); C += bkV2PaxTot(t.pax, 'chd');
+    /* §ltFoc (2026-11-05) · owner "กดเพิ่มจำนวนไม่ได้" · ใบบริษัท/PR คนทั้งใบเป็น FOC → เพดานผู้ใหญ่เป็น 0 ติ๊กหางยาวแล้วใส่คนไม่ได้
+       FOC คือคนที่ไม่เสียค่าที่นั่ง แต่ลงหางยาวได้เหมือนผู้ใหญ่ · นับรวมในเพดาน (ค่าจอยคิดตามจำนวนที่ใส่ เหมือนเดิม) */
+    A += bkV2PaxTot(t.pax, 'ad') + bkV2PaxTot(t.pax, 'foc'); C += bkV2PaxTot(t.pax, 'chd');
   });
   return { A:A, C:C };
 }
