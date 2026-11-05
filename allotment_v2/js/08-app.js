@@ -35936,6 +35936,9 @@ function pxCSS(){ return ''
  +'#trippl-host table.sum .bn i{width:7px;height:28px;border-radius:999px;flex:none}'
  +'#trippl-host table.sum .bn b{font-size:13px;font-weight:800;color:var(--pi);line-height:1.2}'
  +'#trippl-host table.sum .bn small{display:block;font-size:10.5px;color:var(--pm);font-weight:400;margin-top:1px}'
+ +'#trippl-host table.sum td.pg{text-align:left;min-width:190px;max-width:260px}'
+ +'#trippl-host table.sum td.pg .pgn{display:block;font-size:12.5px;font-weight:700;color:#16265C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+ +'#trippl-host table.sum td.pg small{display:block;font-size:10.5px;color:#94A3B8;margin-top:2px}'
  +'#trippl-host table.sum .tm{font-size:11px;font-weight:700;color:#334155;background:#F1F5F9;'
    +'border:1px solid var(--pl2);border-radius:6px;padding:2px 8px;display:inline-block}'
  +'#trippl-host table.sum .num{font-size:12.5px;font-weight:700;color:var(--pi)}'
@@ -36677,8 +36680,9 @@ function pxDaily(e){
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
       +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
-        +'<small>'+e(t.route.name||'—')+(t.plan?'':' · no cost plan')+'</small></div></div></td>'
-      +'<td class="c"><span class="tm n">'+e(t.dep||'--:--')+'</span></td>'
+        +(t.plan?'':'<small>no cost plan</small>')+'</div></div></td>'
+      /* §pxProg (2026-11-05) · owner: "เอาชื่อโปรแกรม ไปแทนที่เวลา" · ช่องที่เคยเป็นเวลาออก = ชื่อโปรแกรม · เวลาย่อไว้ท้ายชื่อ */
+      +'<td class="l pg"><span class="pgn" title="'+e(t.route.name||'')+'">'+e(t.route.name||'—')+'</span><small class="n">'+e(t.dep||'--:--')+'</small></td>'
       +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
       +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
@@ -36766,7 +36770,7 @@ function pxDaily(e){
       +'<span><i style="background:#F59E0B"></i>Watch 70–95%</span>'
       +'<span><i style="background:#E11D48"></i>Loss &gt;100%</span></div></div>'
     +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+(fShow?920:760)+'px">'
-    +'<thead><tr><th class="l">Boat · Route</th><th class="c">Dep</th><th class="c">Pax</th>'
+    +'<thead><tr><th class="l">Boat</th><th class="l">Program</th><th class="c">Pax</th>'
     +'<th>Revenue (฿)</th><th>Cost (฿)</th><th>Net (฿)</th>'+(fShow?'<th title="Sales + FAM = Net">of which Sales</th><th title="Cost of FAM / FOC groups · already inside Net">of which FAM</th>':'')
     +'<th class="c">Cost ratio / Break-even</th></tr></thead><tbody>'
     +sumRows+totRow+'</tbody></table></div></div></div>'
