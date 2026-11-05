@@ -54,9 +54,24 @@
     if(!res.ok) throw LaOpsError(res.status, j, method + ' ' + path);
     return j;
   }
+  /* §vanGuard (2026-11-05) · taking the outbound van off a booking the van already picked up (or after its date) is refused
+     with 409 van_reason_required until a reason comes with it (header X-Van-Reason, URI-encoded). Every van command can meet it,
+     so it is asked here, once per command, in legacy's words (bkVanAuditScan). Cancel keeps the van: the refusal goes on to the
+     caller with e.declined, and nothing was changed. The van history lines themselves are the server's (kind van, tag Van). */
+  function vanReasonAsk(e){
+    var list = String(e.message || '').replace(/\n*Send the reason[\s\S]*$/, '');
+    var r = null;
+    try{ r = prompt(list + '\n\nType the reason to continue, or press Cancel to keep the van.', ''); }catch(_){ r = null; }
+    return String(r || '').trim();
+  }
   function call(method, path, body, headers){
     if(method !== 'GET') forgetShared();
-    return send(method, path, body, headers).then(function(res){ return answer(res, method, path); });
+    return send(method, path, body, headers).then(function(res){ return answer(res, method, path); }).catch(function(e){
+      if(!e || e.status !== 409 || e.code !== 'van_reason_required' || (headers && headers['X-Van-Reason'])) throw e;
+      var why = vanReasonAsk(e);
+      if(!why){ e.declined = true; throw e; }
+      return call(method, path, body, Object.assign({}, headers || {}, { 'X-Van-Reason': encodeURIComponent(why) }));
+    });
   }
 
   /* §bootShare (2026-10-26) · the same GET asked again while the first is still on its way joins it instead
@@ -238,6 +253,7 @@
 
   function toast(o){ try{ if(typeof laSaveToast === 'function') laSaveToast(o); }catch(_){} }
   function fail(title, err){
+    if(err && err.declined && err.code === 'van_reason_required'){ toast({ kind: 'neutral', title: 'Van kept', status: 'INFO', sub: 'No reason given: nothing was changed', dur: 5000 }); return; }
     var m = (err && err.message) || String(err || 'unknown error');
     try{ console.warn('[ops] ' + title + ' · ' + m + (err && err.failedOp ? ' · at ' + err.failedOp : '')); }catch(_){}
     toast({ kind: 'error', title: title, status: err && err.status ? ('HTTP ' + err.status) : 'ERROR', sub: m, dur: 9000 });
