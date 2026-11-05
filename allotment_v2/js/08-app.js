@@ -35973,8 +35973,8 @@ function pxCSS(){ return ''
  +'#trippl-host table.sum .bn b{font-size:13px;font-weight:800;color:var(--pi);line-height:1.2}'
  +'#trippl-host table.sum .bn small{display:block;font-size:10.5px;color:var(--pm);font-weight:400;margin-top:1px}'
  +'#trippl-host table.sum td.pg{text-align:left;min-width:190px;max-width:260px}'
- +'#trippl-host table.sum td.pg .pgn{display:block;font-size:12.5px;font-weight:700;color:#16265C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
- +'#trippl-host table.sum td.pg small{display:block;font-size:10.5px;color:#94A3B8;margin-top:2px}'
+ +'#trippl-host table.sum td.pg .pgn{display:inline-block;max-width:100%;box-sizing:border-box;font-size:12.5px;font-weight:700;color:#16265C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--rc) 16%,#fff);border-left:4px solid var(--rc);border-radius:6px;padding:3px 9px 3px 7px}'
+ +'#trippl-host table.sum td.pg small{display:block;font-size:10.5px;color:#94A3B8;margin:3px 0 0 11px}'
  +'#trippl-host table.sum .tm{font-size:11px;font-weight:700;color:#334155;background:#F1F5F9;'
    +'border:1px solid var(--pl2);border-radius:6px;padding:2px 8px;display:inline-block}'
  +'#trippl-host table.sum .num{font-size:12.5px;font-weight:700;color:var(--pi)}'
@@ -36718,7 +36718,8 @@ function pxDaily(e){
       +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +(t.plan?'':'<small>no cost plan</small>')+'</div></div></td>'
       /* §pxProg (2026-11-05) · owner: "เอาชื่อโปรแกรม ไปแทนที่เวลา" · ช่องที่เคยเป็นเวลาออก = ชื่อโปรแกรม · เวลาย่อไว้ท้ายชื่อ */
-      +'<td class="l pg"><span class="pgn" title="'+e(t.route.name||'')+'">'+e(t.route.name||'—')+'</span><small class="n">'+e(t.dep||'--:--')+'</small></td>'
+      /* §pxProgCol (2026-11-05) · owner: "เส้นทางแต้มสีให้เห็นความต่างของแต่ละเส้นทาง" · สีของเส้นทาง (route.color) เป็นป้ายพื้นอ่อน + แถบซ้าย */
+      +'<td class="l pg"><span class="pgn" style="--rc:'+e(t.route.color||'#94A3B8')+'" title="'+e(t.route.name||'')+'">'+e(t.route.name||'—')+'</span><small class="n">'+e(t.dep||'--:--')+'</small></td>'
       +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?('paid '+(t.px.tot-t.fam.pax)+' · <b style="color:#6D28D9">FAM '+t.fam.pax+'</b>'):('TH '+t.px.th+' · FR '+t.px.fr))+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
       +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
