@@ -15127,6 +15127,32 @@ function ckSelfUnalloc(b, date){
   var t=0; PAXK.forEach(function(k){ t+=Math.max(0,+sa[k]||0); });
   return Math.max(0, (+sa.pax||0)-t);
 }
+/* §vsLostRow (2026-11-05) · owner "ตรวจสอบ ทำไมไม่ตรงกัน" (LOV-7228679 · 5 พ.ย. · ลมใต้1 No-show 2 แต่แถวลมใต้2 ก็โดนหัก 2 ด้วย)
+   ckLostByType() รวมคนหายทั้งใบ (ทุกคัน) · ใบที่แยกรถหลายคัน แต่ละแถวจึงถูกหักซ้ำ → ลมใต้2 โชว์ AD 10 ทั้งที่มา 12
+   ป้ายหัวรถ/ใบงานไกด์ถูกอยู่แล้ว (นับจาก expect ของแถว) · ตัวนี้นับเฉพาะเหตุการณ์ของช่องรถ/ท่า "ลำดับ i" ของใบนั้น
+   กติกาเดียวกับ ckLostByType: ข้ามรายการที่ถอนแล้ว · No-show ฝั่งรถที่แจ้งว่าจะมาเองที่ท่า (หรือท่ายืนยันแล้ว) ไม่นับว่าหาย */
+function ckLostSlotByType(b, date, i){
+  var out={ad:0,chd:0,inf:0,foc:0,total:0,unalloc:0};
+  var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  var _reins=!!(O.pierCheckin && O.pierCheckin.reinstate);
+  [['van',ckSlotGet(O,'van',i)],['pier',ckSlotGet(O,'pier',i)]].forEach(function(pr){
+    var kind=pr[0], ck=pr[1]; if(!ck) return;
+    (Array.isArray(ck.events)?ck.events:[]).forEach(function(x){
+      if(!x || x.undone) return; var n=Math.max(0,+x.pax||0); if(!n) return;
+      if(kind==='van' && x.type!=='cxl' && (_reins || ckExpectAtPier(x.reasonCode))) return;
+      out.total+=n; var pb=x.paxBreak;
+      if(pb && (pb.ad||pb.chd||pb.inf||pb.foc)){ out.ad+=(+pb.ad||0); out.chd+=(+pb.chd||0); out.inf+=(+pb.inf||0); out.foc+=(+pb.foc||0); }
+      else out.unalloc+=n;
+    });
+  });
+  return out;
+}
+function ckPaxLeftSlot(b, date, i, k, booked){
+  var L=ckLostSlotByType(b,date,i);
+  var left=Math.max(0, (booked||0)-(L[k]||0));
+  if(L.unalloc>0 && k==='ad') left=Math.max(0, left-L.unalloc);
+  return left;
+}
 function ckPaxLeft(b, date, k, booked){
   var L=ckLostByType(b,date);
   var left=Math.max(0, (booked||0)-(L[k]||0));
@@ -17675,7 +17701,7 @@ function ckRowHtml(r, date, kind, extraHtml){
        return ['ad','chd','inf','foc'].map(function(k){
          var bkd=pb[k]||0;
          if(!L || L.total<=0) return '<td class="ck-c">'+num(bkd)+'</td>';
-         var left=ckPaxLeft(b,date,k,bkd);
+         var left=(_sp && r.si!=null)?ckPaxLeftSlot(b,date,(+r.si||0),k,bkd):ckPaxLeft(b,date,k,bkd);   /* §vsLostRow · หน้าเช็คอินรถ · แถวของคันไหนหักเฉพาะคันนั้น */
          if(left===bkd) return '<td class="ck-c">'+num(bkd)+'</td>';
          return '<td class="ck-c" title="จองมา '+bkd+' · เดินทางจริง '+left+'"><span style="font-family:\'DM Mono\',monospace;font-weight:700;color:'+(left?'#A32D2D':'#c8c6be')+'">'+left+'</span><div style="font-size:9px;color:#c2c0b7;line-height:1.1;text-decoration:line-through">'+bkd+'</div></td>';
        }).join(''); })()
@@ -23437,7 +23463,7 @@ function pckRowHtml(r, date, sheet){
     var bkd=pb[k]||0;
     if(r.bsN&&r.bsN>1) return '<td class="ck-c pck-px">'+big(bkd)+'</td>';   // §boatSplit · คนไม่มาเป็นของทั้งใบ ไม่หักซ้ำทุกแถว
     if(!_lost || _lost.total<=0) return '<td class="ck-c pck-px">'+big(bkd)+'</td>';
-    var left=ckPaxLeft(b,date,k,bkd);
+    var left=(r.vsN&&r.vsN>1)?ckPaxLeftSlot(b,date,(+r.vsIdx||0),k,bkd):ckPaxLeft(b,date,k,bkd);   /* §vsLostRow · แยกรถ = หักเฉพาะคันนี้ */
     if(left===bkd) return '<td class="ck-c pck-px">'+big(bkd)+'</td>';
     return '<td class="ck-c pck-px" title="จองมา '+bkd+' · เดินทางจริง '+left+'"><span style="font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;color:'+(left?'#A32D2D':'#c8c6be')+'">'+left+'</span>'
       +'<div style="font-size:9px;color:#c2c0b7;line-height:1.1;text-decoration:line-through">'+bkd+'</div></td>';
