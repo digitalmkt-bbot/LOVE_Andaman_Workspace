@@ -83,7 +83,10 @@ function bookingV2RenderAddOnsSection(){
 
   if(opts.length === 0) return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">No add-ons available for this rate type · or pick trips first to enable transfer options.</div>`;
 
-  return `
+  /* §coAddon · ใบของบริษัท · บอกให้ชัดว่าราคาในการ์ดเป็นแค่อ้างอิง */
+  const _coHint = (typeof laIsCompanyBk==='function' && laIsCompanyBk(d))
+    ? `<div style="font-size:11px;color:#8a5b00;background:#FDF6E6;border:1px solid #E8D8A8;border-radius:8px;padding:6px 10px;margin-bottom:8px">ใบของบริษัท · ติ๊กเพื่อให้ฝ่ายปฏิบัติการรู้ว่าต้องจัดหางยาว/รถ · ราคาที่เห็นเป็นตัวอ้างอิง ยอดจริงอยู่ในช่อง Total</div>` : '';
+  return `${_coHint}
     <div class="bkv2-nb-addons">
       ${opts.map(o => { const _sel=d.addOns.find(x=>x.type===o.type); const _q=_sel?(_sel.qty||1):1; const _isChtr=o.type==='longtail-charter'; const _isVan=o.type.indexOf('transfer-')===0; const _isQty=_isChtr||_isVan; const _on=checked(o.type)&&!o.locked; const _amt=(o.amount||0)*((_isQty&&_on)?_q:1); const _btn='width:28px;height:28px;border-radius:8px;border:1.5px solid #C9CCD6;background:#F7F7F5;color:#3E4658;font-size:15px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;padding:0'; const _qLbl=_isChtr?'ลำ':'คัน'; return `
         <label class="bkv2-nb-addon ${checked(o.type)?'on':''}" style="${o.locked?'opacity:.55;cursor:not-allowed;background:#fafafa':''}">

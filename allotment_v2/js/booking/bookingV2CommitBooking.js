@@ -400,7 +400,8 @@ function bookingV2CommitBooking(status){
     addOns: d.addOns.map(a => {
       const info = bookingV2AddOnInfo(a.type);
       const q = a.qty||1;
-      const _o = { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: info.total*q, qty: q, note: (a.note||'').trim() };
+      const _coBk = (typeof laIsCompanyBk==='function') && laIsCompanyBk(d);   /* §coAddon · ใบบริษัท ราคารวมในช่อง Total แล้ว */
+      const _o = { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: _coBk?0:info.total*q, qty: q, note: (a.note||'').trim() };
       /* §ltJoinQty · เก็บจำนวนคนที่ลงจอยจริง · ฝั่งปฏิบัติการอ่านตัวนี้ ไม่ใช่เดาจากหัวทั้งลำ */
       if(a.type==='longtail-join'){ _o.jAd = (info.joinAd!=null)?info.joinAd:null; _o.jChd = (info.joinChd!=null)?info.joinChd:null; }
       return _o;

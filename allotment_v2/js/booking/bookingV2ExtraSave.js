@@ -7,7 +7,14 @@ function bookingV2ExtraSave(bkId){
   const toCompany=Math.min(total,Math.max(0,pckN((document.getElementById('bkx-company')||{}).value)));
   const commission=pckN(Math.max(0,total-toCompany));
   const seller=((document.getElementById('bkx-seller')||{}).value||'').trim();
-  const _pm=_bkExtraPay.m||'cash';
+  let _pm=_bkExtraPay.m||'cash';
+  /* §exSplitPay · แบ่งชำระ → เก็บเป็น "split:วิธี=ยอด|วิธี=ยอด" · ยอดสองส่วนต้องรวมเท่ายอดขายพอดี */
+  if(typeof bkxPaySplitOn==='function' && bkxPaySplitOn()){
+    const _pp=bkxPayParts(total), _sum=bkxPaySplitSum();
+    if(Math.abs(_sum-total)>0.005){ alert('ยอดที่ใส่รวม ฿'+pckNum(_sum)+' ไม่เท่ายอดขาย ฿'+pckNum(total)+(_sum<total?('\n\nยังขาด ฿'+pckNum(total-_sum)+' · กด "ใส่ที่เหลือ" ที่บรรทัดวิธีที่ต้องการ'):('\n\nเกิน ฿'+pckNum(_sum-total)))); return; }
+    if(_pp.length===1){ _pm=_pp[0].method; }   /* ใส่วิธีเดียว = ไม่ต้องแบ่ง · เก็บแบบปกติ */
+    else _pm=bkxExSplitStr(_pp);
+  }
   const _fee=bookingV2ExtraFee();
   const _slips=(_bkExtraPay.slips||[]).slice();
   if(_pm!=='cash' && _pm!=='cot' && !_slips.length && !confirm('ยังไม่ได้แนบสลิป\n\nบันทึกก่อนแล้วแนบทีหลังได้ · กด OK เพื่อบันทึกเลย')) return;
@@ -21,7 +28,7 @@ function bookingV2ExtraSave(bkId){
       return;
     }
     if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller;
-           e.method=_pm; e.feePct=(_pm==='card'?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);
+           e.method=_pm; e.feePct=(/card/.test(_pm)?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);   /* §exSplitPay · feePct เก็บไว้เมื่อมีส่วนที่เป็นบัตร */
            e.slips=(_pm==='cot'?[]:_slips);
            /* §exCot · เก็บเงินวันเดินทาง = ยังไม่ปิดยอด · เปลี่ยนเป็นวิธีอื่นเมื่อไหร่ = เก็บแล้ว */
            e.settle=(_pm==='cot'?'pending':'done');
@@ -30,7 +37,7 @@ function bookingV2ExtraSave(bkId){
     _bkExtraEditId=null;
   } else {
     SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(typeof bookingV2ExtraDayOf==='function'?bookingV2ExtraDayOf(bk):((bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'')), service:name, qty, unitPrice:price, total, toCompany, commission, seller,
-      method:_pm, feePct:(_pm==='card'?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:pckN(total+_fee),
+      method:_pm, feePct:(/card/.test(_pm)?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:pckN(total+_fee),   /* §exSplitPay */
       slips:(_pm==='cot'?[]:_slips),
       settle:(_pm==='cot'?'pending':'done'), collectedAt:(_pm==='cot'?'':new Date().toISOString()),
       date:new Date().toISOString()});
