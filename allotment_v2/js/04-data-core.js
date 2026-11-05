@@ -11495,7 +11495,37 @@ function toggleDayOverride(rid,dateStr){
   } else {
     r.overrides[dateStr]='open'; // no season, default to open
   }
-  save('config');renderSettings();
+  save('config');
+  progReleaseBoats(rid);   /* §closeRelease */
+  renderSettings();
+}
+/* §closeRelease (2026-11-05) · owner: "User เข้าไปปิดเส้นทาง แต่เรือถูก Deploy ไว้ พอปิดแล้วเรือค้างอยู่ในเส้นทางนั้นเลย"
+   ปิดวัน/ฤดูกาล = ซ่อนจากตาราง แต่ TRIPS[วัน][ลำ].route ยังชี้เส้นทางเดิม → เรือดูเหมือนติดงาน จัดไปเส้นอื่นไม่ได้ และมองไม่เห็นว่าจะถอดตรงไหน
+   ตอนนี้ทุกครั้งที่แก้วันเปิด/ปิดหรือฤดูกาลของเส้นทาง · กวาดวันที่ "ปิด" ตั้งแต่วันนี้ไป (ไม่แตะอดีต) แล้วถอดเรือที่จัดไว้บนเส้นทางนี้ออก
+   ไม่ถอด · ลำที่ล็อกด้วยเหมาลำ/กันที่ให้เอเจนต์ (opLocked) · ใบจองที่ผูกเรือนั้นยังอยู่ จะขึ้นธง "เรือถูกถอด · จัดใหม่" ตามกติกาเดิม */
+function progReleaseBoats(rid, from, to){
+  const r=(ROUTES||[]).find(x=>x.id===rid); if(!r || typeof TRIPS==='undefined' || !TRIPS) return [];
+  const today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  from=(from && from>today)?from:today;
+  const out=[];
+  Object.keys(TRIPS).forEach(ds=>{
+    if(ds<from || (to && ds>to)) return;
+    const day=TRIPS[ds]; if(!day) return;
+    Object.keys(day).forEach(bid=>{
+      const op=day[bid]; if(!op || op.route!==rid) return;
+      if(typeof opLocked==='function' && opLocked(op)) return;
+      const st=getDayStatus(r, ds); if(!st || st.type!=='closed') return;
+      delete day[bid]; out.push({date:ds, bid});
+    });
+    if(!Object.keys(day).length) delete TRIPS[ds];
+  });
+  if(out.length){
+    save('operations');
+    const nm=b=>(((typeof BOATS!=='undefined'?BOATS:[]).find(x=>x.id===b))||{}).name||b;
+    const msg='ถอดเรือออกจาก '+(r.name||rid)+' ในวันที่ปิด '+out.length+' รายการ · '+[...new Set(out.map(x=>nm(x.bid)))].join(', ');
+    if(typeof flShowToast==='function') flShowToast(msg); else console.info('[closeRelease]', msg);
+  }
+  return out;
 }
 /* §closeNoWarn · สถานะของวันนั้น "หลังกดหนึ่งครั้ง" จะเป็นอะไร (2026-09-24)
    จำลองโดยไม่แตะข้อมูลจริง · ล้าง override ชั่วคราวแล้วคืนทันที
@@ -11583,7 +11613,7 @@ function progShowImpactModalForDay(rid, dateStr, routeName, impact){
         </div>
       </div>
       <div style="padding:18px 20px">
-        <div style="font-size:12px;color:#1A2A33;line-height:1.5">Closing this day will hide existing bookings &amp; boat assignments from the schedule. Data is preserved · only display is hidden.</div>
+        <div style="font-size:12px;color:#1A2A33;line-height:1.5">Closing this day hides existing bookings from the schedule (bookings are kept). <b>Boats deployed on this route that day are taken off</b> so they are free for other routes · charter / agent-held boats stay.</div>
         ${bookingsHTML}
         ${tripsHTML}
         ${charterHTML}
@@ -12414,6 +12444,7 @@ function saveNewSeasonGuarded(rid){
   if(impact.bookings.length === 0 && impact.trips.filter(t => !t.isCharter).length === 0){
     // Safe · no bookings or non-charter assignments · proceed normally
     saveNewSeason(rid);
+    progReleaseBoats(rid); renderSettings();   /* §closeRelease · กวาดเรือที่ค้างจากการปิดครั้งก่อนด้วย */
     return;
   }
   // Show warning modal
@@ -12499,6 +12530,7 @@ function progConfirmCloseAnyway(rid){
   const modal = document.getElementById('prog-impact-modal');
   if(modal) modal.remove();
   saveNewSeason(rid);
+  progReleaseBoats(rid); renderSettings();   /* §closeRelease */
 }
 function delSeason(rid,sid){
   const r=ROUTES.find(x=>x.id===rid);if(!r)return;
@@ -12508,7 +12540,7 @@ function delSeason(rid,sid){
   const msg=`ลบ Season นี้?\n\n${typeLabel} · ${fmtD(s.from)} → ${fmtD(s.to)}\nโปรแกรม: ${r.name}\n\nการลบนี้ไม่สามารถยกเลิกได้`;
   if(!confirm(msg))return;
   r.seasons=(r.seasons||[]).filter(x=>x.id!==sid);
-  save('config');renderSettings();
+  save('config'); progReleaseBoats(rid); renderSettings();   /* §closeRelease · ลบฤดูเปิด = วันนั้นปิด */
 }
 
 let selProgramStatus='active';
