@@ -31478,20 +31478,27 @@ function tsV6Head(H, money){
   var WN=function(n){ return n?('<span class="wn" title="'+n+' ใบมีเรื่องค้างก่อนปิดวัน">!</span>'):''; };
   /* ── แถวชิป · ท่าเรือ › เส้นทาง ── */
   var totPax=0; H.pOrder.forEach(function(p){ totPax+=H.pMap[p].pax; });
-  var rail=((typeof laPierScoped==='function')&&laPierScoped()) ? ('<span class="h4-fl">ท่าเรือ</span><button class="h4-c on" disabled>'+e(laPierName(laMyPier()))+'<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i></button>') : '<span class="h4-fl">ท่าเรือ</span>'
-    +'<button class="h4-c'+(_tsPier?'':' on')+'" data-tspier="" onclick="tsPickPier(\'\')">ทุกท่าเรือ'
-      +(_tsPier?'':('<i>'+H.rTotN+' ใบ &middot; '+totPax+' คน</i>'))+'</button>';
-  if(!((typeof laPierScoped==='function')&&laPierScoped())) H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;   /* §pierScope */
-    rail+='<button class="h4-c'+(on?' on':'')+(P.n?'':' zero')+'" data-tspier="'+q(p)+'" onclick="tsPickPier(\''+q(p)+'\')">'+e(tsPierName(p))
-      /* เลือกท่าแล้ว ท่าอื่นย่อเหลือชื่อ · ให้ชิปเส้นทางพอดีแถวเดียว */
-      +((_tsPier&&!on)?'':('<i>'+nr+' เส้นทาง &middot; '+P.n+' ใบ &middot; '+P.pax+' คน</i>'))+WN(P.w)+'</button>'; });
+  /* §tsRail2 (2026-11-05) · owner: "ปรับตัวชิปที่เป็นตัวกรองใหม่หน่อย"
+     แถว 1 · ท่าเรือเป็นแถบเลือกก้อนเดียว (แบบเดียวกับ ภาษี) · ตัวเลข = คน · รายละเอียด (เส้นทาง · ใบ) อยู่ในคำอธิบายตอนชี้
+     แถว 2 · เส้นทางของท่าที่เลือก บรรทัดเดียว เลื่อนซ้าย-ขวาได้ · จุดสีเส้นทาง + ชื่อ + คนจริง/จอง · มีเรื่องค้าง = จุดส้มเล็ก */
+  var WN=function(n){ return n?('<span class="wn" title="'+n+' ใบมีเรื่องค้างก่อนปิดวัน"></span>'):''; };
+  var scoped=((typeof laPierScoped==='function')&&laPierScoped());
+  var rail='<span class="h4-fl">ท่าเรือ</span><span class="h4-pseg">';
+  if(scoped) rail+='<button class="h4-c on" disabled>'+e(laPierName(laMyPier()))+'<i>'+totPax+'</i></button>';
+  else {
+    rail+='<button class="h4-c'+(_tsPier?'':' on')+'" data-tspier="" onclick="tsPickPier(\'\')" title="'+H.rTotN+' ใบ · '+totPax+' คน">ทุกท่าเรือ<i>'+totPax+'</i></button>';
+    H.pOrder.forEach(function(p){ var P=H.pMap[p], on=(p===_tsPier), nr=Object.keys(P.rt).length;   /* §pierScope */
+      rail+='<button class="h4-c'+(on?' on':'')+(P.n?'':' zero')+'" data-tspier="'+q(p)+'" onclick="tsPickPier(\''+q(p)+'\')" title="'+nr+' เส้นทาง · '+P.n+' ใบ · '+P.pax+' คน">'
+        +e(tsPierName(p))+'<i>'+P.pax+'</i>'+WN(P.w)+'</button>'; });
+  }
+  rail+='</span>';
   if(_tsPier){
-    rail+='<span class="h4-sep">&rsaquo;</span><span class="h4-fl">เส้นทาง</span>'
-      +'<button class="h4-c'+(_tsRoute?'':' on')+'" data-tsroute="" onclick="tsPickRoute(_tsRoute)">ทุกเส้นทาง</button>';
+    rail+='<span class="h4-hint" style="margin-left:6px">คน · เดินทางจริง</span></div><div class="h4-rail h4-rail2"><span class="h4-fl">เส้นทาง</span>'
+      +'<button class="h4-c sm'+(_tsRoute?'':' on')+'" data-tsroute="" onclick="tsPickRoute(_tsRoute)">ทุกเส้นทาง</button>';
     H.rOrder.forEach(function(k){ if(tsPierOf(k)!==_tsPier) return; var R=H.rMap[k], on=(k===_tsRoute);
-      rail+='<button class="h4-c'+(on?' on':'')+(R.n?'':' zero')+'" data-tsroute="'+q(k)+'" onclick="tsPickRoute(\''+q(k)+'\')">'
+      rail+='<button class="h4-c sm'+(on?' on':'')+(R.n?'':' zero')+'" data-tsroute="'+q(k)+'" onclick="tsPickRoute(\''+q(k)+'\')" title="'+e(tsRouteName(k))+' · '+R.n+' ใบ · เดินทางจริง '+R.pax+' / จอง '+R.bk+' คน">'
         +'<span class="dot" style="background:'+e(tsRouteColor(k))+'"></span>'+e(tsRouteName(k))
-        +'<i>'+R.n+' ใบ &middot; '+R.pax+'/'+R.bk+' คน</i>'+WN(R.w)+'</button>'; });
+        +'<i>'+R.pax+'/'+R.bk+'</i>'+WN(R.w)+'</button>'; });
   } else rail+='<span class="h4-hint">&middot; เลือกท่าเรือเพื่อดูเส้นทางของท่านั้น</span>';
   /* ── ภาษี ── */
   var seg=function(v,l,n){ return '<button data-tsvat="'+v+'" class="'+(H.vat===v?'on':'')+'" onclick="tsPickVat(\''+v+'\')">'+l+'<i>'+n+'</i></button>'; };
@@ -31686,6 +31693,17 @@ function tsCSSv6(){
 & .h4-c.on .dot{box-shadow:none}
 & .h4-c.zero{opacity:.45}
 & .h4-hint{font-size:11.5px;color:#9FA5CC}
+/* §tsRail2 · ท่าเรือ = แถบเลือกก้อนเดียว · เส้นทาง = แถวเดียวเลื่อนได้ */
+& .h4-pseg{display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,.12);border-radius:999px;padding:3px}
+& .h4-pseg .h4-c{border:0;background:transparent;padding:5px 13px}
+& .h4-pseg .h4-c.on{background:#fff}
+& .h4-pseg .h4-c i,& .h4-c.sm i{font-family:'DM Mono',ui-monospace,monospace;font-weight:500}
+& .h4-c .wn{width:7px;height:7px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 2px rgba(255,255,255,.65);font-size:0}
+& .h4-rail.h4-rail2{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;margin-top:8px;padding-top:0;border-top:0;min-height:0;padding-bottom:2px}
+& .h4-rail2>*{flex:none}
+& .h4-c.sm{padding:4px 11px;font-size:12px;gap:6px}
+& .h4-bar.inkd .h4-pseg{background:rgba(0,15,76,.10)}
+& .h4-bar.inkd .h4-pseg .h4-c.on{background:#000F4C}
 & .h4-seg{display:inline-flex;background:rgba(255,255,255,.10);border-radius:999px;padding:3px}
 & .h4-seg button{border:none;background:transparent;border-radius:999px;padding:5px 12px;font:700 11.5px/1.2 inherit;font-family:inherit;color:#D3D7F0;cursor:pointer;white-space:nowrap}
 & .h4-seg button i{font-style:normal;font-weight:600;color:#9FA5CC;margin-left:4px;font-size:10.5px}
@@ -31951,6 +31969,8 @@ function tsCSSv6(){
 & .h4-bar.inkd .h4-c.on{background:#000F4C;border-color:#000F4C;color:#fff}
 & .h4-bar.inkd .h4-c.on i{color:#C3CCEC}
 & .h4-bar.inkd .h4-c.on .dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.7)}
+& .h4-bar.inkd .h4-pseg .h4-c{background:transparent;border:0}
+& .h4-bar.inkd .h4-pseg .h4-c.on{background:#000F4C;color:#fff}
 & .h4-bar.inkd .h4-seg{background:rgba(0,15,76,.13)}
 & .h4-bar.inkd .h4-seg button{color:#000F4C}
 & .h4-bar.inkd .h4-seg button i{color:rgba(0,15,76,.68)}
