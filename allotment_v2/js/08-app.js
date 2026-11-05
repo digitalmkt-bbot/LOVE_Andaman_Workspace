@@ -21072,12 +21072,22 @@ function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bk
    กติกา · เงินหน้าท่าของวันนั้น "เกิน" ยอดที่ใบนั้นต้องเก็บ (COT + อัปเกรดค้าง + ยอดค้าง + ขายเพิ่มที่ยังรอ)
           และส่วนเกินนั้นพอจ่ายรายการขายเพิ่มที่ถูกเปลี่ยนเป็นโอน/บัตรได้ → ถือว่าเป็นก้อนเดียวกับเงินหน้าท่า ไม่บวกซ้ำ
    อ่านให้ตรงกันเฉย ๆ ไม่แก้ข้อมูล · ปุ่ม "แก้ให้" (tsExDupFix) ในหน้าปิดวันค่อยเปลี่ยนรายการกลับเป็นแบบเก็บหน้าท่า */
+/* §b2cCotBal (2026-11-05) · owner "ของเหมาลำขึ้น ให้เก็บเงิน 12000 อีกแล้ว ทั้งๆที่เก็บ 6000" (LOV-3285839 · 5 พ.ย.)
+   ใบ B2C: paymentSnapshot.balance = ยอดที่ลูกค้ายังไม่ได้จ่ายบนเว็บ (total − paid) · ส่วนที่ตกลงกันว่า "จ่ายสดหน้าท่า"
+   ก็อยู่ในยอดนี้แล้ว (เว็บไม่ตัดออก) · พอ rsvn บันทึก Cash on Tour ซ้ำอีกก้อน หน้าท่าเลยเห็น COT 6,000 + ค้าง 6,000 = 12,000
+   ของจริงทุกใบที่เคยเกิด (2 ใบ) ยอดสองก้อนเท่ากันเป๊ะและหน้าท่าเก็บไปก้อนเดียว → ยอดค้างที่ใช้ = balance − COT (ไม่ต่ำกว่า 0)
+   เฉพาะใบที่แขวนกับเอเยนต์กลาง a_b2c · ใบเอเยนต์ปกติ balance กับ COT เป็นคนละเงินเหมือนเดิม */
+function pckBalOf(b, ovnBack, cot){
+  var bal=(!ovnBack && b && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  if(bal>0 && cot>0 && b.agentId==='a_b2c') bal=Math.max(0, bal-cot);
+  return bal;
+}
 function bkxExNeed(b, date, skipId){
   var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
   var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
   var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
   var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
-  var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  var bal=pckBalOf(b,_ovnBack,cot);   /* §b2cCotBal */
   var exDue=0; ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(k){
     if(date && k.tripDate && k.tripDate!==date) return;
     if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
@@ -21125,7 +21135,7 @@ function bkxExCovered(x){
     var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
     var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
     var upDue=0; ((!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[]).forEach(function(u){ if(!u.collected) upDue+=(+u.sellPrice||0); });
-    var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+    var bal=pckBalOf(b,_ovnBack,cot);   /* §b2cCotBal */
     var exDue=0; ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(k){
       if(date && k.tripDate && k.tripDate!==date) return;
       if(k.method==='cot' && k.settle!=='done') exDue+=(+k.total||0); });
@@ -21158,7 +21168,7 @@ function pckMoney(b, date){
   var upDue=0, upGot=0;
   var _upDup=bkxPierDupIds(b,date);   /* §exDupPier · อัปเกรดที่ติ๊กเก็บแล้วทั้งที่หน้าท่าเก็บไปแล้ว = เงินก้อนเดียวกับแถวหน้าท่า */
   var upCov=0; ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected){ if(_upDup[u.id]) upCov+=v; else upGot+=v; } else upDue+=v; });
-  var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  var bal=pckBalOf(b,_ovnBack,cot);   /* §b2cCotBal */
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   // §pierPay · เงินที่เก็บหน้าท่าไปแล้ว (bk.pierPayments) หักออกจากยอดค้างทันที
   // fee ไม่เข้า got เพราะไม่ใช่รายได้เรา — เป็นเงินที่ส่งต่อธนาคาร (ดูคอมเมนต์ §pierPay)
