@@ -28785,7 +28785,7 @@ function tsManApply(){
   [].forEach.call(host.querySelectorAll('[data-tscol]'), function(cb){ cb.checked=hc.indexOf(+cb.getAttribute('data-tscol'))<0; });
   var btn=host.querySelector('.ts-mcolbtn'); if(btn) btn.innerHTML='คอลัมน์'+(hc.length?('<i>ซ่อน '+hc.length+'</i>'):'');
   /* §tsManFull · หัวคอลัมน์เกาะใต้แถบหัวที่ sticky อยู่ · วัดความสูงจริง */
-  var bar=host.querySelector('.h4-bar'); host.style.setProperty('--tsbar', (bar?bar.offsetHeight:0)+'px');
+  if(window._tsStickFit) window._tsStickFit(); else { var bar=host.querySelector('.h4-bar'); host.style.setProperty('--tsbar', (bar?bar.offsetHeight:0)+'px'); }   /* §tsStick · รวมความสูงหัวการ์ดที่เกาะอยู่ */
 }
 var _tsBleedOn=false;
 function tsV6Bleed(){
@@ -31524,39 +31524,27 @@ function tsV6Head(H, money){
   else if(_tsPier) tail='<span class="h4-rt pier" data-tsv6="tail"><i style="background:#B4B8D2"></i>'+e(tsPierName(_tsPier))+'</span>';
   var cnt=H.booked ? ((H.trav>=H.booked?'เดินทางครบ ':'เดินทางจริง ')+'<em class="'+(H.trav<H.booked?'bad':'')+'">'+H.trav+' / '+H.booked+'</em> คน') : 'ไม่มี booking ในชุดนี้';
   /* §tsV6b · หัวข้อหลักอยู่กลางการ์ด · ป้ายปิดวันอยู่มุมขวาบน · บรรทัด "กำลังดูเฉพาะ…" ตัดออก (ชื่อท้ายหัวข้อบอกอยู่แล้ว) */
-  var card='<div class="ts-scr ts-noprint h4-card" data-tsv6="card" style="'+thSty+'">'
+  /* §tsStick (2026-11-05) · owner: "เวลาเลื่อนลง ขอตรึงตรงวันที่ไว้" แล้ว "ควรตรึงอันนี้ ไม่ใช่ทำอันใหม่ให้"
+     หัวข้อ "สรุปการเดินทางประจำวัน <วันที่> • <ท่า/เส้นทาง>" แยกออกมาเป็นกล่องบนของการ์ด (h4-cardhd) แล้วให้ sticky ใต้แถบ navy
+     ตัวเดิมเกาะจอเอง ไม่ใช่แถบใหม่ · ส่วนล่าง (จำนวนคน · รายการเช็ก) เป็น h4-cardbd ต่อกันเป็นการ์ดเดียวเหมือนเดิม */
+  var card='<div class="ts-scr ts-noprint h4-card h4-cardhd" data-tsv6="cardhd" style="'+thSty+'">'
     +'<div class="h4-head"><span class="h4-pill'+(W?' warn':'')+'" data-tsv6="pill" data-w="'+W+'">'+(W?('เหลือ '+W+' เรื่องก่อนปิดวัน'):'ตรวจครบแล้ว &middot; ปิดวันได้')+'</span>'
       +'<h1 class="h4-h1">สรุปการเดินทางประจำวัน '
         +'<label class="dt" title="กดเพื่อเลือกวันจากปฏิทิน">'+e(tsV6DateLabel(H.date))
           +'<input type="date" value="'+e(H.date)+'" onclick="try{this.showPicker()}catch(_){}" onchange="tsPickDay(this.value)"></label>'
-        +tail+'</h1></div>'
+        +tail+'</h1></div></div>'
+    +'<div class="ts-scr ts-noprint h4-card h4-cardbd" data-tsv6="card" style="'+thSty+'">'
     +'<div><div class="h4-count" data-tsv6="count">'+cnt+'</div>'
       +'<div class="h4-iss">ออกเมื่อ '+e(H.stamp)+(H.by?(' &middot; โดย '+e(H.by)):'')+'</div></div>'
     +'<ul class="h4-checks">'+C.map(function(c){ return '<li data-tschk="'+c.k+'" data-w="'+(c.w?1:0)+'"><span class="h4-ic'+(c.w?' warn':'')+'">'+(c.w?'!':'&#10003;')+'</span><span>'+c.h+'</span></li>'; }).join('')+'</ul>'
     +'</div>';
-  /* §tsStick (2026-11-05) · owner: "เวลาเลื่อนลง ขอตรึงตรงวันที่ไว้ได้ไหม"
-     แถบเล็กติดบนสุดของหน้า โผล่เมื่อหัวข้อวันที่เลื่อนพ้นจอ · วันที่ (กดเลือกวัน) + ชื่อเส้นทาง/ท่าที่กรองอยู่ + จำนวนคน + ปุ่มวันก่อน/ถัดไป
-     ห่อด้วยกล่องสูง 0 ที่ sticky · ไม่กินที่ ไม่ดันเนื้อหา · ไม่ขึ้นในใบพิมพ์ (ts-noprint) */
-  var bt='border:1px solid #D9DCEA;background:#fff;color:#000F4C;border-radius:8px;height:30px;padding:0 10px;font:700 12px inherit;font-family:inherit;cursor:pointer';
-  var stick='<div class="ts-noprint" style="position:sticky;top:0;height:0;z-index:60">'
-    +'<div id="ts-stick" style="position:absolute;left:32px;right:32px;top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.97);border:1px solid #E3E5EF;border-radius:12px;box-shadow:0 6px 20px rgba(20,24,70,.12);padding:8px 14px;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .15s,transform .15s">'
-      +'<button type="button" style="'+bt+'" onclick="tsDateShift(-1)" aria-label="วันก่อน">&lsaquo;</button>'
-      +'<label style="position:relative;cursor:pointer;font-size:16px;font-weight:800;color:#000F4C;border-bottom:1.5px dashed #C9CCE4;white-space:nowrap">'+e(tsV6DateLabel(H.date))
-        +'<input type="date" value="'+e(H.date)+'" aria-label="เลือกวัน" onclick="try{this.showPicker()}catch(_){}" onchange="tsPickDay(this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>'
-      +'<button type="button" style="'+bt+'" onclick="tsDateShift(1)" aria-label="วันถัดไป">&rsaquo;</button>'
-      +tail
-      +'<span style="margin-left:auto;font-size:12.5px;color:#4A4F86;font-weight:700">'+cnt+'</span>'
-    +'</div></div>';
+  /* ตำแหน่งเกาะ = ใต้แถบ navy (วัดจริง) · หัวคอลัมน์ตารางรายชื่อ (--tsbar) เกาะใต้หัวข้อนี้อีกที */
   if(!window._tsStickOn){ window._tsStickOn=1;
-    document.addEventListener('scroll', function(){ var st=document.getElementById('ts-stick'), h=document.querySelector('.h4-card .h4-h1'); if(!st||!h) return;
-      /* แถบ navy ด้านบนติดจออยู่แล้ว · วางแถบวันที่ไว้ใต้แถบนั้นพอดี */
-      var bar=document.querySelector('#travelsum-host .h4-bar'), bb=bar?Math.max(0,bar.getBoundingClientRect().bottom):0;
-      st.style.top=(bb+6)+'px';
-      var show=h.getBoundingClientRect().bottom<bb;
-      if(show!==(st.style.opacity==='1')){ st.style.opacity=show?'1':'0'; st.style.pointerEvents=show?'auto':'none'; st.style.transform=show?'none':'translateY(-6px)';
-        /* หัวคอลัมน์ตารางรายชื่อ (ts-man) เกาะที่ --tsbar · ดันลงใต้แถบวันที่ตอนแถบโผล่ จะได้ไม่ทับกัน */
-        var host=document.getElementById('travelsum-host'); if(host&&bar) host.style.setProperty('--tsbar', (bar.offsetHeight+(show?st.offsetHeight+12:0))+'px'); } }, true); }
-  return bar+stick+card;
+    var fit=function(){ var host=document.getElementById('travelsum-host'); if(!host) return; var bar=host.querySelector('.h4-bar'), hd=host.querySelector('.h4-cardhd');
+      var bh=bar?bar.offsetHeight:0; host.style.setProperty('--tsbar0', bh+'px'); host.style.setProperty('--tsbar', (bh+(hd?hd.offsetHeight:0))+'px'); };
+    document.addEventListener('scroll', fit, true); window.addEventListener('resize', fit); window._tsStickFit=fit; }
+  setTimeout(function(){ if(window._tsStickFit) window._tsStickFit(); }, 0);
+  return bar+card;
 }
 /* หมวด 01 · คนกี่คน หายไปไหน · แถบสัดส่วน + สี่ช่อง */
 function tsV6Overview(O, money){
@@ -31946,6 +31934,10 @@ function tsCSSv6(){
 /* ── §tsV6d · แถบหัวสีเต็มพื้น · ชุดตัวอักษรเข้มสำหรับพื้นฟ้า CI ── */
 & .h4-bar,& .h4-band{background:var(--tshbg,#000F4C)}
 & .h4-card{border-top-color:var(--tshline,#00BCDF)}
+/* §tsStick · หัวการ์ดเกาะใต้แถบ navy · ส่วนล่างต่อจากหัวไม่มีรอยต่อ */
+& .h4-card.h4-cardhd{display:block;position:sticky;top:var(--tsbar0,0px);z-index:30;border-radius:20px 20px 0 0;padding-bottom:12px;box-shadow:0 10px 18px -14px rgba(20,24,70,.35)}
+& .h4-card.h4-cardhd .h4-head{border-bottom:1px solid #ECEDF4}
+& .h4-card.h4-cardbd{margin-top:0 !important;border-top:0 !important;border-radius:0 0 20px 20px;padding-top:14px}
 & .h4-bar.inkd{box-shadow:0 6px 18px rgba(0,60,80,.20)}
 & .h4-bar.inkd .h4-brand b{color:#000F4C}
 & .h4-bar.inkd .h4-brand i{color:rgba(0,15,76,.78)}
