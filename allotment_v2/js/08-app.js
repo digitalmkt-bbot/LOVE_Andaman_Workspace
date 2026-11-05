@@ -55368,9 +55368,13 @@ function bkV2RenderTripsSection(){
               <span style="font-size:12.5px;font-weight:600;color:${accent};flex:1;min-width:120px">${escapeHTML(x.label)} <span style="opacity:.7;font-weight:400">· เหลือ ${x.remaining}</span></span>
               <button onclick="bkV2SetTripLockDraw(${idx},'${x.lockId}',${Math.max(0,v-1)})" ${v<=0?'disabled':''} style="${stepBtn}">&minus;</button>
               <span style="font-family:'DM Mono',monospace;font-size:14.5px;font-weight:500;color:${accent};min-width:24px;text-align:center;font-variant-numeric:tabular-nums">${v}</span>
-              <button onclick="bkV2SetTripLockDraw(${idx},'${x.lockId}',${v+1})" ${canInc?'':'disabled'} style="${stepBtn}">+</button>
+              <button onclick="bkV2SetTripLockDraw(${idx},'${x.lockId}',${v+1})" ${canInc?'':'disabled'} title="${canInc?'':(pax<=0?'ใส่จำนวนคนในตาราง Pax ด้านล่างก่อน แล้วค่อยเลือกดึงจากล็อก':(v>=x.remaining?'ล็อกนี้เหลือ '+x.remaining+' ที่':'ดึงครบจำนวนคนแล้ว ('+pax+')'))}" style="${stepBtn}${canInc?'':';opacity:.45;cursor:not-allowed'}">+</button>
             </div>`;
         }).join('');
+        /* §lkDrawHint (2026-11-05) · owner "กดจะเลือกที่ล็อคก็ไม่ขึ้น" · ปุ่ม + ถูกล็อกเพราะยังไม่ได้ใส่จำนวนคน (ดึงได้ไม่เกิน pax) แต่ไม่มีอะไรบอก */
+        const lockHint = (pax<=0)
+          ? `<div style="margin-top:8px;font-size:12px;color:#7A4300;background:#FBF1DF;border:1px solid #E0A93B;border-radius:8px;padding:6px 10px">ใส่จำนวนคน (ผู้ใหญ่/เด็ก) ในตาราง Pax ด้านล่างก่อน · ดึงจากล็อกได้ไม่เกินจำนวนคนในใบ</div>`
+          : ((drawnTot>=pax && drawnTot>0) ? `<div style="margin-top:8px;font-size:12px;color:#0F6E56">ดึงครบตามจำนวนคนแล้ว · เพิ่มคนในตาราง Pax ก่อนถ้าจะดึงเพิ่ม</div>` : '');
         lockBannerHtml = undrawn ? `
           <div style="margin-top:10px;padding:10px 12px;background:#FBF1DF;border:1.5px solid #E0A93B;border-radius:12px;box-shadow:0 0 0 3px rgba(224,169,59,.15)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -55386,7 +55390,7 @@ function bkV2RenderTripsSection(){
               <span style="font-size:13px">🔒</span>
               <span style="font-size:13px;font-weight:700;color:#16265C">${remTotal} locked seat${remTotal===1?'':'s'} · เลือกดึงจากกรุ๊ป</span>
             </div>
-            ${srcRows}
+            ${srcRows}${lockHint}
             <div style="margin-top:8px;font-size:12px;color:#23335F">ดึงจากล็อค <b>${drawnTot}</b> ที่ (ไม่กระทบ pool) + <b>${general}</b> ที่นั่งใหม่ · ยืนยันตอนบันทึก</div>
           </div>`;
       }
