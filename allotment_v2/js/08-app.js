@@ -21057,6 +21057,27 @@ var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก'
 /* §exCot (2026-08-17) · Extra ที่ขายก่อนวันเดินทางแล้วเก็บเงินวันเดินทาง
    วิธีรับเงิน 'cot' = ยังไม่ได้รับเงิน · settle 'done' เมื่อเก็บจริงแล้ว
    ห้ามใช้ settle เดี่ยวๆ ตัดสิน · ของเก่าทุกใบเขียน settle:'pending' ไว้ทั้งที่รับเงินไปแล้ว */
+/* ══ §exSplitPay (2026-11-05) · owner "รายการนี้สามารถแบ่งชำระได้ไหม ส่วนนึงเป็นเงินสด ส่วนนึงเป็นบัตร" ════
+   รายการขายเพิ่ม 1 รายการ รับเงินได้ 2 วิธี · เก็บในช่อง method เดิมเป็นข้อความ "split:cash=400|card=250"
+   (ตาราง sb_extras ไม่มีคอลัมน์ใหม่ · ไม่แตะ DB) · ค่าธรรมเนียมบัตรคิดเฉพาะส่วนที่จ่ายบัตร (feePct เดิม)
+   ทุกที่ที่อ่านวิธีรับเงิน ให้อ่านผ่าน bkxExPays(x) → [{method, amount, fee}] · รายการเดิมที่มีวิธีเดียวได้ 1 ส่วนเหมือนเดิม
+   Travel Summary แตกเป็นบรรทัดละส่วน (ยอดเงินสด/โอน/บัตร · สลิป · ใบปิดยอด จึงถูกโดยไม่ต้องแก้ตัวอ่านปลายทาง) */
+var BKX_PM_TH={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต', cot:'เก็บวันเดินทาง', pier:'หน้าท่า'};
+function bkxExIsSplit(x){ return !!(x && /^split:/.test(String(x.method||''))); }
+function bkxExPays(x){
+  if(!x) return [];
+  var m=String(x.method||'cash'), pct=+x.feePct||0;
+  if(/^split:/.test(m)){
+    var parts=[];
+    m.slice(6).split('|').forEach(function(seg){ var kv=seg.split('='); var mm=kv[0], a=pckN(+kv[1]||0); if(!mm||!(a>0)) return; parts.push({method:mm, amount:a, fee:(mm==='card'?pckN(a*pct/100):0)}); });
+    if(parts.length) return parts;
+    m='cash';
+  }
+  return [{method:m, amount:+x.total||0, fee:+x.fee||0}];
+}
+function bkxExSplitStr(parts){ return 'split:'+parts.filter(function(q){ return q && q.method && +q.amount>0; }).map(function(q){ return q.method+'='+pckN(+q.amount); }).join('|'); }
+function bkxExPayLabel(x){ var P=bkxExPays(x); if(P.length<2){ var m0=P[0]?P[0].method:'cash'; return BKX_PM_TH[m0]||m0||'เงินสด'; } return P.map(function(q){ return (BKX_PM_TH[q.method]||q.method)+' \u0e3f'+pckNum(q.amount); }).join(' + '); }
+function bkxExNeedSlip(x){ if(!bkxExGot(x)) return false; if(((x&&x.slips)||[]).length) return false; return bkxExPays(x).some(function(q){ return q.method!=='cash' && q.method!=='cot' && q.method!=='pier'; }); }
 function bkxExGot(x){ return !(x && x.method==='cot' && x.settle!=='done') || bkxExCovered(x); }
 /* §exCotPier (2026-10-06) · ขายเพิ่มจากหน้า By trip แบบ "เก็บเงินวันเดินทาง" แล้วหน้าท่ากดเช็คอิน+รับเงินของใบนั้นไปแล้ว
    เจ้าของ: "ขายผ่านหน้า By trip date แล้วเช็คอินเป็นคนกดเช็คอินแล้วรับเงินแล้ว ต้องทำอะไรอีกเหรอ" → ไม่ต้อง
@@ -21105,7 +21126,9 @@ function bkxPierDupIds(b, date){
     ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(k){
       if(!k.id || k.method==='cot' || k.method==='cash' || !k.method) return;
       if(date && k.tripDate && k.tripDate!==date) return;
-      cand.push({id:k.id, m:k.method, amt:+k.total||0, at:k.collectedAt||k.date||''}); });
+      /* §exSplitPay · แบ่งชำระ → เทียบเฉพาะส่วนที่ไม่ใช่เงินสด */
+      bkxExPays(k).forEach(function(q){ if(q.method==='cash' || q.method==='cot' || !(q.amount>0)) return;
+        cand.push({id:k.id, m:q.method, amt:+q.amount||0, at:k.collectedAt||k.date||''}); }); });
     (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
       if(!u.id || !u.collected || !u.method || u.method==='cash' || u.method==='cot') return;
       cand.push({id:u.id, m:u.method, amt:+u.sellPrice||0, at:u.at||''}); });
@@ -21958,7 +21981,7 @@ function pckAddonCell(r, date){
     return !(date && x.tripDate && x.tripDate!==date);
   }).map(function(x){
     var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
-    return '<span class="ck-ao" style="background:'+(_g?'#E1F5EE':'#FDF3E3')+';color:'+(_g?'#0F6E56':'#8A5300')+'" title="'+e(x.service+(x.qty>1?(' ×'+x.qty):'')+' · '+(_g?('ขายหน้างาน '+({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'}[x.method||'cash']||'เงินสด')):'ขายล่วงหน้า · เก็บเงินวันนี้ · ยังไม่ได้เก็บ')+((+x.fee||0)?(' · ค่าธรรมเนียม '+Math.round(x.fee).toLocaleString()):'')+((_g&&x.method&&x.method!=='cash'&&!((x.slips||[]).length))?' · ยังไม่มีสลิป':'')+(x.seller?(' · '+x.seller):''))+'">'+e(x.service)+(x.qty>1?(' ×'+x.qty):'')+' +'+m(x.total)+(_g?'':' ⏳')+'</span>';
+    return '<span class="ck-ao" style="background:'+(_g?'#E1F5EE':'#FDF3E3')+';color:'+(_g?'#0F6E56':'#8A5300')+'" title="'+e(x.service+(x.qty>1?(' ×'+x.qty):'')+' · '+(_g?('ขายหน้างาน '+bkxExPayLabel(x)):'ขายล่วงหน้า · เก็บเงินวันนี้ · ยังไม่ได้เก็บ')+((+x.fee||0)?(' · ค่าธรรมเนียม '+Math.round(x.fee).toLocaleString()):'')+(bkxExNeedSlip(x)?' · ยังไม่มีสลิป':'')+(x.seller?(' · '+x.seller):''))+'">'+e(x.service)+(x.qty>1?(' ×'+x.qty):'')+' +'+m(x.total)+(_g?'':' ⏳')+'</span>';
   }).join('');
   var up=((!_ovn && Array.isArray(b.upgrades))?b.upgrades:[]).map(function(u){
     var got=!!u.collected;
@@ -29052,8 +29075,8 @@ function tsAddonList(r, date){
     var PM={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต', cot:'เก็บวันเดินทาง'};
     var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
     out.push({ src:'ex', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:(+x.total||0), done:_g,
-      note:(PM[x.method||'cash']||'เงินสด')+(_g?'':' · ยังไม่เก็บ')+(x.seller?(' · '+x.seller):'')
-           +((_g&&x.method&&x.method!=='cash'&&!((x.slips||[]).length))?' · ยังไม่มีสลิป':'') });
+      note:((typeof bkxExPayLabel==='function')?bkxExPayLabel(x):(PM[x.method||'cash']||'เงินสด'))+(_g?'':' · ยังไม่เก็บ')+(x.seller?(' · '+x.seller):'')
+           +(((typeof bkxExNeedSlip==='function')?bkxExNeedSlip(x):(_g&&x.method&&x.method!=='cash'&&!((x.slips||[]).length)))?' · ยังไม่มีสลิป':'') });   /* §exSplitPay */
   }); }catch(_){}
   // 3) อัปเกรดหน้างาน
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
@@ -29297,24 +29320,33 @@ function tsSaleList(b, date){
   try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
-    var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
     var _cov=(typeof bkxExCovered==='function')&&bkxExCovered(x);   /* §exCotPier · เงินอยู่ในแถวหน้าท่าแล้ว */
     var _g=_cov || ((typeof bkxExGot==='function')?bkxExGot(x):true);
     var _cm=+x.commission||0;
-    if(_cov){ comm+=_cm; if(_cm) commCov+=_cm; } else if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
-    if(_cov) mth='pier';
-    var slipMissing=(_g && !_cov && mth!=='cash' && !((x.slips||[]).length));   /* §exCotPier · สลิปอยู่กับแถวหน้าท่า */
-    if(slipMissing) noSlip++;
-    out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
-               // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
-               fee:(+x.fee||0), nSlip:((x.slips||[]).length),
-               // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
-               slips:(x.slips||[]).slice(),
-               // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
-               comm:_cm, toCompany:(+x.toCompany||0),
-               method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing,
-               dup:(!!_cov && x.method!=='cot') });   /* §exDupPier · ถูกเปลี่ยนเป็นโอน/บัตรทั้งที่หน้าท่าเก็บแล้ว */
+    /* §exSplitPay · รายการที่แบ่งชำระ → บรรทัดละส่วน (ยอด/ค่าธรรมเนียม/วิธี ของส่วนนั้น) · จำนวน/คอม/สลิป อยู่ที่ส่วนแรก
+       รายการวิธีเดียว = 1 ส่วน เหมือนเดิมทุกอย่าง */
+    var _PP=(typeof bkxExPays==='function')?bkxExPays(x):[{method:x.method||'cash', amount:amt, fee:(+x.fee||0)}];
+    if(_cov){ comm+=_cm; if(_cm) commCov+=_cm; }
+    var _slipHome=-1; _PP.forEach(function(q,i){ if(_slipHome<0 && q.method!=='cash' && q.method!=='cot') _slipHome=i; }); if(_slipHome<0) _slipHome=0;
+    _PP.forEach(function(q,i){
+      var pa=+q.amount||0, pf=+q.fee||0; if(!(pa>0)) return;
+      var mth=q.method||'cash'; if(by[mth]==null) by[mth]=0;
+      if(!_cov){ if(_g){ by[mth]+=pa; got+=pa; fee+=pf; if(i===0) comm+=_cm; } else due+=pa; }
+      if(_cov) mth='pier';
+      var _sl=(i===_slipHome)?(x.slips||[]).slice():[];
+      var slipMissing=(_g && !_cov && mth!=='cash' && i===_slipHome && !((x.slips||[]).length));   /* §exCotPier · สลิปอยู่กับแถวหน้าท่า */
+      if(slipMissing) noSlip++;
+      out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม')+(_PP.length>1?(' · ส่วนที่ '+(i+1)+'/'+_PP.length):''), qty:(i===0?(+x.qty||1):0), amt:pa,
+                 // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
+                 fee:pf, nSlip:_sl.length,
+                 // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
+                 slips:_sl,
+                 // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
+                 comm:(i===0?_cm:0), toCompany:(i===0?(+x.toCompany||0):0),
+                 method:mth, who:x.seller||'', done:_g, covered:!!_cov, noSlip:slipMissing, part:(_PP.length>1?(i+1):0),
+                 dup:(!!_cov && x.method!=='cot') });   /* §exDupPier · ถูกเปลี่ยนเป็นโอน/บัตรทั้งที่หน้าท่าเก็บแล้ว */
+    });
   }); }catch(_){}
   try{ var _upDup=bkxPierDupIds(b,date);   /* §exDupPier */
     (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
@@ -31502,7 +31534,27 @@ function tsV6Head(H, money){
       +'<div class="h4-iss">ออกเมื่อ '+e(H.stamp)+(H.by?(' &middot; โดย '+e(H.by)):'')+'</div></div>'
     +'<ul class="h4-checks">'+C.map(function(c){ return '<li data-tschk="'+c.k+'" data-w="'+(c.w?1:0)+'"><span class="h4-ic'+(c.w?' warn':'')+'">'+(c.w?'!':'&#10003;')+'</span><span>'+c.h+'</span></li>'; }).join('')+'</ul>'
     +'</div>';
-  return bar+card;
+  /* §tsStick (2026-11-05) · owner: "เวลาเลื่อนลง ขอตรึงตรงวันที่ไว้ได้ไหม"
+     แถบเล็กติดบนสุดของหน้า โผล่เมื่อหัวข้อวันที่เลื่อนพ้นจอ · วันที่ (กดเลือกวัน) + ชื่อเส้นทาง/ท่าที่กรองอยู่ + จำนวนคน + ปุ่มวันก่อน/ถัดไป
+     ห่อด้วยกล่องสูง 0 ที่ sticky · ไม่กินที่ ไม่ดันเนื้อหา · ไม่ขึ้นในใบพิมพ์ (ts-noprint) */
+  var bt='border:1px solid #D9DCEA;background:#fff;color:#000F4C;border-radius:8px;height:30px;padding:0 10px;font:700 12px inherit;font-family:inherit;cursor:pointer';
+  var stick='<div class="ts-noprint" style="position:sticky;top:0;height:0;z-index:60">'
+    +'<div id="ts-stick" style="position:absolute;left:32px;right:32px;top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.97);border:1px solid #E3E5EF;border-radius:12px;box-shadow:0 6px 20px rgba(20,24,70,.12);padding:8px 14px;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .15s,transform .15s">'
+      +'<button type="button" style="'+bt+'" onclick="tsDateShift(-1)" aria-label="วันก่อน">&lsaquo;</button>'
+      +'<label style="position:relative;cursor:pointer;font-size:16px;font-weight:800;color:#000F4C;border-bottom:1.5px dashed #C9CCE4;white-space:nowrap">'+e(tsV6DateLabel(H.date))
+        +'<input type="date" value="'+e(H.date)+'" aria-label="เลือกวัน" onclick="try{this.showPicker()}catch(_){}" onchange="tsPickDay(this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>'
+      +'<button type="button" style="'+bt+'" onclick="tsDateShift(1)" aria-label="วันถัดไป">&rsaquo;</button>'
+      +tail
+      +'<span style="margin-left:auto;font-size:12.5px;color:#4A4F86;font-weight:700">'+cnt+'</span>'
+    +'</div></div>';
+  if(!window._tsStickOn){ window._tsStickOn=1;
+    document.addEventListener('scroll', function(){ var st=document.getElementById('ts-stick'), h=document.querySelector('.h4-card .h4-h1'); if(!st||!h) return;
+      /* แถบ navy ด้านบนติดจออยู่แล้ว · วางแถบวันที่ไว้ใต้แถบนั้นพอดี */
+      var bar=document.querySelector('#travelsum-host .h4-bar'), bb=bar?Math.max(0,bar.getBoundingClientRect().bottom):0;
+      st.style.top=(bb+6)+'px';
+      var show=h.getBoundingClientRect().bottom<bb;
+      if(show!==(st.style.opacity==='1')){ st.style.opacity=show?'1':'0'; st.style.pointerEvents=show?'auto':'none'; st.style.transform=show?'none':'translateY(-6px)'; } }, true); }
+  return bar+stick+card;
 }
 /* หมวด 01 · คนกี่คน หายไปไหน · แถบสัดส่วน + สี่ช่อง */
 function tsV6Overview(O, money){
@@ -41731,16 +41783,32 @@ function _bkxPayReset(e, opt){
       return pckN(qty*price); };
   }
   _bkExtraPay = e
-    ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[]}
-    : {m:'cash', feePct:3, slips:[]};
+    ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[], split:false, p2:{m:'card', amt:0}}
+    : {m:'cash', feePct:3, slips:[], split:false, p2:{m:'card', amt:0}};
+  /* §exSplitPay · รายการที่แบ่งชำระไว้ · กางกลับเป็น ส่วนที่ 1 (ปุ่มวิธีรับเงิน) + ส่วนที่ 2 */
+  if(e && _bkxPayCot && typeof bkxExIsSplit==='function' && bkxExIsSplit(e)){
+    var _pp=bkxExPays(e);
+    if(_pp.length>=2){ _bkExtraPay.m=_pp[0].method; _bkExtraPay.split=true; _bkExtraPay.p2={m:_pp[1].method, amt:_pp[1].amount}; }
+  }
   if(!_bkxPayCot && _bkExtraPay.m==='cot') _bkExtraPay.m='cash';
 }
 // ค่าธรรมเนียมบัตรคิดบนยอดขาย · ลูกค้าจ่ายจริง = ยอดขาย + ค่าธรรมเนียม (กติกาเดียวกับหน้าเก็บเงิน)
 // §pierDecimal · เศษสตางค์อยู่ครบ (650 x 3% = 19.50) · เดิมปัดเป็น 20 แล้วยอดไม่ตรงสลิปเครื่องรูด
 function bkV2ExtraFee(){
+  var pct=(+_bkExtraPay.feePct||0), base=_bkxPayBase();
+  if(bkxPaySplitOn()){ var P=bkxPayParts(base), f=0; P.forEach(function(q){ if(q.method==='card') f+=pckN(q.amount*pct/100); }); return pckN(f); }   /* §exSplitPay */
   if(_bkExtraPay.m!=='card') return 0;
-  return pckN(_bkxPayBase()*(+_bkExtraPay.feePct||0)/100);
+  return pckN(base*pct/100);
 }
+/* §exSplitPay · สถานะแบ่งชำระของกล่อง · ใช้ได้เฉพาะกล่อง Extra (ไม่ใช่อัปเกรด) และไม่ใช่ "เก็บวันเดินทาง" */
+function bkxPaySplitOn(){ return !!(_bkxPayCot && _bkExtraPay.split && _bkExtraPay.m!=='cot'); }
+function bkxPayParts(base){
+  var a2=Math.max(0, Math.min(base, pckN(+(_bkExtraPay.p2&&_bkExtraPay.p2.amt)||0)));
+  var m2=(_bkExtraPay.p2&&_bkExtraPay.p2.m)||'card';
+  return [{method:_bkExtraPay.m||'cash', amount:pckN(base-a2)}, {method:m2, amount:a2}];
+}
+function bkV2ExtraSetSplit(on){ _bkExtraPay.split=!!on; if(on && !_bkExtraPay.p2) _bkExtraPay.p2={m:'card',amt:0}; if(on && _bkExtraPay.p2.m===_bkExtraPay.m) _bkExtraPay.p2.m=(_bkExtraPay.m==='card'?'cash':'card'); bkV2ExtraPayRender(); }
+function bkV2ExtraSetP2(k,v){ _bkExtraPay.p2=_bkExtraPay.p2||{m:'card',amt:0}; if(k==='m') _bkExtraPay.p2.m=v; else _bkExtraPay.p2.amt=(typeof pckNumStr==='function')?pckNumStr(v):String(v||''); bkV2ExtraPayRender(); }
 function bkV2ExtraSetM(m){ _bkExtraPay.m=m; if(m!=='card') _bkExtraPay.feePct=_bkExtraPay.feePct; bkV2ExtraPayRender(); }
 // §pierDecimal · เก็บสตริงที่พิมพ์ · เกิน 5% ค่อยตัดลงเป็น 5 (กติกาเดิม)
 function bkV2ExtraSetPct(v){
@@ -41770,6 +41838,26 @@ function bkV2ExtraPayRender(){
       +'<span style="display:block;font-size:9.5px;color:'+(on?'#0F6E56':'var(--fd-ink-soft)')+';opacity:.85">'+x[2]+'</span></button>';
   });
   h+='</div>';
+  /* §exSplitPay · แบ่งชำระ 2 วิธี · ส่วนที่ 1 = ปุ่มข้างบน · ส่วนที่ 2 เลือกวิธี + ยอด · ส่วนที่ 1 คำนวณให้เอง */
+  if(_bkxPayCot && P.m!=='cot'){
+    var _sp=bkxPaySplitOn(), _bs=_bkxPayBase(), _pt=_sp?bkxPayParts(_bs):null;
+    h+='<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--fd-ink);margin:-4px 0 8px;cursor:pointer">'
+      +'<input type="checkbox" '+(_sp?'checked':'')+' onchange="bkV2ExtraSetSplit(this.checked)" style="accent-color:#0F7A5A"> แบ่งชำระ 2 วิธี <span style="color:var(--fd-ink-soft);font-size:10.5px">(เช่น เงินสดส่วนหนึ่ง บัตรส่วนหนึ่ง)</span></label>';
+    if(_sp){
+      var _w2=BKX_PAY_WAYS.filter(function(x){ return x[0]!=='cot'; });
+      h+='<div style="border:1px solid #BFD3EA;background:#F3F7FC;border-radius:9px;padding:9px 11px;margin-bottom:10px">'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end">'
+        +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ส่วนที่ 2 · วิธี</label>'
+        +'<select onchange="bkV2ExtraSetP2(\'m\',this.value)" style="width:100%;height:32px;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px;font-family:inherit;background:#fff">'
+        +_w2.map(function(x){ return '<option value="'+x[0]+'"'+((P.p2&&P.p2.m)===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select></div>'
+        +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ส่วนที่ 2 · ยอด &#3647;</label>'
+        +'<input type="text" inputmode="decimal" data-bkx="p2amt" value="'+esc(String((P.p2&&P.p2.amt)||''))+'" oninput="bkV2ExtraSetP2(\'amt\',this.value)" placeholder="0" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>'
+        +'</div>'
+        +'<div style="font-size:11px;color:#15396B;margin-top:7px">ส่วนที่ 1 · <b>'+(BKX_PM_TH[_pt[0].method]||_pt[0].method)+' &#3647;'+pckNum(_pt[0].amount)+'</b> &nbsp;+&nbsp; ส่วนที่ 2 · <b>'+(BKX_PM_TH[_pt[1].method]||_pt[1].method)+' &#3647;'+pckNum(_pt[1].amount)+'</b>'
+        +((_pt[1].amount<=0||_pt[1].amount>=_bs)?' <span style="color:#A32D2D">· ใส่ยอดส่วนที่ 2 ให้อยู่ระหว่าง 0 กับ '+pckNum(_bs)+'</span>':'')
+        +((_pt[0].method===_pt[1].method)?' <span style="color:#A32D2D">· สองส่วนเป็นวิธีเดียวกัน</span>':'')+'</div></div>';
+    }
+  }
   if(P.m==='cot'){
     h+='<div style="display:flex;gap:9px;align-items:flex-start;background:#FDF6E7;border:1px solid #E7CE93;'
       +'border-radius:9px;padding:9px 11px;margin-bottom:10px">'
@@ -41779,7 +41867,8 @@ function bkV2ExtraPayRender(){
       +'เช็คอินหน้าท่า ของวันเดินทาง<br>พอเก็บเงินจริงแล้วให้กด &#10003; ที่รายการ '
       +'หรือแก้วิธีรับเงินเป็น เงินสด / โอน / บัตร</div></div>';
   }
-  if(P.m==='card'){
+  var _anyCard=(P.m==='card') || (bkxPaySplitOn() && bkxPayParts(_bkxPayBase()).some(function(q){ return q.method==='card' && q.amount>0; }));   /* §exSplitPay */
+  if(_anyCard){
     var base=_bkxPayBase(), fee=bkV2ExtraFee();
     h+='<div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px;margin-bottom:10px">'
       +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ค่าธรรมเนียมบัตร %</label>'
@@ -41789,7 +41878,8 @@ function bkV2ExtraPayRender(){
       +'<span style="font-size:10px;color:#7A4A00">ค่าธรรมเนียม &#3647;'+pckNum(fee)+'</span>'
       +'<b style="font-size:13.5px;font-variant-numeric:tabular-nums;color:#7A4A00">&#3647;'+pckNum(base+fee)+'</b></div></div></div>';
   }
-  if(P.m!=='cash' && P.m!=='cot'){
+  var _anyNonCash=(P.m!=='cash' && P.m!=='cot') || (bkxPaySplitOn() && bkxPayParts(_bkxPayBase()).some(function(q){ return q.method!=='cash' && q.amount>0; }));   /* §exSplitPay */
+  if(_anyNonCash){
     h+='<label style="font-size:10px;color:var(--fd-ink-soft)">สลิป — แนบทีหลังได้</label>';
     h+='<div style="margin:4px 0 4px">';
     P.slips.forEach(function(sp,i){
@@ -41866,7 +41956,14 @@ function bkV2ExtraSave(bkId){
   const toCompany=Math.min(total,Math.max(0,pckN((document.getElementById('bkx-company')||{}).value)));
   const commission=pckN(Math.max(0,total-toCompany));
   const seller=((document.getElementById('bkx-seller')||{}).value||'').trim();
-  const _pm=_bkExtraPay.m||'cash';
+  let _pm=_bkExtraPay.m||'cash';
+  /* §exSplitPay · แบ่งชำระ → เก็บเป็น "split:วิธี=ยอด|วิธี=ยอด" · ยอดสองส่วนต้องรวมเท่ายอดขายพอดี */
+  if(typeof bkxPaySplitOn==='function' && bkxPaySplitOn()){
+    const _pp=bkxPayParts(total);
+    if(!(_pp[1].amount>0) || _pp[1].amount>=total){ alert('แบ่งชำระ: ใส่ยอดส่วนที่ 2 ให้อยู่ระหว่าง 0 กับ '+pckNum(total)); return; }
+    if(_pp[0].method===_pp[1].method){ alert('แบ่งชำระ: สองส่วนเป็นวิธีเดียวกัน · เลือกวิธีให้ต่างกัน หรือปิดแบ่งชำระ'); return; }
+    _pm=bkxExSplitStr(_pp);
+  }
   const _fee=bkV2ExtraFee();
   const _slips=(_bkExtraPay.slips||[]).slice();
   if(_pm!=='cash' && _pm!=='cot' && !_slips.length && !confirm('ยังไม่ได้แนบสลิป\n\nบันทึกก่อนแล้วแนบทีหลังได้ · กด OK เพื่อบันทึกเลย')) return;
@@ -41880,7 +41977,7 @@ function bkV2ExtraSave(bkId){
       return;
     }
     if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller;
-           e.method=_pm; e.feePct=(_pm==='card'?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);
+           e.method=_pm; e.feePct=(/card/.test(_pm)?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=pckN(total+_fee);   /* §exSplitPay · feePct เก็บไว้เมื่อมีส่วนที่เป็นบัตร */
            e.slips=(_pm==='cot'?[]:_slips);
            /* §exCot · เก็บเงินวันเดินทาง = ยังไม่ปิดยอด · เปลี่ยนเป็นวิธีอื่นเมื่อไหร่ = เก็บแล้ว */
            e.settle=(_pm==='cot'?'pending':'done');
@@ -41889,7 +41986,7 @@ function bkV2ExtraSave(bkId){
     _bkExtraEditId=null;
   } else {
     SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(typeof bkV2ExtraDayOf==='function'?bkV2ExtraDayOf(bk):((bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'')), service:name, qty, unitPrice:price, total, toCompany, commission, seller,
-      method:_pm, feePct:(_pm==='card'?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:pckN(total+_fee),
+      method:_pm, feePct:(/card/.test(_pm)?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:pckN(total+_fee),   /* §exSplitPay */
       slips:(_pm==='cot'?[]:_slips),
       settle:(_pm==='cot'?'pending':'done'), collectedAt:(_pm==='cot'?'':new Date().toISOString()),
       date:new Date().toISOString()});
@@ -59347,7 +59444,7 @@ function bkV2RenderTab2(){
               return `<span class="t2-rb b2c-addon-in" style="background:#FCEBDD;color:#8A3E05;${_b2cWrap}" title="${esc(_ls)} · ซื้อผ่าน B2C ${esc(l.voucherRef||l.id)} · จ่ายที่ใบ B2C · ไม่บวกยอดใบนี้">${esc((l.addOns||[]).map(_b2cShort).filter(Boolean).join(', ')||'Add-on')}<br>B2C ${esc(l.voucherRef||l.id)}</span>`; }).join('');
         const _extras=(typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(bk.id):[];
         const extrasChips=_extras.map(e=>{ const _g=(typeof bkxExGot==='function')?bkxExGot(e):true;
-          return `<span class="t2-rb" style="background:${_g?'#E1F5EE':'#FDF3E3'};color:${_g?'#0F6E56':'#8A5300'};cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ${_g?('ขายหน้างาน '+(({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'})[e.method||'cash']||'เงินสด')):'ขายล่วงหน้า · เก็บเงินวันเดินทาง · ยังไม่ได้เก็บ'}" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}${_g?'':' &#9203;'}</span>`; }).join('');
+          return `<span class="t2-rb" style="background:${_g?'#E1F5EE':'#FDF3E3'};color:${_g?'#0F6E56':'#8A5300'};cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ${_g?('ขายหน้างาน '+bkxExPayLabel(e)):'ขายล่วงหน้า · เก็บเงินวันเดินทาง · ยังไม่ได้เก็บ'}" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}${_g?'':' &#9203;'}</span>`; }).join('');
         const feeChips=(bk.feeItems||[]).map(f=>{ const amt=Math.round(+f.amount||0); if(!amt) return ''; return `<span class="t2-rb" style="background:#FAEEDA;color:#854F0B" title="${esc(f.label||(f.type==='reschedule'?'Reschedule fee':'Fee'))} · บน invoice">&#8635; +&#3647;${amt.toLocaleString()}</span>`; }).join('');
         // reschedule fee collected as CASH (separate · not on invoice) → surface as "collect cash" on the moved-to date
         const _rsch=bk.reschedule; const _reschCash=(_rsch && _rsch.collect==='separate' && (+_rsch.chargeAmount>0))?Math.round(+_rsch.chargeAmount):0;
