@@ -31553,7 +31553,9 @@ function tsV6Head(H, money){
       var bar=document.querySelector('#travelsum-host .h4-bar'), bb=bar?Math.max(0,bar.getBoundingClientRect().bottom):0;
       st.style.top=(bb+6)+'px';
       var show=h.getBoundingClientRect().bottom<bb;
-      if(show!==(st.style.opacity==='1')){ st.style.opacity=show?'1':'0'; st.style.pointerEvents=show?'auto':'none'; st.style.transform=show?'none':'translateY(-6px)'; } }, true); }
+      if(show!==(st.style.opacity==='1')){ st.style.opacity=show?'1':'0'; st.style.pointerEvents=show?'auto':'none'; st.style.transform=show?'none':'translateY(-6px)';
+        /* หัวคอลัมน์ตารางรายชื่อ (ts-man) เกาะที่ --tsbar · ดันลงใต้แถบวันที่ตอนแถบโผล่ จะได้ไม่ทับกัน */
+        var host=document.getElementById('travelsum-host'); if(host&&bar) host.style.setProperty('--tsbar', (bar.offsetHeight+(show?st.offsetHeight+12:0))+'px'); } }, true); }
   return bar+stick+card;
 }
 /* หมวด 01 · คนกี่คน หายไปไหน · แถบสัดส่วน + สี่ช่อง */
