@@ -75400,8 +75400,9 @@ function poBoatTable(boats, items, ro){
         +(o.miss>0?'<div style="font-size:10px;color:#C0271C;font-weight:700">ขาด '+o.miss+'</div>':'')+'</td>';
     }).join('');
     return '<tr>'
-      +'<td><div class="po-bname">'+poE(b.boat.name||b.bid)+'</div>'
-        +'<div class="po-rt">'+(b.dep?('ออก '+poE(b.dep)):'')+'</div></td>'
+      /* §poBtSlim · owner: "ทำให้เป็นแถวเดียวกัน ไม่ต้องมีเวลามาซ้อน" · ชื่อเรือกับเวลาออกอยู่บรรทัดเดียว */
+      +'<td style="white-space:nowrap"><span class="po-bname" style="display:inline">'+poE(b.boat.name||b.bid)+'</span>'
+        +(b.dep?('<span class="po-rt" style="display:inline;margin-left:8px">'+poE(b.dep)+'</span>'):'')+'</td>'
       +'<td><span class="po-pill" style="background:'+((b.route&&b.route.color)||'#5F5E5A')+'22;color:'+((b.route&&b.route.color)||'#5F5E5A')+'">'+poE((b.route&&b.route.name)||b.rid)+'</span></td>'
       +'<td style="text-align:center;font-weight:800;font-size:15px">'+b.pax+'</td>'
       +'<td style="font-size:11.5px">'+dutyTxt+'</td>'
