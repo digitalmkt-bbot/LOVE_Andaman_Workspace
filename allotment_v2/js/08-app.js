@@ -75373,17 +75373,27 @@ function poBoatTable(boats, items, ro){
   if(!boats.length) return '<div class="po-blank"><div class="ic">'+poIco('anchor',26)+'</div>'
     +'<h4>ไม่มีเรือออกจากท่านี้ในวันที่เลือก</h4>'
     +'<p>ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation เพื่อเปิดรายการเบิกอุปกรณ์สำหรับเที่ยวเรือ</p></div>';
-  var hd='<tr><th style="width:170px">เรือ</th><th>เส้นทาง</th><th style="width:60px;text-align:center">ลค</th>'
-    +'<th style="width:150px">พนักงานลงเรือ</th>'
-    +PO_KORDER.map(function(k){ return '<th style="width:96px;text-align:center">'+PO_KIND[k].t+'<br><span style="font-weight:400;text-transform:none">เบิก / คืน</span></th>'; }).join('')
-    +'<th style="width:104px">สถานะ</th><th style="width:210px"></th></tr>';
+  /* §poBtSlim (2026-11-05) · owner: "ปรับตารางนี้ให้กระชับหน่อย มันล้นไป บางหัวข้อไม่ได้ใช้ในเรือ"
+     คอลัมน์ประเภท = เฉพาะที่ใช้เบิกลงเรือจริง · วันนี้มีเบิก หรือ 60 วันที่ผ่านมาท่านี้เคยเบิก · ไม่เอาประเภทอะไหล่ (§poRpPier)
+     ปุ่มเรียงแถวเดียว · แถวเตี้ยลง */
+  var _rpK=(typeof poRpKinds==='function')?poRpKinds():[], _since=(function(){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()-60); return d.toISOString().slice(0,10); })();
+  var _used={};
+  (PIER_MOVES||[]).forEach(function(m){ if(m.type!=='issue' || m.pier!==_poPier || String(m.date||'')<_since) return; var it=poItem(m.itemId); if(it) _used[it.kind]=1; });
+  var _sums={}; boats.forEach(function(b){ _sums[b.bid]=poBoatKindSum(_poDate,b.bid,_poPier); });
+  boats.forEach(function(b){ PO_KORDER.forEach(function(k){ var o=_sums[b.bid][k]; if(o&&o.iss) _used[k]=1; }); });
+  var KO=PO_KORDER.filter(function(k){ return _used[k] && _rpK.indexOf(k)<0; });
+  if(!KO.length) KO=PO_KORDER.filter(function(k){ return _rpK.indexOf(k)<0 && (k==='fin'||k==='mask'||k==='towel'); });
+  var hd='<tr><th style="width:130px">เรือ</th><th>เส้นทาง</th><th style="width:44px;text-align:center">ลค</th>'
+    +'<th style="width:120px">พนักงานลงเรือ</th>'
+    +KO.map(function(k){ return '<th style="width:70px;text-align:center;white-space:normal;line-height:1.25">'+PO_KIND[k].t+'<br><span style="font-weight:400;text-transform:none">เบิก / คืน</span></th>'; }).join('')
+    +'<th style="width:96px">สถานะ</th><th style="width:1%"></th></tr>';
   var body=boats.map(function(b){
-    var K=poBoatKindSum(_poDate,b.bid,_poPier), st=poBoatStage(_poDate,b.bid,_poPier);
+    var K=_sums[b.bid], st=poBoatStage(_poDate,b.bid,_poPier);
     var duty=poDuty(_poDate,b.bid);
     var dutyTxt=duty.length?duty.map(function(id){ return poE(poStaffName(id)); }).join(', ')
       :'<span style="color:#C0271C;font-weight:700">ยังไม่จัด</span>';
-    var cells=PO_KORDER.map(function(k){
-      var o=K[k];
+    var cells=KO.map(function(k){
+      var o=K[k]||{iss:0,back:0,miss:0};
       if(!o.iss) return '<td style="text-align:center;color:#C9C9C2">—</td>';
       var col=(o.miss>0)?'#C0271C':(o.back>=o.iss?'#1C7A4E':'#B4560A');
       return '<td style="text-align:center" class="po-q">'+o.iss+' <span class="b">/</span> <span style="color:'+col+'">'+o.back+'</span>'
@@ -75391,7 +75401,7 @@ function poBoatTable(boats, items, ro){
     }).join('');
     return '<tr>'
       +'<td><div class="po-bname">'+poE(b.boat.name||b.bid)+'</div>'
-        +'<div class="po-rt">'+poE(b.boat.type||'')+(b.dep?(' · ออก '+poE(b.dep)):'')+'</div></td>'
+        +'<div class="po-rt">'+(b.dep?('ออก '+poE(b.dep)):'')+'</div></td>'
       +'<td><span class="po-pill" style="background:'+((b.route&&b.route.color)||'#5F5E5A')+'22;color:'+((b.route&&b.route.color)||'#5F5E5A')+'">'+poE((b.route&&b.route.name)||b.rid)+'</span></td>'
       +'<td style="text-align:center;font-weight:800;font-size:15px">'+b.pax+'</td>'
       +'<td style="font-size:11.5px">'+dutyTxt+'</td>'
@@ -75403,14 +75413,18 @@ function poBoatTable(boats, items, ro){
             +'title="กรอกใบเบิก–คืนไว้แล้ว แต่ยังไม่ได้กดยืนยัน · สต็อกยังไม่ถูกตัด">ร่าง · ยังไม่ตัดสต็อก</span></div>'
           : '')
       +'</td>'
-      +'<td style="text-align:right">'
+      +'<td style="text-align:right"><div class="po-act">'
         +'<button class="po-btn" onclick="poDutyOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>พนักงาน</button>'
         +'<button class="po-btn'+(st.k==='none'?' pri':'')+'" onclick="poIssueOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>เบิก–คืน</button>'
         +((st.k==='open'||st.k==='carry')?'<button class="po-btn warn" onclick="poCloseOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>ปิดยอด</button>':'')
         +'<button class="po-btn" onclick="poSignSheet(\''+b.bid+'\')">ใบเซ็น</button>'
-      +'</td></tr>';
+      +'</div></td></tr>';
   }).join('');
-  return '<table class="po-t"><thead>'+hd+'</thead><tbody>'+body+'</tbody></table>';
+  var css='<style>.po-t.po-bt td,.po-t.po-bt th{padding-top:7px;padding-bottom:7px}'
+    +'.po-t.po-bt .po-act{display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap}'
+    +'.po-t.po-bt .po-act .po-btn{margin:0;padding:4px 9px;font-size:11.5px;white-space:nowrap}'
+    +'.po-t.po-bt .po-pill{white-space:nowrap}</style>';
+  return css+'<table class="po-t po-bt"><thead>'+hd+'</thead><tbody>'+body+'</tbody></table>';
 }
 
 /* §poStockCards · แถบสัดส่วนย่อของหนึ่งรายการ */
