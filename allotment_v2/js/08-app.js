@@ -4575,16 +4575,45 @@ function bkV2LockFromCalendar(routeId, date){
 }
 // Release · custom modal (replaces native prompt)
 /* §lkNoAuto · กดปล่อยรอบเดียว · ถามก่อนเพราะที่นั่งจะกลับไปขายให้ใครก็ได้ทันที */
+/* ══ §lkRelSheet (2026-11-05) · owner "กดปล่อยไม่ได้" (LK-SAYAMA · รอบ 6 พ.ย.) ═══════════════════
+   ของเดิมเงียบได้ 3 ทาง · (1) confirm() บนมือถือ/Safari ถูกกลืนแล้วคืน false = เหมือนกดยกเลิก (เคสเดียวกับ §outSheet)
+   (2) บัญชีไม่มีสิทธิ์แก้ "ปฏิบัติการ" → sbSeatLocksPersist ไม่บันทึก จอเปลี่ยนแล้วรีเฟรชเด้งกลับ (3) ไม่มีที่ค้างให้ปล่อยก็เงียบ
+   ตอนนี้ · ใช้แผ่นยืนยันของแอปเอง · ทุกทางที่ปล่อยไม่ได้มีข้อความบอก · ปล่อยแล้วขึ้น toast ยืนยัน */
+function laAskSheet(opt){
+  opt=opt||{}; var id='la-ask-'+Date.now();
+  if(document.getElementById('la-ask')) { try{ document.getElementById('la-ask').remove(); }catch(_){} }
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-ask'; ov.style.zIndex='100050';
+  ov.innerHTML='<div class="la-card" style="width:360px;max-width:92vw;padding:22px 22px 18px;text-align:center">'
+    +'<div style="font-size:15px;font-weight:800;color:#15396B">'+e(opt.title||'ยืนยัน?')+'</div>'
+    +'<div style="font-size:12.5px;color:#7C8091;margin:7px 0 16px;line-height:1.6;white-space:pre-line;text-align:left">'+e(opt.body||'')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+      +'<button type="button" data-ask="no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">'+e(opt.noLabel||'ยกเลิก')+'</button>'
+      +'<button type="button" data-ask="yes" style="padding:12px 0;border:none;border-radius:11px;background:'+(opt.color||'#A32D2D')+';color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">'+e(opt.okLabel||'ยืนยัน')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  var close=function(){ try{ ov.remove(); }catch(_){} };
+  ov.querySelector('[data-ask="no"]').onclick=close;
+  ov.onclick=function(ev){ if(ev.target===ov) close(); };
+  ov.querySelector('[data-ask="yes"]').onclick=function(){ close(); try{ if(typeof opt.onYes==='function') opt.onYes(); }catch(err){ console.warn('laAskSheet', err); } };
+}
 function bkV2LockReleaseRoundGo(lockId, tripDate){
-  const l = SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return;
+  const l = SB_SEAT_LOCKS.find(x=>x.id===lockId);
+  if(!l){ alert('ไม่พบล็อกนี้แล้ว · กดรีเฟรชหน้าแล้วลองใหม่'); return; }
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){
+    alert('ปล่อยที่นั่งไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไขหมวด "ปฏิบัติการ"\n\nให้ผู้ที่มีสิทธิ์กดปล่อย หรือขอเพิ่มสิทธิ์ที่ผู้ดูแลระบบ'); return; }
+  if(bkV2LockRoundReleased(l, tripDate)){ alert('รอบ '+tripDate+' ของล็อกนี้ถูกปล่อยไปแล้ว'); return; }
   const seats = bkV2LockPoolHold(l, tripDate);
-  if(seats<=0) return;
+  if(seats<=0){ alert('รอบ '+tripDate+' ไม่มีที่นั่งค้างให้ปล่อย (ใช้ครบแล้วหรือเป็นล็อกลูก)'); return; }
   const nm = (typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):'';
-  if(!confirm('ปล่อยที่นั่งของรอบนี้คืนเข้า pool\n\n'+nm+' · '+tripDate+' · '+seats+' ที่'
-    +'\n\nที่นั่งจะกลับไปขายให้ใครก็ได้ทันที'
-    +(bkV2LockSpansDays(l)?'\nรอบอื่นของล็อกนี้ไม่กระทบ':'')+'\n\nยืนยัน?')) return;
-  bkV2LockReleaseRound(lockId, tripDate);
-  bkV2Render();
+  laAskSheet({ title:'ปล่อยที่นั่งคืนเข้า pool?',
+    body: nm+' · '+tripDate+' · '+seats+' ที่\nที่นั่งจะกลับไปขายให้ใครก็ได้ทันที'+(bkV2LockSpansDays(l)?'\nรอบอื่นของล็อกนี้ไม่กระทบ':''),
+    okLabel:'ปล่อย '+seats+' ที่', color:'#A32D2D',
+    onYes:function(){
+      const n=bkV2LockReleaseRound(lockId, tripDate);
+      bkV2Render();
+      try{ var tt=document.createElement('div'); tt.textContent='✓ ปล่อยแล้ว '+n+' ที่ · '+nm+' · '+tripDate; tt.style.cssText='position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:100060;background:#0F6E56;color:#fff;padding:10px 16px;border-radius:10px;font:700 12.5px system-ui;box-shadow:0 6px 18px rgba(0,0,0,.2)'; document.body.appendChild(tt); setTimeout(function(){ tt.remove(); },3500); }catch(_){}
+    } });
 }
 /* ปล่อยทุกใบที่เลยกำหนดของวันที่กำลังดูอยู่ · ที่นั่งค้างเป็นร้อยจะได้ไม่ต้องกดทีละใบ */
 function bkV2LockOverdueOn(dateStr){
@@ -4595,10 +4624,9 @@ function bkV2LockReleaseOverdueGo(dateStr){
   const list = bkV2LockOverdueOn(dateStr);
   if(!list.length) return;
   const seats = list.reduce((a,l)=>a+bkV2LockPoolHold(l,dateStr),0);
-  if(!confirm('ปล่อยที่นั่งของทุกล็อกที่เลยกำหนดในวันนี้\n\n'+dateStr+' · '+list.length+' ล็อก · '+seats+' ที่'
-    +'\n\nที่นั่งทั้งหมดจะกลับไปขายให้ใครก็ได้ทันที\nล็อกที่ยังไม่ถึงกำหนดไม่กระทบ\n\nยืนยัน?')) return;
-  list.forEach(l=>bkV2LockReleaseRound(l.id, dateStr));
-  bkV2Render();
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ปล่อยที่นั่งไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไขหมวด "ปฏิบัติการ"'); return; }
+  laAskSheet({ title:'ปล่อยทุกล็อกที่เลยกำหนด?', body:dateStr+' · '+list.length+' ล็อก · '+seats+' ที่\nที่นั่งทั้งหมดจะกลับไปขายให้ใครก็ได้ทันที\nล็อกที่ยังไม่ถึงกำหนดไม่กระทบ',
+    okLabel:'ปล่อย '+seats+' ที่', color:'#A32D2D', onYes:function(){ list.forEach(l=>bkV2LockReleaseRound(l.id, dateStr)); bkV2Render(); } });   /* §lkRelSheet */
 }
 
 function bkV2LockReleaseConfirm(id){
