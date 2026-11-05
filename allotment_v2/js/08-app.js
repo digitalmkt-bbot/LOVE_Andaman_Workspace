@@ -74629,6 +74629,11 @@ function pkbEval(text){
     if(!s){ out.push({k:'blank'}); return; }
     if(s.charAt(0)==='#'){ out.push({k:'note'}); return; }
     if(/^รวม\s*[:=]?\s*$/.test(s)){ var v0=acc; out.push({k:'sum', v:v0}); lastSum=v0; acc=0; accN=0; return; }
+    /* §pkbAge (2026-11-05) · owner: "ต่ำกว่า 3 ต้องเป็น ต่ำกว่า 3 ปี เพราะถ้าไม่มีตัวอักษรกำกับ ระบบนับ 3 ด้วย"
+       เลขที่เป็นอายุ/เกณฑ์ = ส่วนของป้าย ไม่ใช่ค่า · "ต่ำกว่า 3" "เกิน 60" "อายุ 12" "3 ปี" "2 ขวบ" "6 เดือน"
+       เลขหลังป้ายนั้นยังนับตามปกติ เช่น "ต่ำกว่า 3 ปี 4" = 4 */
+    s=s.replace(/(ต่ำกว่า|ไม่เกิน|ไม่ถึง|เกิน|อายุ|under|below|over|above)\s*\d+(?:\.\d+)?(?:\s*(?:ปี|ขวบ|เดือน|yrs?|years?))?/gi, function(m){ return m.replace(/[\d.]+/g,'ก'); })
+         .replace(/\d+(?:\.\d+)?\s*(?:ปี|ขวบ|เดือน|yrs?\b|years?\b)/gi, function(m){ return m.replace(/[\d.]+/g,'ก'); });
     var T=pkbTok(s).filter(function(t){ return t.t!=='x' || true; });
     /* ตัดเป็นช่วงที่ไม่มีตัวหนังสือคั่น แล้วเอาช่วงท้ายสุดที่มีของ · ตัวหนังสือ = ป้าย */
     var segs=[[]]; T.forEach(function(t){ if(t.t==='x'){ if(segs[segs.length-1].length) segs.push([]); } else segs[segs.length-1].push(t); });
