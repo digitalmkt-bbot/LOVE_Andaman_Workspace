@@ -74689,8 +74689,11 @@ function pkbIns(btn, s){
 function pkbCopy(btn){
   var host=btn.closest('.pkb'), ta=host&&host.querySelector('textarea'); if(!ta) return;
   var R=pkbEval(ta.value);
-  var txt=ta.value.split('\n').map(function(l,i){ var r=R[i]; return (r&&(r.k==='val'||r.k==='sum'))?(l+'  = '+pkCalcFmt(r.v)):l; }).join('\n');
-  try{ navigator.clipboard.writeText(txt); if(typeof flShowToast==='function') flShowToast('คัดลอกบอร์ดแล้ว'); }catch(_){ }
+  /* §pkbCopyNum (2026-11-05) · owner: "ขอคัดลอกแต่ตัวเลขมาได้ไหม ไม่ต้องมี = ผลรวม , มาด้วย"
+     คัดเฉพาะผลลัพธ์ของบรรทัดที่มีตัวเลข · บรรทัดละตัว · ไม่มีคอมม่า ไม่มีข้อความ · วางลง Excel ได้เป็นคอลัมน์ */
+  var nums=[]; ta.value.split('\n').forEach(function(l,i){ var r=R[i]; if(r&&(r.k==='val'||r.k==='sum')&&isFinite(+r.v)) nums.push(String(Math.round(+r.v*100)/100)); });
+  if(!nums.length){ if(typeof flShowToast==='function') flShowToast('ยังไม่มีตัวเลขให้คัดลอก'); return; }
+  try{ navigator.clipboard.writeText(nums.join('\n')); if(typeof flShowToast==='function') flShowToast('คัดลอกตัวเลข '+nums.length+' บรรทัดแล้ว'); }catch(_){ }
 }
 /* §pkbTools (2026-10-15) · owner "ขอให้สามารถซ่อนอันนี้ได้" (ชิปตัวเลข · ราคา/ใบ · ปุ่มกด) · สลับในที่เดียว ไม่วาดหน้าใหม่ (เคอร์เซอร์ไม่หลุด) · จำต่อเครื่อง */
 function pkbToolsOn(){ try{ return localStorage.getItem('la_pk_board_tools')!=='0'; }catch(_){ return true; } }
@@ -74744,7 +74747,7 @@ function pkBoard(flat, TY){
       +K('0')+K('.')+K('+','o')+K('\n','w3','&#8629; บรรทัดใหม่')+'</div>'
     +'<div class="pkb-ft"><span title="บอร์ดกลางของวัน · ทุกเครื่อง/ทุกคนเห็นแผ่นเดียวกัน · ใครพิมพ์ล่าสุดชนะ">&#9729; บอร์ดกลาง · '+e(dLbl)+(pkbWho()?(' · '+e(pkbWho())):'')+' · # โน้ต · รวม = ผลรวมข้างบน</span><span style="flex:1"></span>'
     +'<button type="button" class="ol" onclick="pkbTools(this)" title="ซ่อน/แสดง ชิปตัวเลข · ราคา/ใบ · ปุ่มกด">'+(_tOn?'&#9650; ซ่อนตัวช่วย':'&#9660; แสดงตัวช่วย')+'</button>'
-    +'<button type="button" class="ol" onclick="pkbCopy(this)">&#10697; คัดลอก</button><button type="button" class="ol" onclick="pkbClear()">ล้างบอร์ด</button></div>'
+    +'<button type="button" class="ol" onclick="pkbCopy(this)" title="คัดลอกเฉพาะตัวเลขผลลัพธ์ บรรทัดละตัว ไม่มีคอมม่า">&#10697; คัดลอกตัวเลข</button><button type="button" class="ol" onclick="pkbClear()">ล้างบอร์ด</button></div>'
     +'<style>'
     +'.pkb .ch{display:flex;align-items:center}'
     +'.pkb-sw{margin-left:auto;display:inline-flex;background:#EEF1F6;border-radius:10px;padding:3px;gap:2px}'
