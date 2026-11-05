@@ -72926,7 +72926,8 @@ function pkCxAdd(dst,C){ if(!dst || !C || !C.tot) return; var D=dst.cx||(dst.cx=
 function pkCxWhy(C){ return 'ยกเลิกหน้างาน '+(C.cxl||0)+' \u00b7 ไม่มา '+(C.ns||0)+((C.mv||0)?(' \u00b7 ย้ายวัน '+C.mv):''); }   /* §pkCxMv */
 function pkCxTxt(C){ if(!C || !C.tot) return ''; return PC_PK.filter(function(k){ return C.p8[k]>0; }).map(function(k){ return PK_CX_LB[k]+' '+C.p8[k]; }).join(' \u00b7 '); }
 function pkCxChip(C){ if(!C || !C.tot) return '';
-  return '<b class="cxc" title="ยกเลิก/ไม่มา/ย้ายวันในวันเดินทาง \u00b7 หักออกจากยอดแล้ว \u00b7 '+pkCxWhy(C)+'">ยกเลิก '+C.tot+'<span> \u00b7 '+pkCxTxt(C)+'</span></b>'; }
+  /* §pkChipSlim (2026-11-05) · owner: "ปรับให้กระชับไม่ต้องยาวเกิน" · ชิปโชว์แค่ "ยกเลิก n" · ประเภท (ผญ ไทย 4 · FOC …) ย้ายไปอยู่ในคำอธิบายตอนชี้ */
+  return '<b class="cxc" title="ยกเลิก '+C.tot+' \u00b7 '+String(pkCxTxt(C)).replace(/<[^>]+>/g,'').replace(/"/g,'&quot;')+'\n(ยกเลิก/ไม่มา/ย้ายวันในวันเดินทาง \u00b7 หักออกจากยอดแล้ว \u00b7 '+pkCxWhy(C)+')">ยกเลิก '+C.tot+'</b>'; }
 function pkTkData(date, pier){
   var boats=(typeof poBoats==='function')?poBoats(date,pier):[];
   var byRid={}, order=[];
@@ -73263,9 +73264,9 @@ function pk2CSS(S){
   S+' .pk2-rtl .rr .t{flex:1;min-width:0;font-size:13px;font-weight:700} '+S+' .pk2-rtl .rr small{display:block;font-size:11.5px;font-weight:500;color:'+M+'}',
   S+' .pk2-rtl .rr b{font-family:"DM Mono",monospace}',
   /* §pkDayMx · ชิปโปรแกรม + ตารางรายวัน */
-  S+' .pk2-fcs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:14px 16px 12px}',
+  S+' .pk2-fcs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 16px 10px}',
   S+' .pk2-fcs .cs{margin-left:auto;font-size:12px;color:'+M+'}',
-  S+' .pk2-fc{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:17px;border:1px solid #DCE1EA;background:#fff;color:'+N+';font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}',
+  S+' .pk2-fc{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:17px;border:1px solid #DCE1EA;background:#fff;color:'+N+';font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}',
   S+' .pk2-fc:hover{background:#F6F8FB}',
   S+' .pk2-fc i{width:8px;height:8px;border-radius:4px}',
   S+' .pk2-fc em{font-style:normal;font-family:"DM Mono",monospace;font-size:12.5px;font-weight:500;color:'+M+'}',
