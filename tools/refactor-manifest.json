@@ -709,6 +709,7 @@
     "bkV2UpgKindHtml": "allotment_v2/js/booking/bookingV2UpgKindHtml.js",
     "bkV2UpgPick": "allotment_v2/js/booking/bookingV2UpgPick.js",
     "bkV2UpgChip": "allotment_v2/js/booking/bookingV2UpgChip.js",
-    "bkV2UpgTicket": "allotment_v2/js/booking/bookingV2UpgTicket.js"
+    "bkV2UpgTicket": "allotment_v2/js/booking/bookingV2UpgTicket.js",
+    "bkV2GoBooking": "allotment_v2/js/booking/bookingV2GoBooking.js"
   }
 }
