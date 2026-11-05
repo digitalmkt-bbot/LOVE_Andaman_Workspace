@@ -41797,12 +41797,12 @@ function _bkxPayReset(e, opt){
       return pckN(qty*price); };
   }
   _bkExtraPay = e
-    ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[], split:false, p2:{m:'card', amt:0}}
-    : {m:'cash', feePct:3, slips:[], split:false, p2:{m:'card', amt:0}};
+    ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[], split:false, amts:{cash:'',transfer:'',card:''}}
+    : {m:'cash', feePct:3, slips:[], split:false, amts:{cash:'',transfer:'',card:''}};
   /* §exSplitPay · รายการที่แบ่งชำระไว้ · กางกลับเป็น ส่วนที่ 1 (ปุ่มวิธีรับเงิน) + ส่วนที่ 2 */
   if(e && _bkxPayCot && typeof bkxExIsSplit==='function' && bkxExIsSplit(e)){
     var _pp=bkxExPays(e);
-    if(_pp.length>=2){ _bkExtraPay.m=_pp[0].method; _bkExtraPay.split=true; _bkExtraPay.p2={m:_pp[1].method, amt:_pp[1].amount}; }
+    if(_pp.length>=2){ _bkExtraPay.m=_pp[0].method; _bkExtraPay.split=true; _pp.forEach(function(q){ if(_bkExtraPay.amts[q.method]!=null) _bkExtraPay.amts[q.method]=String(q.amount); }); }
   }
   if(!_bkxPayCot && _bkExtraPay.m==='cot') _bkExtraPay.m='cash';
 }
@@ -41817,12 +41817,20 @@ function bkV2ExtraFee(){
 /* §exSplitPay · สถานะแบ่งชำระของกล่อง · ใช้ได้เฉพาะกล่อง Extra (ไม่ใช่อัปเกรด) และไม่ใช่ "เก็บวันเดินทาง" */
 function bkxPaySplitOn(){ return !!(_bkxPayCot && _bkExtraPay.split && _bkExtraPay.m!=='cot'); }
 function bkxPayParts(base){
-  var a2=Math.max(0, Math.min(base, pckN(+(_bkExtraPay.p2&&_bkExtraPay.p2.amt)||0)));
-  var m2=(_bkExtraPay.p2&&_bkExtraPay.p2.m)||'card';
-  return [{method:_bkExtraPay.m||'cash', amount:pckN(base-a2)}, {method:m2, amount:a2}];
+  /* §exSplitPay2 · ช่องยอดต่อวิธี · ส่วนที่มียอด > 0 เท่านั้น · ลำดับ เงินสด → โอน → บัตร */
+  var A=_bkExtraPay.amts||{}, out=[];
+  ['cash','transfer','card'].forEach(function(m){ var a=pckN(+A[m]||0); if(a>0) out.push({method:m, amount:a}); });
+  return out;
 }
-function bkV2ExtraSetSplit(on){ _bkExtraPay.split=!!on; if(on && !_bkExtraPay.p2) _bkExtraPay.p2={m:'card',amt:0}; if(on && _bkExtraPay.p2.m===_bkExtraPay.m) _bkExtraPay.p2.m=(_bkExtraPay.m==='card'?'cash':'card'); bkV2ExtraPayRender(); }
-function bkV2ExtraSetP2(k,v){ _bkExtraPay.p2=_bkExtraPay.p2||{m:'card',amt:0}; if(k==='m') _bkExtraPay.p2.m=v; else _bkExtraPay.p2.amt=(typeof pckNumStr==='function')?pckNumStr(v):String(v||''); bkV2ExtraPayRender(); }
+function bkxPaySplitSum(){ return pckN(bkxPayParts(0).reduce(function(t,q){ return t+q.amount; },0)); }
+function bkV2ExtraSetSplit(on){
+  _bkExtraPay.split=!!on; _bkExtraPay.amts=_bkExtraPay.amts||{cash:'',transfer:'',card:''};
+  /* เปิดแบ่งจ่าย · ยกยอดทั้งก้อนไปไว้ที่วิธีที่เลือกอยู่ก่อน ผู้ใช้ค่อยแบ่งออก */
+  if(on){ var b=_bkxPayBase(), m=(_bkExtraPay.m==='cot')?'cash':(_bkExtraPay.m||'cash'); _bkExtraPay.amts={cash:'',transfer:'',card:''}; _bkExtraPay.amts[m]=b?String(b):''; }
+  bkV2ExtraPayRender();
+}
+function bkV2ExtraSetAmt(m,v){ _bkExtraPay.amts=_bkExtraPay.amts||{cash:'',transfer:'',card:''}; _bkExtraPay.amts[m]=(typeof pckNumStr==='function')?pckNumStr(v):String(v||''); bkV2ExtraPayRender(); }
+function bkV2ExtraFillRest(m){ var b=_bkxPayBase(), A=_bkExtraPay.amts||{}; var other=0; ['cash','transfer','card'].forEach(function(k){ if(k!==m) other+=pckN(+A[k]||0); }); _bkExtraPay.amts[m]=String(Math.max(0,pckN(b-other))); bkV2ExtraPayRender(); }
 function bkV2ExtraSetM(m){ _bkExtraPay.m=m; if(m!=='card') _bkExtraPay.feePct=_bkExtraPay.feePct; bkV2ExtraPayRender(); }
 // §pierDecimal · เก็บสตริงที่พิมพ์ · เกิน 5% ค่อยตัดลงเป็น 5 (กติกาเดิม)
 function bkV2ExtraSetPct(v){
@@ -41844,7 +41852,8 @@ function bkV2ExtraPayRender(){
   var P=_bkExtraPay, h='';
   h+='<label style="font-size:10px;color:var(--fd-ink-soft)">วิธีรับเงิน</label>';
   var _ways=BKX_PAY_WAYS.filter(function(x){ return x[0]!=='cot' || _bkxPayCot; });
-  h+='<div style="display:grid;grid-template-columns:repeat('+(_ways.length>3?2:3)+',1fr);gap:7px;margin:4px 0 10px">';
+  if(bkxPaySplitOn()) _ways=[];   /* §exSplitPay2 · แบ่งจ่ายอยู่ = ช่องยอดต่อวิธีแทนปุ่ม */
+  h+='<div style="display:'+(_ways.length?'grid':'none')+';grid-template-columns:repeat('+(_ways.length>3?2:3)+',1fr);gap:7px;margin:4px 0 10px">';
   _ways.forEach(function(x){
     var on=(P.m===x[0]);
     h+='<button type="button" onclick="bkV2ExtraSetM(\''+x[0]+'\')" style="border:1.5px solid '+(on?'#0F7A5A':'var(--fd-line)')+';background:'+(on?'#E8F5EF':'#fff')+';color:'+(on?'#0F6E56':'var(--fd-ink)')+';border-radius:9px;padding:7px 4px;cursor:pointer;font-family:inherit;line-height:1.25">'
@@ -41852,24 +41861,30 @@ function bkV2ExtraPayRender(){
       +'<span style="display:block;font-size:9.5px;color:'+(on?'#0F6E56':'var(--fd-ink-soft)')+';opacity:.85">'+x[2]+'</span></button>';
   });
   h+='</div>';
-  /* §exSplitPay · แบ่งชำระ 2 วิธี · ส่วนที่ 1 = ปุ่มข้างบน · ส่วนที่ 2 เลือกวิธี + ยอด · ส่วนที่ 1 คำนวณให้เอง */
+  /* §exSplitPay2 (2026-11-05) · owner "ขอวิธีที่ง่ายและ user เข้าใจง่ายกว่านี้" · แบบเดิมมี "ส่วนที่ 1/ส่วนที่ 2" ต้องคิดเอง
+     ตอนนี้: ติ๊ก "ลูกค้าจ่ายมากกว่า 1 วิธี" → ปุ่มวิธีรับเงินหายไป เหลือ 3 บรรทัด เงินสด / โอน / บัตร ใส่ยอดตรง ๆ
+     บรรทัดล่างบอก รวมเท่าไร ขาด/เกินเท่าไร · ปุ่ม "ใส่ที่เหลือ" เติมส่วนที่ขาดให้บรรทัดนั้น · ยอดรวมต้องเท่ายอดขายถึงบันทึกได้ */
   if(_bkxPayCot && P.m!=='cot'){
-    var _sp=bkxPaySplitOn(), _bs=_bkxPayBase(), _pt=_sp?bkxPayParts(_bs):null;
+    var _sp=bkxPaySplitOn(), _bs=_bkxPayBase();
     h+='<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--fd-ink);margin:-4px 0 8px;cursor:pointer">'
-      +'<input type="checkbox" '+(_sp?'checked':'')+' onchange="bkV2ExtraSetSplit(this.checked)" style="accent-color:#0F7A5A"> แบ่งชำระ 2 วิธี <span style="color:var(--fd-ink-soft);font-size:10.5px">(เช่น เงินสดส่วนหนึ่ง บัตรส่วนหนึ่ง)</span></label>';
+      +'<input type="checkbox" '+(_sp?'checked':'')+' onchange="bkV2ExtraSetSplit(this.checked)" style="accent-color:#0F7A5A"> ลูกค้าจ่ายมากกว่า 1 วิธี <span style="color:var(--fd-ink-soft);font-size:10.5px">(เช่น สดส่วนหนึ่ง บัตรส่วนหนึ่ง)</span></label>';
     if(_sp){
-      var _w2=BKX_PAY_WAYS.filter(function(x){ return x[0]!=='cot'; });
-      h+='<div style="border:1px solid #BFD3EA;background:#F3F7FC;border-radius:9px;padding:9px 11px;margin-bottom:10px">'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end">'
-        +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ส่วนที่ 2 · วิธี</label>'
-        +'<select onchange="bkV2ExtraSetP2(\'m\',this.value)" style="width:100%;height:32px;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px;font-family:inherit;background:#fff">'
-        +_w2.map(function(x){ return '<option value="'+x[0]+'"'+((P.p2&&P.p2.m)===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select></div>'
-        +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ส่วนที่ 2 · ยอด &#3647;</label>'
-        +'<input type="text" inputmode="decimal" data-bkx="p2amt" value="'+esc(String((P.p2&&P.p2.amt)||''))+'" oninput="bkV2ExtraSetP2(\'amt\',this.value)" placeholder="0" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>'
-        +'</div>'
-        +'<div style="font-size:11px;color:#15396B;margin-top:7px">ส่วนที่ 1 · <b>'+(BKX_PM_TH[_pt[0].method]||_pt[0].method)+' &#3647;'+pckNum(_pt[0].amount)+'</b> &nbsp;+&nbsp; ส่วนที่ 2 · <b>'+(BKX_PM_TH[_pt[1].method]||_pt[1].method)+' &#3647;'+pckNum(_pt[1].amount)+'</b>'
-        +((_pt[1].amount<=0||_pt[1].amount>=_bs)?' <span style="color:#A32D2D">· ใส่ยอดส่วนที่ 2 ให้อยู่ระหว่าง 0 กับ '+pckNum(_bs)+'</span>':'')
-        +((_pt[0].method===_pt[1].method)?' <span style="color:#A32D2D">· สองส่วนเป็นวิธีเดียวกัน</span>':'')+'</div></div>';
+      var A=P.amts||{}, sum=bkxPaySplitSum(), diff=pckN(_bs-sum);
+      var ROW=[['cash','เงินสด'],['transfer','โอนเงิน'],['card','บัตรเครดิต']];
+      h+='<div style="border:1px solid #BFD3EA;background:#F3F7FC;border-radius:9px;padding:6px 11px 9px;margin-bottom:10px">';
+      ROW.forEach(function(r){ var v=String(A[r[0]]||''), on=pckN(+v||0)>0;
+        h+='<div style="display:grid;grid-template-columns:1fr 120px 86px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid #D9E3EF">'
+          +'<span style="font-size:12.5px;font-weight:'+(on?'700':'500')+';color:'+(on?'#0F6E56':'var(--fd-ink)')+'">'+r[1]+(r[0]==='cash'?'':'<span style="font-size:9.5px;color:var(--fd-ink-soft);font-weight:500"> · แนบสลิป</span>')+'</span>'
+          +'<input type="text" inputmode="decimal" data-bkx="amt-'+r[0]+'" value="'+esc(v)+'" placeholder="0" oninput="bkV2ExtraSetAmt(\''+r[0]+'\',this.value)" style="width:100%;height:32px;font-size:13px;text-align:right;border:1px solid '+(on?'#0F7A5A':'var(--fd-line)')+';background:'+(on?'#F2FBF7':'#fff')+';border-radius:7px;padding:2px 8px;font-variant-numeric:tabular-nums">'
+          +((diff>0.005 && !on)?'<button type="button" onclick="bkV2ExtraFillRest(\''+r[0]+'\')" style="height:28px;border:1px solid #BFD3EA;background:#fff;color:#15396B;border-radius:7px;font-size:10.5px;cursor:pointer;font-family:inherit;white-space:nowrap">ใส่ที่เหลือ '+pckNum(diff)+'</button>':'<span></span>')
+          +'</div>'; });
+      var okSum=Math.abs(diff)<=0.005;
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:11.5px">'
+        +'<span style="color:var(--fd-ink-soft)">ยอดขาย &#3647;'+pckNum(_bs)+'</span>'
+        +(okSum?'<b style="color:#0F6E56">&#10003; รวม &#3647;'+pckNum(sum)+' ครบ</b>'
+               :(diff>0?'<b style="color:#A32D2D">รวม &#3647;'+pckNum(sum)+' · ยังขาด &#3647;'+pckNum(diff)+'</b>'
+                       :'<b style="color:#A32D2D">รวม &#3647;'+pckNum(sum)+' · เกิน &#3647;'+pckNum(-diff)+'</b>'))
+        +'</div></div>';
     }
   }
   if(P.m==='cot'){
@@ -41973,10 +41988,10 @@ function bkV2ExtraSave(bkId){
   let _pm=_bkExtraPay.m||'cash';
   /* §exSplitPay · แบ่งชำระ → เก็บเป็น "split:วิธี=ยอด|วิธี=ยอด" · ยอดสองส่วนต้องรวมเท่ายอดขายพอดี */
   if(typeof bkxPaySplitOn==='function' && bkxPaySplitOn()){
-    const _pp=bkxPayParts(total);
-    if(!(_pp[1].amount>0) || _pp[1].amount>=total){ alert('แบ่งชำระ: ใส่ยอดส่วนที่ 2 ให้อยู่ระหว่าง 0 กับ '+pckNum(total)); return; }
-    if(_pp[0].method===_pp[1].method){ alert('แบ่งชำระ: สองส่วนเป็นวิธีเดียวกัน · เลือกวิธีให้ต่างกัน หรือปิดแบ่งชำระ'); return; }
-    _pm=bkxExSplitStr(_pp);
+    const _pp=bkxPayParts(total), _sum=bkxPaySplitSum();
+    if(Math.abs(_sum-total)>0.005){ alert('ยอดที่ใส่รวม ฿'+pckNum(_sum)+' ไม่เท่ายอดขาย ฿'+pckNum(total)+(_sum<total?('\n\nยังขาด ฿'+pckNum(total-_sum)+' · กด "ใส่ที่เหลือ" ที่บรรทัดวิธีที่ต้องการ'):('\n\nเกิน ฿'+pckNum(_sum-total)))); return; }
+    if(_pp.length===1){ _pm=_pp[0].method; }   /* ใส่วิธีเดียว = ไม่ต้องแบ่ง · เก็บแบบปกติ */
+    else _pm=bkxExSplitStr(_pp);
   }
   const _fee=bkV2ExtraFee();
   const _slips=(_bkExtraPay.slips||[]).slice();
