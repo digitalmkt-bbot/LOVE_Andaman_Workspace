@@ -55486,7 +55486,10 @@ function bkV2RenderAddOnsSection(){
 
   if(opts.length === 0) return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">No add-ons available for this rate type · or pick trips first to enable transfer options.</div>`;
 
-  return `
+  /* §coAddon · ใบของบริษัท · บอกให้ชัดว่าราคาในการ์ดเป็นแค่อ้างอิง */
+  const _coHint = (typeof laIsCompanyBk==='function' && laIsCompanyBk(d))
+    ? `<div style="font-size:11px;color:#8a5b00;background:#FDF6E6;border:1px solid #E8D8A8;border-radius:8px;padding:6px 10px;margin-bottom:8px">ใบของบริษัท · ติ๊กเพื่อให้ฝ่ายปฏิบัติการรู้ว่าต้องจัดหางยาว/รถ · ราคาที่เห็นเป็นตัวอ้างอิง ยอดจริงอยู่ในช่อง Total</div>` : '';
+  return `${_coHint}
     <div class="bkv2-nb-addons">
       ${opts.map(o => { const _sel=d.addOns.find(x=>x.type===o.type); const _q=_sel?(_sel.qty||1):1; const _isChtr=o.type==='longtail-charter'; const _isVan=o.type.indexOf('transfer-')===0; const _isQty=_isChtr||_isVan; const _on=checked(o.type)&&!o.locked; const _amt=(o.amount||0)*((_isQty&&_on)?_q:1); const _btn='width:28px;height:28px;border-radius:8px;border:1.5px solid #C9CCD6;background:#F7F7F5;color:#3E4658;font-size:15px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit;padding:0'; const _qLbl=_isChtr?'ลำ':'คัน'; return `
         <label class="bkv2-nb-addon ${checked(o.type)?'on':''}" style="${o.locked?'opacity:.55;cursor:not-allowed;background:#fafafa':''}">
@@ -65947,7 +65950,8 @@ function bkV2CommitBooking(status){
     addOns: d.addOns.map(a => {
       const info = bkV2AddOnInfo(a.type);
       const q = a.qty||1;
-      const _o = { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: info.total*q, qty: q, note: (a.note||'').trim() };
+      const _coBk = (typeof laIsCompanyBk==='function') && laIsCompanyBk(d);   /* §coAddon · ใบบริษัท ราคารวมในช่อง Total แล้ว */
+      const _o = { type: a.type, label: info.label + (a.type==='longtail-charter'&&q>1?(' × '+q+' ลำ'):''), amount: _coBk?0:info.total*q, qty: q, note: (a.note||'').trim() };
       /* §ltJoinQty · เก็บจำนวนคนที่ลงจอยจริง · ฝั่งปฏิบัติการอ่านตัวนี้ ไม่ใช่เดาจากหัวทั้งลำ */
       if(a.type==='longtail-join'){ _o.jAd = (info.joinAd!=null)?info.joinAd:null; _o.jChd = (info.joinChd!=null)?info.joinChd:null; }
       return _o;
@@ -66383,7 +66387,35 @@ function laManualRT(){
   return { id:'__manual__', code:'MANUAL', name:'ราคาใส่มือ · ใบของบริษัท',
            note:'ชุดสังเคราะห์ ไม่มีตารางราคา · ยอดมาจากช่อง Total ของใบ',
            color:'#B8860B', active:true, validFrom:'', validTo:'',
-           routes:routes, seatRates:{}, routeBundles:{}, addOns:{} };
+           routes:routes, seatRates:{}, routeBundles:{}, addOns:laManualAddOns() };
+}
+/* §coAddon (2026-11-05) · owner "Love andaman company ขาดส่วนที่เป็น add-on"
+   ชุดสังเคราะห์ของใบบริษัทเคยมี addOns:{} → การ์ด Add-ons หายทั้งการ์ด · ฝ่ายปฏิบัติการเลยไม่รู้ว่าแขกบริษัท/PR
+   ต้องมีหางยาวหรือเหมารถ (ใบงานไกด์ · จัดรถ · นับหางยาว อ่านจาก addOns ของใบ)
+   รวมรายการ add-on จากทุกชุดราคาที่ยังใช้อยู่ (เส้นทางไหนมีหางยาว/เหมารถในชุดใดชุดหนึ่ง = เลือกได้)
+   ราคาในการ์ดเป็นแค่ตัวอ้างอิง (ชุดแรกที่เจอ) · ยอดจริงของใบบริษัทมาจากช่อง Total · ตอนบันทึก amount = 0 */
+function laManualAddOns(){
+  var lt={applies:[], byRoute:{}}, pt={};
+  try{
+    var RTS=(typeof SB_RATE_TYPES!=='undefined'?SB_RATE_TYPES:[]).filter(function(r){ return r && r.active!==false && r.addOns; });
+    RTS.forEach(function(r){
+      var n=(typeof _rtNormalizeLongtail==='function')?_rtNormalizeLongtail(r.addOns.longtail):null;
+      if(n){
+        var ids=n.applies.length?n.applies:(r.routes||[]);
+        ids.forEach(function(rid){
+          if(lt.byRoute[rid]) return;
+          var e=n.byRoute[rid]||{join:n.join, charter:n.charter};
+          if((e.join&&(e.join.adult||e.join.child))||(e.charter&&e.charter.price)){ lt.byRoute[rid]=e; lt.applies.push(rid); }
+        });
+      }
+      var m=r.addOns.privateTransfer;
+      if(m && typeof m==='object') Object.keys(m).forEach(function(rid){ if(!pt[rid] && m[rid] && typeof m[rid]==='object') pt[rid]=m[rid]; });
+    });
+  }catch(_){}
+  var out={};
+  if(lt.applies.length) out.longtail=lt;
+  if(Object.keys(pt).length) out.privateTransfer=pt;
+  return out;
 }
 function bkV2GetRT(){
   /* §internal · ใบของบริษัทเองใช้ชุดสังเคราะห์เสมอ ต่อให้มีคนไปผูก rate type ไว้ในหน้า Agent List
