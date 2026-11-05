@@ -641,8 +641,56 @@
     if(field === 'nat') return pk === 'lead' ? bk.leadInsuranceNat : p.insuranceNat;
     return null;
   }
+  /* §tmPax (lk-inbox 2026-11-04) · the Ranong immigration (ตม.) document's traveller fields: Thai and English name, ID card number,
+     laser code, date of birth, remark. Legacy kept them in insurance_overrides beside the insurer's age (tmSet → insSetField), and
+     insPersist does nothing here. The server keeps them per booking and traveller key (lead, or the position, past the named
+     passengers too): GET /v1/tm-pax?date= fills a cache per trip date, PUT /v1/bookings/{id}/tm-pax/{key} saves one field and
+     answers the row cleaned as legacy's tmSet cleans it. Nationality (nat) stays the insurer's form field below. */
+  var TM = { thName: 'th_name', enName: 'en_name', idNo: 'id_no', idLaser: 'id_laser', dob: 'dob', remark: 'remark' };
+  var tmRows = {}, tmDays = {};             // server booking id -> key -> row · date -> 'loading' | 'done'
+  function tmRedraw(){
+    var a = document.activeElement; if(a && a.closest && a.closest('.tm-grid')) return;   // typing in the grid: the next draw picks it up
+    try{ if(typeof window.renderPierTm === 'function' && document.getElementById('pt-host-' + (typeof _tmPier !== 'undefined' ? _tmPier : 'ranong'))) window.renderPierTm(); }catch(_){}
+    try{ if(document.querySelector('.tm-grid, [data-tmchip]')) (typeof window.bookingV2RenderKeep === 'function' ? window.bookingV2RenderKeep : window.bookingV2Render)(); }catch(_){}
+  }
+  function tmLoadDay(date){
+    if(tmDays[date]) return;
+    tmDays[date] = 'loading';
+    O.get('/v1/tm-pax', { date: date }).then(function(r){
+      ((r && r.rows) || []).forEach(function(x){ (tmRows[x.booking_id] = tmRows[x.booking_id] || {})[x.pax_key] = x; });
+      tmDays[date] = 'done'; tmRedraw();
+    }, function(e){ delete tmDays[date]; O.fail('Immigration details did not load', e); });
+  }
+  /* every trip date of the booking read: else the loads start and legacy's local value answers meanwhile */
+  function tmKnown(bk){
+    var ds = (bk.trips || []).map(function(t){ return t && t.date; }).filter(Boolean), all = ds.length > 0;
+    ds.forEach(function(d){ if(tmDays[d] !== 'done'){ all = false; tmLoadDay(d); } });
+    return all;
+  }
+  function tmSave(bk, bkId, pk, field, val){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('operations')) return null;   // legacy insPersist: operations
+    var sid = toServerBookingId(bkId), key = String(pk);
+    var rows = tmRows[sid] = tmRows[sid] || {}, was = rows[key];
+    rows[key] = Object.assign({}, was || {}); rows[key][TM[field]] = (val == null || val === '') ? null : String(val);   // shows at once
+    var body = {}; body[TM[field]] = (val == null || val === '') ? null : String(val);
+    return O.queue(function(){ return O.call('PUT', '/v1/bookings/' + enc(sid) + '/tm-pax/' + enc(key), body); }).then(function(r){
+      if(r && r.row) rows[key] = r.row; else delete rows[key];
+      O.wrote('booking-tm-pax');
+      return r;
+    }, function(e){
+      if(was) rows[key] = was; else delete rows[key];
+      O.fail('Immigration details not saved', e); tmRedraw();
+      return null;
+    });
+  }
+
   wrap('insEff', function(orig, bkId, pk, field, src){
     var bk = findBooking(bkId);
+    if(bk && bk._fromOpsBackend && TM[field] && bk.opsId){
+      if(!tmKnown(bk)) return orig.apply(this, [].slice.call(arguments, 1));
+      var row = (tmRows[toServerBookingId(bkId)] || {})[String(pk)], v = row ? row[TM[field]] : null;
+      return v != null && v !== '' ? v : src;
+    }
     if(bk && bk._fromOpsBackend){
       if(field === 'firstName' || field === 'lastName' || field === 'nat'){
         var typed = insForm(bk, pk, field);
@@ -678,6 +726,12 @@
 
   var insAgeTimers = {};
   wrap('insSetField', function(orig, bkId, pk, field, val){
+    if(TM[field]){
+      var tb = findBooking(bkId);
+      if(tb && tb.opsId) return tmSave(tb, bkId, pk, field, val);
+      O.fail('Immigration details not saved', new Error('This booking is not saved to operation-backend yet'));
+      return null;
+    }
     if(field === 'age' || field === 'firstName' || field === 'lastName' || field === 'nat'){
       /* oninput: one save per pause in typing (600 ms), carrying the latest value, not one per keystroke */
       var k = bkId + '::' + pk + '::' + field;

@@ -36,7 +36,7 @@
   var originals = {};
   var WRAPPED = ['renderVanJobs', 'renderVanCheckin', 'bookingV2OpsVansDay', 'vanJobsGetPickupTh',
     'vanJobsSetDriver', 'vanJobsResetDriver', 'vanJobsToggleSent', 'vanJobsSetSreq', 'vanJobsResetSreq',
-    'vanJobsSetPickupTh', 'vckArrWait', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck', 'vckArrAll', 'vckArrSave', 'vckArrToggle'];
+    'vanJobsSetPickupTh', 'vckArrWait', 'vsSave', 'vsDel', 'vsSetVan', 'vsCheck', 'vckArrAll', 'vckArrSave', 'vckArrToggle', 'tsStopGot'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
   function wrap(name, opsFn){
     var orig = originals[name];
@@ -307,6 +307,8 @@
       ck: s.checked_in ? { at: s.checked_in.at, by: s.checked_in.by || '', n: +s.checked_in.seats || 0 } : null,
       by: s.created_by || '', at: s.created_at || '', editBy: s.updated_by || '', editAt: s.updated_at || '',
       srvSeats: s.seats != null ? (+s.seats || 0) : null,      // w6-c · the seats the stop takes (server-computed, never sent; vsSeats in 93-ops-w6c-vans.js)
+      // §vsPay · the charge collected at the stop, in legacy's shape (Travel Summary and the stop form read it)
+      pay: s.pay ? { amt: +s.pay.amount || 0, who: s.pay.who || 'pier', method: s.pay.method || 'cash', got: !!s.pay.got_at, gotBy: s.pay.got_by || '', gotAt: s.pay.got_at || '' } : null,
       _opsId: s.id
     };
   }
@@ -321,7 +323,7 @@
   }
   function stopIdOf(k){ var p = str(k).split('::'); return p[2] || ''; }
   function stopBody(rec){
-    return {
+    var body = {
       kind: rec.kind === 'cargo' ? 'cargo' : 'staff', label: str(rec.label).trim(),
       pax: rec.kind === 'cargo' ? 0 : (parseInt(rec.pax, 10) || 0),
       time: str(rec.time).trim() || null, place: str(rec.place).trim(),
@@ -329,6 +331,13 @@
       leg: (rec.leg === 'ret' || rec.leg === 'both') ? rec.leg : 'out',
       phone: str(rec.phone).trim() || null, note: str(rec.note).trim() || null
     };
+    // §vsPay (vsSubmit's payAmt / payWho / payMethod): no amount is no charge; the collected mark is the server's (tsStopGot below).
+    // Sent only when the caller's record has the form's charge, so a save that knows nothing of it leaves the charge as it is.
+    if(rec.payAmt !== undefined){
+      body.pay = (parseFloat(rec.payAmt) || 0) > 0 ? { amount: Math.round(parseFloat(rec.payAmt) * 100) / 100,
+        who: (rec.payWho === 'driver' || rec.payWho === 'office') ? rec.payWho : 'pier', method: rec.payMethod === 'transfer' ? 'transfer' : 'cash' } : null;
+    }
+    return body;
   }
   function sendStop(id, body){
     return O.queue(function(){ return id ? O.patch('/operations/van-stops/' + enc(id), body) : O.post('/operations/van-stops', body); });
@@ -359,6 +368,15 @@
       var vs = store('VAN_STOPS'); if(vs) delete vs[k];
       redraw();
     }, function(e){ O.fail('Stop not deleted · ' + failCode(e), e); });
+  });
+  // §vsPay · Travel Summary's "เก็บแล้ว" on a stop's charge: the time and who are the server's (PUT …/pay-collected, DELETE undoes it).
+  wrap('tsStopGot', function(k, on){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('pier') && !window.laGuardEdit('operations')) return;
+    var id = stopIdOf(k); if(!id) return;
+    O.queue(function(){ return O.call(on ? 'PUT' : 'DELETE', '/operations/van-stops/' + enc(id) + '/pay-collected'); }).then(function(s){
+      putStop(s);
+      if(typeof window.renderTravelSum === 'function') window.renderTravelSum();
+    }, function(e){ O.fail('Collected not saved · ' + failCode(e), e); });
   });
   wrap('vsSetVan', function(){
     return refuse('Stop not moved', 'Edit the stop and pick its van group instead');

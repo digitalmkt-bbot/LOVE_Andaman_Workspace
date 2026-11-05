@@ -20,6 +20,7 @@
    pck_svc_colors         GET|PUT /v1/config/pck_svc_colors    (Pier check-in service colours)
    pck_svc_rules          GET|PUT /v1/config/pck_svc_rules     (Pier check-in service rules)
    pck_guide_colors       GET|PUT /v1/config/pck_guide_colors  (Pier check-in guide colours)
+   tm_boats               GET|PUT /v1/config/tm_boats          (Ranong immigration boats and crews; tmBoatsRead, tmBoatsWrite)
    (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
@@ -124,6 +125,7 @@
     vck_line_tpl: { title: 'Van check-in LINE template', wait: 0 },
     vck_line_extras: { title: 'Van check-in LINE extra lines', wait: 0 },
     vck_line_office: { title: 'Van check-in LINE office', wait: 0 },
+    tm_boats: { title: 'Ranong immigration boats', wait: DEBOUNCE_MS },
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }
@@ -241,6 +243,15 @@
     if(!window.confirm('คืนเทมเพลตข้อความตามแขกเป็นค่าเริ่มต้น?')) return;
     cfgWrite('vck_line_tpl', ''); cfgWrite('vck_line_extras', []);
     lineSaved();
+  });
+
+  /* §tmDoc · tm_boats: the Ranong immigration document's boat and crew data (14-tm-ranong.js). Legacy kept it in each browser's blob
+     (tmBoatsRead / tmBoatsWrite, laBlob().tm_boats as JSON text); the config store holds one shared object, so every pier login sees the
+     same boats and crews. tmEdit / tmBoatSet keep doing the edit (and the 120-day trim of day-only sets); the whole object is saved. */
+  wrap('tmBoatsRead', function(orig){ return O.clone(liveOf('tm_boats')); });
+  wrap('tmBoatsWrite', function(orig, m){
+    if(typeof window.laCanEditArea === 'function' && !window.laCanEditArea('pier') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+    cfgWrite('tm_boats', (m && typeof m === 'object') ? m : {});
   });
 
   /* rc_status_colors · rcStatusColors (08) and rcSaveStatusColor (08): a falsy hex deletes that status */
