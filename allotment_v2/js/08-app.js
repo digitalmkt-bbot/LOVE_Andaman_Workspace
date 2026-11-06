@@ -17702,6 +17702,8 @@ function ckRowHtml(r, date, kind, extraHtml){
   var pb=ckPaxBreak(t.pax);
   var time=bkSplitPickTime(r.sp)||r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'—';
+  /* §ovnBackDrop · ขากลับค้างคืนที่ส่งคนละที่ · ช่องจุดรับไม่โชว์โรงแรมขาไป */
+  try{ if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn((b.trips||[]).find(function(t){ return t&&t.date===date; })||null)){ var _od=(typeof pckJobDrop==='function')?pckJobDrop(b,date):null; if(_od && _od.t && !_od.self) pickup='\u21a9 รับกลับจากเกาะ'; } }catch(_){}
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
   if(_sp){
     pb={ad:+_sp.ad||0, chd:+_sp.chd||0, inf:+_sp.inf||0, foc:+_sp.foc||0};
@@ -23537,6 +23539,9 @@ function pckRowHtml(r, date, sheet){
   /* §pckSplit · แถวของจุดรับย่อย · โรงแรม/โซน เป็นของจุดนั้น ไม่ใช่ของ Lead */
   if(r._pickHotel!=null){ pickup=r._pickHotel||pickup; pArea=r._pickArea||pArea; }
   pickup=ckPickShort(pickup); pArea=ckPickShort(pArea);   /* §pickShort · ชื่อโซนก็ยาวแบบเดียวกัน */
+  /* §ovnBackDrop (2026-11-06) · owner: "ไม่ต้องบอก The SIS Kata ไหม User อาจจะงง"
+     ขากลับค้างคืนที่ส่งคนละที่ · โรงแรมที่รับขาไปไม่เกี่ยวกับวันนี้ · โชว์แค่จุดส่ง (จาก pckDropHtml) และโซนของจุดส่ง */
+  if(r._ovnBack){ var _od=(typeof pckJobDrop==='function')?pckJobDrop(b,date):null; if(_od && _od.t && !_od.self){ pickup=''; var _da=(b.dropoffAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(b.dropoffAreaId):null; pArea=ckPickShort((_da&&_da.name)||b.dropoffArea||pArea); } }
   var room=b.roomNo||b.room||b.roomNumber||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
@@ -24094,9 +24099,10 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +'<td class="pk">'
         +(r._ovnBack?('<span style="display:block;color:#5B289A;font-weight:700;font-size:.94em">&#8617; รับกลับจากเกาะ'
             +(r._ovnOut?(' &middot; ไปเมื่อ '+e((typeof ovnDayTh==='function')?ovnDayTh(r._ovnOut):r._ovnOut)):'')+'</span>'):'')
-        +e(pickup||area||'ท่าเรือ (มาเอง)')
+        /* §ovnBackDrop · ขากลับที่ส่งคนละที่ · ไม่พิมพ์โรงแรมขาไป (ไกด์ไม่ต้องรู้ว่ารับมาจากไหน) */
+        +((r._ovnBack && dropOff && dropOff.t && !dropOff.self)?'':(e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
-        +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')
+        +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')))
         +(dropOff?('<span class="drp'+(dropOff.self?' self':'')+'">'
             +(dropOff.t?('&#8627; ส่ง '+e(dropOff.t)):'')
             +(dropOff.van?((dropOff.t?' · ':'')+e(ckRetVanTxt(dropOff.van))):'')
