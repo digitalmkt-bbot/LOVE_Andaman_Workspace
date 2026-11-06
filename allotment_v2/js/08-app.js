@@ -10622,7 +10622,10 @@ function bkV2RetInfo(bk, date){ const o=((typeof bkOpsRead==='function')?bkOpsRe
   if(Array.isArray(o.vanSplits)&&o.vanSplits.length){ const rs=o.vanSplits.map(s=>s.vanReturnId).filter(Boolean); arranged=rs.length>0&&rs.length===o.vanSplits.length; retId=rs[0]||null; }
   else { retId=o.vanReturnId||null; arranged=!!retId; }
   const sameVan=!!o.returnSameVan;   // dispatcher confirmed "กลับคันเดิม" (รถขาไปพากลับ · ส่งจุดใหม่) → clears the alert
-  return {sep, drop, retId, arranged, selfRet, sameVan, alert: sep&&!arranged&&!selfRet&&!sameVan}; }
+  /* §ovnOutNoRet (2026-11-06) · owner: "ของวันที่ 6 ไม่ควรจะขึ้นว่ามีรถกลับ แต่ขึ้นป้าย OVN ถูกแล้ว"
+     วันขาไปของใบค้างคืน ลูกค้าไม่กลับวันนี้ · รถไปส่งจุดใหม่เป็นงานของวันขากลับ (ovnLeg) ไม่ใช่วันนี้ */
+  const _tD=(bk.trips||[]).filter(t=>t&&t.date===date), ovnOut=_tD.length>0 && _tD.every(t=>t.ovn && !t.ovnLeg);
+  return {sep, drop, retId, arranged, selfRet, sameVan, ovnOut, alert: sep&&!arranged&&!selfRet&&!sameVan&&!ovnOut}; }
 // Auto-group transfer bookings of a route+date into vans · prefer vans assigned to this program that day (matrix dayRoute), else zone vans · fill-first by capacity · keeps manual assignments
 function bkV2VanAutoAssign(date, routeId){
   const rows=baSeatBookingsForRoute(date,routeId).filter(({b,t})=>{ const z=t.zone||b.pickupZone||'NoTransfer'; return z!=='NoTransfer'&&z!=='NT'; });
@@ -11385,6 +11388,17 @@ function bkV2HealSelfArrivePickup(date){
         if(t.pickupTime!==def){ t.pickupTime=def; changed=true; }
       }
       const o=b.ops; if(o && _isClock(o.pickupTimeFinal)){ o.pickupTimeFinal=''; changed=true; }
+      /* §selfZone (2026-11-06) · owner: "ก่อนหน้าเป็น Kata แล้วเราปรับเป็น Visit Panwa Pier แต่ไม่ย้าย" (E58480 · 6 พ.ย.)
+         เปลี่ยนจุดรับเป็นท่าเรือ (self-arrive) แต่ trip.zone ยังเป็น PK และ ops ของวันนั้นยังมี vanId/vanGroup ของรถคันเดิม
+         → แถวค้างอยู่ในกรุ๊ปรถ · ใบงานรถยังมีชื่อ · คนขับอาจไปรับ
+         ตอนนี้ · จุดรับเป็นโซน NoTransfer และไม่ใช่ขากลับค้างคืน/รถส่วนตัว → โซนของวันนั้น = NoTransfer + ถอดออกจากรถ/กรุ๊ปของวันนั้น
+         (ประวัติเช็คอินรถเก็บไว้เหมือนเดิม) */
+      if(!t.ovnLeg && _area && (_area.zone==='NoTransfer'||_area.zone==='NT') && t.zone && t.zone!=='NoTransfer' && t.zone!=='NT'){
+        t.zone='NoTransfer'; changed=true;
+        try{ const od=(typeof bkOpsDate==='function')?bkOpsDate(b,date):date, O=(typeof bkOpsFor==='function')?bkOpsFor(b,od):b.ops;
+          if(O && !(Array.isArray(O.vanSplits)&&O.vanSplits.length) && (O.vanId||O.vanGroup||O.vanSeq)){ O.vanId=null; O.vanGroup=0; O.vanSeq=0; }
+          if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','จุดรับเป็นท่าเรือ (มาเอง) · ถอดออกจากรถรับของวันที่ '+date,'Edited'); }catch(_){}
+      }
     });
   });
   if(changed && typeof acctPersistBookings==='function') acctPersistBookings();
@@ -59558,6 +59572,7 @@ function bkV2RenderTab2(){
                  ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */
               /* §rtFt2 · owner: "มันต้องอยู่ที่ Dropoff ทำให้สวยเหมือนอันนี้ (ป้ายล็อก)" · ป้ายลอยใต้ชื่อจุดส่งในช่องนี้เอง
                  หน้าตาเป็นเม็ดทึบตัวขาวแบบป้าย 🔒 ล็อก ของ Compact */
+              if(_ri.ovnOut) return loc;   /* §ovnOutNoRet · วันขาไปค้างคืน · ไม่มีรถกลับวันนี้ ป้าย OVN บอกวันกลับอยู่แล้ว */
               if(_ri.selfRet) return loc+`<span class="t2-rtft" style="background:#6B7280" title="จุดส่งกลับเป็นท่าเรือ self-arrive · ลูกค้าเดินทางกลับเอง ไม่ต้องจัดรถ">&#8617; ลูกค้ากลับเอง</span>`;
               if(_ri.arranged){ const vn=_ri.retId?((vehGet(_ri.retId)||{}).name||_ri.retId):''; return loc+`<span class="t2-rtft" style="background:#0F6E56" title="รถกลับ: ${esc(vn)} · ส่งที่ ${esc(_ri.drop||'')}">&#8617; กลับ ${esc(vn)}</span>`; }
               if(_ri.sameVan) return loc+`<span class="t2-rtft" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',false,'${date}')" style="background:#2C5F94;cursor:pointer" title="${vanMode?'รถขาไปพากลับ · ส่งจุดใหม่ · คลิกเพื่อยกเลิก':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">&#8617; กลับคันเดิม &#10003;</span>`; return loc+`<br><span class="t2-rb" style="background:#FBE3E1;color:#C0392B;font-weight:700;white-space:nowrap" title="ส่งกลับคนละที่กับตอนรับ · ยังไม่จัดรถกลับ">⚠ ยังไม่จัดรถกลับ</span> <span class="t2-rb" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode){bkV2ToggleVanMode();return;}bkV2SetReturnSameVan('${bk.id}',true,'${date}')" style="background:${vanMode?'#EAF1FA':'#EFE7D6'};color:${vanMode?'#2C5F94':'#8A6A1A'};white-space:nowrap;cursor:pointer;font-weight:700" title="${vanMode?'รถขาไปพากลับเอง ไปส่งจุดใหม่ (ไม่ต้องจัดรถคันอื่น)':'เปิดโหมด Van ก่อนถึงจะจัดรถกลับได้ · คลิกเพื่อเข้าโหมด Van'}">↩ กลับคันเดิม${vanMode?'':' (เปิด Van)'}</span>`; })() : '';
