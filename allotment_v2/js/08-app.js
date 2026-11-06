@@ -20925,6 +20925,24 @@ function renderVanCheckin(){
     _draw.forEach(function(r){ r._gk=k; r._date=date; if(r.strand) r.strandTail=4;
       bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
   });
+  /* §vckNovan (2026-11-06) · owner "เคสนี้ยังไม่ได้จัดรถเพราะติดต่อลูกค้าไม่ได้ · หน้าเช็คอินน่าจะจัดการได้ด้วยว่า CXL/No-show"
+     แถว "ยังไม่จัดรถ" เดิมเป็นแถวตาย ไม่มีปุ่มอะไร · ทีมรถที่รู้ว่าติดต่อไม่ได้ต้องวิ่งไปกดที่หน้าท่าแทน
+     ตอนนี้: ปุ่ม No-show / CXL (บันทึกฝั่งรถ · เหตุผลเดียวกับแถวปกติ) · กดแล้วแถวขึ้น "✗ ไม่มาทั้งใบ" + ปุ่มถอน · หน้าท่าเห็นตามทันที */
+  var _vckNovanActs=function(r, date){
+    var b=r.b, vd=(typeof pckVoidInfo==='function')?pckVoidInfo(b,date,r.t):null;
+    var L=(typeof ckLostByType==='function')?ckLostByType(b,date):{total:0};
+    var _stop='event.stopPropagation();';
+    if(vd){
+      return '<td class="ck-c ck-in" colspan="2" style="border-left:2px solid #EBD9BE;text-align:left;white-space:normal"><span style="font-size:11px;font-weight:800;color:#A32D2D">&#10007; '+((typeof pckVoidLabel==='function')?pckVoidLabel(vd):'ไม่มาทั้งใบ')+'</span>'
+        +'<div style="font-size:10px;color:#8a8a82">'+e((vd.at||'')+(vd.by?(' · '+vd.by):'')+(vd.reason?(' · '+vd.reason):'')+(vd.note?(' · '+vd.note):''))+'</div></td>'
+        +'<td class="ck-in" colspan="2"><button class="ck-ev" onclick="'+_stop+'ckEventUndo(\''+e(b.id)+'\',\''+e(date)+'\',\'van\')" title="กดผิด / ลูกค้ามาแล้ว · ถอนรายการล่าสุด" style="border:1px solid #D9DDE4;color:#15396B;background:#fff">&#8617; รับกลับ</button></td>';
+    }
+    return '<td class="ck-c ck-in" colspan="2" style="border-left:2px solid #EBD9BE;text-align:left;white-space:normal">'
+      +(L.total>0?('<span style="font-size:10.5px;color:#A32D2D;font-weight:700">ไม่มา '+L.total+' คน</span> '):'')
+      +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="'+_stop+'ckEventOpen(\''+e(b.id)+'\',\''+e(date)+'\',\'van\',\'no_show\')" title="ติดต่อลูกค้าไม่ได้ / ลูกค้าไม่มา · บันทึกฝั่งรถ">No-show</button>'
+      +'<button class="ck-ev ck-ev-cx" onclick="'+_stop+'ckEventOpen(\''+e(b.id)+'\',\''+e(date)+'\',\'van\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน · บันทึกฝั่งรถ">CXL</button></span></td>'
+      +'<td class="ck-in" colspan="2" style="font-size:10px;color:#b0aea6">ยังไม่จัดรถ · กดได้เลยถ้าติดต่อลูกค้าไม่ได้</td>';
+  };
   // §topWarn · booking ที่ยังไม่จัดรถคือของที่ต้องลงมือก่อนใคร เดิมต่อท้ายสุดของตาราง ต้องเลื่อนผ่าน
   // ทุกคันกว่าจะเจอ · ย้ายมาไว้บนสุดแทน (สร้างแยกไว้ใน warnHtml แล้วค่อยเอาไปต่อหน้า)
   var warnHtml='';
@@ -20936,7 +20954,7 @@ function renderVanCheckin(){
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in'), pb=ckPaxBreak(t.pax);
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
       var pa=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
-      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">'+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(ckPickShort(b.hotelName||b.pickup)||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(ckPickShort(pa))+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
+      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">'+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(ckPickShort(b.hotelName||b.pickup)||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(ckPickShort(pa))+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td>'+_vckNovanActs(r, date)+'</tr>';
     });
   }
   bodyHtml = warnHtml + bodyHtml;
