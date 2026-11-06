@@ -262,7 +262,21 @@
     };
     w.__ops = true; window[name] = w;
   }
+  /* §closeRelease (lk-inbox 2026-11-05) · closing a day or a season takes the route's boats off its closed days from today on. The server
+     does it in the same write and answers released_boats; the screen takes them out of TRIPS and says so in legacy's words. Legacy's own
+     sweep (progReleaseBoats) would run on the browser's copy before the server has answered, so it does nothing here. */
+  function adoptReleased(j, r){
+    var list = (j && j.released_boats) || [];
+    if(!list.length) return;
+    if(O.deployments && typeof O.deployments.adopt === 'function') O.deployments.adopt(list.map(function(x){ return { date: x.service_date, boat: x.boat_id, remove: true }; }));
+    var names = [];
+    list.forEach(function(x){ var b = (typeof getBoat === 'function') ? getBoat(x.boat_id) : null, n = (b && b.name) || x.boat_id; if(names.indexOf(n) < 0) names.push(n); });
+    var msg = 'ถอดเรือออกจาก ' + ((r && r.name) || '') + ' ในวันที่ปิด ' + list.length + ' รายการ · ' + names.join(', ');
+    if(typeof window.flShowToast === 'function') window.flShowToast(msg);
+    else O.toast({ kind: 'neutral', title: 'Boats released', status: 'INFO', sub: msg, dur: 8000 });
+  }
   function wrapCalendarWrites(){
+    calWrap('progReleaseBoats', function(){ return []; });
     // a fresh click starts a fresh question · legacy's own guard then arms the modal it shows
     ['saveNewSeasonGuarded', 'toggleDayOverrideGuarded'].forEach(function(n){
       calWrap(n, function(orig){ armed = null; return orig.apply(this, [].slice.call(arguments, 1)); });
@@ -292,6 +306,7 @@
           r.seasons.push(seasonIn(s || { kind: kind, from_date: from, to_date: to }));
           r.seasons.sort(function(a, b){ return String(a.from).localeCompare(String(b.from)); });
           showSeasonForm = false;
+          adoptReleased(j, r);
           redrawSettings(); refreshCalendar(rid);
         }, function(e){
           // an open season on a route with none closes every date outside it · no single range to list
@@ -311,8 +326,9 @@
       var typeLabel = s.type === 'open' ? 'Open' : 'Closed';
       if(!confirm('ลบ Season นี้?\n\n' + typeLabel + ' · ' + fmtD(s.from) + ' → ' + fmtD(s.to) + '\nโปรแกรม: ' + r.name + '\n\nการลบนี้ไม่สามารถยกเลิกได้')) return;
       function send(force){
-        return O.queue(function(){ return O.del(RT(rid) + '/seasons/' + encodeURIComponent(sid) + (force ? '?close_anyway=true' : '')); }).then(function(){
+        return O.queue(function(){ return O.del(RT(rid) + '/seasons/' + encodeURIComponent(sid) + (force ? '?close_anyway=true' : '')); }).then(function(j){
           r.seasons = (r.seasons || []).filter(function(x){ return x.id !== sid; });
+          adoptReleased(j, r);
           redrawSettings(); refreshCalendar(rid);
         }, function(e){
           // deleting an open season closes its dates (unless another season covers them)
@@ -337,9 +353,10 @@
           if(has) return O.del(path + (force ? '?close_anyway=true' : ''));
           var body = { kind: kind }; if(force) body.close_anyway = true;
           return O.call('PUT', path, body);
-        }).then(function(){
+        }).then(function(j){
           if(!r.overrides) r.overrides = {};
           if(has) delete r.overrides[dateStr]; else r.overrides[dateStr] = kind;
+          adoptReleased(j, r);
           redrawSettings(); refreshCalendar(rid);
         }, function(e){
           if(e.code === 'bookings_on_closed_day' && !force) return askCloseAnyway(e, { key: key, day: true, rid: rid, from: dateStr, to: dateStr,

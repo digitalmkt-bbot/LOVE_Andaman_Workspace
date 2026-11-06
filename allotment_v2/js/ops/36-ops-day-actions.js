@@ -446,7 +446,8 @@
       toCompany: num(s.to_company),
       commission: num(s.commission),
       seller: s.seller || '',
-      method: s.method || 'cash',
+      // §exSplitPay: the server's split parts read back as legacy's "split:cash=400|card=250", so bkxExPays and every reader of it work as they are
+      method: (s.method === 'split' && Array.isArray(s.split) && s.split.length) ? ('split:' + s.split.map(function(p){ return p.method + '=' + num(p.amount); }).join('|')) : (s.method || 'cash'),
       feePct: num(s.fee_pct),
       fee: num(s.fee),
       customerPaid: num(s.customer_paid),
@@ -494,9 +495,23 @@
     });
   }
 
+  /* §exSplitPay · legacy's "split:cash=400|card=250" (or a parts list) → the server's method "split" and its parts. One part is a plain sale. */
+  function splitParts(d, method){
+    var parts = Array.isArray(d.split) ? d.split : null;
+    if(!parts && /^split:/.test(method)){
+      parts = method.slice(6).split('|').map(function(seg){ var kv = seg.split('='); return { method: kv[0], amount: num(kv[1]) }; });
+    }
+    return (parts || []).filter(function(p){ return p && p.method && num(p.amount) > 0; }).map(function(p){ return { method: String(p.method), amount: Math.round(num(p.amount) * 100) / 100 }; });
+  }
   function toTourSaleBody(d){
     d = d || {};
     var method = text(d.method) || 'cash';
+    var split = null;
+    if(method === 'split' || /^split:/.test(method)){
+      var parts = splitParts(d, method);
+      if(parts.length > 1){ method = 'split'; split = parts; } else method = parts.length ? parts[0].method : 'cash';
+    }
+    var byCard = method === 'card' || !!(split && split.some(function(p){ return p.method === 'card'; }));
     var slips = method === 'cot' ? [] : (Array.isArray(d.slips || d.slip_ids) ? (d.slips || d.slip_ids).map(function(s){ return typeof s === 'string' ? s : (s && s.id); }).filter(Boolean) : []);
     var body = {
       service: text(d.service || d.name) || 'Extra',
@@ -505,9 +520,10 @@
       to_company: Math.max(0, num(d.to_company != null ? d.to_company : d.toCompany)),
       seller: nullable(d.seller),
       method: method,
-      fee_pct: method === 'card' ? num(d.fee_pct != null ? d.fee_pct : d.feePct) : 0,
+      fee_pct: byCard ? num(d.fee_pct != null ? d.fee_pct : d.feePct) : 0,
       slip_ids: slips
     };
+    if(split) body.split = split;
     if(nullable(d.trip_date != null ? d.trip_date : d.tripDate)){
       body.trip_date = nullable(d.trip_date != null ? d.trip_date : d.tripDate);
     }
@@ -874,6 +890,15 @@
     var seller = ((d('bkx-seller') && d('bkx-seller').value) || '').trim();
     var pay = typeof _bkExtraPay !== 'undefined' && _bkExtraPay ? _bkExtraPay : { m: 'cash', feePct: 0, slips: [] };
     var pm = pay.m || 'cash';
+    // §exSplitPay (legacy bookingV2ExtraSave): paid two ways, the amounts per method must add up to the sale; one method is a plain sale
+    if(typeof window.bkxPaySplitOn === 'function' && window.bkxPaySplitOn()){
+      var parts = window.bkxPayParts(total), sumP = window.bkxPaySplitSum(), fmt = function(n){ return typeof window.pckNum === 'function' ? window.pckNum(n) : String(n); };
+      if(Math.abs(sumP - total) > 0.005){
+        alert('ยอดที่ใส่รวม ฿' + fmt(sumP) + ' ไม่เท่ายอดขาย ฿' + fmt(total) + (sumP < total ? ('\n\nยังขาด ฿' + fmt(total - sumP) + ' · กด "ใส่ที่เหลือ" ที่บรรทัดวิธีที่ต้องการ') : ('\n\nเกิน ฿' + fmt(sumP - total))));
+        return null;
+      }
+      pm = parts.length === 1 ? parts[0].method : 'split:' + parts.map(function(q){ return q.method + '=' + q.amount; }).join('|');
+    }
     var slips = (pay.slips || []).slice();
     if(pm !== 'cash' && pm !== 'cot' && !slips.length && !confirm('ยังไม่ได้แนบสลิป\n\nบันทึกก่อนแล้วแนบทีหลังได้ · กด OK เพื่อบันทึกเลย')) return null;
 
@@ -889,7 +914,7 @@
       toCompany: toCompany,
       seller: seller,
       method: pm,
-      feePct: pm === 'card' ? num(pay.feePct) : 0,
+      feePct: /card/.test(pm) ? num(pay.feePct) : 0,
       slips: slips
     }).then(function(res){
       if(typeof _bkExtraEditId !== 'undefined') _bkExtraEditId = null;
