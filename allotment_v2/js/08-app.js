@@ -59675,7 +59675,8 @@ function bkV2RenderTab2(){
                 /* §together · ป้าย Together ลอยที่มุมบนของช่องลูกค้า (เหมือนป้าย ⚠ รถกลับ) · อยู่ต้น <td> ข้างบน · บรรทัดนี้ไม่มีแล้ว */
                 const _spc='';
                 const _lo2=_whoSplit?'':_lo;
-                return (_nx||_spc)?('<div class="t2-cul2">'+_lo2+_spc+_nx+'</div>'):_lo2; })()}
+                /* §tmBtnLine (2026-11-06) · owner "เอาไว้ใต้ชื่อ เผื่อกรณีลูกค้ามีเบอร์โทรจะเห็น" · ปุ่ม ตม. ของแถวระนองลงบรรทัดใหม่เสมอ ไม่เบียดชื่อ/เบอร์ */
+                return (_nx||_spc||_tmR)?('<div class="t2-cul2'+(_tmR?' t2-tmline':'')+'">'+_lo2+_spc+_nx+'</div>'):_lo2; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -61183,6 +61184,7 @@ function bkV2RenderTab2(){
     .t2-nxt b{font-weight:800;color:#5B7FA6}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     /* §tmBtn2 · ปุ่ม ตม. "ลอยมีเงา" ขนาดเล็ก · owner เลือกแบบ 1 แล้วขอเล็กลง */
+    .t2-cul2 .t2-more.t2-tmgo{margin-left:0}
     .t2-more.t2-tmgo{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px 0 3px;border:0;border-radius:999px;background:#fff;font-size:10px;font-weight:800;white-space:nowrap;line-height:1;
       box-shadow:0 1px 2px rgba(20,35,63,.12),0 2px 6px rgba(20,35,63,.10);transition:box-shadow .15s,transform .15s}
     .t2-more.t2-tmgo:hover{box-shadow:0 2px 3px rgba(20,35,63,.14),0 6px 14px rgba(20,35,63,.16);transform:translateY(-1px)}
@@ -88234,6 +88236,7 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq .t2-rbwrap>*{display:inline-block;margin-right:3px}',
     'body.btc #view-booking tr.t2-row>td.t2-req.btc-rq .t2-note{color:#5B6275}',
     'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2{display:inline-flex!important;margin-left:6px;vertical-align:middle}',
+    'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2.t2-tmline{display:flex!important;margin-left:0;margin-top:3px}',   /* §tmBtnLine · ระนอง: ปุ่ม ตม. ใต้ชื่อแม้ในโหมดกระชับ */
     'body.btc #view-booking tr.t2-row>td:first-child>*{display:inline-block;vertical-align:middle;margin-right:4px}',
     'body.btc #view-booking tr.t2-row>td:first-child{overflow:hidden;text-overflow:ellipsis}',
     'body.btc #view-booking tr.t2-row>td.t2-ag img{max-height:18px;width:auto}',
