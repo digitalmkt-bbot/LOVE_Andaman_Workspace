@@ -10397,6 +10397,7 @@ function bkV2ZonePickOpen(el, bkId, date){
     let top=r.bottom+6; if(top+ph>window.innerHeight-8) top=Math.max(8, r.top-ph-6);
     if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
     panel.style.left=left+'px'; panel.style.top=top+'px';
+    panel.style.maxHeight=Math.max(220, window.innerHeight-top-8)+'px';   /* §zpkFit · ป๊อปอัปต้องไม่ยาวพ้นจอ · รายการเลื่อนในตัวเอง ปุ่มยืนยันเห็นเสมอ */
     const s=panel.querySelector('.zpk-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(cur):cur)+'"]'); if(s) s.scrollIntoView({block:'center'});
     const q=document.getElementById('bkv2-zonepick-q'); if(q) q.focus({preventScroll:true});
   }catch(_){}
@@ -10454,7 +10455,9 @@ function bkV2ZonePickSel(id){
     h+=`<label style="display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:11.5px;color:#3a3a35;cursor:pointer"><input type="checkbox" id="bkv2-zonepick-time" checked style="margin-top:2px"><span>${laT('อัปเดตเวลารับตามพื้นที่ใหม่')}<br><span style="font-family:'DM Mono',monospace;font-size:11px">${tx}</span></span></label>`;
   }
   if(p.zoneDiff){
-    h+=`<div style="margin-top:9px;background:#FBF0DD;color:#7A4A00;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.45">&#9888; ${laT('พื้นที่ใหม่อยู่คนละโซนราคากับใบจอง')} (${e(p.priceZones.map(bkV2ZoneLabel).join(', '))} &rarr; ${e(bkV2ZoneLabel(p.area.zone))}) · ${laT('ราคาไม่เปลี่ยน · ถ้าต้องคิดราคาใหม่ให้แก้ไขใบจอง')}</div>`;
+    /* §zoneFollow (2026-11-06) · owner: "ปรับเป็น Visit Panwa Pier แต่ไม่ย้าย" / "เปลี่ยนกลับ ก็ไม่ย้ายกลับให้"
+       แถวในตารางเกาะตาม trip.zone ไม่ใช่พื้นที่รับ · เดิมป๊อปอัปเปลี่ยนแต่พื้นที่ แถวจึงไม่ขยับ · ตอนนี้ติ๊กให้โซนของทริปตามพื้นที่ใหม่ (ค่าเริ่มต้นติ๊ก) · ราคาไม่แตะ */
+    h+=`<label style="display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:11.5px;color:#3a3a35;cursor:pointer"><input type="checkbox" id="bkv2-zonepick-zone" checked style="margin-top:2px"><span><b>${laT('ย้ายโซนของทริปตามพื้นที่ใหม่')}</b> (${e(p.priceZones.map(bkV2ZoneLabel).join(', '))} &rarr; <b>${e(bkV2ZoneLabel(p.area.zone))}</b>)<br><span style="color:#7A4A00">${laT('แถวจะย้ายไปอยู่โซนนั้นในตาราง · ราคาไม่เปลี่ยน · ถ้าต้องคิดราคาใหม่ให้แก้ไขใบจอง')}</span></span></label>`;
   }
   info.innerHTML=h;
 }
@@ -10468,8 +10471,13 @@ function bkV2ZonePickConfirm(){
   const doTime=!!(document.getElementById('bkv2-zonepick-time')||{}).checked;
   bk.pickupAreaId=p.area.id;
   if(doTime) p.times.forEach(x=>{ x.t.pickupTime=x.to; });
+  /* §zoneFollow · โซนของทริป (ที่ไม่ใช่ขากลับค้างคืน) ตามพื้นที่ใหม่ · ขากลับค้างคืนเป็นโซนที่ไปส่ง ไม่เกี่ยวกับจุดรับ */
+  const doZone=p.zoneDiff && !!(document.getElementById('bkv2-zonepick-zone')||{}).checked, zTo=(p.area.zone==='NT'?'NoTransfer':(p.area.zone||'')), zChg=[];
+  if(doZone && zTo){ (bk.trips||[]).forEach(t=>{ if(!t || t.ovnLeg || (t.zone||'')===zTo) return; zChg.push((t.date||'')+' '+bkV2ZoneLabel(t.zone||'')+'->'+bkV2ZoneLabel(zTo)); t.zone=zTo; });
+    if(zChg.length && bk.pickupZone && bk.pickupZone!==zTo) bk.pickupZone=zTo; }
   bkV2AddHistory(bk, 'edit', 'Pickup zone: '+fromName+' -> '+(p.area.name||p.area.id)
-    + (doTime&&p.times.length?(' · pickup time '+p.times.map(x=>(x.t.date||'')+' '+(x.from||'-')+'->'+x.to).join(', ')):''), 'Edited');
+    + (doTime&&p.times.length?(' · pickup time '+p.times.map(x=>(x.t.date||'')+' '+(x.from||'-')+'->'+x.to).join(', ')):'')
+    + (zChg.length?(' · trip zone '+zChg.join(', ')):''), 'Edited');
   acctPersistBookings();
   const ov=document.getElementById('bkv2-zonepick'); if(ov) ov.remove();
   bkV2RenderKeep();
