@@ -16415,6 +16415,9 @@ function ckSummary(b, date){
   if(p && p.at){ var exp=(p.expected!=null?p.expected:booked); out.pierNoShow = Math.max(0, exp-(p.actualPax!=null?p.actualPax:exp)); }
   // ยอดรวมที่ไม่ได้เดินทางจริง = จอง − คนที่ขึ้นเรือจริง (ท่าเรือคือด่านสุดท้าย) · ยังไม่เช็คท่าก็ใช้ค่าจากรถ
   out.noShow = (p && p.at) ? Math.max(0, booked-(p.actualPax!=null?p.actualPax:booked)) : out.vanNoShow;
+  /* §tsNsVoid (2026-11-06) · ใบที่กด "ไม่มาทั้งใบ" โดยไม่เคยเช็คอิน (ไม่มี at) · ของเดิม noShow = 0 → Travel Summary ขึ้น
+     "เดินทางจริง 112/112 100%" แต่ขณะเดียวกันบอก No-show 1 (1402891271 · 6 พ.ย.) · คนหายอ่านจากเหตุการณ์ (ckLostByType) ด้วย */
+  try{ var _L=(typeof ckLostByType==='function')?ckLostByType(b,date):null; if(_L && (+_L.total||0)>out.noShow) out.noShow=Math.min(booked, +_L.total||0); }catch(_){}
   // เหตุผลที่โชว์ = ด่านที่เกิด No-show ล่าสุด (ท่าเรือก่อน แล้วค่อยรถรับ)
   var src=null;
   if(p && p.at && out.pierNoShow>0){ src=p; out.stage='pier'; }
