@@ -11389,17 +11389,6 @@ function bkV2HealSelfArrivePickup(date){
         if(t.pickupTime!==def){ t.pickupTime=def; changed=true; }
       }
       const o=b.ops; if(o && _isClock(o.pickupTimeFinal)){ o.pickupTimeFinal=''; changed=true; }
-      /* §selfZone (2026-11-06) · owner: "ก่อนหน้าเป็น Kata แล้วเราปรับเป็น Visit Panwa Pier แต่ไม่ย้าย" (E58480 · 6 พ.ย.)
-         เปลี่ยนจุดรับเป็นท่าเรือ (self-arrive) แต่ trip.zone ยังเป็น PK และ ops ของวันนั้นยังมี vanId/vanGroup ของรถคันเดิม
-         → แถวค้างอยู่ในกรุ๊ปรถ · ใบงานรถยังมีชื่อ · คนขับอาจไปรับ
-         ตอนนี้ · จุดรับเป็นโซน NoTransfer และไม่ใช่ขากลับค้างคืน/รถส่วนตัว → โซนของวันนั้น = NoTransfer + ถอดออกจากรถ/กรุ๊ปของวันนั้น
-         (ประวัติเช็คอินรถเก็บไว้เหมือนเดิม) */
-      if(!t.ovnLeg && _area && (_area.zone==='NoTransfer'||_area.zone==='NT') && t.zone && t.zone!=='NoTransfer' && t.zone!=='NT'){
-        t.zone='NoTransfer'; changed=true;
-        try{ const od=(typeof bkOpsDate==='function')?bkOpsDate(b,date):date, O=(typeof bkOpsFor==='function')?bkOpsFor(b,od):b.ops;
-          if(O && !(Array.isArray(O.vanSplits)&&O.vanSplits.length) && (O.vanId||O.vanGroup||O.vanSeq)){ O.vanId=null; O.vanGroup=0; O.vanSeq=0; }
-          if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','จุดรับเป็นท่าเรือ (มาเอง) · ถอดออกจากรถรับของวันที่ '+date,'Edited'); }catch(_){}
-      }
     });
   });
   if(changed && typeof acctPersistBookings==='function') acctPersistBookings();
@@ -59244,6 +59233,10 @@ function bkV2RenderTab2(){
       /* §chOwn (2026-11-01) · "อันนี้เป็นเดินทางเอง ทำไมเตือนให้จัดรถ" · ใบเหมาลำทุกใบอยู่โซน CHARTER
          ไม่ว่าจะมีรถรับหรือไม่ · พอในโซนมีกรุ๊ปรถแล้ว ใบที่ตั้ง No Transfer ถูกนับเป็น "ยังไม่จัดรถ" ไปด้วย
          อ่านโซนจริงของทริป (bkV2EffZone) · NoTransfer / NT = มาเองที่ท่า · ไม่ใช่งานรถ */
+      /* §ovnBackBlk (2026-11-06) · owner: "พอ 7/11 บุคกิ้งควรไปอยู่ล่าง เป็นรับกลับจากเกาะ"
+         ขากลับค้างคืน (trip.ovnLeg) ไม่มีรถไปรับ มีแต่รถไปส่ง · เดิมปนอยู่กับใบรับเช้าของโซนเดียวกัน (และลอยขึ้นบนในการ์ดแดง "ยังไม่จัดรถ")
+         ตอนนี้ · ยังไม่จัดรถ → ไปอยู่ท้ายโซน ใต้หัวม่วง "รับกลับจากเกาะ (OVN)" · จัดรถแล้ว → อยู่กับคันนั้นตามปกติ · แสดงผลอย่างเดียว ไม่แก้ใบจอง */
+      const _ovnBackRow=r=>{ try{ return !r.charter && !!(r.t && r.t.ovnLeg); }catch(_){ return false; } };
       const _bkOwnRow=r=>{ try{ const z=r.charter ? ((typeof bkV2EffZone==='function' && r.t) ? bkV2EffZone(r.bk,r.t) : ((r.t&&r.t.zone)||r.bk.pickupZone||'')) : r.zone; return z==='NoTransfer'||z==='NT'; }catch(_){ return false; } };
       const _allocsOf=r=>{ const b=r.bk; const _o=bkOpsRead(b,date);
         /* §split rows · เดิมกางแถวเฉพาะโหมด Van หรือ split ที่มาจาก "รับหลายจุด" — split จาก "แยกคน"
@@ -59258,7 +59251,7 @@ function bkV2RenderTab2(){
         if((!boatMode || vanMode) && Array.isArray(_o.vanSplits) && _o.vanSplits.length){   /* §vanBoatBoth */ return _o.vanSplits.map((s,i)=>({r,idx:i,head:+s.pax||0,bd:bkSplitPax(s),g:+s.vanGroup||0,seq:+s.vanSeq||0,vanId:s.vanId||null,key:b.id+'@'+i,split:true,first:i===0,pick:{areaId:s.pickAreaId||'',hotel:s.pickHotel||'',zone:s.pickZone||'',who:s.altWho||'',main:!!s.main}})); } const _hasSp = Array.isArray(_o.vanSplits) && _o.vanSplits.length;
         const g  = _hasSp ? (+_o.vanSplits[0].vanGroup||0) : (+_o.vanGroup||0);
         const sq = _hasSp ? (+_o.vanSplits[0].vanSeq||0)   : (+_o.vanSeq||0);
-        return [{r,idx:-1,head:_pHead(r),g,seq:sq,vanId:_o.vanId||null,key:b.id,split:false,first:true,own:(!_hasSp && _bkOwnRow(r))}]; };
+        return [{r,idx:-1,head:_pHead(r),g,seq:sq,vanId:_o.vanId||null,key:b.id,split:false,first:true,own:(!_hasSp && _bkOwnRow(r)),ovnBack:_ovnBackRow(r)}]; };
       let alist=[]; list.forEach(r=>{ _allocsOf(r).forEach(a=>alist.push(a)); });
       /* §splitOwn · แถวมาเองออกจากโซนแม่ · โซน Own transportation รับแถวเหล่านั้นเข้ามา */
       const _spOf = a => (a.split && !a.bsplit && a.idx>=0) ? ((bkOpsRead(a.r.bk,date).vanSplits||[])[a.idx]||null) : null;
@@ -59290,12 +59283,13 @@ function bkV2RenderTab2(){
         alist.sort((x,y)=>{ const bx=_boatId(x), by=_boatId(y); const ua=bx?0:-1, ub=by?0:-1; if(ua!==ub) return ua-ub; const ka=_boatIdx(bx), kb=_boatIdx(by); if(ka!==kb) return ka-kb; const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; });
       }
       // ungrouped (g=0) → sort key -1 so newly-added / not-yet-assigned bookings pop to the TOP (was: last)
-      else if(_grouped){ alist.sort((x,y)=>{ const ka=_gKey(x.g), kb=_gKey(y.g); if(ka!==kb) return ka-kb;
+      else if(_grouped){ alist.sort((x,y)=>{ const ka=(x.ovnBack&&!x.g)?5e6:_gKey(x.g), kb=(y.ovnBack&&!y.g)?5e6:_gKey(y.g); if(ka!==kb) return ka-kb;   /* §ovnBackBlk */
         // manual pickup-seq matters ONLY within a real group (g>0) · a stale vanSeq left on an ungrouped row must NOT freeze its order
         if(ka>0){ const sa=x.seq||0, sb=y.seq||0; if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; } }
         // tiebreak: honor an active column Sort (Agency/Zone) if the user clicked one, else by pickup time
         if(sortCol){ const c=_rowCmp(x.r,y.r); if(c) return c; }
         const ta=_rowTime(x.r)||'~~', tb=_rowTime(y.r)||'~~'; return ta<tb?-1:ta>tb?1:0; }); }
+      if(!_boatCluster && !_grouped){ const _ob=alist.filter(a=>a.ovnBack); if(_ob.length && _ob.length<alist.length) alist=alist.filter(a=>!a.ovnBack).concat(_ob); }   /* §ovnBackBlk */
       /* §b2cAddon · แถวใบ B2C ที่เป็นบริการเสริมของใบเอเจนต์ ต่อท้ายแถวของใบนั้นทันที
          เฉพาะเมื่ออยู่ในโซนนี้และกลุ่มรถเดียวกัน · โหมดจัดเรือเรียงตามลำ ไม่ยุ่ง */
       if(!_boatCluster && typeof bkB2CAddonTo==='function'){
@@ -59654,7 +59648,7 @@ function bkV2RenderTab2(){
         const _splitBadge = (a.split && a.bsplit) ? `<div class="t2-altpick" title="กรุ๊ปใหญ่ · แยกลงเรือ ${a.bsN} ลำ · บุคกิ้งเดียวกัน ${esc(bk.voucherRef||bk.id)} — เงินและใบวางบิลยังเป็นใบเดียว">&#128676; แยกลงเรือ · ลำ ${a.idx+1}/${a.bsN}</div>`
           : (a.split && !_tog) ? `<div class="t2-altpick" title="แยกรับหลายจุด · บุคกิ้งเดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}">&#128652; ${a.pick&&a.pick.main?'จุดหลัก':'แยกรับ'} · เดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}</div>` : '';
         const _2nd = a.split && !a.first;   // a non-first split allocation row → hide booking-level cells (Pay/Total/Voucher/Add-on) to avoid duplicating them across the split rows
-        return {g:a.g, boat:_rowBid||'', html:`
+        return {g:a.g, boat:_rowBid||'', ovnBack:!!(a.ovnBack&&!a.g), html:`
           <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}${(typeof bkUpgPromise==='function' && bkUpgPromise(bk,date))?' t2-upgpr':''}${(typeof bkV2B2CRowFlag==='function')?bkV2B2CRowFlag(bk):''}"${_rowStyle} data-al="${esc(a.key)}">
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_tog||_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_tog||_bkV2SplitColor(bk.id)}55;background:${_tog||_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="${laAgencyTabStyle()}cursor:pointer" class="la-agtab">${laAgencyTabInner(22,{tile:40})}</div>`   /* §agTab */:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
@@ -59760,8 +59754,8 @@ function bkV2RenderTab2(){
       let body='';
       /* §unBlock (2026-10-29) · owner "ปรับตัวที่ไม่ได้จัดรถให้เห็นชัดกว่านี้ ทั้ง Classic และ Compact · แถวแบบมุมโค้ง · เว้นช่องว่างบน-ล่าง · สีสดกว่านี้"
          หัว + แถวใบที่ยังไม่มีรถ = การ์ดเดียวกัน (มุมโค้ง 12px ขอบแดง ขีดซ้าย 6px) · spacer 16px ก่อนและหลัง · ปุ่มเข้าโหมดจัดรถ */
-      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g&&!a.own).length; const px=alist.filter(a=>!a.g&&!a.own).reduce((s,a)=>s+a.head,0);
-        if(!n){ const on=alist.filter(a=>!a.g&&a.own), op=on.reduce((s,a)=>s+a.head,0);   /* §chOwn · เหลือแต่ใบมาเอง = หัวสีกลาง ไม่ใช่การ์ดแดง */
+      const _unassignedHdr=()=>{ const n=alist.filter(a=>!a.g&&!a.own&&!a.ovnBack).length; const px=alist.filter(a=>!a.g&&!a.own&&!a.ovnBack).reduce((s,a)=>s+a.head,0);   /* §ovnBackBlk · ขากลับค้างคืนมีหัวของตัวเอง */
+        if(!n){ const on=alist.filter(a=>!a.g&&a.own), op=on.reduce((s,a)=>s+a.head,0); if(!on.length) return '';   /* §chOwn · เหลือแต่ใบมาเอง = หัวสีกลาง ไม่ใช่การ์ดแดง */
           return `<tr class="t2-ownhd"><td colspan="${COLN}" style="background:#F5F2FB;box-shadow:inset 4px 0 0 #5B289A;padding:6px 12px;font-size:12px;color:#5B289A"><b>&#128694; ${laT('เดินทางเองที่ท่า')}</b> <span style="font-size:11px;opacity:.85">${on.length} booking · ${op} pax · ${laT('ไม่ต้องจัดรถ')}</span></td></tr>`; }
         return `<tr class="t2-unsp"><td colspan="${COLN}"></td></tr><tr class="t2-unhd"><td colspan="${COLN}"><span class="t">&#9888; ${laT('ยังไม่จัดรถ')}</span><span class="n">${n} booking · ${px} pax</span><span class="m">${laT('ลูกค้าจะไม่มีรถไปรับ — จับเข้ากลุ่มหรือเลือกรถก่อนปิดวัน')}</span>${vanMode?`<span class="h">${laT('เลือกรถในช่องรถของแถวด้านล่าง')}</span>`:`<button type="button" class="b" onclick="event.stopPropagation();if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()">${laT('จัดรถให้ใบนี้')} &rarr;</button>`}</td></tr>`; };
       // Boat Assign · per-boat cluster header (mirrors the van group header · read-only · very light tint)
@@ -59781,9 +59775,14 @@ function bkV2RenderTab2(){
             ${mem.length?`<button type="button" class="t2-bclr" onclick="event.stopPropagation();bkV2BoatClearTrip('${esc(bid)}','${esc(date)}','${esc(rid)}')" title="${esc(laT('ถอดเรือลำนี้ออกจากทุก booking ของรอบนี้ (ทุกโซน) · กลับไปเป็นยังไม่จัดเรือ'))}">&#10005; ${laT('ถอดทั้งลำ')}</button>`:''}
           </div></td></tr>`;
       };
-      { let _pg=null, _pb=null, _inUn=false;
-        const _unLast=(()=>{ let k=null; _rowObjs.forEach(o=>{ if(!_boatCluster && _grouped && !o.g) k=o; }); return k; })();   /* §unBlock · แถวสุดท้ายของบล็อก → มุมโค้งล่าง */
-        _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups){ body+=_unassignedHdr(); _inUn=true; } _pg=o.g; }
+      { let _pg=null, _pb=null, _inUn=false, _inOb=false;
+        const _unLast=(()=>{ let k=null; _rowObjs.forEach(o=>{ if(!_boatCluster && _grouped && !o.g && !o.ovnBack) k=o; }); return k; })();   /* §unBlock · แถวสุดท้ายของบล็อก → มุมโค้งล่าง */
+        /* §ovnBackBlk · หัวม่วงก่อนแถวขากลับค้างคืนที่ยังไม่จัดรถ (อยู่ท้ายโซน) */
+        const _ovnHdr=()=>{ const L=_rowObjs.filter(o=>o.ovnBack), px=alist.filter(a=>a.ovnBack&&!a.g).reduce((s,a)=>s+a.head,0);
+          return `<tr class="t2-unsp"><td colspan="${COLN}"></td></tr><tr class="t2-ownhd"><td colspan="${COLN}" style="background:#F5F2FB;box-shadow:inset 4px 0 0 #5B289A;padding:6px 12px;font-size:12px;color:#5B289A"><b>&#8617; ${laT('รับกลับจากเกาะ (OVN)')}</b> <span style="font-size:11px;opacity:.85">${L.length} booking · ${px} pax · ${laT('ไม่มีรถไปรับ · ต้องจัดรถไปส่ง')}</span></td></tr>`; };
+        _rowObjs.forEach(o=>{ if(!_boatCluster && o.ovnBack && !_inOb){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } body+=_ovnHdr(); _inOb=true; _pg=o.g; body+=o.html.replace('t2-unassigned',''); return; }
+          if(_inOb && !_boatCluster){ body+=o.html.replace('t2-unassigned',''); return; }
+          if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups){ body+=_unassignedHdr(); _inUn=true; } _pg=o.g; }
           body+=(o===_unLast && _inUn)?o.html.replace('t2-unassigned','t2-unassigned t2-un-last'):o.html; });
         if(_inUn) body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; }
       /* ══ §btTable (2026-09-04) · ทุกโซนของทริปนี้อยู่ในตารางเดียว ═══════════
