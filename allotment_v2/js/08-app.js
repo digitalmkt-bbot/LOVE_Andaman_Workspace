@@ -6536,10 +6536,11 @@ function tmNatList(){
   return '<datalist id="tm-natlist">'+L.map(function(x){ return '<option value="'+x.code+'">'+String(x.name||'').replace(/[<>&"]/g,'')+'</option>'; }).join('')+'</datalist>';
 }
 function tmBkStatus(b){ var L=tmPaxList(b), n=0, ok=0; L.forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++; if(tmPaxOk(b.id,p)) ok++; }); return {n:n, ok:ok, miss:n-ok}; }
+function tmBtnState(b){ var st=tmBkStatus(b); return !st.n?'':(st.miss===0?'ok':(st.ok===0?'zero':'miss')); }   /* §tmBtn2 */
 function tmChip(b, bare){ var st=tmBkStatus(b); if(!st.n) return '';
   var ok=(st.miss===0);
-  /* §tmBtn · bare = ข้อความล้วนไว้ใส่ในปุ่ม (ปุ่มเป็นคนใส่สี) */
-  if(bare) return '&#129706; '+(ok?('ตม. ครบ '+st.n+' คน'):('ตม. ขาด '+st.miss+'/'+st.n+' คน'));
+  /* §tmBtn2 · bare = เนื้อในปุ่ม (ไอคอนวงกลม · ตม. · ตัวนับในแคปซูล) · ปุ่มเป็นคนใส่สีตาม data-tm */
+  if(bare) return '<span class="tmi">'+(ok?'&#10003;':'&#129706;')+'</span>ตม.'+(ok?' ครบ':'')+'<span class="tmc">'+(ok?st.n:(st.ok+'/'+st.n))+'</span>';
   return '<span class="t2-tmchip" data-tm="'+(ok?'ok':'miss')+'" title="'+(ok?'ข้อมูล ตม. ครบทุกคน':('ข้อมูล ตม. ยังไม่ครบ '+st.miss+' คน · กางแถวเพื่อกรอก'))+'" style="display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:800;white-space:nowrap;'
     +(ok?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00')+'">&#129706; '+(ok?('ตม. ครบ '+st.n):('ตม. ขาด '+st.miss+'/'+st.n))+'</span>'; }
 function tmInputLive(el){
@@ -6555,7 +6556,7 @@ function tmInputChange(el, bkId, pk){
   if(f==='nat' && el.tagName!=='SELECT'){ el.value=tmNatNorm(el.value)||tmGet(bkId,pk,'nat'); }   /* §tmPax4 */
   tmInputLive(el);
   /* ป้ายบนแถวใบจอง · อัปเดตที่เดียวโดยไม่วาดหน้าใหม่ (คนกำลังพิมพ์อยู่) */
-  try{ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); document.querySelectorAll('[data-tmchip="'+bkId+'"]').forEach(function(h){ var bare=(h.getAttribute('data-tmbare')==='1'); h.innerHTML=tmChip(b,bare); if(bare && h.parentNode && h.parentNode.setAttribute){ h.parentNode.setAttribute('data-tm', tmBkStatus(b).miss?'miss':'ok'); h.parentNode.title=tmBkStatus(b).miss?('ข้อมูล ตม. ยังไม่ครบ '+tmBkStatus(b).miss+' คน · กดเพื่อกรอก'):'ข้อมูล ตม. ครบทุกคน · กดเพื่อดู/แก้'; } });   /* §tmBtn */ }catch(_){}
+  try{ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); document.querySelectorAll('[data-tmchip="'+bkId+'"]').forEach(function(h){ var bare=(h.getAttribute('data-tmbare')==='1'); h.innerHTML=tmChip(b,bare); if(bare && h.parentNode && h.parentNode.setAttribute){ h.parentNode.setAttribute('data-tm', tmBtnState(b)||'zero'); h.parentNode.title=tmBkStatus(b).miss?('ข้อมูล ตม. ยังไม่ครบ '+tmBkStatus(b).miss+' คน · กดเพื่อกรอก'):'ข้อมูล ตม. ครบทุกคน · กดเพื่อดู/แก้'; } });   /* §tmBtn */ }catch(_){}
 }
 function tmInputKey(ev, el){
   if(ev.key!=='Enter' && ev.key!=='ArrowDown' && ev.key!=='ArrowUp') return;
@@ -59664,8 +59665,8 @@ function bkV2RenderTab2(){
               ${(function(){ const _lo=_tmR
                   /* §tmBtn (2026-11-06) · owner "ปรับตัวที่เป็น กด + จำนวนลูกค้าที่ต้องใส่รายชื่อ ของระนอง กับตัวเตือนเอกสาร ตม." · เดิม 3 ชิ้นเรียงกัน (+N · ตม. · ป้ายขาด) ซ้ำซ้อน
                      ตอนนี้ปุ่มเดียว: 🪪 ตม. ขาด 2/10 คน (เหลือง) / ✓ ครบ (เขียว) · กดกางตารางกรอก · จำนวนคนอยู่ในปุ่ม ไม่ต้องมี +N แยก */
-                  ? (function(){ const _st=(typeof tmBkStatus==='function')?tmBkStatus(bk):{n:0,miss:0}; const _ok=!_st.miss;
-                      return `<button class="t2-more t2-tmgo" data-tm="${_ok?'ok':'miss'}" title="${_ok?'ข้อมูล ตม. ครบทุกคน · กดเพื่อดู/แก้':('ข้อมูล ตม. ยังไม่ครบ '+_st.miss+' คน · กดเพื่อกรอก')}" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block${_pxOpen?';transform:rotate(180deg)':''}">▾</span> <span data-tmchip="${esc(bk.id)}" data-tmbare="1">${tmChip(bk,true)||('ตม. · '+(others.length+1)+' คน')}</span></button>`; })()
+                  ? (function(){ const _st=(typeof tmBkStatus==='function')?tmBkStatus(bk):{n:0,miss:0}; const _ok=!_st.miss; const _tms=(typeof tmBtnState==='function')?(tmBtnState(bk)||'zero'):(_ok?'ok':'miss');
+                      return `<button class="t2-more t2-tmgo" data-tm="${_tms}" title="${_ok?'ข้อมูล ตม. ครบทุกคน · กดเพื่อดู/แก้':('ข้อมูล ตม. ยังไม่ครบ '+_st.miss+' คน · กดเพื่อกรอก')}" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block${_pxOpen?';transform:rotate(180deg)':''}">▾</span> <span data-tmchip="${esc(bk.id)}" data-tmbare="1">${tmChip(bk,true)||('ตม. · '+(others.length+1)+' คน')}</span></button>`; })()
                   : (others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block${_pxOpen?';transform:rotate(180deg)':''}">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>');
                 /* §tripNext · มีทริปอื่น → บรรทัดที่สองเป็นแถวเดียว [lead only / +N][→ วัน ทริป] ชื่อทริปยาวตัดด้วย … ไม่ดันแถวให้สูงขึ้น */
                 const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid):'';
@@ -61174,9 +61175,16 @@ function bkV2RenderTab2(){
     .t2-depno{font-size:11.5px;color:#8A8A82;font-style:italic}
     .t2-nxt b{font-weight:800;color:#5B7FA6}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
-    .t2-more.t2-tmgo{font-size:10.5px;font-weight:800;border-radius:20px;padding:2px 9px 2px 7px;white-space:nowrap}   /* §tmBtn */
-    .t2-more.t2-tmgo[data-tm=miss]{background:#FEF6E7;border-color:#E8C77A;color:#7A4A00}
-    .t2-more.t2-tmgo[data-tm=ok]{background:#E6F6F2;border-color:#8DD5C3;color:#0F766E}
+    /* §tmBtn2 · ปุ่ม ตม. "ลอยมีเงา" ขนาดเล็ก · owner เลือกแบบ 1 แล้วขอเล็กลง */
+    .t2-more.t2-tmgo{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px 0 3px;border:0;border-radius:999px;background:#fff;font-size:10px;font-weight:800;white-space:nowrap;line-height:1;
+      box-shadow:0 1px 2px rgba(20,35,63,.12),0 2px 6px rgba(20,35,63,.10);transition:box-shadow .15s,transform .15s}
+    .t2-more.t2-tmgo:hover{box-shadow:0 2px 3px rgba(20,35,63,.14),0 6px 14px rgba(20,35,63,.16);transform:translateY(-1px)}
+    .t2-more.t2-tmgo>span:first-child{font-size:8px;opacity:.55;margin-right:-1px}
+    .t2-more.t2-tmgo .tmi{width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;color:#fff;font-style:normal}
+    .t2-more.t2-tmgo .tmc{font-family:'DM Mono',monospace;font-weight:500;font-size:10px;background:rgba(0,0,0,.06);border-radius:999px;padding:1px 6px;margin-left:1px}
+    .t2-more.t2-tmgo[data-tm=zero]{color:#9B2C2C}.t2-more.t2-tmgo[data-tm=zero] .tmi{background:#C2410C}
+    .t2-more.t2-tmgo[data-tm=miss]{color:#7A4A00}.t2-more.t2-tmgo[data-tm=miss] .tmi{background:#D97706}
+    .t2-more.t2-tmgo[data-tm=ok]{color:#0F6E56}.t2-more.t2-tmgo[data-tm=ok] .tmi{background:#0F9B6E}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
     /* §zoneSlim · คอลัมน์ Zone แคบลงเหลือ 96 · ชื่อท่ายาว ("Grand Andaman Pier", "Visit Panwa Pier") ขึ้นสองบรรทัดแทนการตัด … */
