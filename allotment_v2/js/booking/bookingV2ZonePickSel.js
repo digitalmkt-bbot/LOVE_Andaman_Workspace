@@ -20,7 +20,9 @@ function bookingV2ZonePickSel(id){
     h+=`<label style="display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:11.5px;color:#3a3a35;cursor:pointer"><input type="checkbox" id="bkv2-zonepick-time" checked style="margin-top:2px"><span>${laT('อัปเดตเวลารับตามพื้นที่ใหม่')}<br><span style="font-family:'DM Mono',monospace;font-size:11px">${tx}</span></span></label>`;
   }
   if(p.zoneDiff){
-    h+=`<div style="margin-top:9px;background:#FBF0DD;color:#7A4A00;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.45">&#9888; ${laT('พื้นที่ใหม่อยู่คนละโซนราคากับใบจอง')} (${e(p.priceZones.map(bookingV2ZoneLabel).join(', '))} &rarr; ${e(bookingV2ZoneLabel(p.area.zone))}) · ${laT('ราคาไม่เปลี่ยน · ถ้าต้องคิดราคาใหม่ให้แก้ไขใบจอง')}</div>`;
+    /* §zoneFollow (2026-11-06) · owner: "ปรับเป็น Visit Panwa Pier แต่ไม่ย้าย" / "เปลี่ยนกลับ ก็ไม่ย้ายกลับให้"
+       แถวในตารางเกาะตาม trip.zone ไม่ใช่พื้นที่รับ · เดิมป๊อปอัปเปลี่ยนแต่พื้นที่ แถวจึงไม่ขยับ · ตอนนี้ติ๊กให้โซนของทริปตามพื้นที่ใหม่ (ค่าเริ่มต้นติ๊ก) · ราคาไม่แตะ */
+    h+=`<label style="display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:11.5px;color:#3a3a35;cursor:pointer"><input type="checkbox" id="bkv2-zonepick-zone" checked style="margin-top:2px"><span><b>${laT('ย้ายโซนของทริปตามพื้นที่ใหม่')}</b> (${e(p.priceZones.map(bookingV2ZoneLabel).join(', '))} &rarr; <b>${e(bookingV2ZoneLabel(p.area.zone))}</b>)<br><span style="color:#7A4A00">${laT('แถวจะย้ายไปอยู่โซนนั้นในตาราง · ราคาไม่เปลี่ยน · ถ้าต้องคิดราคาใหม่ให้แก้ไขใบจอง')}</span></span></label>`;
   }
   info.innerHTML=h;
 }
