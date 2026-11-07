@@ -241,6 +241,10 @@
       <span class="po-dot"></span>
       ตั๋วอุทยาน
     </div>
+    <div class="nav-item po-sub" data-pogrp="ranong" data-view="pot-ranong" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เอกสาร ตม.
+    </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(255,170,200,.5)">Sales</div>
     <div class="nav-item" data-view="sales-board" onclick="nav(this)" style="border-left:2px solid rgba(255,170,200,.25);padding-left:9px">
@@ -986,6 +990,7 @@
     <div id="view-pok-panwa" class="view"><div id="pk-host-panwa" class="po-host"></div></div>
     <div id="view-pok-tublamu" class="view"><div id="pk-host-tublamu" class="po-host"></div></div>
     <div id="view-pok-ranong" class="view"><div id="pk-host-ranong" class="po-host"></div></div>
+    <div id="view-pot-ranong" class="view"><div id="pt-host-ranong" class="po-host"></div></div>
     <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
     <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
     <div id="view-po-ranong" class="view"><div id="po-host-ranong" class="po-host"></div></div>
@@ -3082,6 +3087,31 @@
       </div>
       <div class="form-row"><label class="form-label">หมายเหตุให้คนขับ</label>
         <input type="text" id="vs-note" placeholder="เช่น ไปประจำเรือที่ท่า ไม่ลงเรือ"></div>
+      <!-- §vsPay · เก็บเงินจากจุดแวะ · ขึ้นใน Travel Summary -->
+      <input type="hidden" id="vs-payon" value="0"><input type="hidden" id="vs-paywho" value="pier"><input type="hidden" id="vs-paymeth" value="cash">
+      <div class="form-row"><label class="form-label">เก็บเงิน</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="vs-payon-pills">
+          <div class="loc-pill on" data-v="0" onclick="vsPaySet('payon','0')">ไม่เก็บ</div>
+          <div class="loc-pill" data-v="1" onclick="vsPaySet('payon','1')">&#3647; เก็บเงิน</div>
+        </div>
+      </div>
+      <div id="vs-pay-more" style="display:none">
+        <div class="form-2">
+          <div class="form-row"><label class="form-label">ยอด (บาท) <span style="color:var(--red)">*</span></label><input type="number" id="vs-payamt" min="0" placeholder="เช่น 300"></div>
+          <div class="form-row"><label class="form-label">ใครเก็บ</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-paywho-pills">
+              <div class="loc-pill on" data-v="pier" onclick="vsPaySet('paywho','pier')">หน้าท่า</div>
+              <div class="loc-pill" data-v="driver" onclick="vsPaySet('paywho','driver')">คนขับ</div>
+              <div class="loc-pill" data-v="office" onclick="vsPaySet('paywho','office')">โอนเข้าบริษัท</div>
+            </div></div>
+        </div>
+        <div class="form-row" id="vs-paymeth-row"><label class="form-label">วิธีรับเงิน</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="vs-paymeth-pills">
+            <div class="loc-pill on" data-v="cash" onclick="vsPaySet('paymeth','cash')">เงินสด</div>
+            <div class="loc-pill" data-v="transfer" onclick="vsPaySet('paymeth','transfer')">โอนเงิน</div>
+          </div></div>
+        <div style="font-size:11.5px;color:#6B7280;margin-top:-4px">ขึ้นใน Travel Summary ของวันนี้ · "หน้าท่า" นับรวมในยอดเงินหน้าท่า · คนขับ/โอน แสดงให้ตามเก็บแต่ไม่นับในลิ้นชัก</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="vs-del" onclick="vsDelGo()" style="margin-right:auto;color:#A32D2D;display:none">ลบจุดแวะ</button>
@@ -3810,9 +3840,17 @@
 <script src="js/booking/bookingV2AltWhoType.js"></script>
 <script src="js/booking/bookingV2AltWhoPicked.js"></script>
 <script src="js/booking/bookingV2UpgKindHtml.js"></script>
+<script src="js/booking/bookingV2UpgPick.js"></script>
+<script src="js/booking/bookingV2UpgChip.js"></script>
+<script src="js/booking/bookingV2UpgTicket.js"></script>
+<script src="js/booking/bookingV2GoBooking.js"></script>
+<script src="js/booking/bookingV2ExtraSetSplit.js"></script>
+<script src="js/booking/bookingV2ExtraSetAmt.js"></script>
+<script src="js/booking/bookingV2ExtraFillRest.js"></script>
 <script src="js/09-action-board.js?v=c2953402"></script>
 <script src="js/11-exec-board.js?v=819a1bc5"></script>
 <!-- §wx (lk-inbox b445e22d) · legacy weather log; before the ops adapters, as every legacy file -->
+<script src="js/14-tm-ranong.js?v=48c3e60cf46db51e755aab1be32e03ed"></script>
 <script src="js/13-guest-insights.js?v=ea78b067"></script>
 <script src="js/12-weather.js"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->

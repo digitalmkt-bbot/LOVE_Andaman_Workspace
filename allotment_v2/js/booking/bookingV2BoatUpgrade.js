@@ -8,6 +8,6 @@ function bookingV2BoatUpgrade(bkId, routeId, date){
   if(t.ovnLeg || t.ovn){ alert('Overnight trips cannot be upgraded here. Edit the booking instead.'); return; }
   if((Number(t.lockUse)||0)>0 || (t.seatSource && Number(t.seatSource.locked)>0)){
     alert('This booking draws seats from a seat lock on '+bkUpgRouteName(t.routeId)+'.\nRelease the lock draw first (edit the booking), then upgrade.'); return; }
-  _bkUpg={ bkId:bkId, date:date, from:t.routeId, to:'', reason:'', charge:'', kind:'fill', boat:'' };   /* §upgPromise */
+  _bkUpg={ bkId:bkId, date:date, from:t.routeId, to:'', reason:'', charge:'', kind:'', boat:'', chargeOn:false };   /* §upgPromise · §upgUi2 · ยังไม่เลือก = ถามในข้อ 2 */
   bookingV2UpgModal();
 }

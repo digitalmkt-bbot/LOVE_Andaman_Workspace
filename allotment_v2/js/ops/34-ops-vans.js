@@ -44,7 +44,7 @@
     'bookingV2VanUnsplit', 'bookingV2VanClearRoute', 'bookingV2VanAutoAssign', 'bookingV2VanGroupHeal',
     'bookingV2GrpOrderAll', 'bookingV2GrpOrderGet', 'bookingV2GrpOrderSet',
     'bookingV2SplitApply', 'bookingV2SyncAltPickupSplits', 'bookingV2HealAltSplits', 'bookingV2HealSplitPax', 'bookingV2HealOvnLegs',
-    'bookingV2UpgVanApply', 'bookingV2VanUpgUndo', 'bkUpgVanMoveStops'];
+    'bookingV2UpgVanApply', 'bookingV2VanUpgUndo', 'bkUpgVanMoveStops', 'bkVanAuditScan'];
   WRAPPED.forEach(function(n){ if(typeof window[n] === 'function') originals[n] = window[n]; });
 
   function wrap(name, opsFn){
@@ -684,6 +684,10 @@
   // The heal keeps a group's vanId in step with local data. In ops mode the server's groups are the truth
   // (the loader applies them), so the heal does nothing rather than write local-only van fields.
   wrap('bookingV2VanGroupHeal', function(){ return null; });
+  // §vanLog / §vanGuard: legacy compared each booking's vans at every blob save, wrote the history line and asked for a reason.
+  // Here every van change is a server command: the server writes the line and refuses without the reason (00-ops-core.js asks).
+  // The browser's scan would ask a second time and revert only its own copy, so it does nothing.
+  wrap('bkVanAuditScan', function(){ return 0; });
   // Auto-assign picks vans by itself, which the rules forbid; no screen calls it, but refuse if it is ever wired.
 
   /* Render hook · the by-trip screen calls this in Van mode. Loads every route's groups for the day once per

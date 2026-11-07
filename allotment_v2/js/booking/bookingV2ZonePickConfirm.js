@@ -8,8 +8,13 @@ function bookingV2ZonePickConfirm(){
   const doTime=!!(document.getElementById('bkv2-zonepick-time')||{}).checked;
   bk.pickupAreaId=p.area.id;
   if(doTime) p.times.forEach(x=>{ x.t.pickupTime=x.to; });
+  /* §zoneFollow · โซนของทริป (ที่ไม่ใช่ขากลับค้างคืน) ตามพื้นที่ใหม่ · ขากลับค้างคืนเป็นโซนที่ไปส่ง ไม่เกี่ยวกับจุดรับ */
+  const doZone=p.zoneDiff && !!(document.getElementById('bkv2-zonepick-zone')||{}).checked, zTo=(p.area.zone==='NT'?'NoTransfer':(p.area.zone||'')), zChg=[];
+  if(doZone && zTo){ (bk.trips||[]).forEach(t=>{ if(!t || t.ovnLeg || (t.zone||'')===zTo) return; zChg.push((t.date||'')+' '+bookingV2ZoneLabel(t.zone||'')+'->'+bookingV2ZoneLabel(zTo)); t.zone=zTo; });
+    if(zChg.length && bk.pickupZone && bk.pickupZone!==zTo) bk.pickupZone=zTo; }
   bookingV2AddHistory(bk, 'edit', 'Pickup zone: '+fromName+' -> '+(p.area.name||p.area.id)
-    + (doTime&&p.times.length?(' · pickup time '+p.times.map(x=>(x.t.date||'')+' '+(x.from||'-')+'->'+x.to).join(', ')):''), 'Edited');
+    + (doTime&&p.times.length?(' · pickup time '+p.times.map(x=>(x.t.date||'')+' '+(x.from||'-')+'->'+x.to).join(', ')):'')
+    + (zChg.length?(' · trip zone '+zChg.join(', ')):''), 'Edited');
   acctPersistBookings();
   const ov=document.getElementById('bkv2-zonepick'); if(ov) ov.remove();
   bookingV2RenderKeep();

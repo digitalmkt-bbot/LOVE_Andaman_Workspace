@@ -1,0 +1,1 @@
+function bookingV2ExtraFillRest(m){ var b=_bkxPayBase(), A=_bkExtraPay.amts||{}; var other=0; ['cash','transfer','card'].forEach(function(k){ if(k!==m) other+=pckN(+A[k]||0); }); _bkExtraPay.amts[m]=String(Math.max(0,pckN(b-other))); bookingV2ExtraPayRender(); }

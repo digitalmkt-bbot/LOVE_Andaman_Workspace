@@ -3,8 +3,9 @@ function bookingV2UpgApply(go){
   var b=SB_BOOKINGS.find(function(x){ return x.id===U.bkId; }); if(!b) return;
   var t=bkUpgTripOn(b, U.date, U.from); if(!t){ alert('Trip not found.'); return; }
   if(!U.to){ alert('Pick the destination programme.'); return; }
+  if(!U.kind){ alert('Choose who asked for the move (step 2).'); return; }   /* §upgUi2 */
   var reason=String(U.reason||'').trim(); if(!reason){ alert('Enter a reason.'); var r0=document.getElementById('bkupg-reason'); if(r0) r0.focus(); return; }
-  var charge=Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g,''))||0)*100)/100);
+  var charge=(U.chargeOn===false)?0:Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g,''))||0)*100)/100);   /* §upgUi2 · กด "ไม่เก็บ" = 0 */
   var pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0;
   var al=(typeof getAllotment==='function')?getAllotment(U.to, U.date, null):null;
   if(al && al.hasAllotment && pax>al.seatsAvailable){

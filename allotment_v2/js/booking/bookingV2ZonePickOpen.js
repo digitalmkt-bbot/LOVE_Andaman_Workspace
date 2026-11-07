@@ -64,6 +64,7 @@ function bookingV2ZonePickOpen(el, bkId, date){
     let top=r.bottom+6; if(top+ph>window.innerHeight-8) top=Math.max(8, r.top-ph-6);
     if(top+ph>window.innerHeight-8) top=Math.max(8, window.innerHeight-ph-8);
     panel.style.left=left+'px'; panel.style.top=top+'px';
+    panel.style.maxHeight=Math.max(220, window.innerHeight-top-8)+'px';   /* §zpkFit · ป๊อปอัปต้องไม่ยาวพ้นจอ · รายการเลื่อนในตัวเอง ปุ่มยืนยันเห็นเสมอ */
     const s=panel.querySelector('.zpk-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(cur):cur)+'"]'); if(s) s.scrollIntoView({block:'center'});
     const q=document.getElementById('bkv2-zonepick-q'); if(q) q.focus({preventScroll:true});
   }catch(_){}

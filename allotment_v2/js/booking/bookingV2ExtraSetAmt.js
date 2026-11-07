@@ -1,0 +1,1 @@
+function bookingV2ExtraSetAmt(m,v){ _bkExtraPay.amts=_bkExtraPay.amts||{cash:'',transfer:'',card:''}; _bkExtraPay.amts[m]=(typeof pckNumStr==='function')?pckNumStr(v):String(v||''); bookingV2ExtraPayRender(); }

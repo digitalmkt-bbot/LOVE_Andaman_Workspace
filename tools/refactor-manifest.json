@@ -706,6 +706,13 @@
     "bkV2CharterCap": "allotment_v2/js/booking/bookingV2CharterCap.js",
     "bkV2AltWhoType": "allotment_v2/js/booking/bookingV2AltWhoType.js",
     "bkV2AltWhoPicked": "allotment_v2/js/booking/bookingV2AltWhoPicked.js",
-    "bkV2UpgKindHtml": "allotment_v2/js/booking/bookingV2UpgKindHtml.js"
+    "bkV2UpgKindHtml": "allotment_v2/js/booking/bookingV2UpgKindHtml.js",
+    "bkV2UpgPick": "allotment_v2/js/booking/bookingV2UpgPick.js",
+    "bkV2UpgChip": "allotment_v2/js/booking/bookingV2UpgChip.js",
+    "bkV2UpgTicket": "allotment_v2/js/booking/bookingV2UpgTicket.js",
+    "bkV2GoBooking": "allotment_v2/js/booking/bookingV2GoBooking.js",
+    "bkV2ExtraSetSplit": "allotment_v2/js/booking/bookingV2ExtraSetSplit.js",
+    "bkV2ExtraSetAmt": "allotment_v2/js/booking/bookingV2ExtraSetAmt.js",
+    "bkV2ExtraFillRest": "allotment_v2/js/booking/bookingV2ExtraFillRest.js"
   }
 }
