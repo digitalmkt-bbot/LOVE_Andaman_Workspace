@@ -6,6 +6,7 @@
      POST /v1/bookings/{id}/pier-payments/preview     pckLineFee      the card fee of each line the cashier typed (no write)
      GET  /v1/pier-checkin  groups {boat, van, zone}  pckTripStats    the heads, languages, meals and longtails of a boat band / van group / zone
      rows[].return {kind, van_id, drop_off}           ckRetVan, pckJobDrop, tsSendBack      (pier sheet, van check-in, travel summary rows)
+                                                      kind 'ovn' + ovn_return_date: an overnight outbound day (§ovnOutNoRet, sync 11-07)
      rows[].service.lines                             pckJobService   the Service column of the job card
      GET  /v1/config/guides  value[].licensed         goIsGuide       outside a guide sheet (the register's own list)
 
@@ -148,8 +149,11 @@
     return null;
   }
   function vanName(id){ var v = typeof g('vehGet') === 'function' ? window.vehGet(id) : null; return (v && v.name) || id; }
+  /* §ovnOutNoRet (lk-inbox 2026-11-06): the outbound day of an overnight stay. The server answers kind 'ovn' with the day they come back. */
+  function ovnBack(rt){ var d = rt.ovn_return_date || ''; return (d && typeof g('ovnDayTh') === 'function') ? window.ovnDayTh(d) : d; }
   function retVanOf(rt){
     if(!rt || !rt.kind) return null;
+    if(rt.kind === 'ovn') return { t: 'ค้างเกาะ · กลับ ' + ovnBack(rt), kind: 'ovn' };
     if(rt.kind === 'self') return { t: 'กลับเอง', kind: 'self' };
     if(rt.kind === 'van') return { t: vanName(rt.van_id), kind: 'van' };
     if(rt.kind === 'same') return { t: 'กลับคันเดิม', kind: 'same' };
@@ -163,6 +167,7 @@
   wrap('pckJobDrop', function(orig, a){
     var rt = returnOf(a[0], a[1]); if(!rt) return undefined;
     var rv = retVanOf(rt);
+    if(rt.kind === 'ovn') return { t: '', self: false, van: rv, ovn: true };       // not "ส่ง <drop>" today: that is the return leg's job
     if(rt.kind === 'self') return { t: 'กลับเอง', self: true, van: null };
     if(rt.drop_off) return { t: rt.drop_off, self: false, van: (rv && rv.kind !== 'self') ? rv : null };
     if(rv) return { t: '', self: false, van: rv };
@@ -172,7 +177,8 @@
     var rt = returnOf(a[0], a[1]); if(!rt) return undefined;
     var drop = rt.drop_off || '';
     if(rt.kind === 'self') return { t: String(drop).replace(/\s*\(self-?arrive\)/i, '').trim() || '—', tag: 'กลับเอง', cls: 'n' };
-    if(!drop && rt.kind !== 'pending') return undefined;       // "same drop-off as the pickup" and "a separate drop with no name" look alike here: legacy tells them apart
+    if(rt.kind === 'ovn') return { t: 'ค้างเกาะ', tag: '🌙 กลับ ' + ovnBack(rt), cls: 'n' };
+    if(!drop && rt.kind !== 'pending') return undefined;      // "same drop-off as the pickup" and "a separate drop with no name" look alike here: legacy tells them apart
     if(rt.kind === 'van') return { t: drop || '—', tag: '↩ ' + vanName(rt.van_id), cls: 'g' };
     if(rt.kind === 'same') return { t: drop || '—', tag: '↩ กลับคันเดิม', cls: 'e' };
     if(rt.kind === 'pending') return { t: drop || '—', tag: '⚠ ยังไม่จัดรถกลับ', cls: 'r' };

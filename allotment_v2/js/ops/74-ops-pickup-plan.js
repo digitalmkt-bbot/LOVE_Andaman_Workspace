@@ -18,7 +18,7 @@
    This file:
      _bkV2ZonePickPlan   answers {area, times, priceZones, zoneDiff} from the server's plan (cached per booking, version and area; the
                          dialog draws again when the answer arrives). Until then, and offline, legacy's own plan.
-     bookingV2ZonePickConfirm   sends only { pickup_area_id, refresh_pickup_times } (the box), draws the booking from the answer, and
+     bookingV2ZonePickConfirm   sends only { pickup_area_id, refresh_pickup_times, follow_zone } (the two boxes), draws the booking from the answer, and
                          shows the server's refusal as it words it. Nothing is changed in the browser first.
    Legacy's texts, checkbox and warning panel are unchanged. Load order: after 40-ops-bookings.js. Classic script.
    ═════════════════════════════════════════════════════════════════ */
@@ -74,6 +74,8 @@
       var box = document.getElementById('bkv2-zonepick-time');
       var body = { pickup_area_id: st.sel };
       if(box) body.refresh_pickup_times = !!box.checked;                             // the box exists only when some trip's time would follow the area
+      var zbox = document.getElementById('bkv2-zonepick-zone');                      // §zoneFollow (sync 11-07): shown with the zone warning only
+      if(zbox && zbox.checked) body.follow_zone = true;
       var sel = st.sel;
       return O.queue(function(){ return O.bookingWrite('PATCH', '/v1/bookings/' + enc(bk.opsId), bk, body); }).then(function(j){
         if(j && j.id && O.bookings && O.bookings.mergeInto) O.bookings.mergeInto(bk, j);
