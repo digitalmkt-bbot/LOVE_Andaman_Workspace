@@ -56302,6 +56302,54 @@ function bkV2RenderPaymentSection(){
   `;
 }
 
+/* §focType (2026-11-08) · เหตุผล FOC เป็นตัวเลือกคงที่ + ช่องหมายเหตุ
+   ของเดิมเป็น free text · ต.ค. 2026: 38% ของ FOC ใส่แค่ชื่อคนขอ (Pum / Mild / Vila) จัดประเภทไม่ได้
+   เก็บ focType (id) ไว้ทั้งบนใบและใน focApproval · focApproval.reason ยังเป็นข้อความอ่านได้ "<ประเภท> · <หมายเหตุ>" เพื่อให้หน้าเดิม/backend อ่านต่อได้ */
+const FOC_TYPES = [
+  { id:'guide',   l:'ไกด์ / Tour Leader',        h:'ไกด์หรือ TL ที่มากับกรุ๊ปลูกค้าจ่ายเงิน' },
+  { id:'insp',    l:'Inspection',                 h:'ทีมงาน agent / ไกด์ใหม่ ลงดูโปรแกรม' },
+  { id:'fam',     l:'Fam trip',                   h:'กรุ๊ปดูงานของ agent' },
+  { id:'promo',   l:'สิทธิ์แถม (10+1 · 1+1)',      h:'หัวฟรีตามสัญญา / แพ็กเกจ' },
+  { id:'voucher', l:'Gift voucher / E-voucher',   h:'ลูกค้าใช้บัตรกำนัลที่จ่ายแล้ว' },
+  { id:'pr',      l:'Influencer / Blogger / PR',  h:'งานประชาสัมพันธ์' },
+  { id:'staff',   l:'Staff / Welfare',            h:'พนักงานและครอบครัว · ลงดูงาน' },
+  { id:'comp',    l:'ชดเชย / VIP',                h:'ชดเชยปัญหาทริปก่อน · ลูกค้า VIP · ต้องระบุ' },
+  { id:'other',   l:'อื่นๆ (ระบุ)',                h:'ต้องระบุในหมายเหตุ' }
+];
+function focTypeLabel(id){ const t = FOC_TYPES.find(x => x.id === id); return t ? t.l : ''; }
+function bkV2FocNeedNote(type){ return type === 'other' || type === 'comp'; }
+/* ข้อความเหตุผลที่บันทึก = ป้ายประเภท · หมายเหตุ */
+function focReasonText(type, note){ const l = focTypeLabel(type); note = String(note||'').trim(); return l ? (note ? l + ' · ' + note : l) : note; }
+/* ใบเก่าที่มีแต่ข้อความ → เดาประเภทจากคำ (ใช้ตอนเปิดแก้ไข เพื่อให้ไม่ต้องเลือกใหม่ถ้าเดาได้) */
+function focTypeGuess(reason){
+  const r = String(reason||'');
+  if(!r.trim()) return '';
+  if(/fam ?trip/i.test(r)) return 'fam';
+  if(/inspect|อินสเปค|ดูงาน|อบรม|ลงเกาะ/i.test(r)) return 'insp';
+  if(/guide|ไกด์|ไกค์|\bTL\b|tour ?lead/i.test(r)) return 'guide';
+  if(/แถม|10\s*\+\s*1|1\s*\+\s*1/i.test(r)) return 'promo';
+  if(/voucher|บัตรกำนัล/i.test(r)) return 'voucher';
+  if(/influencer|blogger|เพจ|content|tiktok|\bPR\b/i.test(r)) return 'pr';
+  if(/staff|welfare|พนักงาน/i.test(r)) return 'staff';
+  if(/comp|ชดเชย|vip/i.test(r)) return 'comp';
+  return '';
+}
+/* แยกข้อความที่บันทึก "<ป้าย> · <หมายเหตุ>" กลับเป็น {type, note} ตอนเปิดแก้ไข */
+function focReasonSplit(type, reason){
+  reason = String(reason||'').trim();
+  const l = focTypeLabel(type);
+  if(l && reason === l) return { type, note:'' };
+  if(l && reason.indexOf(l + ' · ') === 0) return { type, note: reason.slice(l.length + 3) };
+  if(type) return { type, note: reason };
+  for(const t of FOC_TYPES){ if(reason === t.l) return { type:t.id, note:'' }; if(reason.indexOf(t.l + ' · ') === 0) return { type:t.id, note: reason.slice(t.l.length + 3) }; }
+  const g = focTypeGuess(reason);
+  return { type: g, note: reason };
+}
+function bkV2SetFocType(val){
+  if(!_bkV2.newBooking) return;
+  _bkV2.newBooking.focType = val || '';
+  bkV2Render();
+}
 function bkV2RenderFocSection(){
   const d = _bkV2.newBooking;
   const q = bkV2CalcQuote();
@@ -56313,7 +56361,13 @@ function bkV2RenderFocSection(){
       <div style="font-size:12px;color:#633806;line-height:1.55;margin-bottom:10px">
         <strong>${q.totalFoc} FOC pax</strong> across trips &middot; ฿${q.focDiscount.toLocaleString()} forgone revenue &middot; booking will start as <strong>Pending FOC Approval</strong> until reviewed.
       </div>
-      <textarea class="bkv2-nb-input" rows="3" placeholder="Reason for FOC · e.g. VIP returning client · comp for last trip issue" oninput="bkV2SetFocReason(this.value)" style="border-color:#BA7517">${escapeHTML(d.focReason)}</textarea>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <select class="bkv2-nb-input" onchange="bkV2SetFocType(this.value)" style="border-color:#BA7517;font-weight:600">
+          <option value="">— เลือกประเภท FOC (บังคับ) —</option>
+          ${FOC_TYPES.map(t => `<option value="${t.id}" ${d.focType===t.id?'selected':''}>${t.l}${t.h?' — '+t.h:''}</option>`).join('')}
+        </select>
+        <textarea class="bkv2-nb-input" rows="2" placeholder="${bkV2FocNeedNote(d.focType)?'ระบุเหตุผล (บังคับสำหรับประเภทนี้)':'หมายเหตุ · ชื่อไกด์ / กรุ๊ป / เลขสัญญา (ไม่บังคับ)'}" oninput="bkV2SetFocReason(this.value)" style="border-color:${bkV2FocNeedNote(d.focType)&&!(d.focReason||'').trim()?'#BA7517':'#EAD9B0'}">${escapeHTML(d.focReason)}</textarea>
+      </div>
     </div>
   `;
 }
@@ -56347,7 +56401,7 @@ function bkV2RenderSubmitButton(){
   const q = bkV2CalcQuote();
   const hasTrips = d.trips.some(t => t.routeId && t.date);
   const hasFoc = q.totalFoc > 0;
-  const focOk = !hasFoc || (d.focReason||'').trim().length > 0;
+  const focOk = !hasFoc || (!!d.focType && (!bkV2FocNeedNote(d.focType) || (d.focReason||'').trim().length > 0));   /* §focType */
   // Block save if any trip has no rate for its route×zone combo
   const noRateTrips = bkV2NoRateTrips();
   const ratesOk = noRateTrips.length === 0;
@@ -62423,6 +62477,7 @@ function bkV2NewBooking(){
     trips: [bkV2NewTrip()],
     addOns: [],
     adjustments: [],           // [{kind:'discount'|'extra', mode:'amount'|'percent', value, label, note}]
+    focType: '',
     focReason: '',
     createdAt: new Date().toISOString()
   };
@@ -65596,7 +65651,8 @@ function bkV2SubmitBooking(){
   const d = _bkV2.newBooking;
   const quote = bkV2CalcQuote();
   const hasFoc = quote.totalFoc > 0;
-  if(hasFoc && !(d.focReason||'').trim()){ alert('Please enter FOC reason'); return; }
+  if(hasFoc && !d.focType){ alert('เลือกประเภท FOC ก่อนบันทึก'); return; }   /* §focType */
+  if(hasFoc && bkV2FocNeedNote(d.focType) && !(d.focReason||'').trim()){ alert('ประเภท FOC นี้ต้องระบุเหตุผลในหมายเหตุ'); return; }
   /* §chManualNoRate · ใบเหมาที่เรือไม่มีเรทเหมา และยังไม่ได้กรอกราคาเอง = ทริปนั้นจะบันทึกเป็น ฿0
      เดิมผ่านไปเงียบ ๆ · ถามก่อนทุกครั้ง (ไม่ห้าม เพราะเหมาฟรีมีจริง แต่ต้องเป็นการตัดสินใจ ไม่ใช่อุบัติเหตุ) */
   if(!quote.manual){
@@ -66205,9 +66261,11 @@ function bkV2CommitBooking(status){
       ? d.adjustments.filter(a => (Number(a.value)||0) > 0)
           .map(a => ({ kind:a.kind, mode:a.mode||'amount', value:Number(a.value)||0, label:a.label||'', note:a.note||'' }))
       : [],
+    focType: quote.totalFoc > 0 ? (d.focType || '') : '',   /* §focType */
     focApproval: quote.totalFoc > 0 ? {
       count: quote.totalFoc,
-      reason: d.focReason,
+      type: d.focType || '',
+      reason: focReasonText(d.focType, d.focReason),
       status: status === 'pending_foc' ? 'pending' : (status === 'confirmed' ? 'approved' : 'pending'),
       requestedAt: new Date().toISOString(),
       requestedBy: 'RM'
@@ -68133,6 +68191,8 @@ function bkV2EditBooking(bookingId){
     clone.manualTotal = Number(clone.total || (clone.priceBreakdown && clone.priceBreakdown.total) || 0);
     clone._b2cSnap = bkV2B2CSnap(clone);
   }
+  /* §focType · ใบเก่าเก็บเหตุผลไว้ใน focApproval.reason อย่างเดียว → แยกกลับเป็นประเภท + หมายเหตุให้ฟอร์ม */
+  { const fa = clone.focApproval || {}; const sp = focReasonSplit(clone.focType || fa.type || '', fa.reason || clone.focReason || ''); clone.focType = sp.type; clone.focReason = sp.note; }
   bkV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
@@ -85321,8 +85381,8 @@ function bkNbfChecks(){
   });
   var q=null; try{ q=bkV2CalcQuote(); }catch(_){ q=null; }
   if(q && q.totalFoc>0){
-    var fr=String(d.focReason||'').trim().length>0;
-    add('pay', fr, true, fr?'FOC reason entered':('Enter the FOC reason · '+q.totalFoc+' FOC pax'));
+    var fr=!!d.focType && (!bkV2FocNeedNote(d.focType) || String(d.focReason||'').trim().length>0);   /* §focType */
+    add('pay', fr, true, fr?('FOC: '+focTypeLabel(d.focType)):(d.focType?'ระบุเหตุผล FOC ในหมายเหตุ':('เลือกประเภท FOC · '+q.totalFoc+' FOC pax')));
   }
   add('guests', !!d.leadPax, true, d.leadPax?'Lead guest named':'Enter the lead guest name');
   var needVan=withRoute.some(function(t){ return !t.ovnLeg && t.zone!=='NoTransfer' && t.zone!=='NT'; }) && !d.pickupSelf;
