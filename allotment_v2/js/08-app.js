@@ -35666,7 +35666,8 @@ function pxVanCost(date, bid, routeId){
    ใบสั่งงานมัคคุเทศก์ (goAsn) มีคนที่ลงเรือจริงพร้อมบทบาท/ภาษาแล้ว (ต.ค. 2026 ครบ 200/202 เที่ยว)
    จำนวน = จากใบงาน · ราคา = ราคาเดิมของบรรทัดในแผนเส้นทาง (owner: "อิงสูตรก่อน แล้วเช็คกับใบงาน")
    · ไกด์ที่มีภาษาอื่นนอกจาก EN/TH ในทะเบียน = เรทบรรทัดไกด์ต่างชาติ · ที่เหลือ = เรทไกด์
-   · ไกด์ฝึกหัด / นักศึกษาฝึกงาน / สตาฟ = ฿0 (owner)
+   · ไกด์ฝึกหัด = ช่อง ASST. GUIDE ในกลุ่มไกด์ของการ์ดเรือ (goIsGuide) = เรทไกด์ปกติ (owner 2026-11-08: "ขิมเป็น ASST. GUIDE ดึงเรทปกติ 1500")
+   · นักศึกษาฝึกงาน / สตาฟ (ช่อง Trainee / Staff) = ฿0 (owner)
    · ใบงานยังไม่จัด = ใช้สูตรเดิม · บรรทัดบอกตัวเลขสูตรเดิมไว้ข้างกันให้เทียบ */
 function pxGuideWork(date, bid, plan, T){
   try{
@@ -35675,7 +35676,7 @@ function pxGuideWork(date, bid, plan, T){
     if(!F.length && !other) return null;
     var n={ th:0, fx:0, tr:0, it:0, fxL:{} };
     F.forEach(function(g){
-      if(g.role==='trainee'){ n.tr++; return; }
+      if(g.role==='trainee'){ n.tr++; n.th++; return; }   /* ASST. GUIDE · เรทไกด์ */
       if(g.role && g.role!=='guide'){ n.it++; return; }
       var L=(g.langs||[]).filter(function(l){ return l && l!=='EN' && l!=='TH'; });
       if(L.length){ n.fx++; L.forEach(function(l){ n.fxL[l]=(n.fxL[l]||0)+1; }); } else n.th++;
@@ -35732,7 +35733,7 @@ function pxTrip(date, bid){
   /* §pxGuideJob · ไกด์จากใบสั่งงานมัคคุเทศก์ */
   var GW=pxGuideWork(date,bid,plan,T);
   if(GW){
-    var _gx=(GW.tr?(' · ฝึกหัด '+GW.tr+' คน'):'')+(GW.it?(' · นศ./สตาฟ '+GW.it+' คน'):'')+((GW.tr||GW.it)?' ไม่คิดเงิน':'');
+    var _gx=(GW.tr?(' (รวม ผช.ไกด์/ฝึกหัด '+GW.tr+' คน)'):'')+(GW.it?(' · นศ./สตาฟ '+GW.it+' คน ไม่คิดเงิน'):'');
     act.guide={ amt:GW.th*GW.rTH, cmp:1, why:'ใบงานไกด์ '+GW.th+' คน × '+ctB(GW.rTH)+_gx };
     if(GW.fid) act[GW.fid]={ amt:GW.fx*GW.rFX, cmp:1,
       why:GW.fx ? ('ใบงานไกด์ภาษา '+Object.keys(GW.fxL).join('/')+' '+GW.fx+' คน × '+ctB(GW.rFX)) : 'ใบงานไม่มีไกด์ภาษาที่ 3' };
