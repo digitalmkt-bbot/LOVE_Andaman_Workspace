@@ -74320,6 +74320,29 @@ var _pkSetMenu=false;
 /* §pkSets3 · owner "อยากเห็นจำนวนจริง ๆ แยก ผญไทย เด็กไทย ต่ำกว่า 3 FOC ไทย ... และมีให้เลือกว่า สิมิลัน หรือ สุรินทร์ จำนวนก็ขึ้นมา"
    แถวยอดจริงของวันต่อโปรแกรม (Similan / Surin / ...) อยู่บนสุดของตาราง · กดแถว = เลือกโปรแกรม · เมนูเพิ่มเรือกรองตามนั้น */
 var _pkSetFamF='all';
+/* ══ §pkFocTip (2026-11-08) · owner "เอาเม้าไปชี้ตรงตัวเลขของ FOC แล้วขึ้นว่าอยู่ลำไหนบ้าง" ════════════════
+   แถวยอดจริงของวัน (ทั้งหมด / แต่ละเส้นทาง) เป็นยอดรวมทุกลำ · ชี้ช่องตัวเลขใดก็ได้ (FOC ไทย/ตช. ผญ เด็ก …)
+   ขึ้นรายการลำที่มีคนกลุ่มนั้น เรียงจากมากไปน้อย · "Aluminous1 (09:00) · 4" · ช่อง FOC ขึ้นเส้นประใต้ตัวเลขให้รู้ว่าชี้ได้ */
+var PKFT_LBL={ad_th:'ผญ ไทย',chd_th:'เด็ก ไทย',inf_th:'ต่ำกว่า 3 ไทย',foc_th:'FOC ไทย',_th:'รวม ไทย',ad_fr:'ผญ ตช',chd_fr:'เด็ก ตช',inf_fr:'ต่ำกว่า 3 ตช',foc_fr:'FOC ตช',_fr:'รวม ตช'};
+(function(){ try{ if(document.getElementById('pkft-css')) return; var st=document.createElement('style'); st.id='pkft-css';
+  st.textContent='.pk3-mx td.pkft{cursor:help}.pk3-mx tr.fm td.pkft:nth-child(5),.pk3-mx tr.fm td.pkft:nth-child(10){text-decoration:underline dotted;text-underline-offset:3px}'
+   +'#pkft-pop{position:fixed;z-index:100070;background:#14233F;color:#fff;font:600 12px/1.55 Inter,"Noto Sans Thai",system-ui,sans-serif;padding:8px 11px;border-radius:9px;box-shadow:0 8px 22px rgba(0,0,0,.25);white-space:pre;pointer-events:none;max-width:420px}';
+  document.head.appendChild(st);
+  var pop=null; document.addEventListener('mouseover',function(ev){ var td=ev.target&&ev.target.closest&&ev.target.closest('td.pkft'); if(!td){ if(pop){ pop.remove(); pop=null; } return; }
+    var t=td.getAttribute('data-tip'); if(!t) return; td.removeAttribute('title');
+    if(!pop){ pop=document.createElement('div'); pop.id='pkft-pop'; document.body.appendChild(pop); } pop.textContent=t;
+    var r=td.getBoundingClientRect(); pop.style.left=Math.max(8,Math.min(window.innerWidth-pop.offsetWidth-8, r.left+r.width/2-pop.offsetWidth/2))+'px'; pop.style.top=(r.bottom+6)+'px'; },true);
+}catch(_){} })();
+function pkFocTipTxt(F, k, bn){
+  try{
+    var L=(F.by||[]).filter(function(r){ return (+r.p8[k]||0)>0; }).sort(function(a,b){ return (b.p8[k]||0)-(a.p8[k]||0); });
+    if(!L.length) return '';
+    var tot=L.reduce(function(t,r){ return t+(+r.p8[k]||0); },0);
+    return (PKFT_LBL[k]||k)+' '+tot+' คน · '+L.length+' ลำ\n'+L.map(function(r){ var B=r.x.B, rn=(r.x.g&&r.x.g.route&&r.x.g.route.name)||'';
+      var nm=''; try{ nm=String(bn(B)).replace(/<[^>]+>/g,''); }catch(_){ nm=B.bid; }
+      return '• '+nm+(B.dep?(' ('+B.dep+')'):'')+(F.f.id==='all'&&rn?(' · '+rn):'')+' — '+r.p8[k]; }).join('\n');
+  }catch(_){ return ''; }
+}
 function pkSetFamF(id){ _pkSetFamF=String(id||'all'); _pkSetMenu=false; renderPierPark(); }
 var _pkSetD=null;
 var _pkSetDate='';
@@ -74616,10 +74639,10 @@ function pk3Body(flat, TY, TYM, ro){
       +'<td class="n sum">&#8722;'+C.tot+'</td><td class="cxw" colspan="'+(TY.length+3)+'">'+pkCxWhy(C)+'</td></tr>'; };
   var g8=function(p8){ var o={}; GO.forEach(function(k){ o[k]=+p8[k]||0; }); o._th=o.ad_th+o.chd_th+o.inf_th+o.foc_th; o._fr=o.ad_fr+o.chd_fr+o.inf_fr+o.foc_fr; return o; };
   /* §pkSets3 · ยอดจริงของทั้งวัน แยกตามโปรแกรม · นับทุกลำของวัน ไม่ใช่แค่ลำที่เลือก */
-  var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0}; FL.push(F); }
-    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.t+=(+x.B.totPc||0); F.n++; pkCxAdd(F,x.B.cx);
+  var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0, by:[]}; FL.push(F); }
+    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.by.push({x:x, p8:p8});   /* §pkFocTip */ F.t+=(+x.B.totPc||0); F.n++; pkCxAdd(F,x.B.cx);
     F.u+=(x.B.people||[]).filter(function(p){ return !p.over && usedAll[pkSetKey(p)]; }).length; F.l+=pkSetAvail(x.B,usedAll).length; });
-  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; pkCxAdd(FA,F.cx); });
+  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0, by:[]}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.by=FA.by.concat(F.by||[]); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; pkCxAdd(FA,F.cx); });
   if(_pkSetFamF!=='all' && !FM[_pkSetFamF]) _pkSetFamF='all';
   var FSEL=(_pkSetFamF==='all')?FA:FM[_pkSetFamF];
   /* §pkSets4 · owner "ตรงที่เลือกเรือ ให้เลือกเส้นทางก่อน แล้วจำนวนรวมก็ขึ้น และค่อยเลือกเรือทีหลัง"
@@ -74686,7 +74709,8 @@ function pk3Body(flat, TY, TYM, ro){
   var famRow=function(F){ var on=(_pkSetFamF===F.f.id);
     return '<tr class="fm'+(on?' sel':'')+'" onclick="pkSetFamF(\''+e(F.f.id)+'\')" title="กดเพื่อกรองเรือตามโปรแกรมนี้">'
       +'<td class="rt"><span class="fn"><i style="background:'+F.f.c+'"></i>'+e(F.f.n)+'<em>'+F.n+' ลำ</em>'+(on&&F.f.id!=='all'?'<u>กรองอยู่</u>':'')+'</span></td>'
-      +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(F.s[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
+      +GO.map(function(k,i){ var v=F.s[k]||0, tip=v?pkFocTipTxt(F,k,bn):'';
+          return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+(tip?' pkft':'')+'"'+(tip?(' data-tip="'+e(tip)+'" title="'+e(tip)+'"'):'')+'>'+n0(v)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
       +setTds(setBy(function(S){ return F.f.id==='all' || famOfSet(S)===F.f.id; }))   /* §pkSets8 */
       +'<td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'+cxRow(F.cx, F.f.id==='all'?'ทั้งวัน':'ทั้งเส้น'); };
   var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+(pkSets(date).length?' · ใต้ "ชุดนี้" = รวมในชุดที่บันทึกแล้ว':'')+'</td></tr>'
