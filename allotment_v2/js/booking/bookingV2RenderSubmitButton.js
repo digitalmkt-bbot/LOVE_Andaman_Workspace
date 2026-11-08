@@ -4,7 +4,7 @@ function bookingV2RenderSubmitButton(){
   const q = bookingV2CalcQuote();
   const hasTrips = d.trips.some(t => t.routeId && t.date);
   const hasFoc = q.totalFoc > 0;
-  const focOk = !hasFoc || (d.focReason||'').trim().length > 0;
+  const focOk = !hasFoc || (!!d.focType && (!bookingV2FocNeedNote(d.focType) || (d.focReason||'').trim().length > 0));   /* §focType */
   // Block save if any trip has no rate for its route×zone combo
   const noRateTrips = bookingV2NoRateTrips();
   const ratesOk = noRateTrips.length === 0;

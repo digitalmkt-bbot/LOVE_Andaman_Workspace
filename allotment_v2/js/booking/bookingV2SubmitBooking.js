@@ -3,7 +3,8 @@ function bookingV2SubmitBooking(){
   const d = _bkV2.newBooking;
   const quote = bookingV2CalcQuote();
   const hasFoc = quote.totalFoc > 0;
-  if(hasFoc && !(d.focReason||'').trim()){ alert('Please enter FOC reason'); return; }
+  if(hasFoc && !d.focType){ alert('เลือกประเภท FOC ก่อนบันทึก'); return; }   /* §focType */
+  if(hasFoc && bookingV2FocNeedNote(d.focType) && !(d.focReason||'').trim()){ alert('ประเภท FOC นี้ต้องระบุเหตุผลในหมายเหตุ'); return; }
   /* §chManualNoRate · ใบเหมาที่เรือไม่มีเรทเหมา และยังไม่ได้กรอกราคาเอง = ทริปนั้นจะบันทึกเป็น ฿0
      เดิมผ่านไปเงียบ ๆ · ถามก่อนทุกครั้ง (ไม่ห้าม เพราะเหมาฟรีมีจริง แต่ต้องเป็นการตัดสินใจ ไม่ใช่อุบัติเหตุ) */
   if(!quote.manual){
