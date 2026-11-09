@@ -9394,7 +9394,7 @@ function bop2OvfTable(rows){
   const th='padding:5px 7px;font-size:10px;font-weight:800;color:#6B7785;text-align:left;border-bottom:1px solid #EEE';
   const td='padding:5px 7px;font-size:11.5px;border-bottom:1px solid #F3F1EC';
   return '<table style="width:100%;border-collapse:collapse;margin-top:6px"><tr><th style="'+th+'">วันที่</th><th style="'+th+'">เส้นทาง</th><th style="'+th+';text-align:right">จอง</th><th style="'+th+';text-align:right">ที่นั่งหลังปลด</th><th style="'+th+';text-align:right">ไม่พอ</th></tr>'
-    + rows.map(r=>'<tr><td style="'+td+';white-space:nowrap">'+bop2OvfD(r.d)+'</td><td style="'+td+'">'+bop2OvfEsc(r.routeName)+'</td><td style="'+td+';text-align:right;font-weight:700">'+r.booked+'</td><td style="'+td+';text-align:right">'+r.capAfter+' <span style="color:#9B9088;font-size:10px">(เดิม '+r.capBefore+')</span></td><td style="'+td+';text-align:right;font-weight:800;color:#C0392B">&minus;'+r.over+'</td></tr>').join('')
+    + rows.map(r=>'<tr><td style="'+td+';white-space:nowrap">'+bop2OvfD(r.d)+'</td><td style="'+td+'">'+bop2OvfEsc(r.routeName)+'</td><td style="'+td+';text-align:right;font-weight:700">'+r.booked+'</td><td style="'+td+';text-align:right">'+r.capAfter+' <span style="color:#9B9088;font-size:10px">(เดิม '+r.capBefore+')</span></td><td style="'+td+';text-align:right;font-weight:800;color:#3730A3">&minus;'+r.over+'</td></tr>').join('')
     + '</table>';
 }
 /* แผ่นเตือนก่อนปลดเรือ · 3 ปุ่ม (ไม่ใช้ confirm() · มือถือกลืนได้ ดู §lkRelSheet) */
@@ -9404,7 +9404,7 @@ function bop2OvfSheet(o){
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,35,63,.45);z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;font-family:"DM Sans","Noto Sans Thai",sans-serif';
   const nd=bop2OvfDays(o.rows.map(r=>({dateStr:r.d})));
   ov.innerHTML='<div style="background:#fff;border-radius:14px;width:520px;max-width:96vw;max-height:88vh;overflow:auto;padding:18px 20px 16px;box-shadow:0 18px 50px rgba(0,0,0,.25)">'
-    +'<div style="font-size:15px;font-weight:800;color:#A32D2D">&#9888; ปลด '+bop2OvfEsc(o.boat)+' แล้วที่นั่งไม่พอ '+nd+' วัน</div>'
+    +'<div style="font-size:15px;font-weight:800;color:#3730A3">&#9888; ปลด '+bop2OvfEsc(o.boat)+' แล้วที่นั่งไม่พอ '+nd+' วัน</div>'
     +'<div style="font-size:12px;color:#6B7785;margin-top:4px;line-height:1.5">ลูกค้าที่จองไว้จะเกินที่นั่งของเรือที่เหลือ · หาเรือแทนก่อน หรือปลดเลยแล้ววางแผนย้ายลูกค้าทีหลัง (วันเหล่านี้จะขึ้นในการ์ด "ต้องจัดเรือ")</div>'
     + bop2OvfTable(o.rows)
     +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">'
@@ -9440,9 +9440,9 @@ function bop2UnassignAsk(date, boatId, closePop){
 function bop2OvfBanner(list){
   if(!list.length) return '';
   const nd=bop2OvfDays(list);
-  return '<div style="background:#FDF3F2;border:1px solid #F3B7B2;border-radius:12px;padding:8px 12px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px">'
-    +'<b style="color:#A32D2D">&#9888; ที่นั่งไม่พอ '+nd+' วัน</b><span style="color:#9B9088">30 วันข้างหน้า · กดเพื่อไปที่ช่อง</span>'
-    + list.slice(0,10).map(x=>'<span onclick="bop2OvfGo(\''+x.routeId+'\',\''+x.dateStr+'\')" title="'+bop2OvfEsc(x.routeName+' · จอง '+x.booked+' · ที่นั่ง '+x.cap+(x.lost.length?(' · ไม่พร้อม: '+x.lost.join(', ')):''))+'" style="cursor:pointer;background:#fff;border:1px solid #F3B7B2;border-radius:8px;padding:2px 8px;white-space:nowrap"><b>'+bop2OvfD(x.dateStr)+'</b> '+bop2OvfEsc(x.routeName)+' <b style="color:#C0392B">+'+x.over+'</b></span>').join('')
+  return '<div style="background:#EFF0FC;border:1px solid #BEC2EE;border-radius:12px;padding:8px 12px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px">'
+    +'<b style="color:#3730A3">&#9888; ที่นั่งไม่พอ '+nd+' วัน</b><span style="color:#9B9088">30 วันข้างหน้า · กดเพื่อไปที่ช่อง</span>'
+    + list.slice(0,10).map(x=>'<span onclick="bop2OvfGo(\''+x.routeId+'\',\''+x.dateStr+'\')" title="'+bop2OvfEsc(x.routeName+' · จอง '+x.booked+' · ที่นั่ง '+x.cap+(x.lost.length?(' · ไม่พร้อม: '+x.lost.join(', ')):''))+'" style="cursor:pointer;background:#fff;border:1px solid #BEC2EE;border-radius:8px;padding:2px 8px;white-space:nowrap"><b>'+bop2OvfD(x.dateStr)+'</b> '+bop2OvfEsc(x.routeName)+' <b style="color:#3730A3">+'+x.over+'</b></span>').join('')
     +(list.length>10?'<span style="color:#9B9088">และอีก '+(list.length-10)+' รายการ</span>':'')
     +'</div>';
 }
@@ -9465,7 +9465,7 @@ function bop2OvfFix(x){
 function bop2OvfCardItems(list){
   if(!list.length) return '';
   const E=bop2OvfEsc, btn='font-weight:700;font-size:10px;font-family:inherit;padding:3px 9px;border-radius:7px;cursor:pointer;white-space:nowrap';
-  return '<div style="padding:7px 13px 3px;border-top:1px solid rgba(0,0,0,.06);font-size:10px;font-weight:800;color:#A32D2D;letter-spacing:.04em">ที่นั่งไม่พอ · 30 วันข้างหน้า</div>'
+  return '<div style="padding:7px 13px 3px;border-top:1px solid rgba(0,0,0,.06);font-size:10px;font-weight:800;color:#3730A3;letter-spacing:.04em">ที่นั่งไม่พอ · 30 วันข้างหน้า</div>'
     + list.slice(0,6).map(x=>{
       const fx=bop2OvfFix(x), pct=Math.max(4, Math.min(100, Math.round(x.cap/Math.max(1,x.booked)*100)));
       let fix='';
@@ -9476,11 +9476,11 @@ function bop2OvfCardItems(list){
       else fix='<span style="flex:1;color:#9B6B00">ไม่มีเรือว่างที่ท่า · หาเรือเช่า / พาร์ทเนอร์ หรือย้ายลูกค้า</span>';
       return '<div style="padding:7px 13px;border-top:1px solid rgba(0,0,0,.05);cursor:pointer" onclick="bop2OvfGo(\''+x.routeId+'\',\''+x.dateStr+'\')" title="'+E(x.routeName+' · '+x.dateStr)+'">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font:700 10px/1 \'DM Mono\',monospace;color:#9B4A00;background:#FCEBD6;padding:4px 7px;border-radius:6px;flex-shrink:0">'+x.dateStr.slice(8)+'/'+x.dateStr.slice(5,7)+'</span>'
+          +'<span style="font:700 10px/1 \'DM Mono\',monospace;color:#3730A3;background:#EFF0FC;padding:4px 7px;border-radius:6px;flex-shrink:0">'+x.dateStr.slice(8)+'/'+x.dateStr.slice(5,7)+'</span>'
           +'<span style="flex:1;min-width:0;font-size:11.5px;font-weight:600;color:#2C2C2A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+E(x.routeName)+'</span>'
-          +'<span style="font:800 10.5px/1 \'DM Mono\',monospace;color:#C0392B;flex-shrink:0">เกิน '+x.over+' คน</span></div>'
+          +'<span style="font:800 10.5px/1 \'DM Mono\',monospace;color:#3730A3;flex-shrink:0">เกิน '+x.over+' คน</span></div>'
         +'<div style="font-size:10px;color:#6B7785;margin:4px 0 3px">จอง '+x.booked+' · ที่นั่ง '+x.cap+(x.lost.length?(' · เพราะ '+E(x.lost.join(', '))+' ไม่พร้อม'):'')+'</div>'
-        +'<div style="height:4px;border-radius:3px;background:#F6D3CF;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:#0F6E56"></div></div>'
+        +'<div style="height:4px;border-radius:3px;background:#D9DBF6;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:#0F6E56"></div></div>'
         +'<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:10.5px">'+fix+'</div>'
         +'</div>';
     }).join('')
@@ -10050,7 +10050,7 @@ function bop2ReplacePreview(){
     .sort((a,b)=>a.d<b.d?-1:1);
   window._bop2RpImpact=_imp;
   if(canDrop) h+='<br>'+((drop||!B) ? '<b style="color:#A32D2D">ถอดออก '+canDrop+' วัน</b> · ไปขึ้นในรายการ "ต้องจัดเรือ"' : 'วันที่ข้าม ' + canDrop + ' วัน ยังเป็น '+esc(nm)+' อยู่ (ติ๊กด้านบนถ้าจะถอดออก)');
-  if(_imp.length) h+='<div style="margin-top:8px;padding:8px 10px;background:#FDF3F2;border:1px solid #F3B7B2;border-radius:8px"><b style="color:#A32D2D">&#9888; ที่นั่งไม่พอ '+bop2OvfDays(_imp.map(r=>({dateStr:r.d})))+' วัน หลังเปลี่ยน</b>'+bop2OvfTable(_imp)+'</div>';
+  if(_imp.length) h+='<div style="margin-top:8px;padding:8px 10px;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:8px"><b style="color:#3730A3">&#9888; ที่นั่งไม่พอ '+bop2OvfDays(_imp.map(r=>({dateStr:r.d})))+' วัน หลังเปลี่ยน</b>'+bop2OvfTable(_imp)+'</div>';
   box.innerHTML=h;
 }
 function bop2ApplyReplace(){
@@ -10490,7 +10490,7 @@ function bop2RenderShell(){
       ${needsBoats.length
         ? `<span class="bop2-chip r" onclick="bop2ShowNeedsList()" style="cursor:pointer">&#9888; ยังไม่มีเรือ<b>${needsBoats.length}</b> &rsaquo;</span>`
         : `<span class="bop2-chip g">&#10003; มีเรือครบ</span>`}
-      ${ovf30.length ? `<span class="bop2-chip r" onclick="bop2OvfGo('${ovf30[0].routeId}','${ovf30[0].dateStr}')" style="cursor:pointer" title="ลูกค้าเกินที่นั่งของเรือที่วิ่งได้ · 30 วันข้างหน้า">&#9888; ที่นั่งไม่พอ<b>${bop2OvfDays(ovf30)}</b> วัน &rsaquo;</span>` : ''}
+      ${ovf30.length ? `<span class="bop2-chip" onclick="bop2OvfGo('${ovf30[0].routeId}','${ovf30[0].dateStr}')" style="cursor:pointer;background:#EFF0FC;color:#3730A3;border-color:#BEC2EE" title="ลูกค้าเกินที่นั่งของเรือที่วิ่งได้ · 30 วันข้างหน้า">&#9888; ที่นั่งไม่พอ<b>${bop2OvfDays(ovf30)}</b> วัน &rsaquo;</span>` : ''}
       </span>
     </div>
 
@@ -10615,7 +10615,7 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         ${typeof TCX_R!=='undefined'?Object.keys(TCX_R).map(k=>`<span class="bo-legend-chip"><span class="box" style="background:${TCX_R[k].bg};border:1px solid ${TCX_R[k].bd};color:${TCX_R[k].fg};display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">${TCX_R[k].ic}</span>CXL ${TCX_R[k].en.toLowerCase()}</span>`).join('')+'<span class="bo-legend-chip"><span class="box" style="background:#fff;border:1.5px dashed #C53A2E"></span>Below break-even (3 days)</span>':''}
-        ${ovfView.length ? `<span class="bo-legend-chip" onclick="bop2OvfToggle()" title="กดเพื่อจางช่องอื่น ดูเฉพาะวันที่ที่นั่งไม่พอ" style="cursor:pointer;border-radius:8px;padding:2px 7px;${_bop2.ovfOnly?'background:#C0392B;color:#fff':'background:#FDF3F2;color:#A32D2D'}"><span class="box" style="background:#FFF6F5;border:2px solid #C0392B"></span>ที่นั่งไม่พอ · ${_bop2.ovfOnly?'ดูทั้งหมด':('ดูเฉพาะ '+ovfView.length)}</span>` : ''}
+        ${ovfView.length ? `<span class="bo-legend-chip" onclick="bop2OvfToggle()" title="กดเพื่อจางช่องอื่น ดูเฉพาะวันที่ที่นั่งไม่พอ" style="cursor:pointer;border-radius:8px;padding:2px 7px;${_bop2.ovfOnly?'background:#3730A3;color:#fff':'background:#EFF0FC;color:#3730A3'}"><span class="box" style="background:#EFF0FC;border:2px solid #3730A3"></span>ที่นั่งไม่พอ · ${_bop2.ovfOnly?'ดูทั้งหมด':('ดูเฉพาะ '+ovfView.length)}</span>` : ''}
         <style>#view-operation .bop2-grid.ovf-only .bop2-cell-day[data-route]:not([data-ovf]){opacity:.25}</style>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
@@ -10941,14 +10941,14 @@ function bop2RenderHeatmapRow(route, dates){
     /* §bopOvf · ลูกค้าเกินที่นั่งของเรือที่วิ่งได้ · กรอบแดง ตัวเลขจอง/ที่นั่ง ป้าย +N มุมซ้ายบน (มุมขวาเป็นของป้ายคุ้มทุน) */
     const _ovf = (!_tcx && al.hasAllotment) ? bop2Overflow(route.id, d) : null;
     if(_ovf){
-      const _bd = '<span style="position:absolute;top:-6px;left:-4px;font-size:8.5px;font-weight:800;background:#C0392B;color:#fff;border-radius:7px;padding:0 4px;line-height:14px;white-space:nowrap">+'+_ovf.over+'</span>';
-      const _num = '<div style="font-family:Manrope,sans-serif;font-size:'+(isMonth?'12':'15')+'px;color:#A32D2D;font-weight:800;line-height:1">'+_ovf.booked+'<span style="font-size:'+(isMonth?'8':'10')+'px;font-weight:600;color:#C0392B;opacity:.8">/'+_ovf.cap+'</span></div>';
+      const _bd = '<span style="position:absolute;top:-6px;left:-4px;font-size:8.5px;font-weight:800;background:#3730A3;color:#fff;border-radius:7px;padding:0 4px;line-height:14px;white-space:nowrap">+'+_ovf.over+'</span>';
+      const _num = '<div style="font-family:Manrope,sans-serif;font-size:'+(isMonth?'12':'15')+'px;color:#3730A3;font-weight:800;line-height:1">'+_ovf.booked+'<span style="font-size:'+(isMonth?'8':'10')+'px;font-weight:600;color:#3730A3;opacity:.8">/'+_ovf.cap+'</span></div>';
       const _keep = _tcxLow ? cellInner.slice(0, cellInner.indexOf('</span>')+7) : '';
-      cellInner = _keep + _bd + _num + (isMonth ? '' : ('<div style="font-size:8.5px;color:#A32D2D;font-weight:700;margin-top:2px">ที่นั่งไม่พอ</div>'+(_ovf.names.length?('<div style="font-size:8.5px;color:#6B7785;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(_ovf.names.join(', '))+'</div>'):'')));
+      cellInner = _keep + _bd + _num + (isMonth ? '' : ('<div style="font-size:8.5px;color:#3730A3;font-weight:700;margin-top:2px">ที่นั่งไม่พอ</div>'+(_ovf.names.length?('<div style="font-size:8.5px;color:#6B7785;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(_ovf.names.join(', '))+'</div>'):'')));
     }
     const minH = isMonth ? '32px' : '52px';
     const padding = isMonth ? '3px' : '5px 4px';
-    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}"${_ovf?' data-ovf="1"':''} style="background:${_tcx?_tcx.bg:(_tcxLow?'#fff':bg)};${_ovf?'background:#FFF6F5;box-shadow:inset 0 0 0 2px #C0392B;position:relative;':''}${_tcx?('box-shadow:inset 0 0 0 1.5px '+_tcx.bd+';'):''}${_tcxLow?'box-shadow:inset 0 0 0 1.5px #C53A2E;outline:1.5px dashed #C53A2E;outline-offset:-1.5px;position:relative;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${_tcx&&_tcx.title?escapeHTML(_tcx.title):(escapeHTML(route.name)+' · '+d+(al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned')+(_tcxLow?(' · below break-even '+_tcxLow.bk+'/'+_tcxLow.be+' · decide in '+_tcxLow.days+' day(s)'):'')+(_ovf?(' · ที่นั่งไม่พอ: จอง '+_ovf.booked+' / ที่นั่ง '+_ovf.cap+' · เกิน '+_ovf.over+(_ovf.lost.length?(' · ไม่พร้อม: '+_ovf.lost.join(', ')):'')):''))}">${cellInner}</div>`;
+    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}"${_ovf?' data-ovf="1"':''} style="background:${_tcx?_tcx.bg:(_tcxLow?'#fff':bg)};${_ovf?'background:#EFF0FC;box-shadow:inset 0 0 0 2px #3730A3;position:relative;':''}${_tcx?('box-shadow:inset 0 0 0 1.5px '+_tcx.bd+';'):''}${_tcxLow?'box-shadow:inset 0 0 0 1.5px #C53A2E;outline:1.5px dashed #C53A2E;outline-offset:-1.5px;position:relative;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${_tcx&&_tcx.title?escapeHTML(_tcx.title):(escapeHTML(route.name)+' · '+d+(al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned')+(_tcxLow?(' · below break-even '+_tcxLow.bk+'/'+_tcxLow.be+' · decide in '+_tcxLow.days+' day(s)'):'')+(_ovf?(' · ที่นั่งไม่พอ: จอง '+_ovf.booked+' / ที่นั่ง '+_ovf.cap+' · เกิน '+_ovf.over+(_ovf.lost.length?(' · ไม่พร้อม: '+_ovf.lost.join(', ')):'')):''))}">${cellInner}</div>`;
   });
   return row;
 }
