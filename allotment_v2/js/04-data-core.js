@@ -9422,6 +9422,7 @@ function bop2SwapOpen(d, fromId){
       +'<div id="bop2sw-warn"></div>'
       +'<div style="display:flex;gap:10px">'
         +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เวลาที่แจ้งเสีย</span><input type="time" id="bop2sw-t1" style="'+BOP2_SW_I+'"></div>'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือกู้ออกจากท่า</span><input type="time" id="bop2sw-t0" style="'+BOP2_SW_I+'"></div>'   /* §pjSwap */
         +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือใหม่ถึง / เปลี่ยนเสร็จ</span><input type="time" id="bop2sw-t2" style="'+BOP2_SW_I+'"></div>'
         +'<div style="flex:1.4"><span style="'+BOP2_SW_L+'">จุดที่เปลี่ยน</span><input id="bop2sw-place" placeholder="เกาะ / อ่าว" style="'+BOP2_SW_I+'"></div></div>'
       +'<div style="display:flex;gap:10px">'
@@ -9554,7 +9555,7 @@ function bop2SwapSave(){
   const day=TRIPS[S.d]=TRIPS[S.d]||{}, opA=day[S.from]; if(!opA){ alert('ไม่พบเรือเดิมในวันนั้นแล้ว · รีเฟรชแล้วลองใหม่'); return; }
   const j=bop2SwJob(to, S.d, S.route); if(j.block){ alert(bop2SwName(to)+' ใช้ไม่ได้ · '+j.txt); return; }
   const M=bop2SwMoved();
-  const ev={ id:'sw'+Date.now(), to:to, t1:g('bop2sw-t1'), t2:g('bop2sw-t2'), place:g('bop2sw-place'), cause:g('bop2sw-cause'), engine:g('bop2sw-engine'),
+  const ev={ id:'sw'+Date.now(), to:to, t1:g('bop2sw-t1'), t0:g('bop2sw-t0'), t2:g('bop2sw-t2'), place:g('bop2sw-place'), cause:g('bop2sw-cause'), engine:g('bop2sw-engine'),
     mode:S.mode||'all', moved:M.moved, stay:M.stay, pax:M.nm, by:g('bop2sw-by'), note:g('bop2sw-note'), at:new Date().toISOString(), logId:null };
   /* เรือกู้ · จำงานเดิมไว้คืนตอนยกเลิกบันทึก */
   const prev=day[to] ? JSON.parse(JSON.stringify(day[to])) : null;
@@ -9597,7 +9598,7 @@ function bop2SwapView(d, fromId){
   const html='<div style="padding:16px 20px 8px;border-bottom:1px solid #EEE"><div style="font-size:17px;font-weight:800;color:#3730A3">&#128257; '+E(bop2SwName(fromId))+' &rarr; '+E(bop2SwName(ev.to))+'</div>'
       +'<div style="font-size:12px;color:#6B7785;margin-top:2px">'+E(rt.name)+' · '+E(typeof bop2OvfD==='function'?bop2OvfD(d):d)+' · เปลี่ยนเรือกลางทาง</div></div>'
     +'<div id="bop2sw-print" style="padding:8px 20px 14px">'
-      +kv('เวลา', (ev.t1||'?')+(ev.t2?(' → '+ev.t2):''))+kv('จุดที่เปลี่ยน', ev.place)+kv('สาเหตุ', ev.cause+(ev.engine?(' · '+ev.engine):''))
+      +kv('เวลา', 'แจ้งเสีย '+(ev.t1||'?')+(ev.t0?(' · เรือกู้ออก '+ev.t0):'')+(ev.t2?(' · เปลี่ยนเสร็จ '+ev.t2):''))+kv('จุดที่เปลี่ยน', ev.place)+kv('สาเหตุ', ev.cause+(ev.engine?(' · '+ev.engine):''))
       +kv('ย้ายลูกค้า', ev.mode==='part'?'บางส่วน':'ทั้งลำ')+kv('ผู้สั่งการ', ev.by)+kv('หมายเหตุ', ev.note)
       +kv('สถานะเรือเดิม', ev.logId?('ซ่อม ตั้งแต่ '+bop2SwNext(d)):'ไม่ได้เปลี่ยน')
       +'<div style="margin-top:8px;font-size:13px;font-weight:800;color:#12518F">ใบรายชื่อขากลับ</div>'
