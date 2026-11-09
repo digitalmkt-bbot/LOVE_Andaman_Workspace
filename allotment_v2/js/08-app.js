@@ -80937,7 +80937,11 @@ function pjPierOf(boat, date){
 function pjAllBoats(date, pier){
   var run=(typeof poBoats==='function')?poBoats(date,pier):[], out=[], seen={};
   run.forEach(function(B){ seen[B.bid]=1;
-    B._st=pjBoatSt(date,B.boat,true); out.push(B); });
+    B._st=pjBoatSt(date,B.boat,true);
+    /* §pjSwapOrd · เสียกลางทาง = วันนั้นออกเรือไปแล้วจริง */
+    try{ var _o=((typeof TRIPS!=='undefined'&&TRIPS[date])||{})[B.bid];
+      if(_o && _o.swap && B._st && B._st.k!=='run'){ var _c={}; for(var _k in B._st) _c[_k]=B._st[_k]; _c.k='run'; _c.stale=false; _c.swapWas=B._st.k; B._st=_c; } }catch(_){}
+    out.push(B); });
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
     // §pjPierNow · ถามตัวตัดสินเดียวกับ Boat Status · ไม่ใช่ b.pier ที่เป็นค่าคงที่
     if(pjPierOf(b,date)!==pier || seen[b.id]) return;
@@ -80970,6 +80974,16 @@ function pjAllBoats(date, pier){
     return String(a.dep||'99').localeCompare(String(b.dep||'99'))
         || String(a.boat.name||a.bid).localeCompare(String(b.boat.name||b.bid));
   });
+  /* §pjSwapOrd · เรือกู้ไปต่อท้ายเรือที่มันไปรับลูกค้า */
+  try{
+    var _day=(typeof TRIPS!=='undefined'&&TRIPS[date])||{};
+    out.filter(function(B){ var o=_day[B.bid]; return o && o.type==='rescue' && o.rescueFor; }).forEach(function(R){
+      var src=_day[R.bid].rescueFor, i=out.indexOf(R); if(i<0) return;
+      out.splice(i,1);
+      var j=-1; out.forEach(function(x,k){ if(x.bid===src) j=k; });
+      out.splice(j>=0?j+1:i, 0, R);
+    });
+  }catch(_){}
   return out;
 }
 /* §pjDocs · โปรแกรมไหนต้องใช้ใบอุทยานใบไหน
