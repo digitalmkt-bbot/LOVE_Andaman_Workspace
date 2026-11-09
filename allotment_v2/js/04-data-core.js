@@ -8145,7 +8145,11 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
         : '<button onclick="bop2UnassignAsk(\''+dateStr+'\',\''+x.boat.id+'\',1)" title="Unassign" style="font-size:13px;color:#a32d2d;background:none;border:none;cursor:pointer;padding:0 4px;line-height:1">×</button>';
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f5f3ef;border-radius:4px;font-size:11px;margin-bottom:3px">'
         + '<span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:'+c+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'+ic+esc(x.boat.name)+(function(){ var _wp=bop2PierIssue(x.boat, routeId, dateStr); return _wp ? ' <span class="bop2-pier-warn" title="Boat Status puts this boat at another pier on this day" style="font-size:9px;font-weight:800;color:#A32D2D;background:#FDECEA;border-radius:4px;padding:1px 5px">&#9888; at '+esc(bop2PierEn(_wp))+'</span>' : ''; })()+'</span>'
-        + '<span style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0"><span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft)">'+seats+'</span>'+removeBtn+'</span>'
+        + '<span style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0"><span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft)">'+seats+'</span>'+(function(){   /* §bopSwap */
+            if(x.op && x.op.swap) return '<button onclick="event.stopPropagation();bop2SwapView(\''+dateStr+'\',\''+x.boat.id+'\')" title="ดูบันทึกเปลี่ยนเรือกลางทาง" style="font-size:10px;font-weight:800;color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:6px;padding:1px 6px;cursor:pointer;font-family:inherit">&#128257; &rarr; '+esc(bop2SwName(x.op.swap.to))+'</button>';
+            if(x.op && x.op.type==='rescue') return '<button onclick="event.stopPropagation();bop2SwapView(\''+dateStr+'\',\''+x.op.rescueFor+'\')" title="เรือกู้ของ '+esc(bop2SwName(x.op.rescueFor))+'" style="font-size:10px;font-weight:800;color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:6px;padding:1px 6px;cursor:pointer;font-family:inherit">&#128735; เรือกู้</button>';
+            if(!x.isCharter && bop2SwCanRecord(dateStr)) return '<button onclick="event.stopPropagation();bop2SwapOpen(\''+dateStr+'\',\''+x.boat.id+'\')" title="เรือลำนี้เสียกลางทาง · บันทึกส่งเรือลำอื่นไปเปลี่ยน" style="font-size:10px;font-weight:800;color:#3730A3;background:#fff;border:1px solid #BEC2EE;border-radius:6px;padding:1px 6px;cursor:pointer;font-family:inherit">&#128257; เปลี่ยนกลางทาง</button>';
+            return ''; })()+removeBtn+'</span>'
         + '</div>';
     }).join('');
   }
@@ -8326,6 +8330,8 @@ function bop2AssignBoat(routeId, date, boatId){
 function bop2UnassignBoat(date, boatId){
   if(bop2GuardPast(date)) return;
   if(!TRIPS[date] || !TRIPS[date][boatId]) return;
+  { const _o=TRIPS[date][boatId];                                              /* §bopSwap */
+    if(_o.swap || _o.type==='rescue'){ alert('เรือลำนี้อยู่ในบันทึก "เปลี่ยนเรือกลางทาง" · ยกเลิกบันทึกนั้นก่อน (กด 🔁 ที่ช่อง)'); bop2SwapView(date, _o.swap?boatId:_o.rescueFor); return; } }
   if(opLocked(TRIPS[date][boatId])){                                           /* §bkLock */
     alert(opHoldOnly(TRIPS[date][boatId])
       ? 'Cannot unassign - this boat is held whole for an agent. Release the hold on the Seat Locks page first.'
@@ -9324,6 +9330,244 @@ function bop2BoatColor(boatId){
 }
 
 // ─── Scan route×date for slots that have pax but no boat assigned ───
+/* ══ §bopSwap (2026-11-09) · owner "เรือไอรีน่าไปถึงเกาะแล้วตัวเรือมีปัญหา ต้องส่งเรือใหม่ไปเปลี่ยน ·
+   Zeus ไปสุรินทร์มีปัญหา ต้องส่ง Achilles ไปเปลี่ยน · ต้องบันทึกและแก้ไขเหตุการณ์แบบนี้ยังไง เพราะกระทบหลายส่วน"
+   ของเดิมมีแต่ Replace / Unassign ซึ่งเขียนทับเหมือนเรือใหม่วิ่งมาตั้งแต่เช้า ประวัติว่าเรือเดิมออกไปแล้วเสียหายไป
+   ตอนนี้: ทริปเดียวมีสองลำ
+     TRIPS[d][เรือเดิม].swap = { id, to, t1, t2, place, cause, engine, mode:'all'|'part', moved:{bkId:pax}, stay:{bkId:pax}, by, note, at, logId }
+     TRIPS[d][เรือกู้]      = { route, type:'rescue', rescueFor:เรือเดิม, prev:<งานเดิมของเรือกู้วันนั้น หรือ null> }
+     booking ทุกใบบนเรือเดิม · ops(วันนั้น).swapEv = { id, from, to, pax:<ที่ย้าย> }   (ธงไว้ดูตอนร้องเรียน/ชดเชย · ไม่แตะ boatId)
+   เรือกู้ไม่นับเป็นที่นั่ง (getAssignedBoatsForRouteDate ข้าม type rescue) · เรือเดิมตั้งเป็น "ซ่อม" ตั้งแต่วันถัดไป (ถ้าติ๊ก)
+   ยกเลิกบันทึกได้ (ผิด/กดพลาด) · คืนงานเดิมของเรือกู้ ลบธง และลบแถวสถานะที่บันทึกนี้เพิ่ม */
+const BOP2_SW_CAUSE=['เครื่องยนต์','ตัวเรือ','ทริม / ไฮดรอลิก','ใบพัด / เพลา','ระบบไฟฟ้า','น้ำมัน / เชื้อเพลิง','อื่นๆ'];
+function bop2SwE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function bop2SwBoat(id){ return (typeof BOATS!=='undefined'?BOATS:[]).find(x=>x && x.id===id) || null; }
+function bop2SwName(id){ const b=bop2SwBoat(id); return (b && b.name) || id || '-'; }
+/* เหตุการณ์ของช่องนั้น · [{from, op, ev}] */
+function bop2SwapOn(routeId, d){
+  const day=(typeof TRIPS!=='undefined' && TRIPS[d]) || {};
+  return Object.keys(day).filter(bid=>day[bid] && day[bid].route===routeId && day[bid].swap).map(bid=>({ from:bid, op:day[bid], ev:day[bid].swap }));
+}
+function bop2SwCanRecord(d){ if(!d || d>TODAY_STR) return false; let x=TODAY_STR; for(let i=0;i<7;i++) x=fmt(addDays(new Date(x+'T12:00:00'),-1)); return d>=x; }
+function bop2SwRef(b){ return (b && (b.voucherRef||b.code||b.id)) || '-'; }
+function bop2SwAgent(b){ const a=(typeof sbGetAgent==='function' && b && b.agentId) ? sbGetAgent(b.agentId) : null; return a ? (a.name||a.code||a.id) : ((b && b.b2cChannel) || 'B2C'); }
+/* บุคกิ้งบนเรือเดิมวันนั้น · ใบที่จัดลงลำนี้ + ใบของเส้นทางนี้ที่ยังไม่ได้จัดลำ */
+function bop2SwBookings(d, routeId, fromId){
+  const out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
+    if(!b || ['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    if(typeof bkHasTripOn==='function' && !bkHasTripOn(b, d)) return;
+    const onRoute=(b.trips||[]).filter(t=>t && t.date===d && t.routeId===routeId);
+    let pax=(typeof bkBoatPaxOnBoat==='function') ? bkBoatPaxOnBoat(b, d, fromId) : 0;
+    if(!pax && onRoute.length && typeof bkBoatIdsOn==='function' && !bkBoatIdsOn(b, d).length)
+      pax=onRoute.reduce((n,t)=>n+((typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t.pax||{}) : 0), 0);
+    if(pax>0) out.push({ b:b, pax:pax });
+  });
+  return out.sort((a,z)=>z.pax-a.pax);
+}
+/* งานของเรือแต่ละลำวันนั้น (ไว้ขึ้นในตัวเลือกเรือกู้) */
+function bop2SwJob(id, d, routeId){
+  const op=(TRIPS[d]||{})[id]; const b=bop2SwBoat(id);
+  if(op && (op.type==='charter' || op.charterBookingId || (typeof opLocked==='function' && opLocked(op)))) return { block:true, txt:'เหมาลำ / ล็อคทั้งลำ' };
+  if(op && op.type==='rescue') return { block:true, txt:'เป็นเรือกู้อยู่แล้ว' };
+  if(op && op.swap) return { block:true, txt:'เพิ่งเสียกลางทาง' };
+  if(op && op.route===routeId) return { block:false, txt:'อยู่รอบนี้อยู่แล้ว', same:true };
+  if(op){ const r=(ROUTES||[]).find(x=>x && x.id===op.route); const ab=(typeof baAssignedBookings==='function') ? baAssignedBookings(d, id) : {count:0,pax:0};
+    return { block:false, busy:true, route:op.route, txt:'จัดไว้ '+((r&&r.name)||op.route)+(ab.pax?(' ('+ab.pax+' pax)'):''), pax:ab.pax }; }
+  if(b && typeof getCurStatus==='function' && getCurStatus(b, d).s!=='available') return { block:false, warn:true, txt:'สถานะไม่พร้อม' };
+  return { block:false, free:true, txt:'ว่าง' };
+}
+function bop2SwClose(){ const m=document.getElementById('bop2-sw-modal'); if(m) m.remove(); }
+function bop2SwShell(inner, w){
+  bop2SwClose(); if(typeof bop2CloseCellPopover==='function') bop2CloseCellPopover();
+  const wrap=document.createElement('div'); wrap.id='bop2-sw-modal';
+  wrap.style.cssText='position:fixed;inset:0;background:rgba(20,35,63,.5);z-index:100040;display:flex;align-items:center;justify-content:center;padding:16px;font-family:"DM Sans","Noto Sans Thai",sans-serif';
+  wrap.innerHTML='<div style="background:#fff;border-radius:14px;width:'+(w||600)+'px;max-width:97vw;max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28)">'+inner+'</div>';
+  wrap.addEventListener('click', e=>{ if(e.target===wrap) bop2SwClose(); });
+  document.body.appendChild(wrap); return wrap;
+}
+const BOP2_SW_L='display:block;font-size:10.5px;font-weight:800;color:#6B7785;letter-spacing:.05em;margin:10px 0 4px';
+const BOP2_SW_I='display:block;width:100%;box-sizing:border-box;padding:7px 9px;font-size:12.5px;border:1px solid #D9DDE4;border-radius:8px;font-family:inherit;background:#fff';
+/* ── ฟอร์มบันทึก ── */
+function bop2SwapOpen(d, fromId){
+  const op=(TRIPS[d]||{})[fromId]; if(!op){ alert('ไม่พบเรือลำนี้ในวันนั้น'); return; }
+  if(op.swap) return bop2SwapView(d, fromId);
+  if(!bop2SwCanRecord(d)){ alert('บันทึกเปลี่ยนเรือกลางทางได้เฉพาะวันนี้และย้อนหลังไม่เกิน 7 วัน'); return; }
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  const E=bop2SwE, routeId=op.route, rt=(ROUTES||[]).find(x=>x && x.id===routeId) || {name:routeId, pier:''};
+  const A=bop2SwBoat(fromId) || {name:fromId};
+  const capA=(typeof boatCapFor==='function' && boatCapFor(fromId, d)) || (+A.cap||0);
+  const bks=bop2SwBookings(d, routeId, fromId), tot=bks.reduce((n,x)=>n+x.pax,0);
+  window._bop2Sw={ d:d, from:fromId, route:routeId, bks:bks };
+  const cands=(typeof BOATS!=='undefined'?BOATS:[]).filter(b=>b && !b.retired && b.id!==fromId).map(b=>{
+    const j=bop2SwJob(b.id, d, routeId), pierOk=!rt.pier || (typeof getBoatCurrentPier!=='function') || getBoatCurrentPier(b, d)===rt.pier;
+    return { b:b, j:j, cap:(typeof boatCapFor==='function' && boatCapFor(b.id, d)) || (+b.cap||0), rank:(j.block?9:0)+(j.free?0:j.same?1:j.busy?3:5)+(pierOk?0:2) };
+  }).sort((a,z)=>a.rank-z.rank || String(a.b.name).localeCompare(String(z.b.name)));
+  const opts='<option value="">— เลือกเรือ —</option>'+cands.map(c=>'<option value="'+E(c.b.id)+'"'+(c.j.block?' disabled':'')+'>'+E(c.b.name)+' · '+c.cap+' ที่ · '+E(c.j.txt)+'</option>').join('');
+  const rows=bks.map((x,i)=>'<tr><td style="padding:5px 4px"><input type="checkbox" data-swck="'+i+'" checked onchange="bop2SwCalc()"></td>'
+      +'<td style="padding:5px 4px;font-family:\'DM Mono\',monospace;font-size:11.5px">'+E(bop2SwRef(x.b))+'</td>'
+      +'<td style="padding:5px 4px;font-size:11.5px">'+E(bop2SwAgent(x.b))+'<div style="font-size:10px;color:#9B9088">'+E(x.b.customerName||'')+'</div></td>'
+      +'<td style="padding:5px 4px;text-align:right">'+x.pax+'</td>'
+      +'<td style="padding:5px 4px;text-align:right"><input type="number" min="0" max="'+x.pax+'" value="'+x.pax+'" data-swpx="'+i+'" oninput="bop2SwCalc()" style="width:58px;padding:3px 5px;border:1px solid #D9DDE4;border-radius:6px;text-align:right;font-family:inherit"></td></tr>').join('');
+  const html='<div style="padding:16px 20px 10px;border-bottom:1px solid #EEE">'
+      +'<div style="font-size:17px;font-weight:800;color:#3730A3">&#128257; เปลี่ยนเรือกลางทาง</div>'
+      +'<div style="font-size:12px;color:#6B7785;margin-top:2px">'+E(rt.name)+' · '+E(typeof bop2OvfD==='function'?bop2OvfD(d):d)+' · บันทึกเหตุที่เกิดแล้ว · ไม่แตะเรือของ booking (ขาไปยังเป็นเรือเดิม)</div></div>'
+    +'<div style="padding:4px 20px 14px">'
+      +'<div style="display:flex;gap:10px;align-items:flex-end">'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือที่มีปัญหา</span><div style="'+BOP2_SW_I+';background:#F6F5F2">'+E(A.name)+' · '+capA+' ที่ · '+tot+' pax</div></div>'
+        +'<div style="font-size:20px;color:#3730A3;padding-bottom:6px">&rarr;</div>'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือที่ส่งไปแทน</span><select id="bop2sw-to" style="'+BOP2_SW_I+'" onchange="bop2SwCalc()">'+opts+'</select></div></div>'
+      +'<div id="bop2sw-warn"></div>'
+      +'<div style="display:flex;gap:10px">'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เวลาที่แจ้งเสีย</span><input type="time" id="bop2sw-t1" style="'+BOP2_SW_I+'"></div>'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือใหม่ถึง / เปลี่ยนเสร็จ</span><input type="time" id="bop2sw-t2" style="'+BOP2_SW_I+'"></div>'
+        +'<div style="flex:1.4"><span style="'+BOP2_SW_L+'">จุดที่เปลี่ยน</span><input id="bop2sw-place" placeholder="เกาะ / อ่าว" style="'+BOP2_SW_I+'"></div></div>'
+      +'<div style="display:flex;gap:10px">'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">สาเหตุ</span><select id="bop2sw-cause" style="'+BOP2_SW_I+'">'+BOP2_SW_CAUSE.map(c=>'<option>'+E(c)+'</option>').join('')+'</select></div>'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เครื่อง / จุดที่มีปัญหา</span><input id="bop2sw-engine" placeholder="เช่น เครื่องซ้าย · MJ-295" style="'+BOP2_SW_I+'"></div></div>'
+      +'<span style="'+BOP2_SW_L+'">ลูกค้าย้ายไปเรือใหม่</span>'
+      +'<div id="bop2sw-mode" style="display:flex;border:1px solid #D9DDE4;border-radius:9px;overflow:hidden;font-size:12px;font-weight:700">'
+        +'<span data-m="all" onclick="bop2SwMode(\'all\')" style="flex:1;text-align:center;padding:7px;cursor:pointer;background:#3730A3;color:#fff">ทั้งลำ</span>'
+        +'<span data-m="part" onclick="bop2SwMode(\'part\')" style="flex:1;text-align:center;padding:7px;cursor:pointer">บางส่วน</span></div>'
+      +(bks.length
+        ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px"><tr style="font-size:10px;color:#6B7785;text-align:left"><th></th><th>Booking</th><th>Agent · ลูกค้า</th><th style="text-align:right">pax</th><th style="text-align:right">ย้าย</th></tr>'+rows+'</table>'
+        : '<div style="font-size:11.5px;color:#9B6B00;margin-top:6px">ไม่พบ booking ที่ผูกกับเรือลำนี้ / เส้นทางนี้วันนั้น · บันทึกเหตุการณ์ได้ แต่จะไม่มีใบรายชื่อขากลับ</div>')
+      +'<div id="bop2sw-sum" style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-top:6px"></div>'
+      +'<div style="display:flex;gap:10px">'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">ผู้สั่งการ</span><input id="bop2sw-by" value="'+E(((window.LA_ME||{}).name)||((window.LA_ME||{}).username)||'')+'" style="'+BOP2_SW_I+'"></div>'
+        +'<div style="flex:2"><span style="'+BOP2_SW_L+'">หมายเหตุ</span><input id="bop2sw-note" placeholder="เช่น ลูกค้ารอบนเกาะ ~1.5 ชม. · แจกน้ำเพิ่ม" style="'+BOP2_SW_I+'"></div></div>'
+      +'<label style="display:flex;gap:7px;align-items:center;font-size:12px;margin-top:10px"><input type="checkbox" id="bop2sw-st" checked> ตั้งสถานะ '+E(A.name)+' เป็น "ซ่อม" ตั้งแต่วันถัดไป (วันที่จัดไว้จะขึ้น 🔧 เปลี่ยนเรือ)</label>'
+    +'</div>'
+    +'<div style="padding:12px 20px;background:#FAFAF8;border-top:1px solid #EEE;display:flex;justify-content:flex-end;gap:8px">'
+      +'<button onclick="bop2SwClose()" style="padding:9px 16px;border:1px solid #D9DDE4;background:#fff;border-radius:9px;font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer">ยกเลิก</button>'
+      +'<button onclick="bop2SwapSave()" style="padding:9px 16px;border:0;background:#3730A3;color:#fff;border-radius:9px;font-weight:800;font-size:12.5px;font-family:inherit;cursor:pointer">บันทึกเหตุการณ์</button></div>';
+  bop2SwShell(html, 620);
+  window._bop2Sw.mode='all'; bop2SwMode('all');
+}
+function bop2SwMode(m){
+  const S=window._bop2Sw; if(!S) return; S.mode=m;
+  document.querySelectorAll('#bop2sw-mode [data-m]').forEach(el=>{ const on=el.getAttribute('data-m')===m; el.style.background=on?'#3730A3':'#fff'; el.style.color=on?'#fff':'#1A2A33'; });
+  (S.bks||[]).forEach((x,i)=>{ const ck=document.querySelector('[data-swck="'+i+'"]'), px=document.querySelector('[data-swpx="'+i+'"]');
+    if(m==='all'){ if(ck){ ck.checked=true; ck.disabled=true; } if(px){ px.value=x.pax; px.disabled=true; } }
+    else { if(ck) ck.disabled=false; if(px) px.disabled=false; } });
+  bop2SwCalc();
+}
+function bop2SwMoved(){
+  const S=window._bop2Sw||{}, moved={}, stay={}; let nm=0, ns=0;
+  (S.bks||[]).forEach((x,i)=>{
+    const ck=document.querySelector('[data-swck="'+i+'"]'), px=document.querySelector('[data-swpx="'+i+'"]');
+    let n=(S.mode==='all') ? x.pax : ((ck && ck.checked) ? Math.max(0, Math.min(x.pax, parseInt(px && px.value,10)||0)) : 0);
+    if(n>0){ moved[x.b.id]=n; nm+=n; } if(x.pax-n>0){ stay[x.b.id]=x.pax-n; ns+=x.pax-n; }
+  });
+  return { moved:moved, stay:stay, nm:nm, ns:ns };
+}
+function bop2SwCalc(){
+  const S=window._bop2Sw; if(!S) return;
+  const to=(document.getElementById('bop2sw-to')||{}).value||'', M=bop2SwMoved();
+  const sum=document.getElementById('bop2sw-sum');
+  if(sum) sum.innerHTML='<span style="color:#3730A3">ขึ้น '+bop2SwE(to?bop2SwName(to):'เรือใหม่')+' '+M.nm+' คน</span><span style="color:#6B7785">อยู่กับ '+bop2SwE(bop2SwName(S.from))+' '+M.ns+' คน</span>';
+  const w=document.getElementById('bop2sw-warn'); if(!w) return;
+  let h='';
+  if(to){
+    const j=bop2SwJob(to, S.d, S.route), cap=(typeof boatCapFor==='function' && boatCapFor(to, S.d)) || (+((bop2SwBoat(to)||{}).cap)||0);
+    if(j.busy) h+='<div style="margin-top:8px;background:#FEF6E7;border:1px solid #E8C77A;border-radius:9px;padding:7px 10px;font-size:11.5px;color:#7A4A00">&#9888; '+bop2SwE(bop2SwName(to))+' '+bop2SwE(j.txt)+' วันนี้ · ส่งไปแล้วรอบนั้นจะ<b>ไม่มีเรือ</b> → ขึ้นในการ์ด "ต้องจัดเรือ"'+(j.pax?' · booking ที่จัดลงลำนี้ยังผูกกับลำนี้ ต้องจัดใหม่เอง':'')+'</div>';
+    if(j.warn) h+='<div style="margin-top:8px;background:#FEF6E7;border:1px solid #E8C77A;border-radius:9px;padding:7px 10px;font-size:11.5px;color:#7A4A00">&#9888; สถานะของ '+bop2SwE(bop2SwName(to))+' วันนั้นไม่ใช่ "พร้อม" · ตรวจอีกครั้ง</div>';
+    if(cap && M.nm>cap) h+='<div style="margin-top:8px;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:9px;padding:7px 10px;font-size:11.5px;color:#3730A3">ย้าย '+M.nm+' คน แต่ '+bop2SwE(bop2SwName(to))+' มี '+cap+' ที่</div>';
+  }
+  w.innerHTML=h;
+}
+/* เรือกู้ที่ถูกดึงมาจากเส้นทางนี้วันนั้น (งานเดิม prev.route) */
+function bop2SwTakenFrom(routeId, d){
+  const day=(typeof TRIPS!=='undefined' && TRIPS[d]) || {};
+  return Object.keys(day).filter(bid=>day[bid] && day[bid].type==='rescue' && day[bid].prev && day[bid].prev.route===routeId);
+}
+function bop2SwNext(d){ return fmt(addDays(new Date(d+'T12:00:00'), 1)); }
+function bop2SwapSave(){
+  const S=window._bop2Sw; if(!S) return;
+  const g=id=>{ const e=document.getElementById(id); return e ? (e.type==='checkbox' ? e.checked : String(e.value||'').trim()) : ''; };
+  const to=g('bop2sw-to'); if(!to){ alert('เลือกเรือที่ส่งไปแทน'); return; }
+  const day=TRIPS[S.d]=TRIPS[S.d]||{}, opA=day[S.from]; if(!opA){ alert('ไม่พบเรือเดิมในวันนั้นแล้ว · รีเฟรชแล้วลองใหม่'); return; }
+  const j=bop2SwJob(to, S.d, S.route); if(j.block){ alert(bop2SwName(to)+' ใช้ไม่ได้ · '+j.txt); return; }
+  const M=bop2SwMoved();
+  const ev={ id:'sw'+Date.now(), to:to, t1:g('bop2sw-t1'), t2:g('bop2sw-t2'), place:g('bop2sw-place'), cause:g('bop2sw-cause'), engine:g('bop2sw-engine'),
+    mode:S.mode||'all', moved:M.moved, stay:M.stay, pax:M.nm, by:g('bop2sw-by'), note:g('bop2sw-note'), at:new Date().toISOString(), logId:null };
+  /* เรือกู้ · จำงานเดิมไว้คืนตอนยกเลิกบันทึก */
+  const prev=day[to] ? JSON.parse(JSON.stringify(day[to])) : null;
+  day[to]={ route:S.route, type:'rescue', rescueFor:S.from, booked:0, prev:prev };
+  opA.swap=ev;
+  /* ธงบน booking · ไม่แตะ boatId/boatSplits */
+  let nbk=0;
+  (S.bks||[]).forEach(x=>{ if(typeof bkOpsFor!=='function') return; const o=bkOpsFor(x.b, S.d); o.swapEv={ id:ev.id, from:S.from, to:to, pax:M.moved[x.b.id]||0 }; nbk++; });
+  /* สถานะเรือเดิม · ซ่อมตั้งแต่วันถัดไป (ถ้ายังพร้อมอยู่) */
+  if(g('bop2sw-st')){
+    const A=bop2SwBoat(S.from), from=bop2SwNext(S.d);
+    if(A && (typeof getStoredStatus!=='function' || (getStoredStatus(A, from)||{}).s==='available')){
+      A.log=A.log||[]; if(typeof autoClosePrevLog==='function') autoClosePrevLog(A, from, null);
+      const row={ id:'sl'+Date.now(), s:'fixing', from:from, to:null, loc:'', note:'เสียกลางทาง '+S.d+' · '+ev.cause+(ev.engine?(' · '+ev.engine):'')+(ev.place?(' · '+ev.place):''), reason:ev.cause, swapId:ev.id };
+      A.log.push(row); ev.logId=row.id; save('config');
+    }
+  }
+  save('operations');
+  if(nbk && typeof acctPersistBookings==='function') acctPersistBookings();
+  bop2SwClose(); renderOp();
+  setTimeout(()=>bop2SwapView(S.d, S.from), 50);
+}
+/* ── ดูเหตุการณ์ + ใบรายชื่อขากลับ ── */
+function bop2SwManifest(d, fromId){
+  const op=(TRIPS[d]||{})[fromId], ev=op && op.swap; if(!ev) return null;
+  const by=id=>(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).find(b=>b && b.id===id);
+  const L=m=>Object.keys(m||{}).map(id=>({ b:by(id), id:id, pax:m[id] })).filter(x=>x.pax>0);
+  return { ev:ev, on:L(ev.moved), stay:L(ev.stay) };
+}
+function bop2SwListHtml(list, title, color){
+  const E=bop2SwE, n=list.reduce((a,x)=>a+x.pax,0);
+  return '<div style="margin-top:10px"><div style="font-size:12px;font-weight:800;color:'+color+'">'+E(title)+' · '+n+' คน</div>'
+    +(list.length ? '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:4px">'+list.map(x=>'<tr><td style="padding:4px;border-bottom:1px solid #F0EEE9;font-family:\'DM Mono\',monospace">'+E(x.b?bop2SwRef(x.b):x.id)+'</td><td style="padding:4px;border-bottom:1px solid #F0EEE9">'+E(x.b?bop2SwAgent(x.b):'')+'</td><td style="padding:4px;border-bottom:1px solid #F0EEE9">'+E((x.b&&x.b.customerName)||'')+'</td><td style="padding:4px;border-bottom:1px solid #F0EEE9;text-align:right;font-weight:700">'+x.pax+'</td></tr>').join('')+'</table>'
+      : '<div style="font-size:11px;color:#9B9088">—</div>')
+    +'</div>';
+}
+function bop2SwapView(d, fromId){
+  const op=(TRIPS[d]||{})[fromId]; if(!op || !op.swap){ alert('ไม่พบบันทึกเปลี่ยนเรือของลำนี้'); return; }
+  const E=bop2SwE, ev=op.swap, M=bop2SwManifest(d, fromId), rt=(ROUTES||[]).find(x=>x && x.id===op.route) || {name:op.route};
+  const kv=(k,v)=>v?('<div style="display:flex;gap:8px;font-size:12px;padding:3px 0"><span style="width:110px;color:#6B7785;flex-shrink:0">'+k+'</span><span>'+E(v)+'</span></div>'):'';
+  const html='<div style="padding:16px 20px 8px;border-bottom:1px solid #EEE"><div style="font-size:17px;font-weight:800;color:#3730A3">&#128257; '+E(bop2SwName(fromId))+' &rarr; '+E(bop2SwName(ev.to))+'</div>'
+      +'<div style="font-size:12px;color:#6B7785;margin-top:2px">'+E(rt.name)+' · '+E(typeof bop2OvfD==='function'?bop2OvfD(d):d)+' · เปลี่ยนเรือกลางทาง</div></div>'
+    +'<div id="bop2sw-print" style="padding:8px 20px 14px">'
+      +kv('เวลา', (ev.t1||'?')+(ev.t2?(' → '+ev.t2):''))+kv('จุดที่เปลี่ยน', ev.place)+kv('สาเหตุ', ev.cause+(ev.engine?(' · '+ev.engine):''))
+      +kv('ย้ายลูกค้า', ev.mode==='part'?'บางส่วน':'ทั้งลำ')+kv('ผู้สั่งการ', ev.by)+kv('หมายเหตุ', ev.note)
+      +kv('สถานะเรือเดิม', ev.logId?('ซ่อม ตั้งแต่ '+bop2SwNext(d)):'ไม่ได้เปลี่ยน')
+      +'<div style="margin-top:8px;font-size:13px;font-weight:800;color:#12518F">ใบรายชื่อขากลับ</div>'
+      +bop2SwListHtml(M.on, 'ขึ้น '+bop2SwName(ev.to), '#3730A3')
+      +bop2SwListHtml(M.stay, 'อยู่กับ '+bop2SwName(fromId), '#6B7785')
+    +'</div>'
+    +'<div style="padding:12px 20px;background:#FAFAF8;border-top:1px solid #EEE;display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button onclick="bop2SwapUndo(\''+d+'\',\''+fromId+'\')" style="padding:9px 14px;border:1px solid #E3B7B2;background:#fff;color:#A32D2D;border-radius:9px;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer">ยกเลิกบันทึกนี้</button>'
+      +'<span style="flex:1"></span>'
+      +'<button onclick="bop2SwPrint()" style="padding:9px 14px;border:1px solid #D9DDE4;background:#fff;border-radius:9px;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer">พิมพ์ใบรายชื่อ</button>'
+      +'<button onclick="bop2SwClose()" style="padding:9px 16px;border:0;background:#3730A3;color:#fff;border-radius:9px;font-weight:800;font-size:12px;font-family:inherit;cursor:pointer">ปิด</button></div>';
+  bop2SwShell(html, 560);
+}
+function bop2SwPrint(){
+  const el=document.getElementById('bop2sw-print'); if(!el) return;
+  const w=window.open('', '_blank'); if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up แล้วลองอีกครั้ง'); return; }
+  const t=(document.querySelector('#bop2-sw-modal div div')||{}).innerText||'';
+  w.document.write('<html><head><meta charset="utf-8"><title>ใบรายชื่อขากลับ</title></head><body style="font-family:sans-serif;padding:20px"><h2 style="margin:0 0 6px">'+bop2SwE(t.split('\n')[0]||'')+'</h2>'+el.innerHTML+'</body></html>');
+  w.document.close(); setTimeout(()=>{ try{ w.print(); }catch(_){} }, 300);
+}
+function bop2SwapUndo(d, fromId){
+  const day=TRIPS[d]||{}, opA=day[fromId], ev=opA && opA.swap; if(!ev) return;
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  if(!confirm('ยกเลิกบันทึก "'+bop2SwName(fromId)+' → '+bop2SwName(ev.to)+'" ?\n\n· '+bop2SwName(ev.to)+' กลับไปงานเดิมของวันนั้น\n· ลบธงบน booking'+(ev.logId?('\n· ลบสถานะ "ซ่อม" ที่บันทึกนี้ตั้งไว้'):'')+'\n\nใช้เมื่อบันทึกผิด / กดพลาด')) return;
+  const opB=day[ev.to];
+  if(opB && opB.type==='rescue' && opB.rescueFor===fromId){ if(opB.prev) day[ev.to]=opB.prev; else delete day[ev.to]; }
+  delete opA.swap;
+  let nbk=0;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(!b || typeof bkOpsRead!=='function') return; const o=bkOpsRead(b, d); if(o && o.swapEv && o.swapEv.id===ev.id){ delete o.swapEv; nbk++; } });
+  if(ev.logId){ const A=bop2SwBoat(fromId); if(A && Array.isArray(A.log)){ const i=A.log.findIndex(x=>x && x.id===ev.logId); if(i>=0){ A.log.splice(i,1); save('config'); } } }
+  save('operations');
+  if(nbk && typeof acctPersistBookings==='function') acctPersistBookings();
+  bop2SwClose(); renderOp();
+}
 /* ══ §bopOvf (2026-11-09) · owner "จู่ๆเรือเสีย เราก็ปลดเรือออก แต่มันมีบางวันบุคกิ้งล้นแล้ว
    อยากรู้ว่าวันไหนที่ลูกค้าล้นจำนวนที่นั่งแล้ว เราจะได้วางแผนหาเรือหรือย้ายลูกค้าต่อ" ═══════════════════
    ที่นั่งจริงของรอบ = ความจุรวมของเรือที่วิ่งได้วันนั้น (สถานะพร้อม · อยู่ท่าเดียวกัน · ไม่ใช่เหมาลำ)
@@ -9334,7 +9578,7 @@ function bop2OvfCap(routeId, d, drop, add){
   (al.assignedBoats||[]).forEach(a=>{
     const b=a.boat; if(!b || a.type==='charter' || a.charterBookingId) return;
     if(drop && b.id===drop) return;
-    if((typeof getCurStatus==='function' && getCurStatus(b,d).s!=='available') || bop2PierIssue(b, routeId, d)){ lost.push(b.name||b.id); return; }
+    if(!((TRIPS[d]||{})[b.id]||{}).swap && ((typeof getCurStatus==='function' && getCurStatus(b,d).s!=='available') || bop2PierIssue(b, routeId, d))){ lost.push(b.name||b.id); return; }   /* §bopSwap */
     cap+=(+a.capacity||0); n++; names.push(b.name||b.id);
   });
   if(add){ const B=(typeof BOATS!=='undefined'?BOATS:[]).find(x=>x && x.id===add);
@@ -9498,11 +9742,14 @@ function bop2RouteDaysNeedingBoats(routes, dates){
       const usable = assigned.filter(a => {
         const b=a.boat; return b && (typeof getCurStatus!=='function' || getCurStatus(b,d).s==='available');
       });
-      if(assigned.length > 0 && usable.length === 0){
+      if(assigned.length > 0 && usable.length === 0 && !bop2SwapOn(r.id, d).length){   /* §bopSwap */
         // boat WAS assigned but is now broken/unavailable → reassign (flag even with 0 pax · the schedule is invalid)
         const brokenNames = assigned.map(a=>a.boat&&a.boat.name).filter(Boolean);
         out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: al.seatsConsumed,
                    reason: 'boat_broken', boats: brokenNames });
+      } else if(assigned.length === 0 && bop2SwTakenFrom(r.id, d).length && getSeatsConsumed(r.id, d) > 0){   /* §bopSwap · เรือถูกส่งไปกู้ */
+        out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: getSeatsConsumed(r.id, d),
+                   reason: 'rescue_took', boats: bop2SwTakenFrom(r.id, d).map(bop2SwName) });
       } else if(al.seatsConsumed > 0 && assigned.length === 0){
         // pax exist but no boat assigned at all
         out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: al.seatsConsumed,
@@ -10616,6 +10863,7 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         ${typeof TCX_R!=='undefined'?Object.keys(TCX_R).map(k=>`<span class="bo-legend-chip"><span class="box" style="background:${TCX_R[k].bg};border:1px solid ${TCX_R[k].bd};color:${TCX_R[k].fg};display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">${TCX_R[k].ic}</span>CXL ${TCX_R[k].en.toLowerCase()}</span>`).join('')+'<span class="bo-legend-chip"><span class="box" style="background:#fff;border:1.5px dashed #C53A2E"></span>Below break-even (3 days)</span>':''}
         ${ovfView.length ? `<span class="bo-legend-chip" onclick="bop2OvfToggle()" title="กดเพื่อจางช่องอื่น ดูเฉพาะวันที่ที่นั่งไม่พอ" style="cursor:pointer;border-radius:8px;padding:2px 7px;${_bop2.ovfOnly?'background:#3730A3;color:#fff':'background:#EFF0FC;color:#3730A3'}"><span class="box" style="background:#EFF0FC;border:2px solid #3730A3"></span>ที่นั่งไม่พอ · ${_bop2.ovfOnly?'ดูทั้งหมด':('ดูเฉพาะ '+ovfView.length)}</span>` : ''}
+        <span class="bo-legend-chip"><span class="box" style="background:#3730A3;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:8px;line-height:1">&#128257;</span>เปลี่ยนเรือกลางทาง</span>
         <style>#view-operation .bop2-grid.ovf-only .bop2-cell-day[data-route]:not([data-ovf]){opacity:.25}</style>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
@@ -10884,13 +11132,15 @@ function bop2RenderHeatmapRow(route, dates){
     }
 
     // ─── ALERT STATE · pax exist but no boat assigned ───
-    if(al.seatsConsumed > 0 && boats.length === 0){
+    const _rtk = (boats.length === 0) ? bop2SwTakenFrom(route.id, d) : [];   /* §bopSwap */
+    const _nbPax = al.seatsConsumed || (_rtk.length ? getSeatsConsumed(route.id, d) : 0);
+    if(_nbPax > 0 && boats.length === 0){
       const stripes = 'repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 5px,#fff 5px,#fff 10px)';
       const cellContent = isMonth
-        ? `<div style="font-family:Manrope,sans-serif;font-size:11px;color:#C44A36;font-weight:700">${al.seatsConsumed}</div><div style="font-size:11px;color:#C44A36;line-height:1;margin-top:1px">⚠</div>`
-        : `<div style="font-size:14px;color:#C44A36;line-height:1">⚠</div><div style="font-size:9px;color:#C44A36;font-weight:700;line-height:1.1;margin-top:2px;text-align:center">${al.seatsConsumed} pax</div><div style="font-size:9px;color:#C44A36;line-height:1.1;text-align:center">no boat</div>`;
+        ? `<div style="font-family:Manrope,sans-serif;font-size:11px;color:#C44A36;font-weight:700">${_nbPax}</div><div style="font-size:11px;color:#C44A36;line-height:1;margin-top:1px">⚠</div>`
+        : `<div style="font-size:14px;color:#C44A36;line-height:1">⚠</div><div style="font-size:9px;color:#C44A36;font-weight:700;line-height:1.1;margin-top:2px;text-align:center">${_nbPax} pax</div><div style="font-size:9px;color:#C44A36;line-height:1.1;text-align:center">no boat</div>`;
     const minH = isMonth ? '32px' : '52px';
-      row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${stripes};border:1px dashed #C44A36;border-radius:10px;min-height:${minH};padding:3px;flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${escapeHTML(route.name)} · ${d} · ${al.seatsConsumed} pax · NO BOAT ASSIGNED">${cellContent}</div>`;
+      row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}" style="background:${stripes};border:1px dashed #C44A36;border-radius:10px;min-height:${minH};padding:3px;flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${escapeHTML(route.name)} · ${d} · ${_nbPax} pax · NO BOAT ASSIGNED${_rtk.length?(" · "+_rtk.map(bop2SwName).join(", ")+" ไปเป็นเรือกู้"):""}">${cellContent}</div>`;
       return;
     }
 
@@ -10938,6 +11188,16 @@ function bop2RenderHeatmapRow(route, dates){
     if(_wxClosed){ _tcx=(typeof tcxCellHtml==='function')?tcxCellHtml(route.id,d):{bg:'#FBE4E0',bd:'#C44A36',inner:'<div style="font-size:13px;line-height:1">&#9928;</div><div style="font-size:7px;color:#A32D2D;font-weight:700;line-height:1;margin-top:1px">CANCEL</div>',title:''}; cellInner=_tcx.inner; }
     else if(typeof tcxBelow==='function'){ _tcxLow=tcxBelow(route.id,d,al);
       if(_tcxLow) cellInner = '<span style="position:absolute;top:-6px;right:-4px;font-size:8.5px;font-weight:800;background:#C53A2E;color:#fff;border-radius:7px;padding:0 4px;line-height:14px;white-space:nowrap">'+(_tcxLow.days===0?'today':(_tcxLow.days+'d'))+'</span>'+cellInner; }
+    /* §bopSwap · ช่องที่มีเปลี่ยนเรือกลางทาง · ป้าย 🔁 มุมขวาล่าง · สัปดาห์ขึ้นชื่อ เดิม(ขีดฆ่า) → เรือกู้ */
+    const _sw = (!_tcx) ? bop2SwapOn(route.id, d) : [];
+    if(_sw.length){
+      const _swb = '<span style="position:absolute;bottom:-6px;right:-4px;font-size:9px;font-weight:800;background:#3730A3;color:#fff;border-radius:7px;padding:0 4px;line-height:14px;white-space:nowrap">&#128257;</span>';
+      if(isMonth) cellInner = cellInner + _swb;
+      else {
+        const _num = cellInner.slice(0, cellInner.indexOf('</div>')+6);
+        cellInner = _num + '<div style="margin-top:3px;width:100%">' + _sw.map(x => '<div style="font-size:9px;line-height:1.2;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:#9B9088;text-decoration:line-through">'+escapeHTML(bop2SwName(x.from))+'</span> <b style="color:#3730A3">&rarr; '+escapeHTML(bop2SwName(x.ev.to))+'</b></div>').join('') + '</div>' + _swb;
+      }
+    }
     /* §bopOvf · ลูกค้าเกินที่นั่งของเรือที่วิ่งได้ · กรอบแดง ตัวเลขจอง/ที่นั่ง ป้าย +N มุมซ้ายบน (มุมขวาเป็นของป้ายคุ้มทุน) */
     const _ovf = (!_tcx && al.hasAllotment) ? bop2Overflow(route.id, d) : null;
     if(_ovf){
@@ -10948,7 +11208,7 @@ function bop2RenderHeatmapRow(route, dates){
     }
     const minH = isMonth ? '32px' : '52px';
     const padding = isMonth ? '3px' : '5px 4px';
-    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}"${_ovf?' data-ovf="1"':''} style="background:${_tcx?_tcx.bg:(_tcxLow?'#fff':bg)};${_ovf?'background:#EFF0FC;box-shadow:inset 0 0 0 2px #3730A3;position:relative;':''}${_tcx?('box-shadow:inset 0 0 0 1.5px '+_tcx.bd+';'):''}${_tcxLow?'box-shadow:inset 0 0 0 1.5px #C53A2E;outline:1.5px dashed #C53A2E;outline-offset:-1.5px;position:relative;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${_tcx&&_tcx.title?escapeHTML(_tcx.title):(escapeHTML(route.name)+' · '+d+(al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned')+(_tcxLow?(' · below break-even '+_tcxLow.bk+'/'+_tcxLow.be+' · decide in '+_tcxLow.days+' day(s)'):'')+(_ovf?(' · ที่นั่งไม่พอ: จอง '+_ovf.booked+' / ที่นั่ง '+_ovf.cap+' · เกิน '+_ovf.over+(_ovf.lost.length?(' · ไม่พร้อม: '+_ovf.lost.join(', ')):'')):''))}">${cellInner}</div>`;
+    row += `<div class="bop2-cell bop2-cell-day${todayClass}${selClass}" data-route="${route.id}" data-date="${d}"${_ovf?' data-ovf="1"':''} style="background:${_tcx?_tcx.bg:(_tcxLow?'#fff':bg)};${_sw.length?'position:relative;':''}${_ovf?'background:#EFF0FC;box-shadow:inset 0 0 0 2px #3730A3;position:relative;':''}${_tcx?('box-shadow:inset 0 0 0 1.5px '+_tcx.bd+';'):''}${_tcxLow?'box-shadow:inset 0 0 0 1.5px #C53A2E;outline:1.5px dashed #C53A2E;outline-offset:-1.5px;position:relative;':''}border-radius:10px;min-height:${minH};padding:${padding};flex-direction:column;justify-content:center" onclick="bop2SelectCell('${route.id}','${d}')" title="${_tcx&&_tcx.title?escapeHTML(_tcx.title):(escapeHTML(route.name)+' · '+d+(al.hasAllotment ? ` · ${al.seatsConsumed}/${al.availableCapacity}${al.charterCapacity>0?` +${al.charterCapacity}⚓`:''} · ${boats.length} boat${boats.length===1?'':'s'}` : ' · no boat assigned')+(_tcxLow?(' · below break-even '+_tcxLow.bk+'/'+_tcxLow.be+' · decide in '+_tcxLow.days+' day(s)'):'')+(_sw.length?(' · เปลี่ยนเรือกลางทาง: '+_sw.map(x=>bop2SwName(x.from)+' → '+bop2SwName(x.ev.to)+(x.ev.cause?(' ('+x.ev.cause+')'):'')).join(', ')):'')+(_ovf?(' · ที่นั่งไม่พอ: จอง '+_ovf.booked+' / ที่นั่ง '+_ovf.cap+' · เกิน '+_ovf.over+(_ovf.lost.length?(' · ไม่พร้อม: '+_ovf.lost.join(', ')):'')):''))}">${cellInner}</div>`;
   });
   return row;
 }
@@ -11502,6 +11762,7 @@ function getAssignedBoatsForRouteDate(routeId, dateStr){
   Object.keys(dayOps).forEach(bid => {
     const op = dayOps[bid];
     if(!op || op.route !== routeId) return;
+    if(op.type === 'rescue') return;   /* §bopSwap · เรือกู้ไปรับลูกค้าที่มีที่นั่งอยู่แล้ว ไม่ใช่ที่นั่งใหม่ */
     const boat = (typeof BOATS !== 'undefined') ? BOATS.find(b => b.id === bid) : null;
     if(!boat) return;
     // §boatSplit · เรือที่ถูกเหมาจริงอาจยังไม่ถูกธงใน Boat Operation (ลำที่ 2+ ของใบที่แยกลำ)
