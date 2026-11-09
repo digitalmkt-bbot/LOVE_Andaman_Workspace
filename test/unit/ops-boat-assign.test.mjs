@@ -6,11 +6,12 @@ import vm from 'node:vm';
 const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
 const DEPLOY = fs.readFileSync('allotment_v2/js/ops/20-ops-deployments.js', 'utf8');
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/37-ops-boat-assign.js', 'utf8');
+const CLEAR_SCAN = fs.readFileSync('allotment_v2/js/booking/bookingV2BoatClearScan.js', 'utf8');
 const D = '2026-10-02';
 const R = 'r1';
 const plain = (x) => JSON.parse(JSON.stringify(x === undefined ? null : x));
 
-const LEGACY = ['bookingV2AssignBoat', 'bookingV2BoatSplitApply', 'bookingV2BoatUnsplit', 'bookingV2BoatAssignSelected', 'baAutoAssign'];
+const LEGACY = ['bookingV2AssignBoat', 'bookingV2BoatSplitApply', 'bookingV2BoatUnsplit', 'bookingV2BoatAssignSelected', 'bookingV2BoatClearTrip', 'baAutoAssign'];
 
 function bookings() {
   return [
@@ -64,7 +65,10 @@ function runtime({ enabled = true, handlers = {}, bks = bookings(), prompt = () 
   ctx.bkOpsFor = (b, date) => { if (isFirst(b, date)) return (b.ops = b.ops || {}); const t = (b.trips || []).find((x) => x.date === date); return (t.ops = t.ops || {}); };
   ctx.bkOpsDate = (b, date) => date || ((b.trips || [])[0] || {}).date || '';
   ctx.bkSplitPax = (s) => ({ ad: s.ad, chd: s.chd, inf: s.inf, foc: s.foc });
+  ctx.bkBoatSplits = (b, date) => { const sp = ctx.bkOpsRead(b, date).boatSplits; return Array.isArray(sp) && sp.length ? sp : null; };
+  ctx.bkBoatPaxOnBoat = () => 2;
   vm.createContext(ctx);
+  vm.runInContext(CLEAR_SCAN, ctx);
   // legacy functions the adapter wraps by snapshot (defined as the app does, so their mutation is real)
   vm.runInContext(`
     function pckMoveSave(bkId){ var b=SB_BOOKINGS.find(function(x){return x.id===bkId;}); bkOpsFor(b,'${D}').boatId=_pckTarget; b.history.push({t:'move'}); return true; }
@@ -207,6 +211,77 @@ test('bulk assign sends one PATCH per row and lists the refused ones', async () 
   assert.match(rt.alerts[0], /Skipped 1: Bob \(boat_full\)/);
 });
 
+// ── one boat off the whole trip ─────────────────────────────────────────────
+
+const onBoatA = (id, opsTripId, more = {}) => ({ id, opsId: 'lg_' + id, status: 'confirmed', leadPax: id, trips: [{ date: D, routeId: R, opsTripId }], ops: { boatId: 'boatA' }, ...more });
+const clearBks = () => [onBoatA('c1', 'tc1'), onBoatA('c2', 'tc2', { voucherRef: 'V-2' }), onBoatA('c3', 'tc3')];
+const cleared = (id) => tripRes(id, { boat_id: null });
+const guaranteed = { status: 409, body: { message: 'GUARANTEED UPGRADE: the customer was promised boat A', code: 'guaranteed_boat' } };
+
+test('removing a boat from a trip sends one PATCH per booking, in order, and the answer clears the local boat', async () => {
+  let keeps = 0;
+  const rt = runtime({ bks: clearBks(), extra: { bookingV2RenderKeep: () => { keeps++; } }, handlers: {
+    'PATCH /operations/trip-ops/tc1': cleared('tc1'), 'PATCH /operations/trip-ops/tc2': cleared('tc2'), 'PATCH /operations/trip-ops/tc3': cleared('tc3') } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  assert.equal(byId(rt, 'c1').ops.boatId, 'boatA', 'nothing changes before the server answers');
+  await rt.settle();
+  assert.deepEqual(writes(rt), ['tc1', 'tc2', 'tc3'].map((t) => ['PATCH', '/operations/trip-ops/' + t, { boat_id: null }]));
+  assert.deepEqual(['c1', 'c2', 'c3'].map((id) => byId(rt, id).ops.boatId), [null, null, null]);
+  assert.equal(rt.alerts.length, 0);
+  assert.equal(keeps, 1);
+  assert.deepEqual(rt.legacyCalls, [], 'the legacy no-op persist path is not used');
+});
+
+test('removing a boat keeps the legacy confirm, and No sends nothing', async () => {
+  let asked = '';
+  const rt = runtime({ confirm: (m) => { asked = m; return false; } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  await rt.settle();
+  assert.equal(rt.requests.length, 0);
+  assert.equal(byId(rt, 'b1').ops.boatId, 'boatA');
+  assert.match(asked, /^Remove boat Boat A from 1 booking\(s\) \(2 pax\) on this trip\?\n2026-10-02\n\nThey go back to "not assigned"\./);
+  assert.match(asked, /1 booking\(s\) split across several boats are not changed[^]*b2/);
+});
+
+test('a GUARANTEED booking stays on its boat and is listed the way legacy lists it; the rest come off', async () => {
+  const rt = runtime({ bks: clearBks(), handlers: {
+    'PATCH /operations/trip-ops/tc1': cleared('tc1'), 'PATCH /operations/trip-ops/tc2': guaranteed, 'PATCH /operations/trip-ops/tc3': cleared('tc3') } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  await rt.settle();
+  assert.deepEqual(['c1', 'c2', 'c3'].map((id) => byId(rt, id).ops.boatId), [null, 'boatA', null]);
+  assert.equal(rt.requests.length, 3, 'no second try and no reason asked: a promise is broken one booking at a time');
+  assert.deepEqual(plain(rt.alerts), ['Kept 1 GUARANTEED booking(s) on Boat A: V-2\nThe customer was promised this boat. Move them one by one if you really must.']);
+});
+
+test('a refused row stays, is listed with the code, and the rows after it still go', async () => {
+  const bks = clearBks();
+  delete bks[1].trips[0].opsTripId;
+  const rt = runtime({ bks, handlers: {
+    'PATCH /operations/trip-ops/tc1': { status: 403, body: { message: 'no', code: 'forbidden' } }, 'PATCH /operations/trip-ops/tc3': cleared('tc3') } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  await rt.settle();
+  assert.deepEqual(['c1', 'c2', 'c3'].map((id) => byId(rt, id).ops.boatId), ['boatA', 'boatA', null]);
+  assert.deepEqual(plain(rt.alerts), ['Removed 1 booking(s) from Boat A.\nNot removed 2: c1 (forbidden), V-2 (not_synced)']);
+});
+
+test('the PATCH goes to the trip on this route when the booking has two that day', async () => {
+  const b = onBoatA('c1', 'other', { trips: [{ date: D, routeId: 'r2', opsTripId: 'other' }, { date: D, routeId: R, opsTripId: 'tc1' }] });
+  const rt = runtime({ bks: [b], handlers: { 'PATCH /operations/trip-ops/tc1': cleared('tc1') } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  await rt.settle();
+  assert.deepEqual(writes(rt), [['PATCH', '/operations/trip-ops/tc1', { boat_id: null }]]);
+});
+
+test('a trip with only split bookings on the boat says so and sends nothing', async () => {
+  let askedConfirm = false;
+  const rt = runtime({ bks: [bookings()[1]], confirm: () => { askedConfirm = true; return true; } });
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
+  await rt.settle();
+  assert.equal(askedConfirm, false);
+  assert.equal(rt.requests.length, 0);
+  assert.match(rt.alerts[0], /^Nothing to remove from Boat A except split bookings\./);
+});
+
 // ── pier move (snapshot / restore) ──────────────────────────────────────────
 
 test('pier move: the form runs, the server decides, a refusal puts the boat and history back', async () => {
@@ -280,8 +355,9 @@ test('auto-assign is refused in ops mode', async () => {
 test('legacy mode delegates and sends nothing', async () => {
   const rt = runtime({ enabled: false });
   rt.ctx.bookingV2AssignBoat('b1', 'boatB', D);
+  rt.ctx.bookingV2BoatClearTrip('boatA', D, R);
   rt.ctx.baAutoAssign(D, R);
   await rt.settle();
   assert.equal(rt.requests.length, 0);
-  assert.deepEqual(rt.legacyCalls.map((c) => c[0]), ['bookingV2AssignBoat', 'baAutoAssign']);
+  assert.deepEqual(rt.legacyCalls.map((c) => c[0]), ['bookingV2AssignBoat', 'bookingV2BoatClearTrip', 'baAutoAssign']);
 });
