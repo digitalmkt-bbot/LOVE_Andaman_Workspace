@@ -201,7 +201,7 @@ function tmPaxOfBoat(bid, ds){
 function tmExport(bid, ds){
   var btn=event&&event.currentTarget; if(btn){ btn.disabled=true; btn.textContent='กำลังสร้าง…'; }
   var done=function(){ if(btn){ btn.disabled=false; btn.innerHTML='&#128229; ดาวน์โหลด Excel ชุด ตม.'; } };
-  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=2').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
+  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=3').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
   .then(function(buf){ var wb=new ExcelJS.Workbook(); return wb.xlsx.load(buf); })
   .then(function(wb){ return tmFill(wb, bid, ds).xlsx.writeBuffer(); })
   .then(function(out){ var nm=(tmBoatRec(bid).name||bid).replace(/[\\/:*?"<>|]/g,'-');
