@@ -176,7 +176,7 @@ function renderPierTm(pier){
     +boatsHtml+'</div>';
 }
 /* ── Excel ───────────────────────────────────────────────────────────────── */
-var TM_TEMPLATE_URL='assets/tm_ranong_template.xlsx';   /* §tmPaxPg · แม่แบบ v2 · ตม.3/1 สองหน้า หน้าละ 25 */
+var TM_TEMPLATE_URL='assets/tm_ranong_template.xlsx';   /* §tmPaxPg · แม่แบบ v4 = ไฟล์ที่ทีมแก้แล้วบันทึกจาก Excel (ล้างข้อมูลออก) · v2/v3 สร้างด้วยการคัดลอกแผ่น Excel ต้องซ่อมไฟล์และทิ้งข้อมูลแผ่นบัญชีคนโดยสาร */
 function tmLoadExcelJS(){
   if(window.ExcelJS) return Promise.resolve();
   return new Promise(function(res,rej){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=res; s.onerror=function(){ rej(new Error('ExcelJS load failed')); }; document.head.appendChild(s); });
@@ -201,14 +201,20 @@ function tmPaxOfBoat(bid, ds){
 function tmExport(bid, ds){
   var btn=event&&event.currentTarget; if(btn){ btn.disabled=true; btn.textContent='กำลังสร้าง…'; }
   var done=function(){ if(btn){ btn.disabled=false; btn.innerHTML='&#128229; ดาวน์โหลด Excel ชุด ตม.'; } };
-  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=3').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
+  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=4').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
   .then(function(buf){ var wb=new ExcelJS.Workbook(); return wb.xlsx.load(buf); })
-  .then(function(wb){ return tmFill(wb, bid, ds).xlsx.writeBuffer(); })
+  .then(function(wb){ tmFill(wb, bid, ds); tmNoFitToPage(wb); return wb.xlsx.writeBuffer(); })
   .then(function(out){ var nm=(tmBoatRec(bid).name||bid).replace(/[\\/:*?"<>|]/g,'-');
     var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ตม-'+nm+'-'+ds+'.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
     done(); })
   .catch(function(err){ done(); alert('Could not build the document: '+(err&&err.message||err)); });
+}
+/* §tmFitBug (2026-11-09) · ExcelJS 4.4 เขียน <sheetPr> เป็น pageSetUpPr ก่อน outlinePr (ผิดลำดับ schema)
+   Excel เปิดแล้วขึ้น [Repaired] และทิ้งเนื้อหาแผ่นนั้น (owner: บัญชีคนโดยสารว่างทั้งแผ่น)
+   LibreOffice ไม่ฟ้อง · ทุกแผ่นที่ตั้ง fit to page → เปลี่ยนเป็นย่อตาม % แทน ExcelJS จะไม่เขียน pageSetUpPr */
+function tmNoFitToPage(wb){
+  try{ wb.eachSheet(function(ws){ var p=ws.pageSetup||{}; if(p.fitToPage){ p.fitToPage=false; if(!(+p.scale>0 && +p.scale<100)) p.scale=66; delete p.fitToWidth; delete p.fitToHeight; } }); }catch(_){ }
 }
 function tmFill(wb, bid, ds){
   var R=Object.assign({}, tmBoatRec(bid)), P=tmPaxOfBoat(bid, ds);
@@ -227,7 +233,7 @@ function tmFill(wb, bid, ds){
      ตม.3/1 · 2 หน้า หน้าละ 25 แถว (1-25 · 26-50) รูปแบบเดียวกันทั้งคู่ คอลัมน์ A-F (แม่แบบใหม่)
      · เลขบัตรแบบขีด 3-1006-02866-47-6 · ชาวต่างชาติ (เลขบัตรว่าง/ศูนย์) ใช้เลขพาสปอร์ต
      · ช่องท่าลงเรือ/ขึ้นจากเรือเว้นว่าง (เดิมใส่แถวแรกแล้วตามด้วย ") */
-  var pages=[ {ws:wb.getWorksheet('บัญชีคนโดยสาร'), r0:16, n:25, base:1, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F'},
+  var pages=[ {ws:wb.getWorksheet('บัญชีคนโดยสาร')||wb.getWorksheet('บัญชีคนโดยสาร '), r0:16, n:25, base:1, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F'},
               {ws:wb.getWorksheet('บัญชีคนโดยสาร (2)'), r0:16, n:25, base:26, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F'} ];
   var docNo=function(x){ var d=String(x.id||'').replace(/\D/g,''); if(d.length===13 && !/^0+$/.test(d)) return tmIdFmt(d); return x.laser||(d&&!/^0+$/.test(d)?x.id:null); };
   if(P.length>50) try{ console.warn('[tmDoc] '+P.length+' passengers · the form holds 50 · extra rows not printed'); }catch(_){}
