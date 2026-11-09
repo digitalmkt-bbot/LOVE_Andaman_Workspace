@@ -154,13 +154,13 @@ function renderPierTm(pier){
     var nm=g.bid?(((typeof getBoat==='function')&&getBoat(g.bid))||{}).name||g.bid:'(ยังไม่จัดเรือ)';
     var rec=g.bid?tmCrewOf(g.bid,_tmDate):null, crewOk=!!(rec&&rec.master&&rec.crew.length);
     var rn=(((typeof getRoute==='function')&&getRoute(g.routeId))||{}).name||g.routeId;
-    return '<div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 190px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #EEECE6;font-size:12.5px">'
+    return '<div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 290px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #EEECE6;font-size:12.5px">'
       +'<b style="color:#14233F">'+e(nm)+'</b><span style="color:#5B6472">'+e(rn)+' · '+g.bks.length+' ใบ</span><span><b>'+g.pax+'</b> คน</span>'
       +'<span style="font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 9px;justify-self:start;'+(g.ok===g.n&&g.n?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00')+'">&#129706; ผู้โดยสาร '+g.ok+'/'+g.n+'</span>'
       +(g.bid?('<button type="button" onclick="tmGoDay(\''+e(g.bid)+'\')" title="ดู / เปลี่ยนลูกเรือของลำนี้เฉพาะวันนี้" style="border:0;font-family:inherit;cursor:pointer;font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 9px;justify-self:start;'
           +(rec.day?'background:#F1ECFB;color:#5B289A':(crewOk?'background:#E6F6F2;color:#0F766E':'background:#FEF6E7;color:#7A4A00'))+'">'
           +(rec.day?('ลูกเรือวันนี้ (เปลี่ยน) '+rec.crew.length+' คน'):(crewOk?('ลูกเรือ '+rec.crew.length+' คน'):'ยังไม่มีข้อมูลเรือ'))+' &rsaquo;</button>'):'<span>—</span>')
-      +(g.bid?'<button type="button" onclick="tmExport(\''+e(g.bid)+'\',\''+e(_tmDate)+'\')" style="border:0;background:#1B2A55;color:#fff;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;justify-self:start">&#128229; ดาวน์โหลด Excel ชุด ตม.</button>':'<span style="font-size:11.5px;color:#B42318">จัดเรือก่อนถึงออกเอกสารได้</span>')+'</div>'; }).join('')
+      +(g.bid?'<span style="display:inline-flex;gap:6px;justify-self:start;flex-wrap:wrap"><button type="button" onclick="tmPreview(\''+e(g.bid)+'\',\''+e(_tmDate)+'\')" style="border:1px solid #1B2A55;background:#fff;color:#1B2A55;border-radius:8px;padding:6px 11px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">&#128065; พรีวิว</button><button type="button" onclick="tmExport(\''+e(g.bid)+'\',\''+e(_tmDate)+'\')" style="border:0;background:#1B2A55;color:#fff;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">&#128229; ดาวน์โหลด Excel ชุด ตม.</button></span>':'<span style="font-size:11.5px;color:#B42318">จัดเรือก่อนถึงออกเอกสารได้</span>')+'</div>'; }).join('')
     :'<div style="padding:18px;text-align:center;color:#8A9099;font-size:12.5px">วันนี้ไม่มีใบจองเส้นทางท่าระนอง</div>';
   var dLbl=(function(){ try{ return new Date(_tmDate+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){ return _tmDate; } })();
   host.innerHTML='<div style="font-family:\'IBM Plex Sans Thai\',\'DM Sans\',sans-serif;color:#14233F;padding:16px 18px;max-width:1240px">'
@@ -170,7 +170,7 @@ function renderPierTm(pier){
       +'<button type="button" onclick="laDatePop(\'tmSetDate\',_tmDate,event)" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;padding:4px 12px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">'+e(dLbl)+'</button>'
       +'<button type="button" onclick="tmShiftDate(1)" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;width:28px;height:28px;cursor:pointer">&rsaquo;</button>'
       +'<button type="button" onclick="tmSetDate((typeof bkV2LocalYMD===\'function\')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10))" style="border:1px solid #D0D5DD;background:#fff;border-radius:7px;padding:4px 10px;font-family:inherit;font-size:12px;cursor:pointer">วันนี้</button></span></div>'
-    +'<div style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;overflow:hidden;margin-bottom:18px"><div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 190px;gap:10px;padding:7px 14px;font-size:10.5px;font-weight:700;color:#5B6472"><span>เรือ</span><span>เส้นทาง</span><span>ผู้โดยสาร</span><span>ข้อมูล ตม.</span><span>ข้อมูลเรือ</span><span></span></div>'+dayHtml+'</div>'
+    +'<div style="background:#fff;border:1px solid #E7E5DD;border-radius:12px;overflow:hidden;margin-bottom:18px"><div style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.2fr) 90px 150px 150px 290px;gap:10px;padding:7px 14px;font-size:10.5px;font-weight:700;color:#5B6472"><span>เรือ</span><span>เส้นทาง</span><span>ผู้โดยสาร</span><span>ข้อมูล ตม.</span><span>ข้อมูลเรือ</span><span></span></div>'+dayHtml+'</div>'
     +'<div style="font-size:11.5px;color:#5B6472;margin:-10px 0 18px">ผู้โดยสารที่ข้อมูลยังไม่ครบ ยังออกเอกสารได้ (ช่องว่าง) · กรอกที่ By trip date (กางแถวใบจอง) หรือหน้า Insurance</div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:22px;height:22px;border-radius:50%;background:#1B2A55;color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">2</span><b style="font-size:14px">ข้อมูลเรือและลูกเรือ</b><span style="font-size:12px;color:#5B6472">คลิกชื่อเรือทางซ้าย รายละเอียดขึ้นทางขวา · ชุดประจำใช้ทุกวัน · วันไหนลูกเรือเปลี่ยน ใช้แท็บ "เฉพาะวันที่"</span></div>'
     +boatsHtml+'</div>';
@@ -197,6 +197,110 @@ function tmPaxOfBoat(bid, ds){
       out.push({ b:b, p:p, name:en, th:th, id:tmGet(b.id,p.key,'idNo'), laser:tmGet(b.id,p.key,'idLaser'), dob:dob, remark:tmGet(b.id,p.key,'remark'),
                  nat:tmNatLabel({natCode:_nc}), natCode:_nc,   /* §tmPax4 · สัญชาติจากช่องกรอก (ค่าตั้งต้น = ใบจอง) */ g:tmGender(en||p.name), vc:b.voucherRef||b.code||b.id }); }); }); });
   return out;
+}
+/* §tmPrev (2026-11-09) · owner: "เพิ่มให้พรีวิวด้วย"
+   ใช้แม่แบบ + tmFill ชุดเดียวกับไฟล์ดาวน์โหลด แล้ววาดแต่ละแผ่นเป็นตาราง HTML (ความกว้างคอลัมน์ ความสูงแถว
+   เซลล์ผสาน เส้นขอบ ตัวหนา จัดวาง) · สูตรที่อ้างข้ามแผ่น (=แผ่น!A1, =A1, SUM(A1:A9)) คำนวณให้เห็นค่าจริง
+   ฟอนต์ไทยเก่า (Angsana/Browallia) ไม่มีในเบราว์เซอร์ส่วนใหญ่ · ย่อขนาดลงให้ใกล้ของจริง */
+function tmBuildWb(bid, ds){
+  return tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=4').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
+    .then(function(buf){ var wb=new ExcelJS.Workbook(); return wb.xlsx.load(buf); })
+    .then(function(wb){ tmFill(wb, bid, ds); return wb; });
+}
+var _tmPv=null;
+function tmPreview(bid, ds){
+  var btn=(typeof event!=='undefined'&&event&&event.currentTarget)||null; if(btn){ btn.disabled=true; btn.textContent='กำลังเปิด…'; }
+  var done=function(){ if(btn){ btn.disabled=false; btn.innerHTML='&#128065; พรีวิว'; } };
+  tmBuildWb(bid, ds).then(function(wb){ done(); _tmPv={wb:wb, bid:bid, ds:ds, sheet:''};
+    var pick=wb.worksheets.filter(function(w){ return /^บัญชีคนโดยสาร\s*$/.test(w.name); })[0]||wb.worksheets[0];
+    _tmPv.sheet=pick.name; tmPvRender(); })
+  .catch(function(err){ done(); alert('Could not build the preview: '+(err&&err.message||err)); });
+}
+function tmPvClose(){ var o=document.getElementById('tm-pv'); if(o) o.remove(); _tmPv=null; document.removeEventListener('keydown', tmPvKey); }
+function tmPvKey(ev){ if(ev.key==='Escape') tmPvClose(); }
+function tmPvTab(i){ if(!_tmPv) return; var w=_tmPv.wb.worksheets[+i]; if(w){ _tmPv.sheet=w.name; tmPvRender(); } }
+function tmPvVal(wb, ws, addr, depth){
+  depth=depth||0; if(depth>8) return '';
+  var c=ws.getCell(addr), v=c.value;
+  if(v==null) return '';
+  if(v instanceof Date) return v;
+  if(typeof v==='object'){
+    if(v.richText) return v.richText.map(function(t){ return t.text; }).join('');
+    if(v.formula!=null || v.sharedFormula!=null){
+      var f=String(v.formula||'').replace(/^=/,'').trim(), m;
+      if((m=f.match(/^'?(.+?)'?!\$?([A-Z]+)\$?(\d+)$/))){ var w2=wb.getWorksheet(m[1])||wb.getWorksheet(m[1]+' ')||wb.getWorksheet(m[1].trim()); return w2?tmPvVal(wb,w2,m[2]+m[3],depth+1):''; }
+      if((m=f.match(/^\$?([A-Z]+)\$?(\d+)$/))) return tmPvVal(wb,ws,m[1]+m[2],depth+1);
+      if((m=f.match(/^SUM\(\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)\)$/i))){
+        var sum=0, c0=ws.getColumn(m[1]).number, c1=ws.getColumn(m[3]).number;
+        for(var r=+m[2]; r<=+m[4]; r++) for(var cc=c0; cc<=c1; cc++){ var x=tmPvVal(wb,ws,ws.getRow(r).getCell(cc).address,depth+1); if(typeof x==='number') sum+=x; else if(x!==''&&!isNaN(+x)) sum+=+x; }
+        return sum;
+      }
+      return (v.result!=null && typeof v.result!=='object')?v.result:'';
+    }
+    if(v.text!=null) return v.text;
+    if(v.error) return v.error;
+    return '';
+  }
+  return v;
+}
+function tmPvTxt(x){
+  if(x instanceof Date){ var M=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return x.getUTCDate()+' '+M[x.getUTCMonth()]+' '+x.getUTCFullYear(); }
+  return String(x==null?'':x);
+}
+function tmPvSheetHtml(wb, ws){
+  var e=tmE, maxR=0, maxC=0, R0=Math.min(ws.rowCount||0, 140);
+  for(var r=1;r<=R0;r++){ var row=ws.getRow(r); row.eachCell({includeEmpty:false}, function(c, cn){ var v=c.value; if(v!=null && v!=='' ){ if(r>maxR) maxR=r; if(cn>maxC) maxC=cn; } }); }
+  var CN=Math.max(1, Math.min(Math.max(maxC, (ws.columnCount||0)>16?maxC:(ws.columnCount||maxC)), 20)); maxR=Math.min(maxR+1, R0||1);
+  var merges=((ws.model&&ws.model.merges)||[]), skip={}, span={};
+  merges.forEach(function(rg){ var p=String(rg).split(':'); if(p.length<2) return; var a=ws.getCell(p[0]), b=ws.getCell(p[1]);
+    var r0=a.row, c0=a.col, r1=b.row, c1=b.col; span[r0+','+c0]={rs:r1-r0+1, cs:c1-c0+1};
+    for(var r=r0;r<=r1;r++) for(var c=c0;c<=c1;c++) if(r!==r0||c!==c0) skip[r+','+c]=1; });
+  var cols='', tw=0;
+  for(var c=1;c<=CN;c++){ var w=(ws.getColumn(c).width||9)*7+5; tw+=w; cols+='<col style="width:'+Math.round(w)+'px">'; }
+  var bd=function(s){ if(!s||!s.style) return 'none'; var w=/medium|thick|double/.test(s.style)?2:1; var col=(s.color&&s.color.argb)?('#'+String(s.color.argb).slice(-6)):'#222'; return w+'px '+(s.style==='dashed'||s.style==='dotted'?s.style:(s.style==='double'?'double':'solid'))+' '+col; };
+  var body='';
+  for(var r=1;r<=maxR;r++){ var row=ws.getRow(r), h=Math.max(4, Math.round((row.height||15)*1.333));
+    body+='<tr style="height:'+h+'px">';
+    for(var c=1;c<=CN;c++){ var k=r+','+c; if(skip[k]) continue;
+      var cell=row.getCell(c), sp=span[k], st='', f=cell.font||{}, al=cell.alignment||{}, b=cell.border||{}, fl=cell.fill;
+      var fn=String(f.name||''), sz=+f.size||11, thai=/angsana|browallia|cordia|eucrosia/i.test(fn);
+      st+='font-size:'+(thai?(sz*0.78):sz).toFixed(1)+'pt;';
+      if(f.bold) st+='font-weight:700;'; if(f.italic) st+='font-style:italic;'; if(f.underline) st+='text-decoration:underline;';
+      if(f.color&&f.color.argb&&String(f.color.argb).length>=6) st+='color:#'+String(f.color.argb).slice(-6)+';';
+      if(al.horizontal) st+='text-align:'+(al.horizontal==='centerContinuous'?'center':al.horizontal)+';';
+      st+='vertical-align:'+(al.vertical==='top'?'top':(al.vertical==='middle'||al.vertical==='center'?'middle':'bottom'))+';';
+      st+='white-space:'+(al.wrapText?'pre-wrap':'pre')+';';
+      st+='border-top:'+bd(b.top)+';border-bottom:'+bd(b.bottom)+';border-left:'+bd(b.left)+';border-right:'+bd(b.right)+';';
+      if(fl&&fl.type==='pattern'&&fl.pattern==='solid'&&fl.fgColor&&fl.fgColor.argb) st+='background:#'+String(fl.fgColor.argb).slice(-6)+';';
+      var tx=tmPvTxt(tmPvVal(wb, ws, cell.address));
+      if(typeof tmPvVal(wb, ws, cell.address)==='number' && !al.horizontal) st+='text-align:right;';
+      body+='<td'+(sp?(' rowspan="'+sp.rs+'" colspan="'+sp.cs+'"'):'')+' style="'+st+'">'+e(tx)+'</td>';
+    }
+    body+='</tr>';
+  }
+  return {html:'<table style="border-collapse:collapse;table-layout:fixed;width:'+Math.round(tw)+'px;font-family:Tahoma,\'Sarabun\',\'IBM Plex Sans Thai\',sans-serif;color:#000;background:#fff"><colgroup>'+cols+'</colgroup><tbody>'+body+'</tbody></table>', w:tw};
+}
+function tmPvRender(){
+  if(!_tmPv) return; var e=tmE, wb=_tmPv.wb, ws=wb.getWorksheet(_tmPv.sheet)||wb.worksheets[0];
+  var o=document.getElementById('tm-pv');
+  if(!o){ o=document.createElement('div'); o.id='tm-pv'; document.body.appendChild(o); document.addEventListener('keydown', tmPvKey); }
+  var S=tmPvSheetHtml(wb, ws), nm=tmBoatRec(_tmPv.bid).name||_tmPv.bid;
+  var dl=(function(){ try{ return new Date(_tmPv.ds+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }catch(_){ return _tmPv.ds; } })();
+  var tabs=wb.worksheets.map(function(w,i){ var on=w.name===ws.name;
+    return '<button type="button" onclick="tmPvTab('+i+')" style="border:0;border-bottom:2px solid '+(on?'#1B2A55':'transparent')+';background:none;padding:8px 10px;font-family:inherit;font-size:12px;font-weight:'+(on?'700':'500')+';color:'+(on?'#14233F':'#5B6472')+';cursor:pointer;white-space:nowrap">'+e(w.name.trim())+'</button>'; }).join('');
+  var avail=Math.min(window.innerWidth-80, 1100), z=Math.min(1, (avail-40)/Math.max(1,S.w));
+  o.innerHTML='<div onclick="if(event.target===this)tmPvClose()" style="position:fixed;inset:0;background:rgba(20,35,63,.55);z-index:9999;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Sans Thai\',\'DM Sans\',sans-serif">'
+    +'<div style="background:#F4F3EF;border-radius:14px;width:'+avail+'px;max-width:96vw;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +'<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border-bottom:1px solid #E7E5DD">'
+      +'<b style="font-size:14px;color:#14233F">&#128065; พรีวิวชุด ตม. · '+e(nm)+' · '+e(dl)+'</b>'
+      +'<span style="font-size:11.5px;color:#5B6472">ตามที่จะออกเป็นไฟล์ Excel · ฟอนต์อาจต่างจาก Excel เล็กน้อย</span>'
+      +'<button type="button" onclick="tmExport(\''+e(_tmPv.bid)+'\',\''+e(_tmPv.ds)+'\')" style="margin-left:auto;border:0;background:#1B2A55;color:#fff;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">&#128229; ดาวน์โหลด Excel</button>'
+      +'<button type="button" onclick="tmPvClose()" title="ปิด (Esc)" style="border:1px solid #D0D5DD;background:#fff;border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer">&times;</button></div>'
+    +'<div style="display:flex;gap:2px;padding:0 10px;background:#fff;border-bottom:1px solid #E7E5DD;overflow-x:auto">'+tabs+'</div>'
+    +'<div style="flex:1;overflow:auto;padding:20px;display:flex;justify-content:center;align-items:flex-start">'
+      +'<div style="background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.12);padding:24px;zoom:'+z.toFixed(3)+'">'+S.html+'</div></div>'
+    +'</div></div>';
 }
 function tmExport(bid, ds){
   var btn=event&&event.currentTarget; if(btn){ btn.disabled=true; btn.textContent='กำลังสร้าง…'; }
