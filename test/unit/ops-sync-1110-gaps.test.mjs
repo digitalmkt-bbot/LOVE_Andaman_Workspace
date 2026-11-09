@@ -164,3 +164,24 @@ test('§bopOvf replace-a-boat confirm (ops mode) lists the days the preview foun
   await ctx.bop2ApplyReplace();
   assert.doesNotMatch(asked[1], /ที่นั่งไม่พอ/);
 });
+
+test('§pjSwapOrd pier boats (ops mode): the server\'s order stands, and a rescue boat\'s card sits right after the boat it went out for', () => {
+  const SRC = fs.readFileSync('allotment_v2/js/ops/85-ops-pier-w5.js', 'utf8');
+  const boat = (id) => ({ bid: id, boat: { id, name: id }, _st: { k: 'run' } });
+  const ctx = { console, Object, Array, String, JSON, Math, encodeURIComponent, setTimeout: () => 0, clearTimeout() {},
+    document: { getElementById: () => null },
+    TRIPS: { [D]: { zeus: { route: 'r-sim', swap: { to: 'achilles' } }, achilles: { route: 'r-sim', type: 'rescue', rescueFor: 'zeus' }, hera: { route: 'r-sur' } } },
+    getBoat: (id) => ({ id, name: id }), pjBoatSt: () => ({ k: 'run' }),
+    pjAllBoats: () => [boat('zeus'), boat('hera'), boat('achilles')] };
+  ctx.window = ctx;
+  const order = ['achilles', 'hera', 'zeus'];
+  ctx.laOps = new Proxy({ enabled: () => true, pierJob: { state: { views: {} } },
+    pier: new Proxy({ enabled: () => true, loaded: true, dayBoats: { entry: () => ({ order, fleet: Object.fromEntries(order.map((id) => [id, { boat_id: id, state: 'run' }])) }) } },
+      { get: (t, k) => (k in t ? t[k] : () => null) }) },
+  { get: (t, k) => (k in t ? t[k] : () => null) });
+  vm.createContext(ctx);
+  vm.runInContext(SRC, ctx);
+  assert.deepEqual([...ctx.pjAllBoats(D, 'tublamu').map((B) => B.bid)], ['hera', 'zeus', 'achilles']);
+  delete ctx.TRIPS[D].achilles.rescueFor; ctx.TRIPS[D].achilles.type = 'normal';
+  assert.deepEqual([...ctx.pjAllBoats(D, 'tublamu').map((B) => B.bid)], order, 'no swap: the server\'s order as it is');
+});
