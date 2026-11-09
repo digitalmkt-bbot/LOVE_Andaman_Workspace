@@ -82416,6 +82416,27 @@ function pjSwBanner(date, bid){
     +(nG?('<span style="font-size:10.5px;color:#3730A3;font-weight:700">ไกด์ '+nG+' คน ไปกับลูกค้าที่ '+poE(pjSwNm(I.to))+'</span>'):'')
     +'</div>';
 }
+/* ══ §pjSwapPr (2026-11-09) · owner "หน้าใบงานต้องแก้ให้ด้วย" (ใบพิมพ์ Tub Lamu · Achilles ขึ้น 08:00 · 0/65 เหมือนรอบขาย) */
+function pjSwPrTag(I, block){
+  if(!I) return '';
+  var E=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var st=block ? 'display:block;margin-top:3px;font-size:10.5px;font-weight:800;' : 'display:inline-block;margin-left:6px;font-size:10px;font-weight:800;vertical-align:middle;';
+  if(I.rsc) return '<span style="'+st+'color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:5px;padding:0 6px;white-space:nowrap">&#128735; เรือกู้ของ '+E(pjSwNm(I.from))+'</span>';
+  var e=I.ev||{};
+  return '<span style="'+st+'color:#A32D2D;background:#FFF1F0;border:1px solid #F3B7B2;border-radius:5px;padding:0 6px;white-space:nowrap">&#128295; เสีย'+(e.t1?(' '+E(e.t1)):'')+' &rarr; '+E(pjSwNm(I.to))+'</span>';
+}
+function pjSwPrNote(I){
+  if(!I) return '';
+  var E=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var e=I.ev||{}, sty=' style="background:#EFF0FC;color:#3730A3;white-space:normal"';
+  if(I.rsc){
+    var pr=(I.prev && I.prev.route) ? (((typeof getRoute==='function' && getRoute(I.prev.route))||{}).name || I.prev.route) : '';
+    return '<span class="pc"'+sty+'>เรือกู้ของ '+E(pjSwNm(I.from))+' · รับลูกค้า <b>'+(+e.pax||0)+'</b> คน'+(e.place?(' · เปลี่ยนที่ '+E(e.place)):'')+(pr?(' · ดึงมาจาก '+E(pr)):'')+' · ลูกเรือ = งานกู้</span>';
+  }
+  var G2=(typeof pjGuidesFull==='function')?pjGuidesFull(_poDate, I.to):[], nG=(G2.length||0)+(+G2.other||0);
+  return '<span class="pc" style="background:#FFF1F0;color:#A32D2D;white-space:normal">เสียกลางทาง'+(e.t1?(' '+E(e.t1)):'')+(e.cause?(' · '+E(e.cause)):'')
+    +' · ลูกค้า <b>'+(+e.pax||0)+'</b> คนกลับด้วย '+E(pjSwNm(I.to))+(nG?(' · ไกด์ '+nG+' คนไปกับลูกค้า'):'')+'</span>';
+}
 function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
   var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
@@ -83792,12 +83813,14 @@ function pjPrint(){
           var C=pjChtrOf(B);   /* §pjChtr */
           return '<td class="v ctr trip" style="background:'+pjTint(rt.color||'#64748B')
             +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')
-            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">CHARTER</span></div>'):'')+'</td>'; }).join('')
+            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">CHARTER</span></div>'):'')+pjSwPrTag(pjSwInfo(_poDate,B.bid),1)+'</td>'; }).join('')
       +'</tr>'; };
   var timeRow=function(){
     return '<tr><th class="k">TIME<i>\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01</i></th>'
       + boats.map(function(B){
           if(!isGo(B)) return '<td class="mut off2">\u2014</td>';
+          var _s=pjSwInfo(_poDate,B.bid);   /* §pjSwapPr */
+          if(_s && _s.rsc){ var _e=_s.ev||{}; return '<td class="v ctr tmc">'+e(_e.t0||_e.t1||'--:--')+'<div style="font-size:10px;font-weight:800;color:#3730A3">'+(_e.t0?'ออกไปรับ':'แจ้งเสีย')+(_e.t2?(' · ถึง '+e(_e.t2)):'')+'</div></td>'; }
           return '<td class="v ctr tmc">'+e(B.dep||'--:--')+'</td>'; }).join('')
       +'</tr>'; };
 
@@ -83808,6 +83831,7 @@ function pjPrint(){
        แต่ร้านอาหารไม่ใช่คนที่ถูกจ่ายงาน · เป็นของที่ผูกกับทริปเหมือนโปรแกรมและเวลา
        สามแถวบนสุดจึงตอบครบว่า วันนี้ลำนี้ไปไหน ออกกี่โมง กินที่ไหน */
     + row('RESTAURANT|\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23',function(B,i){
+        var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<span class="rl" style="color:#3730A3">ใช้ของ '+e(pjSwNm(_s.from))+'</span>';   /* §pjSwapPr */
         var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
         if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
         var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
@@ -83853,6 +83877,7 @@ function pjPrint(){
        และคนสั่งของทางไลน์ต้องพิมพ์ชื่อสีได้ · โชว์ทั้งแถบสีและชื่อ */
     + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
         /* §pjWbCarry · ใบที่ปริ้นต้องโชว์สีเดียวกับบนจอ รวมถึงสีที่สืบมาจากวันก่อน */
+        var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<span style="color:#3730A3;font-weight:700">ใช้ของ '+e(pjSwNm(_s.from))+'</span>';   /* §pjSwapPr */
         var _w=pjWbOf(_poDate, B.bid);
         var c=String(_w.c||'').trim(), nm=String(_w.t||'').trim();
         if(/^#[0-9a-fA-F]{3,8}$/.test(c))
@@ -83877,6 +83902,7 @@ function pjPrint(){
           +'</tr>';
         o+='<tr class="pxt pxr"><th class="k">TOTAL PAX<i>\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21</i></th>'
           + boats.map(function(B){ if(!isGo(B)) return '<td class="pxn tot z2">\u2014</td>';
+              var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<td class="pxn tot" style="color:#3730A3">'+(+((_s.ev||{}).pax)||0)+'<div style="font-size:10px;font-weight:800">ขากลับ · ไม่นับซ้ำ</div></td>';   /* §pjSwapPr */
               return '<td class="pxn tot">'+PX[gi(B)].all+'</td>'; }).join('')
           +'</tr>';
         return o; })()
@@ -83901,6 +83927,7 @@ function pjPrint(){
             if(P.allerg) chips+='<span class="pc alg">&#9888; \u0e41\u0e1e\u0e49\u0e2d\u0e32\u0e2b\u0e32\u0e23 <b>'+P.allerg+'</b>'+_cn+'</span>';
             if(P.lt)     chips+='<span class="pc lt">\u0e40\u0e23\u0e37\u0e2d\u0e2b\u0e32\u0e07\u0e22\u0e32\u0e27 <b>'+P.lt+'</b>'+_cn+'</span>';
           }
+          var _sN=pjSwInfo(_poDate,B.bid); if(_sN) chips=pjSwPrNote(_sN)+chips;   /* §pjSwapPr */
           var txt=isGo(B) ? (J[gi(B)].note||'') : (WK[B.bid].note||'');
           return '<td class="nt">'+(chips?('<span class="ntc">'+chips+'</span>'):'')
             +(txt?('<span class="ntt">'+e(txt)+'</span>'):(chips?'':'<span class="mut">\u2014</span>'))+'</td>'; }).join('')
@@ -83963,11 +83990,14 @@ function pjPrint(){
       var P=null; try{ P=pjPrep(_poDate,B.bid,_poPier); }catch(_){}
       P=P||{lang:{},halal:0,veg:0,vegan:0,allerg:0,lt:0};
       var pax=(PX[i]&&PX[i].all)||0, cap=(+(B.boat.cap)||0);
+      var _SWI=pjSwInfo(_poDate,B.bid);   /* §pjSwapPr · เรือกู้ = เวลาออกไปรับ · ยอดขากลับ ไม่มีความจุขาย */
+      if(_SWI && _SWI.rsc){ pax=+((_SWI.ev||{}).pax)||0; cap=0; dep=String((_SWI.ev||{}).t0||(_SWI.ev||{}).t1||dep); }
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
          ของเดิมพิมพ์ "120/65" ด้วยสีเดียวกับทุกช่อง อ่านผ่านได้ง่ายมาก */
       var over=(cap>0 && pax>cap) ? (pax-cap) : 0;
       var _wb2=pjWbOf(_poDate, B.bid);                  /* §pjWbCarry */
       var wbc=_wb2.c||'', wbn=_wb2.t||'';
+      if(_SWI && _SWI.rsc){ wbn='ใช้ของ '+pjSwNm(_SWI.from); wbc='#FFFFFF'; }   /* §pjSwapPr */
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
       /* §pjItin · ป้ายชื่อโปรแกรมสีเส้นทางอ่อน (กว้างเท่ากันทุกแถว) · ถัดไปคือเส้นทางเกาะ สีตามที่แต้มไว้ */
@@ -83987,10 +84017,10 @@ function pjPrint(){
            สีเรือจึงยังเทียบกับหัวตารางด้านล่างได้ด้วยตา · ตัวหนังสืออ่านออกไม่ว่าสีเรือเข้มหรืออ่อน */
         +'<td class="c-b"><span class="bpill" style="background:'+pjTint2(_pjC6(B.bid),0.68)
           +';border-left:5px solid '+e(_pjC6(B.bid))+'">'
-          +e(B.boat.name||B.bid)+'</span></td>'
+          +e(B.boat.name||B.bid)+'</span>'+pjSwPrTag(_SWI)+'</td>'
         +'<td class="c-p"><span class="pnm">'+e(rt.name||'\u2014')+'</span></td>'
         +'<td class="c-i">'+_itH+'</td>'
-        +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
+        +'<td class="c-x'+(over?' over':'')+'"><b'+((_SWI&&_SWI.rsc)?' style="color:#3730A3"':'')+'>'+pax+'</b><s>'+((_SWI&&_SWI.rsc)?' ขากลับ':('/'+cap))+'</s>'
           +(over?('<em>เกิน '+over+'</em>'):'')
           +(cap>0?('<span class="fl"><span style="width:'+_fill+'%"></span></span>'):'')+'</td>'
         /* §pjBand · สีสายรัดข้อมือ · ของที่ต้องหยิบมาเตรียมก่อนแขกมาถึง
