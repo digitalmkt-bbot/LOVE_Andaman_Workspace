@@ -9401,9 +9401,10 @@ function bop2SwapOpen(d, fromId){
   window._bop2Sw={ d:d, from:fromId, route:routeId, bks:bks };
   const cands=(typeof BOATS!=='undefined'?BOATS:[]).filter(b=>b && !b.retired && b.id!==fromId).map(b=>{
     const j=bop2SwJob(b.id, d, routeId), pierOk=!rt.pier || (typeof getBoatCurrentPier!=='function') || getBoatCurrentPier(b, d)===rt.pier;
-    return { b:b, j:j, cap:(typeof boatCapFor==='function' && boatCapFor(b.id, d)) || (+b.cap||0), rank:(j.block?9:0)+(j.free?0:j.same?1:j.busy?3:5)+(pierOk?0:2) };
+    return { b:b, j:j, pierOk:pierOk, cap:(typeof boatCapFor==='function' && boatCapFor(b.id, d)) || (+b.cap||0), rank:(j.block?9:0)+(j.free?0:j.same?1:j.busy?3:5)+(pierOk?0:2) };
   }).sort((a,z)=>a.rank-z.rank || String(a.b.name).localeCompare(String(z.b.name)));
-  const opts='<option value="">— เลือกเรือ —</option>'+cands.map(c=>'<option value="'+E(c.b.id)+'"'+(c.j.block?' disabled':'')+'>'+E(c.b.name)+' · '+c.cap+' ที่ · '+E(c.j.txt)+'</option>').join('');
+  window._bop2Sw.cands=cands; window._bop2Sw.tot=tot;
+  const opts=bop2SwOpts(false);
   const rows=bks.map((x,i)=>'<tr><td style="padding:5px 4px"><input type="checkbox" data-swck="'+i+'" checked onchange="bop2SwCalc()"></td>'
       +'<td style="padding:5px 4px;font-family:\'DM Mono\',monospace;font-size:11.5px">'+E(bop2SwRef(x.b))+'</td>'
       +'<td style="padding:5px 4px;font-size:11.5px">'+E(bop2SwAgent(x.b))+'<div style="font-size:10px;color:#9B9088">'+E(x.b.customerName||'')+'</div></td>'
@@ -9416,7 +9417,8 @@ function bop2SwapOpen(d, fromId){
       +'<div style="display:flex;gap:10px;align-items:flex-end">'
         +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือที่มีปัญหา</span><div style="'+BOP2_SW_I+';background:#F6F5F2">'+E(A.name)+' · '+capA+' ที่ · '+tot+' pax</div></div>'
         +'<div style="font-size:20px;color:#3730A3;padding-bottom:6px">&rarr;</div>'
-        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือที่ส่งไปแทน</span><select id="bop2sw-to" style="'+BOP2_SW_I+'" onchange="bop2SwCalc()">'+opts+'</select></div></div>'
+        +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เรือที่ส่งไปแทน</span><select id="bop2sw-to" style="'+BOP2_SW_I+'" onchange="bop2SwCalc()">'+opts+'</select>'
+          +'<label style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:#6B7785;margin-top:4px"><input type="checkbox" id="bop2sw-all" onchange="bop2SwOptsRedo()"> แสดงทุกลำ (ท่าอื่น / ไม่พร้อม)</label></div></div>'
       +'<div id="bop2sw-warn"></div>'
       +'<div style="display:flex;gap:10px">'
         +'<div style="flex:1"><span style="'+BOP2_SW_L+'">เวลาที่แจ้งเสีย</span><input type="time" id="bop2sw-t1" style="'+BOP2_SW_I+'"></div>'
@@ -9443,6 +9445,26 @@ function bop2SwapOpen(d, fromId){
       +'<button onclick="bop2SwapSave()" style="padding:9px 16px;border:0;background:#3730A3;color:#fff;border-radius:9px;font-weight:800;font-size:12.5px;font-family:inherit;cursor:pointer">บันทึกเหตุการณ์</button></div>';
   bop2SwShell(html, 620);
   window._bop2Sw.mode='all'; bop2SwMode('all');
+}
+/* §bopSwapFlt · ตัวเลือกเรือกู้ */
+function bop2SwOpts(all){
+  const S=window._bop2Sw||{}, E=bop2SwE, C=S.cands||[], tot=+S.tot||0;
+  const op=c=>'<option value="'+E(c.b.id)+'"'+(c.j.block?' disabled':'')+'>'+E(c.b.name)+' · '+c.cap+' ที่'+(tot && c.cap && c.cap<tot?' (ไม่พอ '+tot+')':'')+' · '+E(c.j.txt)+(c.pierOk?'':' · อยู่ท่าอื่น')+'</option>';
+  const free=C.filter(c=>!c.j.block && c.pierOk && (c.j.free || c.j.same)).sort((a,z)=>((z.cap>=tot)-(a.cap>=tot)) || (z.cap-a.cap));   /* พอทั้งลำก่อน · ลำใหญ่ก่อน */
+  const busy=C.filter(c=>!c.j.block && c.pierOk && c.j.busy).sort((a,z)=>(a.j.pax||0)-(z.j.pax||0));
+  let h='<option value="">— เลือกเรือ —</option>';
+  if(free.length) h+='<optgroup label="ว่าง · ท่าเดียวกัน ('+free.length+')">'+free.map(op).join('')+'</optgroup>';
+  if(busy.length) h+='<optgroup label="มีงานวันนี้ · ต้องดึงจากรอบอื่น ('+busy.length+')">'+busy.map(op).join('')+'</optgroup>';
+  if(all){ const rest=C.filter(c=>free.indexOf(c)<0 && busy.indexOf(c)<0);
+    if(rest.length) h+='<optgroup label="ท่าอื่น / ไม่พร้อม / ใช้ไม่ได้ ('+rest.length+')">'+rest.map(op).join('')+'</optgroup>'; }
+  if(!free.length && !busy.length && !all) h+='<option value="" disabled>ไม่มีเรือพร้อมที่ท่านี้ · ติ๊ก "แสดงทุกลำ"</option>';
+  return h;
+}
+function bop2SwOptsRedo(){
+  const sel=document.getElementById('bop2sw-to'), all=!!(document.getElementById('bop2sw-all')||{}).checked; if(!sel) return;
+  const keep=sel.value; sel.innerHTML=bop2SwOpts(all);
+  if(keep && Array.from(sel.options).some(o=>o.value===keep && !o.disabled)) sel.value=keep;
+  bop2SwCalc();
 }
 function bop2SwMode(m){
   const S=window._bop2Sw; if(!S) return; S.mode=m;
