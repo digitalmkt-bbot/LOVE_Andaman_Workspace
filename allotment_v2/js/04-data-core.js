@@ -9560,9 +9560,9 @@ function bop2SwapSave(){
   const prev=day[to] ? JSON.parse(JSON.stringify(day[to])) : null;
   day[to]={ route:S.route, type:'rescue', rescueFor:S.from, booked:0, prev:prev };
   opA.swap=ev;
-  /* ธงบน booking · ไม่แตะ boatId/boatSplits */
-  let nbk=0;
-  (S.bks||[]).forEach(x=>{ if(typeof bkOpsFor!=='function') return; const o=bkOpsFor(x.b, S.d); o.swapEv={ id:ev.id, from:S.from, to:to, pax:M.moved[x.b.id]||0 }; nbk++; });
+  /* §btSwap2 · ไม่เขียนธงลงบุคกิ้งแล้ว (ops.swapEv ไม่อยู่ใน field_mapping · หายตอนขึ้นฐาน) · หน้าอื่นอ่าน ev.moved/ev.stay จาก TRIPS
+     ใบที่อยู่เรือเดิมทั้งใบ (ไม่ย้าย) ต้องอยู่ใน stay ด้วย ไม่งั้นหน้า By trip จะไม่รู้ว่าใบนั้นอยู่ลำที่เสีย */
+  const nbk=0;
   /* สถานะเรือเดิม · ซ่อมตั้งแต่วันถัดไป (ถ้ายังพร้อมอยู่) */
   if(g('bop2sw-st')){
     const A=bop2SwBoat(S.from), from=bop2SwNext(S.d);
@@ -9573,7 +9573,6 @@ function bop2SwapSave(){
     }
   }
   save('operations');
-  if(nbk && typeof acctPersistBookings==='function') acctPersistBookings();
   bop2SwClose(); renderOp();
   setTimeout(()=>bop2SwapView(S.d, S.from), 50);
 }

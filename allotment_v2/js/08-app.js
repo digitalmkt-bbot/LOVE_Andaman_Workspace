@@ -9944,12 +9944,20 @@ function btSwChip(rid, date){
     }).join(' ');
   }catch(_){ return ''; }
 }
+/* §btSwap2 · บุคกิ้งนี้อยู่ในบันทึกเปลี่ยนเรือของวันนั้นไหม (ev.moved / ev.stay บน TRIPS) */
+function bkSwFind(bk, date){
+  if(!bk || !date) return null;
+  var day=((typeof TRIPS!=='undefined' && TRIPS[date]) || {});
+  for(var bid in day){ var op=day[bid], ev=op && op.swap; if(!ev) continue;
+    var mv=+((ev.moved||{})[bk.id])||0, st=+((ev.stay||{})[bk.id])||0;
+    if(mv || st) return { from:bid, to:ev.to, pax:mv, stay:st, ev:ev }; }
+  return null;
+}
 /* ช่อง BOAT รายบุคกิ้ง */
 function bkSwTag(bk, date){
   try{
-    var o=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):((bk&&bk.ops)||{}); var f=o && o.swapEv; if(!f) return '';
-    var ev=(btSwOp(date, f.from)||{}).swap; if(!ev || ev.id!==f.id) return '';
-    var mv=+f.pax||0, st=+((ev.stay||{})[bk.id])||0;
+    var f=bkSwFind(bk, date); if(!f) return '';
+    var ev=f.ev, mv=f.pax, st=f.stay;
     var tip='ขาไป '+btSwNm(f.from)+' · '+(mv?('ขากลับ '+btSwNm(f.to)+' '+mv+' คน'):'ไม่ได้ย้าย')+(st?(' · อยู่ '+btSwNm(f.from)+' '+st+' คน'):'')+' · '+(ev.cause||'')+(ev.t2?(' · เปลี่ยน '+ev.t2):'')+(ev.place?(' '+ev.place):'')+' · กดดูบันทึก';
     var txt = !mv ? 'อยู่ลำที่เสีย' : (st ? ('&rarr; '+btSwE(btSwNm(f.to))+' '+mv+' · '+btSwE(btSwNm(f.from))+' '+st) : ('&rarr; '+btSwE(btSwNm(f.to))));
     var sty = !mv ? (BT_SW_PILL+';color:#A32D2D;background:#FFF5F4;border-color:#F3B7B2') : BT_SW_PILL;
@@ -9961,8 +9969,7 @@ function bkSwBanner(bk){
   try{
     var ds=Array.from(new Set(((bk&&bk.trips)||[]).map(function(t){ return t.date; }).filter(Boolean))).sort(), out=[];
     ds.forEach(function(d){
-      var o=(typeof bkOpsRead==='function')?bkOpsRead(bk,d):{}; var f=o && o.swapEv; if(!f) return;
-      var ev=(btSwOp(d, f.from)||{}).swap; if(!ev || ev.id!==f.id) return;
+      var f=bkSwFind(bk, d); if(!f) return; var ev=f.ev;   /* §btSwap2 */
       var w=null; if(ev.t1 && ev.t2){ var a=ev.t1.split(':').map(Number), b=ev.t2.split(':').map(Number); var m=(b[0]*60+b[1])-(a[0]*60+a[1]); if(m>=0) w=m; }
       out.push('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:10px;padding:9px 13px;color:#3730A3;margin-bottom:12px">'
         +'<b>&#128257; มีเหตุเปลี่ยนเรือ '+btSwE(d)+'</b><span>'+btSwE(btSwNm(f.from))+' เสียกลางทาง'+(ev.cause?(' ('+btSwE(ev.cause)+')'):'')
