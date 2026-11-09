@@ -118,6 +118,15 @@
     return orig.apply(self, [].slice.call(arguments, 2));          // legacy's plan until the server's answer is in
   });
 
+  /* §bopOvf (lk-inbox 295e4e45) · the preview (bop2ReplacePreview, legacy's, run on the server's plan) keeps the seats-short days
+     in window._bop2RpImpact; legacy's own confirm adds them, in its own words, so this one does too */
+  function shortLine(){
+    var imp = window._bop2RpImpact || [];
+    if(!imp.length) return '';
+    var day = typeof window.bop2OvfD === 'function' ? window.bop2OvfD : function(d){ return d; };
+    return '\n\u26a0 \u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07\u0e44\u0e21\u0e48\u0e1e\u0e2d ' + imp.length + ' \u0e23\u0e2d\u0e1a: '
+      + imp.slice(0, 8).map(function(r){ return day(r.d) + ' ' + r.routeName + ' -' + r.over; }).join(', ') + '\n';
+  }
   wrap('bop2ApplyReplace', function(orig, self){
     if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return;
     var A = val('bop2rp-from'), B = val('bop2rp-to'), d1 = val('bop2rp-d1'), d2 = val('bop2rp-d2');
@@ -136,6 +145,7 @@
       if(!confirm((move.length ? ('Move ' + an + ' -> ' + bn + ' on ' + move.length + ' day(s), with its bookings.\n') : '')
         + (dropList.length ? ('Remove ' + an + ' from ' + dropList.length + ' day(s) (no replacement).\n') : '')
         + (left.length > 0 ? ('Leave ' + left.length + ' day(s) as they are.\n') : '')
+        + shortLine()                                                    /* §bopOvf (sync 11-10) · legacy's confirm lists the days left short of seats */
         + '\nContinue?')){ free(); return null; }
       return O.queue(function(){ return O.post('/operations/boat-replacements', body); }).then(function(done){
         var moved = done.moved || [], dropped = done.dropped || [], nb = 0, dates = {}, changes = [];

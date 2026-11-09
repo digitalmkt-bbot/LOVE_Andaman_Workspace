@@ -30,6 +30,19 @@
   var snapTrips = null, snapCap = null;
 
   function key(d, b){ return d + '::' + b; }
+  /* §opsSwap (sync 11-10, lk-inbox §bopSwap) · a mid-trip boat swap rides on two deployment rows: mid_trip_swap on the
+     boat that broke (legacy TRIPS[d][boat].swap) and rescue_for / rescue_prev on the boat sent for the guests (legacy
+     {type:'rescue', rescueFor, prev}). The server owns them: PUT / DELETE /operations/deployments/{d}/{boat}/mid-trip-swap. */
+  function cellOf(r){
+    var c = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+    if(r.rescue_for){
+      c.type = 'rescue'; c.rescueFor = r.rescue_for;
+      c.prev = r.rescue_prev ? { route: r.rescue_prev.route_id, type: r.rescue_prev.trip_type, booked: 0 } : null;
+    }
+    if(r.mid_trip_swap) c.swap = O.clone(r.mid_trip_swap);
+    return c;
+  }
+  var swapBusy = {};              // 'date::boat' → true while a swap write is out: the diff leaves those cells to it
   /* the deployment's NORMAL seats, never the day override (js/ops/49 owns that on the server):
      what the server holds if known, else the boat's own cap */
   function capFor(boatId, date){
@@ -117,6 +130,7 @@
     var want = desired(), ops = [], removes = [], skipped = {}, skippedMsg = [];
     var mid = between.splice(0);
     Object.keys(want).forEach(function(k){
+      if(swapBusy[k]) return;
       var w = want[k], had = synced[k];
       // trip_type goes when the person changed it from what the server holds (or picked Early for a new deployment)
       w.sendType = w.type && ((had && had.type && had.type !== w.type) || (!had && w.type === 'early')) ? w.type : null;
@@ -132,7 +146,7 @@
         undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity, sendType: w.sendType ? had.type : null }) : delDep(w.date, w.boat); } });
     });
     Object.keys(synced).forEach(function(k){
-      if(want[k]) return;
+      if(want[k] || swapBusy[k]) return;
       var had = synced[k], p = k.split('::');
       removes.push({ label: 'remove ' + p[1] + ' on ' + p[0],
         run: function(){ return delDep(p[0], p[1]).catch(function(e){ if(e.status === 404) return null; throw e; }); },
@@ -144,7 +158,9 @@
     if(!ops.length) return Promise.resolve(false);
     return O.runBatch(ops).then(function(){
       var before = synced;
-      synced = {}; Object.keys(want).forEach(function(k){
+      synced = {}; Object.keys(before).forEach(function(k){ if(swapBusy[k]) synced[k] = before[k]; });
+      Object.keys(want).forEach(function(k){
+        if(swapBusy[k]) return;
         if(skipped[k]){ if(before[k]) synced[k] = before[k]; return; }
         synced[k] = { route: want[k].route, capacity: want[k].capacity, type: want[k].type || (before[k] && before[k].type) || null };
       });
@@ -225,7 +241,7 @@
       synced = {};
       rows.forEach(function(r){
         if(!T) return;
-        (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+        (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
         var b = (typeof getBoat === 'function') ? getBoat(r.boat_id) : null;
         if(C && b && +b.cap !== +r.capacity) C[r.service_date + '::' + r.boat_id] = { cap: r.capacity, reason: 'operation-backend', by: '', at: '' };
         synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
@@ -322,7 +338,7 @@
         ((j && j.deployments) || []).forEach(function(r){
           if(!T) return;
           if(T[r.service_date] && T[r.service_date][r.boat_id]) return;
-          (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+          (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
           synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
         });
         farDone[m] = 1;
@@ -348,6 +364,83 @@
     var w = function(){ try{ if(typeof _poDate === 'string') ensureDays([_poDate]); }catch(_){} return orig.apply(this, arguments); };
     w.__opsFar = true; window[n] = w;
   });
+
+  /* ── §opsSwap · record / undo a mid-trip swap on the server ──────────────────────────────────────────────────────
+     Legacy's form runs as it is (it validates, builds the record, writes the two cells, renders). Then the two cells go
+     to the server in one call, never through the diff (which would post the rescue boat as a plain deployment that sells
+     its seats). The server answers both rows and they become what is confirmed. If it refuses, the two cells go back to
+     what the server holds and the server's text is shown. The broken boat's "fixing from tomorrow" status line is legacy's
+     own save('config'), which the boats adapter sends on its own; a refused swap leaves it. */
+  function swapPath(d, b){ return '/operations/deployments/' + encodeURIComponent(d) + '/' + encodeURIComponent(b) + '/mid-trip-swap'; }
+  function adoptRows(d, rows, removed){
+    var T = trips(); if(!T) return;
+    (rows || []).forEach(function(r){
+      if(!r || !r.boat_id) return;
+      (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
+      synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity || capFor(r.boat_id, r.service_date), type: r.trip_type || null };
+    });
+    (removed || []).forEach(function(b){
+      if(T[d]){ delete T[d][b]; if(!Object.keys(T[d]).length) delete T[d]; }
+      delete synced[key(d, b)];
+    });
+    snapshot();
+  }
+  function backToServer(d, boats){
+    var T = trips(); if(!T || !snapTrips) return;
+    boats.forEach(function(b){
+      var was = snapTrips[d] && snapTrips[d][b];
+      if(was) (T[d] = T[d] || {})[b] = O.clone(was); else if(T[d]) delete T[d][b];
+    });
+  }
+  function swapWrite(d, boats, send, done){
+    boats.forEach(function(b){ swapBusy[key(d, b)] = true; });
+    function free(){ boats.forEach(function(b){ delete swapBusy[key(d, b)]; }); }
+    return O.queue(send).then(function(j){
+      free(); done(j); O.wrote('deployments'); rerender();
+    }, function(e){
+      free(); backToServer(d, boats); rerender();
+      try{ if(typeof bop2SwClose === 'function') bop2SwClose(); }catch(_){}
+      O.fail('Mid-trip swap not saved', e);
+    });
+  }
+  (function(){
+    var save = window.bop2SwapSave, undo = window.bop2SwapUndo;
+    if(typeof save === 'function' && !save.__opsSwap){
+      var ws = function(){
+        var S = window._bop2Sw;
+        if(!O.enabled() || !ready || !S || !S.d || !S.from) return save.apply(this, arguments);
+        var d = S.d, from = S.from, T = trips();
+        var had = T && T[d] && T[d][from] && T[d][from].swap;
+        var ret = save.apply(this, arguments);
+        var cell = T && T[d] && T[d][from], ev = cell && cell.swap;
+        if(!ev || !ev.to || ev === had) return ret;                              // legacy refused it (alert): nothing written
+        swapWrite(d, [from, ev.to], function(){ return O.call('PUT', swapPath(d, from), { to_boat_id: ev.to, record: O.clone(ev) }); },
+          function(j){ adoptRows(d, j && j.deployments, []); });
+        return ret;
+      };
+      ws.__opsSwap = true; window.bop2SwapSave = ws;
+    }
+    if(typeof undo === 'function' && !undo.__opsSwap){
+      var wu = function(d, fromId){
+        var T = trips(), cell = T && T[d] && T[d][fromId], ev = cell && cell.swap;
+        if(!O.enabled() || !ready || !ev) return undo.apply(this, arguments);
+        var to = ev.to;
+        var ret = undo.apply(this, arguments);
+        if(T[d] && T[d][fromId] && T[d][fromId].swap) return ret;                // cancelled at the confirm
+        swapWrite(d, [fromId, to], function(){
+          return O.del(swapPath(d, fromId)).catch(function(e){
+            if(e && e.status === 404) return { notOnServer: true };              // a record the server never had: the two cells go as plain ones
+            throw e;
+          });
+        }, function(j){
+          if(j && j.notOnServer){ schedule(); return; }
+          adoptRows(d, j && j.deployments, j && j.removed);
+        });
+        return ret;
+      };
+      wu.__opsSwap = true; window.bop2SwapUndo = wu;
+    }
+  })();
 
   O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, ensureDays: ensureDays, isReady: function(){ return ready; } };
 })();
