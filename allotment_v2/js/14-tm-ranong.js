@@ -176,7 +176,7 @@ function renderPierTm(pier){
     +boatsHtml+'</div>';
 }
 /* ── Excel ───────────────────────────────────────────────────────────────── */
-var TM_TEMPLATE_URL='assets/tm_ranong_template.xlsx';
+var TM_TEMPLATE_URL='assets/tm_ranong_template.xlsx';   /* §tmPaxPg · แม่แบบ v2 · ตม.3/1 สองหน้า หน้าละ 25 */
 function tmLoadExcelJS(){
   if(window.ExcelJS) return Promise.resolve();
   return new Promise(function(res,rej){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=res; s.onerror=function(){ rej(new Error('ExcelJS load failed')); }; document.head.appendChild(s); });
@@ -201,7 +201,7 @@ function tmPaxOfBoat(bid, ds){
 function tmExport(bid, ds){
   var btn=event&&event.currentTarget; if(btn){ btn.disabled=true; btn.textContent='กำลังสร้าง…'; }
   var done=function(){ if(btn){ btn.disabled=false; btn.innerHTML='&#128229; ดาวน์โหลด Excel ชุด ตม.'; } };
-  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=1').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
+  tmLoadExcelJS().then(function(){ return fetch(TM_TEMPLATE_URL+'?v=2').then(function(r){ if(!r.ok) throw new Error('template '+r.status); return r.arrayBuffer(); }); })
   .then(function(buf){ var wb=new ExcelJS.Workbook(); return wb.xlsx.load(buf); })
   .then(function(wb){ return tmFill(wb, bid, ds).xlsx.writeBuffer(); })
   .then(function(out){ var nm=(tmBoatRec(bid).name||bid).replace(/[\\/:*?"<>|]/g,'-');
@@ -223,18 +223,23 @@ function tmFill(wb, bid, ds){
   set(s1,'B20',R.name); set(s1,'I20',R.port); set(s1,'B23',new Date(Date.UTC(be, mi, dd)));   /* UTC · ExcelJS เขียนเป็น UTC ถ้าใช้เวลาเครื่องจะถอยไปวันก่อน */ set(s1,'I23',R.nat);
   set(s1,'B26',R.master); set(s1,'B29',R.reg); set(s1,'G29',R.agent); set(s1,'B32',R.gross?+R.gross||R.gross:null); set(s1,'I32',R.net?+R.net||R.net:null); set(s1,'B35',R.position);
   set(s1,'A54',crew.length+' คน'); set(s1,'D54',' '+P.length+' คน');
-  /* ตม.3/1 · 3 หน้า · หน้า 1 คอลัมน์ B-G · หน้า 2-3 คอลัมน์ A-F */
-  var pages=[ {ws:wb.getWorksheet('บัญชีคนโดยสาร'), r0:16, n:25, idx:'B', nm:'C', nat:'D', id:'E', em:'F', dis:'G', ship:'C10'},
-              {ws:wb.getWorksheet('บัญชีคนโดยสาร (2)'), r0:16, n:20, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F', ship:null},
-              {ws:wb.getWorksheet('บัญชีคนโดยสาร (3)'), r0:16, n:25, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F', ship:null} ];
+  /* §tmPaxPg (2026-11-09) · owner ส่งไฟล์ที่แก้แล้ว "ข้อมูลที่ Export ควรออกมาแบบนี้"
+     ตม.3/1 · 2 หน้า หน้าละ 25 แถว (1-25 · 26-50) รูปแบบเดียวกันทั้งคู่ คอลัมน์ A-F (แม่แบบใหม่)
+     · เลขบัตรแบบขีด 3-1006-02866-47-6 · ชาวต่างชาติ (เลขบัตรว่าง/ศูนย์) ใช้เลขพาสปอร์ต
+     · ช่องท่าลงเรือ/ขึ้นจากเรือเว้นว่าง (เดิมใส่แถวแรกแล้วตามด้วย ") */
+  var pages=[ {ws:wb.getWorksheet('บัญชีคนโดยสาร'), r0:16, n:25, base:1, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F'},
+              {ws:wb.getWorksheet('บัญชีคนโดยสาร (2)'), r0:16, n:25, base:26, idx:'A', nm:'B', nat:'C', id:'D', em:'E', dis:'F'} ];
+  var docNo=function(x){ var d=String(x.id||'').replace(/\D/g,''); if(d.length===13 && !/^0+$/.test(d)) return tmIdFmt(d); return x.laser||(d&&!/^0+$/.test(d)?x.id:null); };
+  if(P.length>50) try{ console.warn('[tmDoc] '+P.length+' passengers · the form holds 50 · extra rows not printed'); }catch(_){}
   var k=0;
   pages.forEach(function(pg, pi){
     if(!pg.ws) return;
-    if(pg.ship) set(pg.ws, pg.ship, R.name);
+    set(pg.ws,'B10',R.name);   /* แม่แบบเป็นสูตรอ้าง ตม.33!F18 ซึ่งอ้างต่ออีกชั้น · บางโปรแกรมเปิดแล้วขึ้น #NAME? */
     for(var r=0;r<pg.n;r++){ var row=pg.r0+r, x=P[k];
-      if(x){ k++; set(pg.ws,pg.idx+row,k); set(pg.ws,pg.nm+row,x.name); set(pg.ws,pg.nat+row,x.nat); set(pg.ws,pg.id+row,x.id?tmIdSpaced(x.id):null);
-             set(pg.ws,pg.em+row,r===0?R.embark:'"'); set(pg.ws,pg.dis+row,r===0?R.dest:'"'); }
-      else { set(pg.ws,pg.idx+row,(pi===0&&r===0)?1:null); set(pg.ws,pg.nm+row,null); set(pg.ws,pg.nat+row,null); set(pg.ws,pg.id+row,null); set(pg.ws,pg.em+row,null); set(pg.ws,pg.dis+row,null); }
+      set(pg.ws,pg.idx+row,pg.base+r);   /* เลขลำดับพิมพ์ไว้ทุกแถว เหมือนไฟล์ที่ทีมใช้ */
+      if(x){ k++; set(pg.ws,pg.nm+row,x.name); set(pg.ws,pg.nat+row,x.nat); set(pg.ws,pg.id+row,docNo(x)); }
+      else { set(pg.ws,pg.nm+row,null); set(pg.ws,pg.nat+row,null); set(pg.ws,pg.id+row,null); }
+      set(pg.ws,pg.em+row,null); set(pg.ws,pg.dis+row,null);
     }
     try{ set(pg.ws,'D13',R.nat); }catch(_){}
   });
