@@ -59,6 +59,7 @@ function bookingV2RenderBookingDetail(){
       <!-- §vc2 · document on the left (fixed 900px) · use / staff / activity on the right -->
       <div class="bkvc2-grid">
         <div class="bkvc2-main">
+          ${(typeof bkSwBanner==='function')?bkSwBanner(bk):''}
 
           ${focPending?`
           <!-- FOC pending banner -->

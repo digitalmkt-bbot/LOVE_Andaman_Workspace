@@ -7414,6 +7414,68 @@ function ovnDayTh(d){
   catch(_){ return String(d); }
 }
 function bkIsOvnOutbound(t){ return !!(t && t.ovn==='return' && t.ovnReturnDate); }
+
+/* ══ §btSwap (2026-11-09) · owner "พอเปลี่ยนเรือแล้ว ในหน้านี้ (By trip) จะเป็นยังไง" → Mockup → "ทำ" ═══════════
+   อ่านจากบันทึกของ Boat Operation อย่างเดียว (TRIPS[d][เรือเดิม].swap · TRIPS[d][เรือกู้].type='rescue' · ops.swapEv ของบุคกิ้ง)
+   ไม่แก้เรือที่จัดไว้ในบุคกิ้ง · แถวรถ/กรุ๊ปเป็นขาไป ไม่เปลี่ยน */
+function btSwE(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function btSwNm(id){ var b=(typeof BOATS!=='undefined'?BOATS:[]).find(function(x){ return x && x.id===id; }); return (b && b.name) || id || '-'; }
+function btSwOp(date, bid){ return ((typeof TRIPS!=='undefined' && TRIPS[date]) || {})[bid] || null; }
+var BT_SW_PILL='display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:6px;padding:0 5px;white-space:nowrap;cursor:pointer;line-height:16px';
+/* ป้ายต่อท้ายชื่อเรือในการ์ด Boats running */
+function btSwBoatTag(b, date){
+  try{
+    if(b && b.rescue){ var ev=(btSwOp(date, b.rescue.for)||{}).swap||{};
+      return ' <span style="'+BT_SW_PILL+'" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+b.rescue.for+'\')" title="'+btSwE('เรือกู้ของ '+btSwNm(b.rescue.for)+(ev.t2?(' · ถึง '+ev.t2):'')+' · ขากลับ '+(+ev.pax||0)+' คน · ไม่นับเป็นที่นั่ง'+((b.rescue.prev)?(' · ดึงมาจาก '+b.rescue.prev):''))+'">&#128735; เรือกู้ · ขากลับ</span>'; }
+    if(b && b.swap){ var e=b.swap;
+      return ' <span style="'+BT_SW_PILL+';color:#A32D2D;background:#FFF5F4;border-color:#F3B7B2" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+b.id+'\')" title="'+btSwE('เสียกลางทาง'+(e.t1?(' '+e.t1):'')+' · '+(e.cause||'')+(e.engine?(' · '+e.engine):'')+(e.place?(' · '+e.place):'')+' · ส่ง '+btSwNm(e.to)+' ไปเปลี่ยน · ขากลับเหลือ '+Math.max(0,(+b.pax||0)-(+e.pax||0))+' คน')+'">&#128295; เสีย'+(e.t1?(' '+btSwE(e.t1)):'')+' &rarr; '+btSwE(btSwNm(e.to))+'</span>'; }
+  }catch(_){}
+  return '';
+}
+/* ชิปบนการ์ด/แถบโปรแกรม · กดเปิดใบรายชื่อขากลับ */
+function btSwChip(rid, date){
+  try{ if(typeof bop2SwapOn!=='function') return '';
+    return bop2SwapOn(rid, date).map(function(x){
+      return '<span class="pb" style="'+BT_SW_PILL+';font-size:11px;padding:1px 8px" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+x.from+'\')" title="เปลี่ยนเรือกลางทาง · กดดูใบรายชื่อขากลับ">&#128257; '+btSwE(btSwNm(x.from))+' &rarr; '+btSwE(btSwNm(x.ev.to))+' &middot; ขากลับ &rsaquo;</span>';
+    }).join(' ');
+  }catch(_){ return ''; }
+}
+/* §btSwap2 · บุคกิ้งนี้อยู่ในบันทึกเปลี่ยนเรือของวันนั้นไหม (ev.moved / ev.stay บน TRIPS) */
+function bkSwFind(bk, date){
+  if(!bk || !date) return null;
+  var day=((typeof TRIPS!=='undefined' && TRIPS[date]) || {});
+  for(var bid in day){ var op=day[bid], ev=op && op.swap; if(!ev) continue;
+    var mv=+((ev.moved||{})[bk.id])||0, st=+((ev.stay||{})[bk.id])||0;
+    if(mv || st) return { from:bid, to:ev.to, pax:mv, stay:st, ev:ev }; }
+  return null;
+}
+/* ช่อง BOAT รายบุคกิ้ง */
+function bkSwTag(bk, date){
+  try{
+    var f=bkSwFind(bk, date); if(!f) return '';
+    var ev=f.ev, mv=f.pax, st=f.stay;
+    var tip='ขาไป '+btSwNm(f.from)+' · '+(mv?('ขากลับ '+btSwNm(f.to)+' '+mv+' คน'):'ไม่ได้ย้าย')+(st?(' · อยู่ '+btSwNm(f.from)+' '+st+' คน'):'')+' · '+(ev.cause||'')+(ev.t2?(' · เปลี่ยน '+ev.t2):'')+(ev.place?(' '+ev.place):'')+' · กดดูบันทึก';
+    var txt = !mv ? 'อยู่ลำที่เสีย' : (st ? ('&rarr; '+btSwE(btSwNm(f.to))+' '+mv+' · '+btSwE(btSwNm(f.from))+' '+st) : ('&rarr; '+btSwE(btSwNm(f.to))));
+    var sty = !mv ? (BT_SW_PILL+';color:#A32D2D;background:#FFF5F4;border-color:#F3B7B2') : BT_SW_PILL;
+    return ' <span style="'+sty+'" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+f.from+'\')" title="'+btSwE(tip)+'">'+txt+'</span>';
+  }catch(_){ return ''; }
+}
+/* แถบในหน้ารายละเอียดบุคกิ้ง · ทุกวันของใบที่มีเหตุเปลี่ยนเรือ */
+function bkSwBanner(bk){
+  try{
+    var ds=Array.from(new Set(((bk&&bk.trips)||[]).map(function(t){ return t.date; }).filter(Boolean))).sort(), out=[];
+    ds.forEach(function(d){
+      var f=bkSwFind(bk, d); if(!f) return; var ev=f.ev;   /* §btSwap2 */
+      var w=null; if(ev.t1 && ev.t2){ var a=ev.t1.split(':').map(Number), b=ev.t2.split(':').map(Number); var m=(b[0]*60+b[1])-(a[0]*60+a[1]); if(m>=0) w=m; }
+      out.push('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:10px;padding:9px 13px;color:#3730A3;margin-bottom:12px">'
+        +'<b>&#128257; มีเหตุเปลี่ยนเรือ '+btSwE(d)+'</b><span>'+btSwE(btSwNm(f.from))+' เสียกลางทาง'+(ev.cause?(' ('+btSwE(ev.cause)+')'):'')
+        +' · '+(+f.pax ? ('ลูกค้ากลับด้วย '+btSwE(btSwNm(f.to))+' '+f.pax+' คน') : ('ลูกค้าอยู่กับ '+btSwE(btSwNm(f.from))))
+        +(w!=null?(' · รอเรือ '+w+' นาที'):'')+(ev.note?(' · '+btSwE(ev.note)):'')+'</span>'
+        +'<span onclick="bop2SwapView(\''+d+'\',\''+f.from+'\')" style="margin-left:auto;text-decoration:underline;cursor:pointer">ดูบันทึก</span></div>');
+    });
+    return out.join('');
+  }catch(_){ return ''; }
+}
 function baDayBoats(date){ // all non-charter assigned boats that day → [{boatId, routeId, boat}]
   const day=TRIPS[date]||{}; const chSet=baCharterBoatIds(date); const out=[];
   /* §bkLock · ลำที่ถูกกันไว้ทั้งลำไม่ใช่ "เรือที่ขายที่นั่ง" อีกต่อไป
@@ -31530,6 +31592,10 @@ function pxGuideWork(date, bid, plan, T){
   try{
     if(typeof pjGuidesFull!=='function') return null;
     var F=pjGuidesFull(date,bid)||[], other=+F.other||0;
+    if(!F.length && !other){   /* §pjSwap · เรือเสียกลางทาง · ไกด์ย้ายไปการ์ดเรือกู้ = ยังเป็นไกด์ของทริปนี้ (เรือกู้ไม่คิดค่าไกด์) */
+      var _so=((typeof TRIPS!=='undefined' && TRIPS[date])||{})[bid]||{};
+      if(_so.swap && _so.swap.to){ F=pjGuidesFull(date,_so.swap.to)||[]; other=+F.other||0; }
+    }
     if(!F.length && !other) return null;
     var n={ th:0, fx:0, tr:0, it:0, fxL:{} };
     F.forEach(function(g){
@@ -31713,8 +31779,17 @@ function pxTrip(date, bid){
      → จึงมีปุ่ม "ออกจริง" (A.ran) ให้กดกลับเมื่อเรือออกแต่ไม่มีผู้โดยสาร
        (ออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว · เรือสำรองที่ต้องวิ่งตาม)
      est ของทุกบรรทัดยังอยู่ครบ ไม่ได้ลบทิ้ง จึงยังเปิดดูได้ว่า "ถ้าออกจะเท่าไหร่" */
+  /* ══ §bopSwap2 (2026-11-09) · เรือกู้ (เปลี่ยนเรือกลางทาง · Boat Operation) ════════════════
+     ไม่มีใบจอง ไม่มีคน → เดิมโดนนับเป็น "ไม่ได้ออก" ต้นทุน 0 ทั้งที่วิ่งไปรับลูกค้าจริง
+     คิดเฉพาะ น้ำมัน · กัปตัน · เด็กเรือ · ค่าเช่า (ถ้าเป็นเรือเช่า) · ไกด์/อาหาร/รถ/อุทยาน ไม่ใช่ของเรือกู้ */
+  var _rsc=(op && op.type==='rescue') ? op : null;
+  if(_rsc && !A.closed){
+    rows=rows.map(function(r){ if(PX_RSC_IDS.indexOf(r.id)>=0) return r;
+      return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:r.real, why:'เรือกู้ · ไม่คิดบรรทัดนี้', src:r.src, gross:r.gross, use:0 }; });
+    cost=0; rows.forEach(function(r){ cost+=r.use; });
+  }
   var estCost=cost;
-  var noSail=(PX.tot===0 && PX.bk===0 && !A.ran);
+  var noSail=(PX.tot===0 && PX.bk===0 && !A.ran && !_rsc);
   if(noSail){
     rows=rows.map(function(r){
       return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:r.real, why:r.why,
@@ -31755,7 +31830,23 @@ function pxTrip(date, bid){
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr,
            fam:{ pax:PX.fam, th:PX.famTH, cost:famCost, all:(PX.fam>0 && PX.fam>=PX.tot), list:PX.famL||[], zero:PX.zeroL||[] },   /* §pxFam */
-           saleProfit:Math.round(revNet-cost)+famCost };
+           saleProfit:Math.round(revNet-cost)+famCost,
+           rescue:_rsc ? { for:_rsc.rescueFor } : null,   /* §bopSwap2 */
+           swap:(op && op.swap) ? { to:op.swap.to, cause:op.swap.cause||'' } : null };
+}
+var PX_RSC_IDS=['fuel','cap','crew','rent'];   /* §bopSwap2 · บรรทัดที่เรือกู้ต้องจ่าย */
+/* ป้ายหัวลำ · ลำที่เสียกลางทางบอกค่าเรือกู้ (ไม่ได้บวกเข้ากำไรลำนี้ · อยู่ในการ์ดเรือกู้ ยอดวันไม่นับซ้ำ) */
+function pxSwPill(t){
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var nm=function(id){ var b=(typeof getBoat==='function')?getBoat(id):null; return (b&&b.name)||id; };
+  try{
+    if(t && t.rescue) return '<span class="pill" style="background:#EFF0FC;color:#3730A3" title="'+e('เรือกู้ · ส่งไปเปลี่ยนแทน '+nm(t.rescue.for)+' ที่เสียกลางทาง · คิดเฉพาะน้ำมัน กัปตัน เด็กเรือ (และค่าเช่า)')+'">&#128735; เรือกู้ของ '+e(nm(t.rescue.for))+'</span>';
+    if(t && t.swap){ var R=null; try{ R=pxTrip((t.ctx&&t.ctx.date)||_px.date, t.swap.to); }catch(_){}
+      var c=(R&&R.rescue)?R.cost:null;
+      return '<span class="pill" style="background:#EFF0FC;color:#3730A3" title="'+e('เสียกลางทาง ('+t.swap.cause+') · ส่ง '+nm(t.swap.to)+' ไปเปลี่ยน · ค่าเรือกู้อยู่ในการ์ดของ '+nm(t.swap.to)+(c!=null?(' · ถ้ารวมค่าเรือกู้ กำไรลำนี้ = '+Math.round(t.profit-c).toLocaleString()+' ฿'):''))+'">&#128257; เสียกลางทาง &rarr; '+e(nm(t.swap.to))+(c!=null?(' · ค่าเรือกู้ ฿'+Math.round(c).toLocaleString()):'')+'</span>';
+    }
+  }catch(_){}
+  return '';
 }
 function pxDay(date, pier){
   var out=[];
@@ -32524,7 +32615,7 @@ function pxDetail(t, e, GORD, DAVG){
   /* §pxNoSail · ทางกลับมีอยู่เสมอ · ระบบเดาว่า "ไม่ได้ออก" จากการไม่มีใบจอง
      ซึ่งผิดได้ (เรือออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว)
      ปุ่มจึงบอกทั้งสถานะปัจจุบันและตัวเลขที่จะกลับมาถ้ากด */
-  var nsPill = t.noSail
+  var nsPill = (typeof pxSwPill==='function'?pxSwPill(t):'') + (t.noSail   /* §bopSwap2 */
     ? ('<span class="pill ns clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
        +e('ไม่มีผู้โดยสารและไม่มีใบจองเลย ระบบจึงถือว่าเรือไม่ได้ออกและไม่คิดต้นทุน '
          +'· ถ้าออกจริง ต้นทุนจะเป็น '+pxN(t.wouldCost)+' ฿ · กดเพื่อยืนยันว่าออกจริง')
@@ -32533,7 +32624,7 @@ function pxDetail(t, e, GORD, DAVG){
        ? ('<span class="pill am clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
           +e('ยืนยันไว้แล้วว่าลำนี้ออกจริงทั้งที่ไม่มีผู้โดยสาร · ต้นทุนจึงถูกคิดตามสูตร · กดเพื่อยกเลิก')
           +'">ออกจริง · ไม่มีผู้โดยสาร</span>')
-       : '');
+       : ''));
   /* §revFlag · เตือนตรงหัวลำเลย · คนที่เปิดหน้านี้คือคนที่แก้ใบจองได้ */
   var rphNow=t.rev/pax, revBad=(DAVG>0 && t.px.tot>0 && rphNow<DAVG*0.3);
   var revPill=revBad
@@ -32761,7 +32852,7 @@ function pxDaily(e){
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
-      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((t.rescue||t.swap)?' <span class="pill" style="background:#EFF0FC;color:#3730A3">'+(t.rescue?'&#128735; เรือกู้':'&#128257;')+'</span>':'')+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +(t.plan?'':'<small>no cost plan</small>')+'</div></div></td>'
       /* §pxProg (2026-11-05) · owner: "เอาชื่อโปรแกรม ไปแทนที่เวลา" · ช่องที่เคยเป็นเวลาออก = ชื่อโปรแกรม · เวลาย่อไว้ท้ายชื่อ */
       /* §pxProgCol (2026-11-05) · owner: "เส้นทางแต้มสีให้เห็นความต่างของแต่ละเส้นทาง" · สีของเส้นทาง (route.color) เป็นขีดสีข้างหน้าแบบเดียวกับเรือ */
@@ -63635,6 +63726,11 @@ function pjLockMiss(date, bid){
     var rid=(B.route&&B.route.id)||'';
     var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
     if(!V) out.push('\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23');
+    /* §pjSwap · เรือกู้ต้องมีแค่กัปตัน (สายรัด/ไกด์/ร้านเป็นของทริปเรือเดิม)
+       เรือที่เสีย · ไกด์ไปกับลูกค้าที่เรือกู้แล้ว = ไม่ขาดไกด์ */
+    var _SI=(typeof pjSwInfo==='function')?pjSwInfo(date,bid):null;
+    if(_SI && _SI.rsc) out=out.filter(function(x){ return x==='\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19'; });
+    else if(_SI && _SI.sw){ var _G2=pjGuidesFull(date,_SI.to)||[]; if(_G2.length || +_G2.other) out=out.filter(function(x){ return x!=='\u0e44\u0e01\u0e14\u0e4c'; }); }
   }catch(_){}
   return out;
 }
@@ -63966,7 +64062,11 @@ function pjPierOf(boat, date){
 function pjAllBoats(date, pier){
   var run=(typeof poBoats==='function')?poBoats(date,pier):[], out=[], seen={};
   run.forEach(function(B){ seen[B.bid]=1;
-    B._st=pjBoatSt(date,B.boat,true); out.push(B); });
+    B._st=pjBoatSt(date,B.boat,true);
+    /* §pjSwapOrd · เสียกลางทาง = วันนั้นออกเรือไปแล้วจริง */
+    try{ var _o=((typeof TRIPS!=='undefined'&&TRIPS[date])||{})[B.bid];
+      if(_o && _o.swap && B._st && B._st.k!=='run'){ var _c={}; for(var _k in B._st) _c[_k]=B._st[_k]; _c.k='run'; _c.stale=false; _c.swapWas=B._st.k; B._st=_c; } }catch(_){}
+    out.push(B); });
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
     // §pjPierNow · ถามตัวตัดสินเดียวกับ Boat Status · ไม่ใช่ b.pier ที่เป็นค่าคงที่
     if(pjPierOf(b,date)!==pier || seen[b.id]) return;
@@ -63999,6 +64099,16 @@ function pjAllBoats(date, pier){
     return String(a.dep||'99').localeCompare(String(b.dep||'99'))
         || String(a.boat.name||a.bid).localeCompare(String(b.boat.name||b.bid));
   });
+  /* §pjSwapOrd · เรือกู้ไปต่อท้ายเรือที่มันไปรับลูกค้า */
+  try{
+    var _day=(typeof TRIPS!=='undefined'&&TRIPS[date])||{};
+    out.filter(function(B){ var o=_day[B.bid]; return o && o.type==='rescue' && o.rescueFor; }).forEach(function(R){
+      var src=_day[R.bid].rescueFor, i=out.indexOf(R); if(i<0) return;
+      out.splice(i,1);
+      var j=-1; out.forEach(function(x,k){ if(x.bid===src) j=k; });
+      out.splice(j>=0?j+1:i, 0, R);
+    });
+  }catch(_){}
   return out;
 }
 /* §pjDocs · โปรแกรมไหนต้องใช้ใบอุทยานใบไหน
@@ -65415,6 +65525,57 @@ function pjGuideJobMap(date){
   }
 }catch(_){} })();
 
+/* ══ §pjSwap (2026-11-09) · owner "หน้าใบงานนี้ต้องมีอะไรเปลี่ยนไหม" → Mockup → "ทำ" · ทีมย้ายไกด์ไปการ์ดเรือกู้เอง (ไกด์ตามลูกค้า)
+   อ่านจากบันทึก Boat Operation (§bopSwap) · เรือกู้ = TRIPS[d][bid].type 'rescue' · เรือที่เสีย = TRIPS[d][bid].swap
+   ไม่แตะจำนวนลูกค้าที่ครัว/สรุปอื่นใช้ (pjPax) · แค่แสดงบนการ์ด */
+function pjSwInfo(date, bid){
+  var day=(typeof TRIPS!=='undefined' && TRIPS[date]) || {}, op=day[bid] || {};
+  if(op.type==='rescue'){ var src=day[op.rescueFor]||{}; return { rsc:true, from:op.rescueFor, ev:src.swap||{}, prev:op.prev||null }; }
+  if(op.swap) return { sw:true, to:op.swap.to, ev:op.swap };
+  return null;
+}
+function pjSwNm(id){ var b=(typeof BOATS!=='undefined'?BOATS:[]).find(function(x){ return x && x.id===id; }); return (b && b.name) || id || '-'; }
+function pjSwBanner(date, bid){
+  var I=pjSwInfo(date, bid); if(!I) return '';
+  var P='display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap';
+  var IND=P+';background:#EFF0FC;color:#3730A3;border:1px solid #BEC2EE;cursor:pointer';
+  var e=I.ev||{};
+  if(I.rsc){
+    var pr=(I.prev && I.prev.route) ? (((typeof getRoute==='function' && getRoute(I.prev.route))||{}).name || I.prev.route) : '';
+    return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 15px;background:#F7F7FE;border-bottom:1px solid #DEE0F7">'
+      +'<span style="'+IND+'" onclick="bop2SwapView(\''+date+'\',\''+I.from+'\')" title="เปิดบันทึก + ใบรายชื่อขากลับ">&#128735; งานกู้ของ '+poE(pjSwNm(I.from))+' · ไม่ใช่รอบขาย</span>'
+      +(pr?('<span style="'+P+';background:#FEF6E7;color:#7A4A00;border:1px solid #E8C77A">ดึงมาจาก '+poE(pr)+'</span>'):'')
+      +'<span style="font-size:10.5px;color:#6B7785">ลูกเรือ = ค่าแรงงานกู้'+(e.place?(' · เปลี่ยนที่ '+poE(e.place)):'')+'</span></div>';
+  }
+  var G2=(typeof pjGuidesFull==='function')?pjGuidesFull(date, I.to):[], nG=(G2.length||0)+(+G2.other||0);
+  var mv=+e.pax||0;
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 15px;background:#FFF5F4;border-bottom:1px solid #F3D3CF">'
+    +'<span style="'+P+';background:#FFF1F0;color:#A32D2D;border:1px solid #F3B7B2">&#128295; เสียกลางทาง'+(e.t1?(' '+poE(e.t1)):'')+(e.cause?(' · '+poE(e.cause)):'')+'</span>'
+    +'<span style="'+IND+'" onclick="bop2SwapView(\''+date+'\',\''+bid+'\')" title="เปิดบันทึก + ใบรายชื่อขากลับ">&rarr; '+poE(pjSwNm(I.to))+' รับลูกค้า '+mv+' คน &rsaquo;</span>'
+    +(nG?('<span style="font-size:10.5px;color:#3730A3;font-weight:700">ไกด์ '+nG+' คน ไปกับลูกค้าที่ '+poE(pjSwNm(I.to))+'</span>'):'')
+    +'</div>';
+}
+/* ══ §pjSwapPr (2026-11-09) · owner "หน้าใบงานต้องแก้ให้ด้วย" (ใบพิมพ์ Tub Lamu · Achilles ขึ้น 08:00 · 0/65 เหมือนรอบขาย) */
+function pjSwPrTag(I, block){
+  if(!I) return '';
+  var E=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var st=block ? 'display:block;margin-top:3px;font-size:10.5px;font-weight:800;' : 'display:inline-block;margin-left:6px;font-size:10px;font-weight:800;vertical-align:middle;';
+  if(I.rsc) return '<span style="'+st+'color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:5px;padding:0 6px;white-space:nowrap">&#128735; เรือกู้ของ '+E(pjSwNm(I.from))+'</span>';
+  var e=I.ev||{};
+  return '<span style="'+st+'color:#A32D2D;background:#FFF1F0;border:1px solid #F3B7B2;border-radius:5px;padding:0 6px;white-space:nowrap">&#128295; เสีย'+(e.t1?(' '+E(e.t1)):'')+' &rarr; '+E(pjSwNm(I.to))+'</span>';
+}
+function pjSwPrNote(I){
+  if(!I) return '';
+  var E=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var e=I.ev||{}, sty=' style="background:#EFF0FC;color:#3730A3;white-space:normal"';
+  if(I.rsc){
+    var pr=(I.prev && I.prev.route) ? (((typeof getRoute==='function' && getRoute(I.prev.route))||{}).name || I.prev.route) : '';
+    return '<span class="pc"'+sty+'>เรือกู้ของ '+E(pjSwNm(I.from))+' · รับลูกค้า <b>'+(+e.pax||0)+'</b> คน'+(e.place?(' · เปลี่ยนที่ '+E(e.place)):'')+(pr?(' · ดึงมาจาก '+E(pr)):'')+' · ลูกเรือ = งานกู้</span>';
+  }
+  var G2=(typeof pjGuidesFull==='function')?pjGuidesFull(_poDate, I.to):[], nG=(G2.length||0)+(+G2.other||0);
+  return '<span class="pc" style="background:#FFF1F0;color:#A32D2D;white-space:normal">เสียกลางทาง'+(e.t1?(' '+E(e.t1)):'')+(e.cause?(' · '+E(e.cause)):'')
+    +' · ลูกค้า <b>'+(+e.pax||0)+'</b> คนกลับด้วย '+E(pjSwNm(I.to))+(nG?(' · ไกด์ '+nG+' คนไปกับลูกค้า'):'')+'</span>';
+}
 function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
   var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
@@ -65423,6 +65584,7 @@ function pjCard(B, pier, ro){
      ทุกช่องที่เขียนค่าลงใบงานใช้ lro · ส่วนจานสีของโปรแกรม/สถานะยังใช้ ro
      เพราะนั่นเป็นค่าของเส้นทาง ไม่ใช่ของใบงานลำนี้วันนี้ */
   var lk=!!J.lock, lro=(ro||lk);
+  var _SW=pjSwInfo(_poDate,bid), _rsc=(_SW&&_SW.rsc)?_SW:null, _swp=(_SW&&_SW.sw)?_SW:null;   /* §pjSwap */
   var _miss=(typeof pjLockMiss==='function')?pjLockMiss(_poDate,bid):[];   /* §pjDone */
   var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var col=going?colRaw:pjMute(colRaw);
@@ -65520,12 +65682,15 @@ function pjCard(B, pier, ro){
   var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
    +'<div class="top'+(lt?' lt':'')+'" style="background:'+col+(lt?';color:#1A2433':'')+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)
+       +(_rsc?('<span class="pj-chp" style="background:#fff;color:#3730A3;border-color:#BEC2EE">&#128735; เรือกู้ของ '+poE(pjSwNm(_rsc.from))+'</span>'):'')   /* §pjSwap */
        +(function(){ var C=pjChtrOf(B); return C?'<span class="pj-chp" title="เหมาลำ">เหมาลำ</span>':''; })()+'</div>'   /* §pjChtr */
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
        +(B.boat.licensePax?(' &middot; '+B.boat.licensePax+' ที่นั่ง'):'')+'</div></div>'
      /* §pjDep · ช่องเวลาแก้ได้ (ถ้ามีสิทธิ์และใบยังไม่ปิด) · ค่าที่แก้เองขึ้นป้าย "แก้แล้ว" · ลบว่าง = กลับไปตามโปรแกรม */
      +'<div>'+(function(){
          var ov=!!(J.dep), rtT=((rt.times&&rt.times[0])||'');
+         if(_rsc){ var _re=_rsc.ev||{};   /* §pjSwap · เรือกู้ไม่ได้ออก 08:00 · ออกไปรับหลังเรือเสีย */
+           return '<div class="tm">'+poE(_re.t0||_re.t1||'--:--')+'</div><div class="tmL">'+(_re.t0?'ออกไปรับ':'แจ้งเสีย')+(_re.t2?(' &middot; ถึง '+poE(_re.t2)):'')+'</div>'; }
          if(lro) return '<div class="tm">'+poE(B.dep||'--:--')+'</div><div class="tmL">DEPARTURE'+(ov?' &middot; แก้แล้ว':'')+'</div>';
          return '<input type="time" class="tm tm-in" value="'+poE(B.dep||'')+'" onchange="pjDepSet(\''+poE(bid)+'\',this.value)" '
            +'title="เวลาออกเรือของลำนี้วันนี้ · แก้ได้ · ล้างว่าง = ตามโปรแกรม'+(rtT?(' ('+poE(rtT)+')'):'')+'">'
@@ -65612,6 +65777,7 @@ function pjCard(B, pier, ro){
              ? ('<span class="pj-lb need" title="'+poE('\u0e22\u0e31\u0e07\u0e02\u0e32\u0e14 '+_miss.join(' \u00b7 '))+'">&#9888; \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a</span>')
              : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>'))))
    +'</div>'
+   + pjSwBanner(_poDate,bid)   /* §pjSwap */
    +((!ro && !lk && _miss.length)
       ? ('<div class="pj-need">&#9888; \u0e22\u0e31\u0e07\u0e08\u0e31\u0e14\u0e44\u0e21\u0e48\u0e40\u0e2a\u0e23\u0e47\u0e08 \u00b7 \u0e02\u0e32\u0e14'
           + _miss.map(function(x){ return '<b>'+poE(x)+'</b>'; }).join('')+'</div>')
@@ -65697,6 +65863,9 @@ function pjCard(B, pier, ro){
         /* §mealTrip · ร้านอาหารของลำนี้วันนี้ · ค่าเริ่มต้นมาจากเส้นทาง กดเปลี่ยนเฉพาะวันนี้ได้
            §pjKit · ชื่อร้านต้องอ่านออกจากระยะไกล · ครัวใช้ใบนี้จัดของ ไม่ได้มานั่งอ่านทีละบรรทัด */
         + (function(){
+            if(_rsc){ var SK0=PJ_SEC.kit;   /* §pjSwap · อาหารเป็นของทริปเรือเดิม · เรือกู้ไม่สั่งซ้ำ */
+              return '<div class="pj-gh pj-ln" data-sec="kit" style="--bg:'+SK0.bg+';--fg:'+SK0.fg+';--bd:'+SK0.bd+'">'
+                +'<span class="lk">\u0e04\u0e23\u0e31\u0e27</span><span style="font-size:11px;font-weight:800;color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:999px;padding:2px 9px">ใช้ของ '+poE(pjSwNm(_rsc.from))+'</span></div>'; }
             var raw=mvTripRaw(_poDate,bid), V=mvForTrip(_poDate,bid,B.rid);
             var col=pjMvCol(V?V.id:''), nm=V?(V.name||V.id):'';
             var sel='<select onchange="pjMvSet(\''+bid+'\',this.value)"'+(lro?' disabled':'')+'>'
@@ -65745,6 +65914,7 @@ function pjCard(B, pier, ro){
         + (gdHas?gdSec():'') ))
    + (going ? ( pjSecHd('Customer','cust')
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
+     +(_rsc?('<span class="pj-wb" style="color:#3730A3">ใช้ของ '+poE(pjSwNm(_rsc.from))+'</span>'):(''   /* §pjSwap */
      +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
        /* §pjWbCarry · บอกด้วยว่าสีนี้ต่อมาจากวันไหน · ล็อตเปลี่ยนแล้วจะได้เห็นว่าต้องแก้ */
@@ -65776,14 +65946,17 @@ function pjCard(B, pier, ro){
            +'<span>เลือกสีเอง</span></label>'
          +(wbt?('<button type="button" class="pj-wbclr" onclick="pjWbSet(\''+bid+'\',\'\',\'\')">ล้างสี</button>'):'')
        +'</div>'
-       +'<div class="pf">เก็บแยกรายวันรายลำ</div></div></span>'
+       +'<div class="pf">เก็บแยกรายวันรายลำ</div></div></span>'))
      +'<span style="flex:1"></span><span class="k">Group</span>'
      +(langs.length?langs.map(function(L){ return '<span class="pj-lang">'+poE(L)+'</span>'; }).join(''):'<span style="font-size:11px;color:#C9CFD8">—</span>')
    +'</div>'
    +'<div class="pj-pax">'
      +[['AD',pax.ad],['CHD',pax.chd],['INF',pax.inf],['FOC',pax.foc]].map(function(x){
         return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
-     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
+     +(_rsc ? ('<div class="c t" style="background:#EFF0FC"><div class="k">ขากลับ</div><div class="v" style="color:#3730A3">'+(+((_rsc.ev||{}).pax)||0)+'</div></div></div>'
+               +'<div style="font-size:10.5px;color:#6B7785;padding:4px 15px 8px">รับจาก '+poE(pjSwNm(_rsc.from))+' · ไม่นับซ้ำในยอดลูกค้าของวัน</div>')
+             : ('<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
+               +(_swp?('<div style="font-size:10.5px;color:#6B7785;padding:4px 15px 8px">ขาไป '+(pax.ad+pax.chd+pax.inf+pax.foc)+' · ขากลับ <b>'+Math.max(0,(pax.ad+pax.chd+pax.inf+pax.foc)-(+((_swp.ev||{}).pax)||0))+'</b> (ย้ายไป '+poE(pjSwNm(_swp.to))+' '+(+((_swp.ev||{}).pax)||0)+' คน)</div>'):'')))   /* §pjSwap */
    +(function(){ var C=pjChtrOf(B); if(!C) return '';   /* §pjChtr · การ์ดเหมาลำใต้จำนวนลูกค้า */
        return '<div class="pj-chc"><span class="i">VIP</span><span class="t">CHARTER</span></div>'   /* §pjChtr2 · owner: "ให้เป็น VIP CHARTER ก็พอ" */
          +(C.mixed?('<div class="pj-chx">&#9888; มีที่นั่งปกติปน '+C.seat+' คน · ตรวจการจัดเรือ</div>'):''); })() )
@@ -66779,12 +66952,14 @@ function pjPrint(){
           var C=pjChtrOf(B);   /* §pjChtr */
           return '<td class="v ctr trip" style="background:'+pjTint(rt.color||'#64748B')
             +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')
-            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">CHARTER</span></div>'):'')+'</td>'; }).join('')
+            +(C?('<div class="chl"><span class="i">VIP</span><span class="t">CHARTER</span></div>'):'')+pjSwPrTag(pjSwInfo(_poDate,B.bid),1)+'</td>'; }).join('')
       +'</tr>'; };
   var timeRow=function(){
     return '<tr><th class="k">TIME<i>\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01</i></th>'
       + boats.map(function(B){
           if(!isGo(B)) return '<td class="mut off2">\u2014</td>';
+          var _s=pjSwInfo(_poDate,B.bid);   /* §pjSwapPr */
+          if(_s && _s.rsc){ var _e=_s.ev||{}; return '<td class="v ctr tmc">'+e(_e.t0||_e.t1||'--:--')+'<div style="font-size:10px;font-weight:800;color:#3730A3">'+(_e.t0?'ออกไปรับ':'แจ้งเสีย')+(_e.t2?(' · ถึง '+e(_e.t2)):'')+'</div></td>'; }
           return '<td class="v ctr tmc">'+e(B.dep||'--:--')+'</td>'; }).join('')
       +'</tr>'; };
 
@@ -66795,6 +66970,7 @@ function pjPrint(){
        แต่ร้านอาหารไม่ใช่คนที่ถูกจ่ายงาน · เป็นของที่ผูกกับทริปเหมือนโปรแกรมและเวลา
        สามแถวบนสุดจึงตอบครบว่า วันนี้ลำนี้ไปไหน ออกกี่โมง กินที่ไหน */
     + row('RESTAURANT|\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23',function(B,i){
+        var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<span class="rl" style="color:#3730A3">ใช้ของ '+e(pjSwNm(_s.from))+'</span>';   /* §pjSwapPr */
         var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
         if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
         var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
@@ -66840,6 +67016,7 @@ function pjPrint(){
        และคนสั่งของทางไลน์ต้องพิมพ์ชื่อสีได้ · โชว์ทั้งแถบสีและชื่อ */
     + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
         /* §pjWbCarry · ใบที่ปริ้นต้องโชว์สีเดียวกับบนจอ รวมถึงสีที่สืบมาจากวันก่อน */
+        var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<span style="color:#3730A3;font-weight:700">ใช้ของ '+e(pjSwNm(_s.from))+'</span>';   /* §pjSwapPr */
         var _w=pjWbOf(_poDate, B.bid);
         var c=String(_w.c||'').trim(), nm=String(_w.t||'').trim();
         if(/^#[0-9a-fA-F]{3,8}$/.test(c))
@@ -66864,6 +67041,7 @@ function pjPrint(){
           +'</tr>';
         o+='<tr class="pxt pxr"><th class="k">TOTAL PAX<i>\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21</i></th>'
           + boats.map(function(B){ if(!isGo(B)) return '<td class="pxn tot z2">\u2014</td>';
+              var _s=pjSwInfo(_poDate,B.bid); if(_s && _s.rsc) return '<td class="pxn tot" style="color:#3730A3">'+(+((_s.ev||{}).pax)||0)+'<div style="font-size:10px;font-weight:800">ขากลับ · ไม่นับซ้ำ</div></td>';   /* §pjSwapPr */
               return '<td class="pxn tot">'+PX[gi(B)].all+'</td>'; }).join('')
           +'</tr>';
         return o; })()
@@ -66888,6 +67066,7 @@ function pjPrint(){
             if(P.allerg) chips+='<span class="pc alg">&#9888; \u0e41\u0e1e\u0e49\u0e2d\u0e32\u0e2b\u0e32\u0e23 <b>'+P.allerg+'</b>'+_cn+'</span>';
             if(P.lt)     chips+='<span class="pc lt">\u0e40\u0e23\u0e37\u0e2d\u0e2b\u0e32\u0e07\u0e22\u0e32\u0e27 <b>'+P.lt+'</b>'+_cn+'</span>';
           }
+          var _sN=pjSwInfo(_poDate,B.bid); if(_sN) chips=pjSwPrNote(_sN)+chips;   /* §pjSwapPr */
           var txt=isGo(B) ? (J[gi(B)].note||'') : (WK[B.bid].note||'');
           return '<td class="nt">'+(chips?('<span class="ntc">'+chips+'</span>'):'')
             +(txt?('<span class="ntt">'+e(txt)+'</span>'):(chips?'':'<span class="mut">\u2014</span>'))+'</td>'; }).join('')
@@ -66950,11 +67129,14 @@ function pjPrint(){
       var P=null; try{ P=pjPrep(_poDate,B.bid,_poPier); }catch(_){}
       P=P||{lang:{},halal:0,veg:0,vegan:0,allerg:0,lt:0};
       var pax=(PX[i]&&PX[i].all)||0, cap=(+(B.boat.cap)||0);
+      var _SWI=pjSwInfo(_poDate,B.bid);   /* §pjSwapPr · เรือกู้ = เวลาออกไปรับ · ยอดขากลับ ไม่มีความจุขาย */
+      if(_SWI && _SWI.rsc){ pax=+((_SWI.ev||{}).pax)||0; cap=0; dep=String((_SWI.ev||{}).t0||(_SWI.ev||{}).t1||dep); }
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
          ของเดิมพิมพ์ "120/65" ด้วยสีเดียวกับทุกช่อง อ่านผ่านได้ง่ายมาก */
       var over=(cap>0 && pax>cap) ? (pax-cap) : 0;
       var _wb2=pjWbOf(_poDate, B.bid);                  /* §pjWbCarry */
       var wbc=_wb2.c||'', wbn=_wb2.t||'';
+      if(_SWI && _SWI.rsc){ wbn='ใช้ของ '+pjSwNm(_SWI.from); wbc='#FFFFFF'; }   /* §pjSwapPr */
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
       /* §pjItin · ป้ายชื่อโปรแกรมสีเส้นทางอ่อน (กว้างเท่ากันทุกแถว) · ถัดไปคือเส้นทางเกาะ สีตามที่แต้มไว้ */
@@ -66974,10 +67156,10 @@ function pjPrint(){
            สีเรือจึงยังเทียบกับหัวตารางด้านล่างได้ด้วยตา · ตัวหนังสืออ่านออกไม่ว่าสีเรือเข้มหรืออ่อน */
         +'<td class="c-b"><span class="bpill" style="background:'+pjTint2(_pjC6(B.bid),0.68)
           +';border-left:5px solid '+e(_pjC6(B.bid))+'">'
-          +e(B.boat.name||B.bid)+'</span></td>'
+          +e(B.boat.name||B.bid)+'</span>'+pjSwPrTag(_SWI)+'</td>'
         +'<td class="c-p"><span class="pnm">'+e(rt.name||'\u2014')+'</span></td>'
         +'<td class="c-i">'+_itH+'</td>'
-        +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
+        +'<td class="c-x'+(over?' over':'')+'"><b'+((_SWI&&_SWI.rsc)?' style="color:#3730A3"':'')+'>'+pax+'</b><s>'+((_SWI&&_SWI.rsc)?' ขากลับ':('/'+cap))+'</s>'
           +(over?('<em>เกิน '+over+'</em>'):'')
           +(cap>0?('<span class="fl"><span style="width:'+_fill+'%"></span></span>'):'')+'</td>'
         /* §pjBand · สีสายรัดข้อมือ · ของที่ต้องหยิบมาเตรียมก่อนแขกมาถึง
