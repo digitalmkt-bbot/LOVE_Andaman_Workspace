@@ -9919,6 +9919,60 @@ function bkV2CharterBoatHeal(date){
   if(healed && typeof acctPersistBookings==='function') acctPersistBookings();
   return healed;
 }
+/* ══ §btSwap (2026-11-09) · owner "พอเปลี่ยนเรือแล้ว ในหน้านี้ (By trip) จะเป็นยังไง" → Mockup → "ทำ" ═══════════
+   อ่านจากบันทึกของ Boat Operation อย่างเดียว (TRIPS[d][เรือเดิม].swap · TRIPS[d][เรือกู้].type='rescue' · ops.swapEv ของบุคกิ้ง)
+   ไม่แก้เรือที่จัดไว้ในบุคกิ้ง · แถวรถ/กรุ๊ปเป็นขาไป ไม่เปลี่ยน */
+function btSwE(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function btSwNm(id){ var b=(typeof BOATS!=='undefined'?BOATS:[]).find(function(x){ return x && x.id===id; }); return (b && b.name) || id || '-'; }
+function btSwOp(date, bid){ return ((typeof TRIPS!=='undefined' && TRIPS[date]) || {})[bid] || null; }
+var BT_SW_PILL='display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:#3730A3;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:6px;padding:0 5px;white-space:nowrap;cursor:pointer;line-height:16px';
+/* ป้ายต่อท้ายชื่อเรือในการ์ด Boats running */
+function btSwBoatTag(b, date){
+  try{
+    if(b && b.rescue){ var ev=(btSwOp(date, b.rescue.for)||{}).swap||{};
+      return ' <span style="'+BT_SW_PILL+'" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+b.rescue.for+'\')" title="'+btSwE('เรือกู้ของ '+btSwNm(b.rescue.for)+(ev.t2?(' · ถึง '+ev.t2):'')+' · ขากลับ '+(+ev.pax||0)+' คน · ไม่นับเป็นที่นั่ง'+((b.rescue.prev)?(' · ดึงมาจาก '+b.rescue.prev):''))+'">&#128735; เรือกู้ · ขากลับ</span>'; }
+    if(b && b.swap){ var e=b.swap;
+      return ' <span style="'+BT_SW_PILL+';color:#A32D2D;background:#FFF5F4;border-color:#F3B7B2" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+b.id+'\')" title="'+btSwE('เสียกลางทาง'+(e.t1?(' '+e.t1):'')+' · '+(e.cause||'')+(e.engine?(' · '+e.engine):'')+(e.place?(' · '+e.place):'')+' · ส่ง '+btSwNm(e.to)+' ไปเปลี่ยน · ขากลับเหลือ '+Math.max(0,(+b.pax||0)-(+e.pax||0))+' คน')+'">&#128295; เสีย'+(e.t1?(' '+btSwE(e.t1)):'')+' &rarr; '+btSwE(btSwNm(e.to))+'</span>'; }
+  }catch(_){}
+  return '';
+}
+/* ชิปบนการ์ด/แถบโปรแกรม · กดเปิดใบรายชื่อขากลับ */
+function btSwChip(rid, date){
+  try{ if(typeof bop2SwapOn!=='function') return '';
+    return bop2SwapOn(rid, date).map(function(x){
+      return '<span class="pb" style="'+BT_SW_PILL+';font-size:11px;padding:1px 8px" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+x.from+'\')" title="เปลี่ยนเรือกลางทาง · กดดูใบรายชื่อขากลับ">&#128257; '+btSwE(btSwNm(x.from))+' &rarr; '+btSwE(btSwNm(x.ev.to))+' &middot; ขากลับ &rsaquo;</span>';
+    }).join(' ');
+  }catch(_){ return ''; }
+}
+/* ช่อง BOAT รายบุคกิ้ง */
+function bkSwTag(bk, date){
+  try{
+    var o=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):((bk&&bk.ops)||{}); var f=o && o.swapEv; if(!f) return '';
+    var ev=(btSwOp(date, f.from)||{}).swap; if(!ev || ev.id!==f.id) return '';
+    var mv=+f.pax||0, st=+((ev.stay||{})[bk.id])||0;
+    var tip='ขาไป '+btSwNm(f.from)+' · '+(mv?('ขากลับ '+btSwNm(f.to)+' '+mv+' คน'):'ไม่ได้ย้าย')+(st?(' · อยู่ '+btSwNm(f.from)+' '+st+' คน'):'')+' · '+(ev.cause||'')+(ev.t2?(' · เปลี่ยน '+ev.t2):'')+(ev.place?(' '+ev.place):'')+' · กดดูบันทึก';
+    var txt = !mv ? 'อยู่ลำที่เสีย' : (st ? ('&rarr; '+btSwE(btSwNm(f.to))+' '+mv+' · '+btSwE(btSwNm(f.from))+' '+st) : ('&rarr; '+btSwE(btSwNm(f.to))));
+    var sty = !mv ? (BT_SW_PILL+';color:#A32D2D;background:#FFF5F4;border-color:#F3B7B2') : BT_SW_PILL;
+    return ' <span style="'+sty+'" onclick="event.stopPropagation();bop2SwapView(\''+date+'\',\''+f.from+'\')" title="'+btSwE(tip)+'">'+txt+'</span>';
+  }catch(_){ return ''; }
+}
+/* แถบในหน้ารายละเอียดบุคกิ้ง · ทุกวันของใบที่มีเหตุเปลี่ยนเรือ */
+function bkSwBanner(bk){
+  try{
+    var ds=Array.from(new Set(((bk&&bk.trips)||[]).map(function(t){ return t.date; }).filter(Boolean))).sort(), out=[];
+    ds.forEach(function(d){
+      var o=(typeof bkOpsRead==='function')?bkOpsRead(bk,d):{}; var f=o && o.swapEv; if(!f) return;
+      var ev=(btSwOp(d, f.from)||{}).swap; if(!ev || ev.id!==f.id) return;
+      var w=null; if(ev.t1 && ev.t2){ var a=ev.t1.split(':').map(Number), b=ev.t2.split(':').map(Number); var m=(b[0]*60+b[1])-(a[0]*60+a[1]); if(m>=0) w=m; }
+      out.push('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;background:#EFF0FC;border:1px solid #BEC2EE;border-radius:10px;padding:9px 13px;color:#3730A3;margin-bottom:12px">'
+        +'<b>&#128257; มีเหตุเปลี่ยนเรือ '+btSwE(d)+'</b><span>'+btSwE(btSwNm(f.from))+' เสียกลางทาง'+(ev.cause?(' ('+btSwE(ev.cause)+')'):'')
+        +' · '+(+f.pax ? ('ลูกค้ากลับด้วย '+btSwE(btSwNm(f.to))+' '+f.pax+' คน') : ('ลูกค้าอยู่กับ '+btSwE(btSwNm(f.from))))
+        +(w!=null?(' · รอเรือ '+w+' นาที'):'')+(ev.note?(' · '+btSwE(ev.note)):'')+'</span>'
+        +'<span onclick="bop2SwapView(\''+d+'\',\''+f.from+'\')" style="margin-left:auto;text-decoration:underline;cursor:pointer">ดูบันทึก</span></div>');
+    });
+    return out.join('');
+  }catch(_){ return ''; }
+}
 function baDayBoats(date){ // all non-charter assigned boats that day → [{boatId, routeId, boat}]
   const day=TRIPS[date]||{}; const chSet=baCharterBoatIds(date); const out=[];
   /* §bkLock · ลำที่ถูกกันไว้ทั้งลำไม่ใช่ "เรือที่ขายที่นั่ง" อีกต่อไป
@@ -58835,7 +58889,10 @@ function bkV2RenderTab2(){
       const _cBase=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
       const cap=(typeof boatCapFor==='function' && bid)?((+boatCapFor(bid,date))||_cBase):_cBase;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.fill||_c.text; }   /* §boatFill */
-      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null,bd:a.bd||null};
+      const _sop=btSwOp(date, bid)||{};   /* §btSwap */
+      if(_sop.type==='rescue'){ const _ev=(btSwOp(date,_sop.rescueFor)||{}).swap||{}; const _pr=_sop.prev&&_sop.prev.route?((((typeof getRoute==='function'&&getRoute(_sop.prev.route))||{}).name)||_sop.prev.route):'';
+        return {id:bid,name:bo.name||bid,col:c,pax:(+_ev.pax||0),cap:0,over:false,ovn:null,bd:null,rescue:{for:_sop.rescueFor,prev:_pr}}; }
+      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null,bd:a.bd||null,swap:_sop.swap||null};
     });
   };
 
@@ -58997,7 +59054,7 @@ function bkV2RenderTab2(){
     const nOver=bl.filter(b=>b.over).length;
     const rnm=(((typeof getRoute==='function'&&getRoute(_btSelRid))||{}).name)||_btSelRid;
     _btBoatCard = `<div class="bt-c bt-boat" style="--c:${_btCol||'#B9B3AA'}">
-      <div class="bt-ct">Boats running<span class="sp"></span><span class="bt-cnt">${bl.length} boat${bl.length===1?'':'s'}</span>
+      <div class="bt-ct">Boats running<span class="sp"></span><span class="bt-cnt">${(()=>{ const _n=bl.filter(b=>!b.rescue).length; return _n+' boat'+(_n===1?'':'s'); })()}</span>${btSwChip(_btSelRid,date)}
         ${nOver?`<span class="bt-cnt over">&#9888; ${nOver} over</span>`:''}</div>
       <div class="bt-bnm">${esc(rnm)}<span>${esc(_btDep(_btSelRid))}${_btPier(_btSelRid)?' · '+esc(_btPier(_btSelRid)):''}</span></div>
       <div class="bt-avrow">
@@ -59005,7 +59062,7 @@ function bkV2RenderTab2(){
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span>${_btBdHtml(_btBdOf(groups[_btSelRid]),'s')}</span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span>${b.ovn?'':_btBdHtml(b.bd,'b')}<span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span>${btSwBoatTag(b,date)}${b.ovn?'':_btBdHtml(b.bd,'b')}<span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):(_btHoldsOf(_btSelRid).length?'':'<span class="bt-none2">No boat assigned to this trip</span>')}${_btHoldChips(_btSelRid,'bt-brow')}</div>
       ${_btWhyHtml(_btSelRid)}${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
@@ -59017,7 +59074,7 @@ function bkV2RenderTab2(){
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
           <span class="sm">${bkd}/${cp}<em class="${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':'ok'))}">${cp<=0?(bkd>0?laT('ไม่มีเรือ'):laT('ไม่มีที่นั่ง')):(av<=0?'full':(av+' free'))}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):(_btHoldsOf(rid).length?'':'<span class="bt-tbc none">no boat</span>')}${_btHoldChips(rid,'bt-tbc')}</div>
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}${btSwBoatTag(b,date)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):(_btHoldsOf(rid).length?'':'<span class="bt-tbc none">no boat</span>')}${_btHoldChips(rid,'bt-tbc')}</div>
         ${_btWhyHtml(rid)}${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
@@ -59893,7 +59950,7 @@ function bkV2RenderTab2(){
             ${vanMode?'':(_2nd?'<td></td>':`<td${bkUpgPayChip(bk, date)?' class="t2-pyc"':''}><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div>${bkUpgPayChip(bk, date, 'fl')}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
-            <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : bkV2BoatPickWrap(bk, rid, a, r, !!(_rowBid||r.charterBoatId), (_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
+            <td class="t2-c${(boatMode&&!rcMode&&!wxClosed)?' t2-bst':''}"${boatMode?' style="background:#F4F9FE"':''}>${(boatMode && a.split && !a.bsplit && !a.first) ? '<span class="t2-dim" title="เรือเดียวกับแถวแรกของใบนี้">&#8629;</span>' : boatMode ? `<div class="t2-bcell" style="display:flex;align-items:center;gap:7px;justify-content:flex-start;min-width:0;padding:0"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : bkV2BoatPickWrap(bk, rid, a, r, !!(_rowBid||r.charterBoatId), (_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%" title="${esc(_bn)}${_pl?' · ถูกถอดจาก Boat Operation · จัดเรือใหม่':' · เรือที่ขึ้น'}"   /* §btClip */><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'};min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span>${bkSwTag(bk,date)}</span>`;})():'<span class="t2-dim">—</span>')}</td>
             ${rcMode?`<td class="t2-c" style="background:#FDFAF1">${(function(){const rc=bk.ops&&bk.ops.reconfirm;if(rc&&rc.status==='done'){let tm='';try{tm=new Date(rc.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="background:#E1F5EE;color:#0F6E56;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px" title="re-confirmed ${esc(rc.via||'')} ${esc(tm)}">&#10003; ${rc.via==='phone'?'โทร':'list'}</span><button onclick="event.stopPropagation();bkV2ReconfirmClear('${esc(bk.id)}')" title="ยกเลิก" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer">&times;</button></span>`;}return `<div style="display:flex;gap:3px;justify-content:center"><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','list')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">List</button><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','phone')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">โทร</button></div>`;})()}</td>`:''}
             ${wxClosed?`<td class="t2-c" style="background:#FBE8E4">${bkV2WeatherInlineCell(bk.id)}</td>`:''}
           </tr>${(a.first && typeof bkV2B2CStripRow==='function')?bkV2B2CStripRow(bk, COLN, date):''}${expandRow}`};   /* §b2cChg · บรรทัดสรุปใต้แถว · ใบที่แยกหลายแถวขึ้นครั้งเดียว */
@@ -59974,7 +60031,7 @@ function bkV2RenderTab2(){
     const _pbCls = _pbAv<=0?'full':(_pbFr<0.20?'low':'ok');
     const _pbCol = (bkV2RouteFamily(rid)||{}).color || '#8b909c';
     const _pbPier= route?.pier ? (route.pier==='tublamu'?'Tub Lamu':route.pier==='panwa'?'Visit Panwa':route.pier==='ranong'?'Ranong':route.pier) : '';
-    const _pbNB  = ((typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[]).length;
+    const _pbNB  = ((typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[]).filter(x=>(btSwOp(date,x.boatId)||{}).type!=='rescue').length;   /* §btSwap · เรือกู้ไม่ใช่ลำที่ขายที่นั่ง */
     /* ══ §btLkBand (2026-09-25) · ที่นั่งที่ล็อกไว้ ลงมาอยู่ใน manifest ════════
        ของเดิมล็อกอยู่แต่ในการ์ด Seat Lock มุมขวาบน · manifest ของทริปที่ยังไม่มี
        booking จึงขึ้นแค่ "No bookings yet" ทั้งที่ที่นั่งถูกกันไว้ให้เอเยนต์อยู่จริง
@@ -60087,6 +60144,7 @@ function bkV2RenderTab2(){
          สี่ช่องคือยอดของแถวลูกค้าจอยที่ยืนยันแล้ว (ไม่รวมเหมาลำ ทั้งสองฝั่ง) */
       + (_seatPax!==_pbBk?`<span class="pb ptot" title="${laTp('ลูกค้าจอยที่ยืนยันแล้ว {0} คน', _seatPax)} · ${laT('ที่นั่งที่ใช้ไป: หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${_seatPax} pax</span>`:'')
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
+      + btSwChip(rid, date)
       + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
       + (trPendTotal>0?`<span class="plk ppd" title="${laT('ล็อกที่รอที่ว่าง · ยังไม่คอนเฟิร์ม ไม่กันที่นั่ง')}">&#9203; Pending ${trPendTotal}</span>`:'')
       /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
@@ -68749,6 +68807,7 @@ function bkV2RenderBookingDetail(){
       <!-- §vc2 · document on the left (fixed 900px) · use / staff / activity on the right -->
       <div class="bkvc2-grid">
         <div class="bkvc2-main">
+          ${(typeof bkSwBanner==='function')?bkSwBanner(bk):''}
 
           ${focPending?`
           <!-- FOC pending banner -->
