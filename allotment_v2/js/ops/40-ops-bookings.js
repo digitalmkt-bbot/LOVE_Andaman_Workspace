@@ -148,6 +148,11 @@
     HEADER.forEach(function(h){ if(SERVER_STAMPED[h[0]]) return; var v = coerce(bk[h[0]], h[1]); if(v !== undefined) b[h[0]] = v; });
     var focReason = (bk.focApproval && bk.focApproval.reason) || bk.focReason;
     if(focReason) b.focReason = String(focReason);
+    /* §focType (sync 11-09) · the FOC reason's fixed type, kept by the server (foc_type). Legacy's commit sets focType ('' when the
+       booking has no FOC any more) and focApproval.type: '' clears it on an edit; a booking that never had the field sends nothing. */
+    var focType = bk.focType !== undefined ? bk.focType : (bk.focApproval && bk.focApproval.type);
+    if(focType) b.focType = String(focType);
+    else if(focType !== undefined && !create) b.focType = null;
     /* §opsBookingFields (2026-10-10) · these are server-owned booking fields.  Send an
        explicit empty array when the user cleared a list: PATCH semantics otherwise leave
        the old server value in place. */
@@ -423,7 +428,7 @@
   }
   function focFrom(a, bk, old){
     old = old || {};
-    return { count: a.foc_count != null ? +a.foc_count : (old.count || 0), reason: old.reason || bk.focReason || '',
+    return { count: a.foc_count != null ? +a.foc_count : (old.count || 0), reason: old.reason || bk.focReason || '', type: bk.focType || old.type || '',
              status: a.status, requestedAt: a.requested_at || '', requestedBy: a.requested_by || '',
              approvedAt: a.decided_at || '', approvedBy: a.decided_by || '', rejectReason: a.status === 'rejected' ? (a.note || '') : '' };
   }
@@ -443,7 +448,7 @@
     var n = 0;
     (bk.trips || []).forEach(function(t){ Object.keys(t.pax || {}).forEach(function(k){ if(/^foc/.test(k)) n += +t.pax[k] || 0; }); });
     if(!n) n = (bk.passengers || []).filter(function(p){ return p && p.foc; }).length;
-    bk.focApproval = { count: n, reason: bk.focReason || '', status: 'pending', requestedAt: bk.bookedAt || bk.createdAt || '', requestedBy: '' };
+    bk.focApproval = { count: n, reason: bk.focReason || '', type: bk.focType || '', status: 'pending', requestedAt: bk.bookedAt || bk.createdAt || '', requestedBy: '' };
   }
 
   /* ── server booking → client booking ── */
@@ -554,6 +559,7 @@
     if(Array.isArray(ob.order_lines)) bk.srvOrderLines = ob.order_lines.map(function(x){ return fromServer(x); });
     Object.assign(bk, records(ob, bk.trips));
     if(ob.foc_reason) bk.focReason = String(ob.foc_reason);    // focApproval.reason (focFrom) and legacy's FOC approval screen read it after a reload
+    bk.focType = ob.foc_type ? String(ob.foc_type) : '';        // §focType · focApproval.type (focFrom); the edit form splits the reason by it (focReasonSplit)
     approvalsInto(bk, ob, null);
     focPlaceholder(bk);
     if(!bk.weatherResolve && O.weather && O.weather.followUpOf && ob.id){ var wr = O.weather.followUpOf(ob.id); if(wr) bk.weatherResolve = wr; }   // a re-opened trip's resolved follow-up (the weather list is read before the day's bookings arrive)

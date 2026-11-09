@@ -38,6 +38,7 @@ function bookingV2NewBooking(){
     trips: [bookingV2NewTrip()],
     addOns: [],
     adjustments: [],           // [{kind:'discount'|'extra', mode:'amount'|'percent', value, label, note}]
+    focType: '',
     focReason: '',
     createdAt: new Date().toISOString()
   };

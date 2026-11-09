@@ -31518,6 +31518,38 @@ function pxVanCost(date, bid, routeId){
   return {total:Math.round(tot), vans:list};
 }
 /* หนึ่งทริป · รายได้ ต้นทุน กำไร พร้อมที่มาของทุกบรรทัด */
+/* §pxGuideJob (2026-11-08) · owner: "ค่าจ้างไกด์ต่างชาติ สุรินทร์เยอะขนาดนั้นเลยเหรอ" → "ไปดึงมาจากหน้าใบงานแทนได้ไหม"
+   สูตรเดิม: ไกด์ 1 + ไกด์ต่างชาติ 1 ต่อ "ลค ทุกคน" ทุก 40 คน → ลำที่ลค ไทยล้วนก็โดนค่าไกด์ต่างชาติ
+   ใบสั่งงานมัคคุเทศก์ (goAsn) มีคนที่ลงเรือจริงพร้อมบทบาท/ภาษาแล้ว (ต.ค. 2026 ครบ 200/202 เที่ยว)
+   จำนวน = จากใบงาน · ราคา = ราคาเดิมของบรรทัดในแผนเส้นทาง (owner: "อิงสูตรก่อน แล้วเช็คกับใบงาน")
+   · ไกด์ที่มีภาษาอื่นนอกจาก EN/TH ในทะเบียน = เรทบรรทัดไกด์ต่างชาติ · ที่เหลือ = เรทไกด์
+   · ไกด์ฝึกหัด = ช่อง ASST. GUIDE ในกลุ่มไกด์ของการ์ดเรือ (goIsGuide) = เรทไกด์ปกติ (owner 2026-11-08: "ขิมเป็น ASST. GUIDE ดึงเรทปกติ 1500")
+   · นักศึกษาฝึกงาน / สตาฟ (ช่อง Trainee / Staff) = ฿0 (owner)
+   · ใบงานยังไม่จัด = ใช้สูตรเดิม · บรรทัดบอกตัวเลขสูตรเดิมไว้ข้างกันให้เทียบ */
+function pxGuideWork(date, bid, plan, T){
+  try{
+    if(typeof pjGuidesFull!=='function') return null;
+    var F=pjGuidesFull(date,bid)||[], other=+F.other||0;
+    if(!F.length && !other) return null;
+    var n={ th:0, fx:0, tr:0, it:0, fxL:{} };
+    F.forEach(function(g){
+      if(g.role==='trainee'){ n.tr++; n.th++; return; }   /* ASST. GUIDE · เรทไกด์ */
+      if(g.role && g.role!=='guide'){ n.it++; return; }
+      var L=(g.langs||[]).filter(function(l){ return l && l!=='EN' && l!=='TH'; });
+      if(L.length){ n.fx++; L.forEach(function(l){ n.fxL[l]=(n.fxL[l]||0)+1; }); } else n.th++;
+    });
+    n.th+=other;
+    var lines=((typeof ctLinesByGroup==='function')?ctLinesByGroup(T):[]).map(function(x){ return x.ln; });
+    var gl=lines.filter(function(l){ return l.id==='guide'; })[0]||null;
+    var fl=lines.filter(function(l){ return l.id!=='guide' && /ไกด์|guide/i.test(l.l||'') && /ต่างชาติ|ภาษา|foreign/i.test(l.l||''); })[0]||null;
+    function rate(ln){ if(!ln) return 0; var L=ctEffLine(ln, plan||{}); if(L.off) return 0;
+      var u=0; (L.parts||[]).forEach(function(p){ if(!u && +p.u>0) u=+p.u; });
+      return u*ctGrpMul(plan||{}, ln.g||'อื่นๆ'); }
+    n.rTH=rate(gl); n.fid=fl?fl.id:''; n.rFX=fl?rate(fl):0;
+    if(!n.rFX){ n.th+=n.fx; n.fx=0; n.fxL={}; }   /* แผนนี้ไม่มีบรรทัดไกด์ต่างชาติ → คิดเรทไกด์ */
+    return n;
+  }catch(_){ return null; }
+}
 function pxTrip(date, bid){
   var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
   var op=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date][bid]:null;
@@ -31555,6 +31587,14 @@ function pxTrip(date, bid){
     act.meal={amt:Math.round(+A.meal.amount||0),
               why:(A.meal.name||'')+' · ผู้ใหญ่ '+(A.meal.ad||0)+'×'+(A.meal.priceAd||0)
                   +(A.meal.chd?(' + เด็ก '+A.meal.chd+'×'+(A.meal.priceCh||0)):'')};
+  /* §pxGuideJob · ไกด์จากใบสั่งงานมัคคุเทศก์ */
+  var GW=pxGuideWork(date,bid,plan,T);
+  if(GW){
+    var _gx=(GW.tr?(' (รวม ผช.ไกด์/ฝึกหัด '+GW.tr+' คน)'):'')+(GW.it?(' · นศ./สตาฟ '+GW.it+' คน ไม่คิดเงิน'):'');
+    act.guide={ amt:GW.th*GW.rTH, cmp:1, why:'ใบงานไกด์ '+GW.th+' คน × '+ctB(GW.rTH)+_gx };
+    if(GW.fid) act[GW.fid]={ amt:GW.fx*GW.rFX, cmp:1,
+      why:GW.fx ? ('ใบงานไกด์ภาษา '+Object.keys(GW.fxL).join('/')+' '+GW.fx+' คน × '+ctB(GW.rFX)) : 'ใบงานไม่มีไกด์ภาษาที่ 3' };
+  }
   var VN=pxVanCost(date,bid,rid);
   var NTV=pxTransferPax(date,bid);   /* §pxNtVan */
   if(VN.vans.length)
@@ -31597,6 +31637,7 @@ function pxTrip(date, bid){
     var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
     var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
     var why = a ? a.why : (r.why || '');   /* §pxWhy · ไม่มีของจริง = บอกสูตร (จำนวน × ราคา) */
+    if(a && a.cmp) why += ' · สูตรเดิม '+ctB(est);   /* §pxGuideJob · เทียบกับสูตร */
     /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
     if(r.id==='fuel' && real==null){
       if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
@@ -49110,6 +49151,90 @@ const _BKV2_FAMILIES = [
   { id:'activity',   name:'Activities',                 color:'#C77D1E' }
 ];
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* §focType (2026-11-08) · เหตุผล FOC เป็นตัวเลือกคงที่ + ช่องหมายเหตุ
+   ของเดิมเป็น free text · ต.ค. 2026: 38% ของ FOC ใส่แค่ชื่อคนขอ (Pum / Mild / Vila) จัดประเภทไม่ได้
+   เก็บ focType (id) ไว้ทั้งบนใบและใน focApproval · focApproval.reason ยังเป็นข้อความอ่านได้ "<ประเภท> · <หมายเหตุ>" เพื่อให้หน้าเดิม/backend อ่านต่อได้ */
+const FOC_TYPES = [
+  { id:'guide',   l:'ไกด์ / Tour Leader',        h:'ไกด์หรือ TL ที่มากับกรุ๊ปลูกค้าจ่ายเงิน' },
+  { id:'insp',    l:'Inspection',                 h:'ทีมงาน agent / ไกด์ใหม่ ลงดูโปรแกรม' },
+  { id:'fam',     l:'Fam trip',                   h:'กรุ๊ปดูงานของ agent' },
+  { id:'promo',   l:'สิทธิ์แถม (10+1 · 1+1)',      h:'หัวฟรีตามสัญญา / แพ็กเกจ' },
+  { id:'voucher', l:'Gift voucher / E-voucher',   h:'ลูกค้าใช้บัตรกำนัลที่จ่ายแล้ว' },
+  { id:'pr',      l:'Influencer / Blogger / PR',  h:'งานประชาสัมพันธ์' },
+  { id:'staff',   l:'Staff / Welfare',            h:'พนักงานและครอบครัว · ลงดูงาน' },
+  { id:'comp',    l:'ชดเชย / VIP',                h:'ชดเชยปัญหาทริปก่อน · ลูกค้า VIP · ต้องระบุ' },
+  { id:'other',   l:'อื่นๆ (ระบุ)',                h:'ต้องระบุในหมายเหตุ' }
+];
+function focTypeLabel(id){ const t = FOC_TYPES.find(x => x.id === id); return t ? t.l : ''; }
+/* ข้อความเหตุผลที่บันทึก = ป้ายประเภท · หมายเหตุ */
+function focReasonText(type, note){ const l = focTypeLabel(type); note = String(note||'').trim(); return l ? (note ? l + ' · ' + note : l) : note; }
+/* ใบเก่าที่มีแต่ข้อความ → เดาประเภทจากคำ (ใช้ตอนเปิดแก้ไข เพื่อให้ไม่ต้องเลือกใหม่ถ้าเดาได้) */
+function focTypeGuess(reason){
+  const r = String(reason||'');
+  if(!r.trim()) return '';
+  if(/fam ?trip/i.test(r)) return 'fam';
+  if(/inspect|อินสเปค|ดูงาน|อบรม|ลงเกาะ/i.test(r)) return 'insp';
+  if(/guide|ไกด์|ไกค์|\bTL\b|tour ?lead/i.test(r)) return 'guide';
+  if(/แถม|10\s*\+\s*1|1\s*\+\s*1/i.test(r)) return 'promo';
+  if(/voucher|บัตรกำนัล/i.test(r)) return 'voucher';
+  if(/influencer|blogger|เพจ|content|tiktok|\bPR\b/i.test(r)) return 'pr';
+  if(/staff|welfare|พนักงาน/i.test(r)) return 'staff';
+  if(/comp|ชดเชย|vip/i.test(r)) return 'comp';
+  return '';
+}
+/* แยกข้อความที่บันทึก "<ป้าย> · <หมายเหตุ>" กลับเป็น {type, note} ตอนเปิดแก้ไข */
+function focReasonSplit(type, reason){
+  reason = String(reason||'').trim();
+  const l = focTypeLabel(type);
+  if(l && reason === l) return { type, note:'' };
+  if(l && reason.indexOf(l + ' · ') === 0) return { type, note: reason.slice(l.length + 3) };
+  if(type) return { type, note: reason };
+  for(const t of FOC_TYPES){ if(reason === t.l) return { type:t.id, note:'' }; if(reason.indexOf(t.l + ' · ') === 0) return { type:t.id, note: reason.slice(t.l.length + 3) }; }
+  const g = focTypeGuess(reason);
+  return { type: g, note: reason };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Calendar cursor for Tab 2 sidebar (YYYY-MM) · null = follow active date
 let _bkV2T2Cursor = null;
 let _bkV2T2Pier = 'all';   // 'all' | 'tublamu' | 'panwa'
@@ -57414,6 +57539,29 @@ var _pkSetMenu=false;
 /* §pkSets3 · owner "อยากเห็นจำนวนจริง ๆ แยก ผญไทย เด็กไทย ต่ำกว่า 3 FOC ไทย ... และมีให้เลือกว่า สิมิลัน หรือ สุรินทร์ จำนวนก็ขึ้นมา"
    แถวยอดจริงของวันต่อโปรแกรม (Similan / Surin / ...) อยู่บนสุดของตาราง · กดแถว = เลือกโปรแกรม · เมนูเพิ่มเรือกรองตามนั้น */
 var _pkSetFamF='all';
+/* ══ §pkFocTip (2026-11-08) · owner "เอาเม้าไปชี้ตรงตัวเลขของ FOC แล้วขึ้นว่าอยู่ลำไหนบ้าง" ════════════════
+   แถวยอดจริงของวัน (ทั้งหมด / แต่ละเส้นทาง) เป็นยอดรวมทุกลำ · ชี้ช่องตัวเลขใดก็ได้ (FOC ไทย/ตช. ผญ เด็ก …)
+   ขึ้นรายการลำที่มีคนกลุ่มนั้น เรียงจากมากไปน้อย · "Aluminous1 (09:00) · 4" · ช่อง FOC ขึ้นเส้นประใต้ตัวเลขให้รู้ว่าชี้ได้ */
+var PKFT_LBL={ad_th:'ผญ ไทย',chd_th:'เด็ก ไทย',inf_th:'ต่ำกว่า 3 ไทย',foc_th:'FOC ไทย',_th:'รวม ไทย',ad_fr:'ผญ ตช',chd_fr:'เด็ก ตช',inf_fr:'ต่ำกว่า 3 ตช',foc_fr:'FOC ตช',_fr:'รวม ตช'};
+(function(){ try{ if(document.getElementById('pkft-css')) return; var st=document.createElement('style'); st.id='pkft-css';
+  st.textContent='.pk3-mx td.pkft{cursor:help}.pk3-mx tr.fm td.pkft:nth-child(5),.pk3-mx tr.fm td.pkft:nth-child(10){text-decoration:underline dotted;text-underline-offset:3px}'
+   +'#pkft-pop{position:fixed;z-index:100070;background:#14233F;color:#fff;font:600 12px/1.55 Inter,"Noto Sans Thai",system-ui,sans-serif;padding:8px 11px;border-radius:9px;box-shadow:0 8px 22px rgba(0,0,0,.25);white-space:pre;pointer-events:none;max-width:420px}';
+  document.head.appendChild(st);
+  var pop=null; document.addEventListener('mouseover',function(ev){ var td=ev.target&&ev.target.closest&&ev.target.closest('td.pkft'); if(!td){ if(pop){ pop.remove(); pop=null; } return; }
+    var t=td.getAttribute('data-tip'); if(!t) return; td.removeAttribute('title');
+    if(!pop){ pop=document.createElement('div'); pop.id='pkft-pop'; document.body.appendChild(pop); } pop.textContent=t;
+    var r=td.getBoundingClientRect(); pop.style.left=Math.max(8,Math.min(window.innerWidth-pop.offsetWidth-8, r.left+r.width/2-pop.offsetWidth/2))+'px'; pop.style.top=(r.bottom+6)+'px'; },true);
+}catch(_){} })();
+function pkFocTipTxt(F, k, bn){
+  try{
+    var L=(F.by||[]).filter(function(r){ return (+r.p8[k]||0)>0; }).sort(function(a,b){ return (b.p8[k]||0)-(a.p8[k]||0); });
+    if(!L.length) return '';
+    var tot=L.reduce(function(t,r){ return t+(+r.p8[k]||0); },0);
+    return (PKFT_LBL[k]||k)+' '+tot+' คน · '+L.length+' ลำ\n'+L.map(function(r){ var B=r.x.B, rn=(r.x.g&&r.x.g.route&&r.x.g.route.name)||'';
+      var nm=''; try{ nm=String(bn(B)).replace(/<[^>]+>/g,''); }catch(_){ nm=B.bid; }
+      return '• '+nm+(B.dep?(' ('+B.dep+')'):'')+(F.f.id==='all'&&rn?(' · '+rn):'')+' — '+r.p8[k]; }).join('\n');
+  }catch(_){ return ''; }
+}
 function pkSetFamF(id){ _pkSetFamF=String(id||'all'); _pkSetMenu=false; renderPierPark(); }
 var _pkSetD=null;
 var _pkSetDate='';
@@ -57710,10 +57858,10 @@ function pk3Body(flat, TY, TYM, ro){
       +'<td class="n sum">&#8722;'+C.tot+'</td><td class="cxw" colspan="'+(TY.length+3)+'">'+pkCxWhy(C)+'</td></tr>'; };
   var g8=function(p8){ var o={}; GO.forEach(function(k){ o[k]=+p8[k]||0; }); o._th=o.ad_th+o.chd_th+o.inf_th+o.foc_th; o._fr=o.ad_fr+o.chd_fr+o.inf_fr+o.foc_fr; return o; };
   /* §pkSets3 · ยอดจริงของทั้งวัน แยกตามโปรแกรม · นับทุกลำของวัน ไม่ใช่แค่ลำที่เลือก */
-  var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0}; FL.push(F); }
-    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.t+=(+x.B.totPc||0); F.n++; pkCxAdd(F,x.B.cx);
+  var FM={}, FL=[]; flat.forEach(function(x){ var f=famOf(x); var F=FM[f.id]; if(!F){ F=FM[f.id]={f:f, s:{}, t:0, u:0, l:0, n:0, by:[]}; FL.push(F); }
+    var p8=g8(x.B.pax8||{}); GO.forEach(function(k){ F.s[k]=(F.s[k]||0)+p8[k]; }); F.by.push({x:x, p8:p8});   /* §pkFocTip */ F.t+=(+x.B.totPc||0); F.n++; pkCxAdd(F,x.B.cx);
     F.u+=(x.B.people||[]).filter(function(p){ return !p.over && usedAll[pkSetKey(p)]; }).length; F.l+=pkSetAvail(x.B,usedAll).length; });
-  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; pkCxAdd(FA,F.cx); });
+  var FA={f:{id:'all',n:'ทั้งหมด',c:'#0B1E5B'}, s:{}, t:0, u:0, l:0, n:0, by:[]}; FL.forEach(function(F){ GO.forEach(function(k){ FA.s[k]=(FA.s[k]||0)+(F.s[k]||0); }); FA.by=FA.by.concat(F.by||[]); FA.t+=F.t; FA.u+=F.u; FA.l+=F.l; FA.n+=F.n; pkCxAdd(FA,F.cx); });
   if(_pkSetFamF!=='all' && !FM[_pkSetFamF]) _pkSetFamF='all';
   var FSEL=(_pkSetFamF==='all')?FA:FM[_pkSetFamF];
   /* §pkSets4 · owner "ตรงที่เลือกเรือ ให้เลือกเส้นทางก่อน แล้วจำนวนรวมก็ขึ้น และค่อยเลือกเรือทีหลัง"
@@ -57780,7 +57928,8 @@ function pk3Body(flat, TY, TYM, ro){
   var famRow=function(F){ var on=(_pkSetFamF===F.f.id);
     return '<tr class="fm'+(on?' sel':'')+'" onclick="pkSetFamF(\''+e(F.f.id)+'\')" title="กดเพื่อกรองเรือตามโปรแกรมนี้">'
       +'<td class="rt"><span class="fn"><i style="background:'+F.f.c+'"></i>'+e(F.f.n)+'<em>'+F.n+' ลำ</em>'+(on&&F.f.id!=='all'?'<u>กรองอยู่</u>':'')+'</span></td>'
-      +GO.map(function(k,i){ return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+'">'+n0(F.s[k]||0)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
+      +GO.map(function(k,i){ var v=F.s[k]||0, tip=v?pkFocTipTxt(F,k,bn):'';
+          return '<td class="n'+((i===0||i===5)?' sep':'')+(/^_/.test(k)?' sum':'')+(tip?' pkft':'')+'"'+(tip?(' data-tip="'+e(tip)+'" title="'+e(tip)+'"'):'')+'>'+n0(v)+'</td>'; }).join('')+'<td class="n sum">'+F.t+'</td>'
       +setTds(setBy(function(S){ return F.f.id==='all' || famOfSet(S)===F.f.id; }))   /* §pkSets8 */
       +'<td class="n">'+n0(F.u)+'</td><td class="n'+(F.l?' left':'')+'">'+n0(F.l)+'</td></tr>'+cxRow(F.cx, F.f.id==='all'?'ทั้งวัน':'ทั้งเส้น'); };
   var famRows='<tr class="fh"><td colspan="'+(TY.length+15)+'">ยอดจริงของวัน · ทุกลำ'+(_pkSetFamF==='all'?' แยกตามเส้นทาง':(' · '+e(FSEL.f.n)))+(pkSets(date).length?' · ใต้ "ชุดนี้" = รวมในชุดที่บันทึกแล้ว':'')+'</td></tr>'
@@ -68401,8 +68550,8 @@ function bkNbfChecks(){
   });
   var q=null; try{ q=bookingV2CalcQuote(); }catch(_){ q=null; }
   if(q && q.totalFoc>0){
-    var fr=String(d.focReason||'').trim().length>0;
-    add('pay', fr, true, fr?'FOC reason entered':('Enter the FOC reason · '+q.totalFoc+' FOC pax'));
+    var fr=!!d.focType && (!bookingV2FocNeedNote(d.focType) || String(d.focReason||'').trim().length>0);   /* §focType */
+    add('pay', fr, true, fr?('FOC: '+focTypeLabel(d.focType)):(d.focType?'ระบุเหตุผล FOC ในหมายเหตุ':('เลือกประเภท FOC · '+q.totalFoc+' FOC pax')));
   }
   add('guests', !!d.leadPax, true, d.leadPax?'Lead guest named':'Enter the lead guest name');
   var needVan=withRoute.some(function(t){ return !t.ovnLeg && t.zone!=='NoTransfer' && t.zone!=='NT'; }) && !d.pickupSelf;

@@ -416,9 +416,11 @@ function bookingV2CommitBooking(status){
       ? d.adjustments.filter(a => (Number(a.value)||0) > 0)
           .map(a => ({ kind:a.kind, mode:a.mode||'amount', value:Number(a.value)||0, label:a.label||'', note:a.note||'' }))
       : [],
+    focType: quote.totalFoc > 0 ? (d.focType || '') : '',   /* §focType */
     focApproval: quote.totalFoc > 0 ? {
       count: quote.totalFoc,
-      reason: d.focReason,
+      type: d.focType || '',
+      reason: focReasonText(d.focType, d.focReason),
       status: status === 'pending_foc' ? 'pending' : (status === 'confirmed' ? 'approved' : 'pending'),
       requestedAt: new Date().toISOString(),
       requestedBy: 'RM'

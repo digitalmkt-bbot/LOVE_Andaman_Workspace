@@ -24,6 +24,8 @@ function bookingV2EditBooking(bookingId){
     clone.manualTotal = Number(clone.total || (clone.priceBreakdown && clone.priceBreakdown.total) || 0);
     clone._b2cSnap = bookingV2B2CSnap(clone);
   }
+  /* §focType · ใบเก่าเก็บเหตุผลไว้ใน focApproval.reason อย่างเดียว → แยกกลับเป็นประเภท + หมายเหตุให้ฟอร์ม */
+  { const fa = clone.focApproval || {}; const sp = focReasonSplit(clone.focType || fa.type || '', fa.reason || clone.focReason || ''); clone.focType = sp.type; clone.focReason = sp.note; }
   bookingV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
