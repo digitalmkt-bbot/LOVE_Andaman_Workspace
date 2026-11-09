@@ -9481,6 +9481,49 @@ function bop2SwTakenFrom(routeId, d){
   const day=(typeof TRIPS!=='undefined' && TRIPS[d]) || {};
   return Object.keys(day).filter(bid=>day[bid] && day[bid].type==='rescue' && day[bid].prev && day[bid].prev.route===routeId);
 }
+/* ══ §bopNoBoat (2026-11-09) · รอบที่มีคนจองแต่ยังไม่ได้วางเรือเลย ไม่เคยขึ้น "ยังไม่มีเรือ"
+   เพราะ getAllotment คืน seatsConsumed=0 ทันทีเมื่อเส้นทางไม่มีเรือ (ไม่แก้ที่นั่น · หน้าขายใช้ค่านั้นอยู่)
+   นับคนเองเฉพาะหน้านี้ · ข้ามระนอง (owner: ทริประนองเปิด Open แล้วจัดเรือใกล้วันเดินทาง) และวันที่ผ่านแล้ว / ปิด / ยกเลิกอากาศ */
+function bop2NbPax(r, d){
+  if(!r || r.pier==='ranong' || bop2OvfSkip(r, d)) return 0;
+  const memo=(window._bop2NbMemo=window._bop2NbMemo||{}), k=r.id+'|'+d;
+  if(k in memo) return memo[k];
+  return (memo[k]=(typeof getSeatsConsumed==='function') ? (+getSeatsConsumed(r.id, d)||0) : 0);
+}
+/* ══ §bopSwap2 · สรุปเปลี่ยนเรือกลางทางของช่วงที่ดู · ค่าเรือกู้มาจาก Trip P&L (pxTrip ของเรือกู้) */
+function bop2SwList(dates){
+  const out=[];
+  (dates||[]).forEach(d=>{ const day=(TRIPS||{})[d]||{};
+    Object.keys(day).forEach(bid=>{ const op=day[bid]; if(!op || !op.swap) return;
+      const r=(ROUTES||[]).find(x=>x && x.id===op.route) || {name:op.route};
+      let cost=null; try{ if(typeof pxTrip==='function'){ const t=pxTrip(d, op.swap.to); cost=(t && t.rescue) ? t.cost : null; } }catch(_){}
+      const mins=(op.swap.t1 && op.swap.t2) ? (function(){ const a=op.swap.t1.split(':').map(Number), b=op.swap.t2.split(':').map(Number); const m=(b[0]*60+b[1])-(a[0]*60+a[1]); return m>=0?m:null; })() : null;
+      out.push({ d:d, from:bid, to:op.swap.to, route:r.name, ev:op.swap, cost:cost, wait:mins });
+    }); });
+  return out;
+}
+function bop2SwLogOpen(){
+  const E=bop2SwE, dates=bop2GetDates(), L=bop2SwList(dates);
+  const byBoat={}; L.forEach(x=>{ const k=x.from; const B=byBoat[k]=byBoat[k]||{ n:0, cost:0, causes:{} }; B.n++; B.cost+=(+x.cost||0); B.causes[x.ev.cause||'-']=1; });
+  const th='padding:6px;font-size:10px;font-weight:800;color:#6B7785;text-align:left;border-bottom:1px solid #EEE';
+  const td='padding:6px;font-size:12px;border-bottom:1px solid #F3F1EC';
+  const tot=L.reduce((a,x)=>a+(+x.cost||0),0);
+  const html='<div style="padding:16px 20px 8px;border-bottom:1px solid #EEE"><div style="font-size:17px;font-weight:800;color:#3730A3">&#128257; เปลี่ยนเรือกลางทาง</div>'
+      +'<div style="font-size:12px;color:#6B7785;margin-top:2px">'+E(dates[0])+' – '+E(dates[dates.length-1])+' · '+L.length+' ครั้ง · ค่าเรือกู้รวม ฿'+Math.round(tot).toLocaleString()+'</div></div>'
+    +'<div style="padding:10px 20px 14px">'
+      +'<div style="font-size:12.5px;font-weight:800;color:#12518F;margin:4px 0">แยกตามเรือ</div>'
+      +'<table style="width:100%;border-collapse:collapse"><tr><th style="'+th+'">เรือ</th><th style="'+th+';text-align:right">ครั้ง</th><th style="'+th+'">สาเหตุ</th><th style="'+th+';text-align:right">ค่าเรือกู้</th></tr>'
+      +Object.keys(byBoat).sort((a,b)=>byBoat[b].n-byBoat[a].n).map(k=>'<tr><td style="'+td+';font-weight:700">'+E(bop2SwName(k))+'</td><td style="'+td+';text-align:right">'+byBoat[k].n+'</td><td style="'+td+'">'+E(Object.keys(byBoat[k].causes).join(', '))+'</td><td style="'+td+';text-align:right">฿'+Math.round(byBoat[k].cost).toLocaleString()+'</td></tr>').join('')
+      +'</table>'
+      +'<div style="font-size:12.5px;font-weight:800;color:#12518F;margin:14px 0 4px">ทุกครั้ง</div>'
+      +'<table style="width:100%;border-collapse:collapse"><tr><th style="'+th+'">วันที่</th><th style="'+th+'">เส้นทาง</th><th style="'+th+'">เรือ</th><th style="'+th+'">สาเหตุ</th><th style="'+th+';text-align:right">ย้าย</th><th style="'+th+';text-align:right">รอเรือ</th><th style="'+th+';text-align:right">ค่าเรือกู้</th></tr>'
+      +L.map(x=>'<tr style="cursor:pointer" onclick="bop2SwapView(\''+x.d+'\',\''+x.from+'\')"><td style="'+td+';white-space:nowrap">'+E(bop2OvfD(x.d))+'</td><td style="'+td+'">'+E(x.route)+'</td><td style="'+td+';white-space:nowrap">'+E(bop2SwName(x.from))+' &rarr; <b style="color:#3730A3">'+E(bop2SwName(x.to))+'</b></td><td style="'+td+'">'+E((x.ev.cause||'')+(x.ev.engine?(' · '+x.ev.engine):''))+'</td><td style="'+td+';text-align:right">'+(+x.ev.pax||0)+'</td><td style="'+td+';text-align:right">'+(x.wait!=null?(x.wait+' นาที'):'—')+'</td><td style="'+td+';text-align:right">'+(x.cost!=null?('฿'+Math.round(x.cost).toLocaleString()):'—')+'</td></tr>').join('')
+      +'</table>'
+      +'<div style="font-size:10.5px;color:#9B9088;margin-top:8px">ค่าเรือกู้ = น้ำมัน + กัปตัน + เด็กเรือ (+ ค่าเช่า ถ้าเป็นเรือเช่า) ของเรือกู้ ตามหน้า Trip P&L · มีน้ำมันจริงในใบงานเรือ = ใช้ของจริง</div>'
+    +'</div>'
+    +'<div style="padding:12px 20px;background:#FAFAF8;border-top:1px solid #EEE;display:flex;justify-content:flex-end"><button onclick="bop2SwClose()" style="padding:9px 16px;border:0;background:#3730A3;color:#fff;border-radius:9px;font-weight:800;font-size:12px;font-family:inherit;cursor:pointer">ปิด</button></div>';
+  bop2SwShell(html, 720);
+}
 function bop2SwNext(d){ return fmt(addDays(new Date(d+'T12:00:00'), 1)); }
 function bop2SwapSave(){
   const S=window._bop2Sw; if(!S) return;
@@ -9750,9 +9793,9 @@ function bop2RouteDaysNeedingBoats(routes, dates){
       } else if(assigned.length === 0 && bop2SwTakenFrom(r.id, d).length && getSeatsConsumed(r.id, d) > 0){   /* §bopSwap · เรือถูกส่งไปกู้ */
         out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: getSeatsConsumed(r.id, d),
                    reason: 'rescue_took', boats: bop2SwTakenFrom(r.id, d).map(bop2SwName) });
-      } else if(al.seatsConsumed > 0 && assigned.length === 0){
+      } else if(assigned.length === 0 && (al.seatsConsumed > 0 || bop2NbPax(r, d) > 0)){   /* §bopNoBoat */
         // pax exist but no boat assigned at all
-        out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: al.seatsConsumed,
+        out.push({ routeId: r.id, routeName: r.name, color: r.color, dateStr: d, paxCount: al.seatsConsumed || bop2NbPax(r, d),
                    reason: 'no_boat', boats: [] });
       }
     });
@@ -10571,11 +10614,12 @@ function bop2RenderShell(){
     });
   });
   // ─── Unassigned scan · used by alert banner ───
+  window._bop2NbMemo = {}; window._bop2OvfMemo = {};                            /* §bopNoBoat */
   const needsBoats = bop2RouteDaysNeedingBoats(routes, dates);
   const needsToday = needsBoats.filter(x => x.dateStr === TODAY_STR).length;
   const needsBroken = needsBoats.filter(x => x.reason === 'boat_broken').length;
   window._bop2NeedsBoats = needsBoats; // cached for bop2ShowNeedsList()
-  window._bop2OvfMemo = {}; window._bop2FreeMemo = {};                          /* §bopOvf */
+  window._bop2FreeMemo = {};                                                     /* §bopOvf */
   const ovf30 = bop2OverflowList(routes, bop2Next30());
   const ovfView = bop2OverflowList(routes, dates);
   if(!ovfView.length) _bop2.ovfOnly = false;
@@ -10737,6 +10781,7 @@ function bop2RenderShell(){
       ${needsBoats.length
         ? `<span class="bop2-chip r" onclick="bop2ShowNeedsList()" style="cursor:pointer">&#9888; ยังไม่มีเรือ<b>${needsBoats.length}</b> &rsaquo;</span>`
         : `<span class="bop2-chip g">&#10003; มีเรือครบ</span>`}
+      ${(() => { const _n = bop2SwList(dates).length; return _n ? `<span class="bop2-chip" onclick="bop2SwLogOpen()" style="cursor:pointer;background:#EFF0FC;color:#3730A3;border-color:#BEC2EE" title="เรือเสียกลางทาง · ส่งเรือลำอื่นไปเปลี่ยน · ช่วงที่ดูอยู่">&#128257; เปลี่ยนกลางทาง<b>${_n}</b> &rsaquo;</span>` : ''; })()}
       ${ovf30.length ? `<span class="bop2-chip" onclick="bop2OvfGo('${ovf30[0].routeId}','${ovf30[0].dateStr}')" style="cursor:pointer;background:#EFF0FC;color:#3730A3;border-color:#BEC2EE" title="ลูกค้าเกินที่นั่งของเรือที่วิ่งได้ · 30 วันข้างหน้า">&#9888; ที่นั่งไม่พอ<b>${bop2OvfDays(ovf30)}</b> วัน &rsaquo;</span>` : ''}
       </span>
     </div>
@@ -11133,7 +11178,7 @@ function bop2RenderHeatmapRow(route, dates){
 
     // ─── ALERT STATE · pax exist but no boat assigned ───
     const _rtk = (boats.length === 0) ? bop2SwTakenFrom(route.id, d) : [];   /* §bopSwap */
-    const _nbPax = al.seatsConsumed || (_rtk.length ? getSeatsConsumed(route.id, d) : 0);
+    const _nbPax = al.seatsConsumed || (_rtk.length ? getSeatsConsumed(route.id, d) : (boats.length === 0 ? bop2NbPax(route, d) : 0));   /* §bopNoBoat */
     if(_nbPax > 0 && boats.length === 0){
       const stripes = 'repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 5px,#fff 5px,#fff 10px)';
       const cellContent = isMonth

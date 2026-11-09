@@ -35856,8 +35856,17 @@ function pxTrip(date, bid){
      → จึงมีปุ่ม "ออกจริง" (A.ran) ให้กดกลับเมื่อเรือออกแต่ไม่มีผู้โดยสาร
        (ออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว · เรือสำรองที่ต้องวิ่งตาม)
      est ของทุกบรรทัดยังอยู่ครบ ไม่ได้ลบทิ้ง จึงยังเปิดดูได้ว่า "ถ้าออกจะเท่าไหร่" */
+  /* ══ §bopSwap2 (2026-11-09) · เรือกู้ (เปลี่ยนเรือกลางทาง · Boat Operation) ════════════════
+     ไม่มีใบจอง ไม่มีคน → เดิมโดนนับเป็น "ไม่ได้ออก" ต้นทุน 0 ทั้งที่วิ่งไปรับลูกค้าจริง
+     คิดเฉพาะ น้ำมัน · กัปตัน · เด็กเรือ · ค่าเช่า (ถ้าเป็นเรือเช่า) · ไกด์/อาหาร/รถ/อุทยาน ไม่ใช่ของเรือกู้ */
+  var _rsc=(op && op.type==='rescue') ? op : null;
+  if(_rsc && !A.closed){
+    rows=rows.map(function(r){ if(PX_RSC_IDS.indexOf(r.id)>=0) return r;
+      return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:r.real, why:'เรือกู้ · ไม่คิดบรรทัดนี้', src:r.src, gross:r.gross, use:0 }; });
+    cost=0; rows.forEach(function(r){ cost+=r.use; });
+  }
   var estCost=cost;
-  var noSail=(PX.tot===0 && PX.bk===0 && !A.ran);
+  var noSail=(PX.tot===0 && PX.bk===0 && !A.ran && !_rsc);
   if(noSail){
     rows=rows.map(function(r){
       return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:r.real, why:r.why,
@@ -35898,7 +35907,23 @@ function pxTrip(date, bid){
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr,
            fam:{ pax:PX.fam, th:PX.famTH, cost:famCost, all:(PX.fam>0 && PX.fam>=PX.tot), list:PX.famL||[], zero:PX.zeroL||[] },   /* §pxFam */
-           saleProfit:Math.round(revNet-cost)+famCost };
+           saleProfit:Math.round(revNet-cost)+famCost,
+           rescue:_rsc ? { for:_rsc.rescueFor } : null,   /* §bopSwap2 */
+           swap:(op && op.swap) ? { to:op.swap.to, cause:op.swap.cause||'' } : null };
+}
+var PX_RSC_IDS=['fuel','cap','crew','rent'];   /* §bopSwap2 · บรรทัดที่เรือกู้ต้องจ่าย */
+/* ป้ายหัวลำ · ลำที่เสียกลางทางบอกค่าเรือกู้ (ไม่ได้บวกเข้ากำไรลำนี้ · อยู่ในการ์ดเรือกู้ ยอดวันไม่นับซ้ำ) */
+function pxSwPill(t){
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var nm=function(id){ var b=(typeof getBoat==='function')?getBoat(id):null; return (b&&b.name)||id; };
+  try{
+    if(t && t.rescue) return '<span class="pill" style="background:#EFF0FC;color:#3730A3" title="'+e('เรือกู้ · ส่งไปเปลี่ยนแทน '+nm(t.rescue.for)+' ที่เสียกลางทาง · คิดเฉพาะน้ำมัน กัปตัน เด็กเรือ (และค่าเช่า)')+'">&#128735; เรือกู้ของ '+e(nm(t.rescue.for))+'</span>';
+    if(t && t.swap){ var R=null; try{ R=pxTrip((t.ctx&&t.ctx.date)||_px.date, t.swap.to); }catch(_){}
+      var c=(R&&R.rescue)?R.cost:null;
+      return '<span class="pill" style="background:#EFF0FC;color:#3730A3" title="'+e('เสียกลางทาง ('+t.swap.cause+') · ส่ง '+nm(t.swap.to)+' ไปเปลี่ยน · ค่าเรือกู้อยู่ในการ์ดของ '+nm(t.swap.to)+(c!=null?(' · ถ้ารวมค่าเรือกู้ กำไรลำนี้ = '+Math.round(t.profit-c).toLocaleString()+' ฿'):''))+'">&#128257; เสียกลางทาง &rarr; '+e(nm(t.swap.to))+(c!=null?(' · ค่าเรือกู้ ฿'+Math.round(c).toLocaleString()):'')+'</span>';
+    }
+  }catch(_){}
+  return '';
 }
 function pxDay(date, pier){
   var out=[];
@@ -36667,7 +36692,7 @@ function pxDetail(t, e, GORD, DAVG){
   /* §pxNoSail · ทางกลับมีอยู่เสมอ · ระบบเดาว่า "ไม่ได้ออก" จากการไม่มีใบจอง
      ซึ่งผิดได้ (เรือออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว)
      ปุ่มจึงบอกทั้งสถานะปัจจุบันและตัวเลขที่จะกลับมาถ้ากด */
-  var nsPill = t.noSail
+  var nsPill = (typeof pxSwPill==='function'?pxSwPill(t):'') + (t.noSail   /* §bopSwap2 */
     ? ('<span class="pill ns clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
        +e('ไม่มีผู้โดยสารและไม่มีใบจองเลย ระบบจึงถือว่าเรือไม่ได้ออกและไม่คิดต้นทุน '
          +'· ถ้าออกจริง ต้นทุนจะเป็น '+pxN(t.wouldCost)+' ฿ · กดเพื่อยืนยันว่าออกจริง')
@@ -36676,7 +36701,7 @@ function pxDetail(t, e, GORD, DAVG){
        ? ('<span class="pill am clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
           +e('ยืนยันไว้แล้วว่าลำนี้ออกจริงทั้งที่ไม่มีผู้โดยสาร · ต้นทุนจึงถูกคิดตามสูตร · กดเพื่อยกเลิก')
           +'">ออกจริง · ไม่มีผู้โดยสาร</span>')
-       : '');
+       : ''));
   /* §revFlag · เตือนตรงหัวลำเลย · คนที่เปิดหน้านี้คือคนที่แก้ใบจองได้ */
   var rphNow=t.rev/pax, revBad=(DAVG>0 && t.px.tot>0 && rphNow<DAVG*0.3);
   var revPill=revBad
@@ -36904,7 +36929,7 @@ function pxDaily(e){
     var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
     return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
-      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'+((t.rescue||t.swap)?' <span class="pill" style="background:#EFF0FC;color:#3730A3">'+(t.rescue?'&#128735; เรือกู้':'&#128257;')+'</span>':'')+((fShow&&t.fam&&t.fam.pax&&!t.noSail)?(' <span class="pill pu">FAM '+t.fam.pax+'</span>'):'')
         +(t.plan?'':'<small>no cost plan</small>')+'</div></div></td>'
       /* §pxProg (2026-11-05) · owner: "เอาชื่อโปรแกรม ไปแทนที่เวลา" · ช่องที่เคยเป็นเวลาออก = ชื่อโปรแกรม · เวลาย่อไว้ท้ายชื่อ */
       /* §pxProgCol (2026-11-05) · owner: "เส้นทางแต้มสีให้เห็นความต่างของแต่ละเส้นทาง" · สีของเส้นทาง (route.color) เป็นขีดสีข้างหน้าแบบเดียวกับเรือ */
