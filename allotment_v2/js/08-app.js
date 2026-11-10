@@ -61294,6 +61294,10 @@ function bkV2RenderTab2(){
     .t2-mtbl td.t2-sbk{position:relative;overflow:visible}
     .t2-mtbl td.t2-sbk .t2-rtft{position:absolute;left:9px;top:calc(100% - 10px);z-index:20;display:inline-flex;align-items:center;gap:4px;font-size:9.5px;line-height:15px;font-weight:700;color:#fff;border-radius:8px;padding:0 7px;white-space:nowrap;max-width:calc(100% - 18px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 5px rgba(15,27,61,.22)}
     .t2-mtbl td.t2-sbk .t2-rtft:hover{max-width:none;z-index:30;box-shadow:0 4px 14px rgba(2,10,30,.25)}
+    /* §rtFtClassic (2026-11-10) · owner "ดู" (Classic · ป้าย กลับคันเดิม ✓ / กลับ ลมใต้2 โดนตัดครึ่งที่ขอบล่างของแถว)
+       มุมมอง Classic แถวสูง ~80px และช่องถูกตัด overflow · ป้ายที่ห้อยขอบล่างเลยเหลือครึ่งบน
+       Classic มีที่พอ วางป้ายต่อใต้ชื่อจุดส่งในช่องเลย แบบเดียวกับป้าย ⚠ ยังไม่จัดรถกลับ · Layer/Compact (body.btc) ยังลอยเหมือนเดิม */
+    body:not(.btc) .t2-mtbl td.t2-sbk .t2-rtft{position:static;display:flex;width:fit-content;margin-top:4px;box-shadow:none}
     /* §btGap · จุดรับ / โซน / ห้อง ไม่ต้องมีพื้นชิป · มีเส้นแบ่งคอลัมน์แล้ว
        ตาแยกค่าออกจากช่องข้าง ๆ ได้อยู่ · ชิปซ้อนอีกชั้นทำให้ตารางลาย */
     .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.3;vertical-align:middle;font-weight:700;font-size:12.5px;color:#26303F}
