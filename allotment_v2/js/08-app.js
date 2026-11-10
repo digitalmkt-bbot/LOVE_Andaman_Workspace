@@ -35692,32 +35692,41 @@ function pxTransferPax(date, bid){
   });
   return o;
 }
+/* §pxVanJoin (2026-11-10) · owner "วันไหนที่ออก 2 ลำ บางทีมีจอยรถด้วยกัน จะคำนวณแบบไหน"
+   กติกาเดิมถูกอยู่แล้ว: รถคันเดียวส่งหลายลำ = ค่ารถ 1 คัน หารตามหัวที่ส่งขึ้นแต่ละลำ (รวมทุกลำ = 1 คันพอดี)
+   ที่ขาด 2 เรื่อง:
+   1) ใบจองที่แบ่งคนลงหลายคัน (ops.vanSplits) ไม่มี vanId → ไม่ถูกนับเลย ทั้งหัวของลำตัวเองและหัวรวมของคัน
+      ต.ค.–10 พ.ย. 27 ใบ · เช่น 21 ต.ค. Achilles กรุ๊ป 62 คน 6 คัน ค่ารถจริง ฿0 → ไปใช้สูตร · 7 ต.ค. Oceanus นับได้คันเดียว
+   2) โซนของคัน · เดิมแต่ละลำดูเฉพาะลูกค้าของตัวเอง ลำหนึ่งได้ราคา KL อีกลำได้ PK ทั้งที่เป็นรถคันเดียววิ่งรอบเดียว
+      → ยึดโซนของทั้งคัน (มีลูกค้า KL ในคัน = ราคา KL ทุกลำ) ผลรวมทุกลำจึงเท่ากับค่ารถ 1 คันจริง */
 function pxVanCost(date, bid, routeId){
-  var mine={}, all={};
+  var mine={}, all={}, zn={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    var vid=O.vanId; if(!vid) return;
     var tb=(O.boatId||t.charterBoatId)||'';
-    var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
-    all[vid]=(all[vid]||0)+pax;
-    if(tb===bid){
-      mine[vid]=(mine[vid]||0)+pax;
-      /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
-      var a=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
-      var z=(a&&a.zone)||'';
-      if(z==='KL') mine['_z'+vid]='KL'; else if(!mine['_z'+vid]) mine['_z'+vid]='PK';
-    }
+    var legs=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
+      ? O.vanSplits.map(function(x){ return {vid:x.vanId, pax:+x.pax||0}; })
+      : [{vid:O.vanId, pax:(typeof ckBookedPax==='function')?ckBookedPax(t):0}];
+    /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
+    var a=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
+    var z=(a&&a.zone)||'';
+    legs.forEach(function(L){
+      if(!L.vid || !(L.pax>0)) return;
+      all[L.vid]=(all[L.vid]||0)+L.pax;
+      if(z==='KL') zn[L.vid]='KL';
+      if(tb===bid) mine[L.vid]=(mine[L.vid]||0)+L.pax;
+    });
   });
   var tot=0, list=[];
   Object.keys(mine).forEach(function(vid){
-    if(vid.indexOf('_z')===0) return;
     var v=(typeof vehGet==='function')?vehGet(vid):null; if(!v) return;
-    var day=vanDayCost(v, routeId, mine['_z'+vid]||'PK');
+    var zone=zn[vid]||'PK';
+    var day=vanDayCost(v, routeId, zone);
     var share=(all[vid]>0)?(mine[vid]/all[vid]):1;
     tot+=day*share;
-    list.push({name:v.name||vid, day:day, share:share, zone:mine['_z'+vid]||'PK'});
+    list.push({name:v.name||vid, day:day, share:share, zone:zone});
   });
   return {total:Math.round(tot), vans:list};
 }
