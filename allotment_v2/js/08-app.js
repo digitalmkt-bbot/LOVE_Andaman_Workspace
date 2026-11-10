@@ -35699,34 +35699,45 @@ function pxTransferPax(date, bid){
       ต.ค.–10 พ.ย. 27 ใบ · เช่น 21 ต.ค. Achilles กรุ๊ป 62 คน 6 คัน ค่ารถจริง ฿0 → ไปใช้สูตร · 7 ต.ค. Oceanus นับได้คันเดียว
    2) โซนของคัน · เดิมแต่ละลำดูเฉพาะลูกค้าของตัวเอง ลำหนึ่งได้ราคา KL อีกลำได้ PK ทั้งที่เป็นรถคันเดียววิ่งรอบเดียว
       → ยึดโซนของทั้งคัน (มีลูกค้า KL ในคัน = ราคา KL ทุกลำ) ผลรวมทุกลำจึงเท่ากับค่ารถ 1 คันจริง */
+/* §pxVanRun (2026-11-10) · owner "วิ่งแยกนับแยก"
+   หน่วยที่คิดเงินคือ "รอบรถ" ไม่ใช่ "รถหนึ่งคันต่อวัน"
+   · กรุ๊ปรถ (vanGroup) เลขเดียวกันทั้งวัน = รถโหลดเดียว · ต่างเส้นทางแต่กรุ๊ปเดียวกัน = จอยรอบเดียว หารตามหัว
+   · คันเดียวกัน คนละกรุ๊ป คนละเส้นทาง = วิ่งแยก 2 รอบ · แต่ละลำจ่ายรอบของตัวเองเต็ม
+     (เดิมหารกันเหมือนรอบเดียว เช่น 21 ต.ค. Love7 รับลค Irena 05:10 แล้วกลับมารับ LKC66 08:20 · คิดรวมแค่ ฿1,700)
+   · คันเดียวกัน เส้นทางเดียวกัน = รอบเดียวเสมอ (เรือออกเวลาเดียว วิ่งสองรอบไม่ทัน) แม้แยกกรุ๊ปไว้ */
 function pxVanCost(date, bid, routeId){
-  var mine={}, all={}, zn={};
+  var legs=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var tb=(O.boatId||t.charterBoatId)||'';
-    var legs=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
-      ? O.vanSplits.map(function(x){ return {vid:x.vanId, pax:+x.pax||0}; })
-      : [{vid:O.vanId, pax:(typeof ckBookedPax==='function')?ckBookedPax(t):0}];
     /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
     var a=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
-    var z=(a&&a.zone)||'';
-    legs.forEach(function(L){
-      if(!L.vid || !(L.pax>0)) return;
-      all[L.vid]=(all[L.vid]||0)+L.pax;
-      if(z==='KL') zn[L.vid]='KL';
-      if(tb===bid) mine[L.vid]=(mine[L.vid]||0)+L.pax;
-    });
+    var kl=((a&&a.zone)||'')==='KL';
+    var L=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
+      ? O.vanSplits.map(function(x){ return {vid:x.vanId, g:x.vanGroup, pax:+x.pax||0}; })
+      : [{vid:O.vanId, g:O.vanGroup, pax:(typeof ckBookedPax==='function')?ckBookedPax(t):0}];
+    L.forEach(function(l){ if(!l.vid || !(l.pax>0)) return;
+      legs.push({vid:l.vid, g:(l.g==null?'':String(l.g)), r:t.routeId||'', pax:l.pax, kl:kl, me:(tb===bid)}); });
   });
+  /* รวมขาเป็นรอบ · คันเดียวกัน + (กรุ๊ปเดียวกัน หรือ เส้นทางเดียวกัน) = รอบเดียว */
+  var P={};
+  function f(x){ while(P[x]!==x){ P[x]=P[P[x]]; x=P[x]; } return x; }
+  legs.forEach(function(l){ var kg=l.vid+'|g'+l.g, kr=l.vid+'|r'+l.r;
+    if(P[kg]==null) P[kg]=kg; if(P[kr]==null) P[kr]=kr;
+    var A=f(kg), B=f(kr); if(A!==B) P[A]=B; });
+  var all={}, mine={}, kl={}, vidOf={};
+  legs.forEach(function(l){ var k=f(l.vid+'|g'+l.g); vidOf[k]=l.vid;
+    all[k]=(all[k]||0)+l.pax; if(l.kl) kl[k]=1; if(l.me) mine[k]=(mine[k]||0)+l.pax; });
   var tot=0, list=[];
-  Object.keys(mine).forEach(function(vid){
-    var v=(typeof vehGet==='function')?vehGet(vid):null; if(!v) return;
-    var zone=zn[vid]||'PK';
+  Object.keys(mine).forEach(function(k){
+    var v=(typeof vehGet==='function')?vehGet(vidOf[k]):null; if(!v) return;
+    var zone=kl[k]?'KL':'PK';
     var day=vanDayCost(v, routeId, zone);
-    var share=(all[vid]>0)?(mine[vid]/all[vid]):1;
+    var share=(all[k]>0)?(mine[k]/all[k]):1;
     tot+=day*share;
-    list.push({name:v.name||vid, day:day, share:share, zone:zone});
+    list.push({name:v.name||vidOf[k], day:day, share:share, zone:zone});
   });
   return {total:Math.round(tot), vans:list};
 }
