@@ -88588,6 +88588,11 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-ft:hover .x{display:inline!important;white-space:nowrap!important}',
     'body.btc #view-booking .btc-ft:hover .s{display:none}',
     'body.btc #view-booking .btc-ft .btc-fa{background:transparent!important;color:#fff!important;padding:0!important;margin:0!important;font-size:inherit!important;text-decoration:underline;cursor:pointer}',
+    /* §retFtBot (2026-11-10) · owner "ทำไมขึ้นเตือนแบบนี้" (11 พ.ย. · ป้ายแดง ⚠ รถกลับ ทับป้ายเขียว "กลับ ลมใต้2" ของ Green Mango)
+       ป้ายเตือนรถกลับลอยที่ขอบบนของช่องตัวเอง แต่ป้ายรถกลับ (rtFt) ลอยที่ขอบล่าง · ป้ายบนของแถวล่างจึงไปทับป้ายล่างของแถวบน
+       ดูเหมือนเตือนใบบน ทั้งที่เป็นของใบล่าง · ย้ายป้ายเตือนในช่อง Send back ไปขอบล่างซ้ายแบบเดียวกับป้ายรถกลับ */
+    'body.btc #view-booking td.t2-sbk .btc-ft.ret{top:calc(100% - 8px);left:6px;right:auto}',
+    'body.btc #view-booking td.t2-sbk .btc-ft.ret:hover{top:calc(100% - 10px)}',
     'body.btc #view-booking .btc-ft.due{background:#FEE4E2;color:#B42318;box-shadow:0 1px 3px rgba(180,35,24,.18)}',
     'body.btc #view-booking .btc-ft.bk{top:-7px;right:2px;font-size:9px!important;line-height:13px!important;padding:0 5px;background:#EEF0F3;color:#8A8F9C!important;text-decoration:none!important;box-shadow:none}',
     'body.btc #view-booking .btc-ft.bk::before{content:"จอง "}',
@@ -88949,7 +88954,7 @@ function pc2CSS3(S){
         });
         if(alertEl){
           /* warning floats at the cell's top-right corner · hover shows the long text + the original "same van" button */
-          var ft = document.createElement('span'); ft.className = 'btc-ft'; ft.title = alertEl.title || '';
+          var ft = document.createElement('span'); ft.className = 'btc-ft ret'; ft.title = alertEl.title || '';   /* §retFtBot · ดู CSS */
           ft.innerHTML = '<span class="s">⚠ รถกลับ</span><span class="x">ยังไม่จัดรถกลับ ·</span>';
           if(actEl){ actEl.textContent = '↩ ใช้คันเดิม'; actEl.classList.add('x', 'btc-fa'); ft.appendChild(actEl); }
           alertEl.parentNode.removeChild(alertEl);
