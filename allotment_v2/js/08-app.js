@@ -61581,6 +61581,12 @@ function bkV2RenderTab2(){
     .bt-hgrid>div{display:flex;flex-direction:column;gap:9px;min-width:0}
     .bt-hgrid>div>.bt-c{flex:1 1 auto;display:flex;flex-direction:column}
     .bt-hgrid>div>.bt-c>.bt-pgbody,.bt-hgrid>div>.bt-c>.bt-blist,.bt-hgrid>div>.bt-c>.bt-tgl{flex:1 1 auto}
+    /* §btEven (2026-11-10) · ขอบล่างของการ์ดหัว By trip เท่ากันทุกวัน */
+    .bt-hgrid>div>.bt-c>.bt-pgbody{flex:1 1 214px;height:214px;max-height:none}
+    @media (min-width:1741px){
+      .bt-hgrid>.bt-col3 .bt-lockc>.bt-lkl,.bt-hgrid>.bt-col3 .bt-notice>.bt-ncb,
+      .bt-hgrid>div>.bt-c.bt-boat>.bt-blist,.bt-hgrid>div>.bt-c.bt-boat>.bt-tgl{flex:1 1 0;height:0;min-height:0;max-height:none;overflow:auto}
+    }
     /* จอแคบ · 3 กรอบเรียงกันแล้วการ์ดโหมดถูกบีบจนชื่อขาด · ยกกรอบขวาลงมาเต็มแถวแทน
        ความสูงหัวที่เปลี่ยนไปไม่เป็นไร เพราะชั้นที่ตรึงวัดจากของจริงหลัง render */
     @media (max-width:1740px){
