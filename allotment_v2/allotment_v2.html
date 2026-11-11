@@ -6,7 +6,7 @@
      จะตั้งนาฬิกาคืนหน้าเดิม และทา class ให้ทันก่อนวาดจอครั้งแรก
      ไม่มี ?embed=1 ใน URL = ไฟล์นี้ออกทันที ไม่แตะอะไรเลย -->
 <script src="js/10-embed.js"></script>
-<script src="js/01-auth-sync.js?v=d11f53f1"></script>
+<script src="js/01-auth-sync.js?v=88b3a42d"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LOVE Andaman · Allotment</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/allotment_v2/assets/favicon-32.png">
@@ -190,6 +190,10 @@
       <span class="po-dot"></span>
       ตั๋วอุทยาน
     </div>
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="pos-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ยอดขายร้านค้า
+    </div>
     <div class="nav-item po-grp" data-pogrp="tublamu" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Tub Lamu
@@ -214,6 +218,10 @@
     <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pok-tublamu" onclick="nav(this)">
       <span class="po-dot"></span>
       ตั๋วอุทยาน
+    </div>
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pos-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ยอดขายร้านค้า
     </div>
     <div class="nav-item po-grp" data-pogrp="ranong" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
@@ -984,6 +992,8 @@
     <div id="view-pok-panwa" class="view"><div id="pk-host-panwa" class="po-host"></div></div>
     <div id="view-pok-tublamu" class="view"><div id="pk-host-tublamu" class="po-host"></div></div>
     <div id="view-pok-ranong" class="view"><div id="pk-host-ranong" class="po-host"></div></div>
+    <div id="view-pos-panwa" class="view"><div id="psl-host-panwa"></div></div>
+    <div id="view-pos-tublamu" class="view"><div id="psl-host-tublamu"></div></div>
     <div id="view-pot-ranong" class="view"><div id="pt-host-ranong" class="po-host"></div></div>
     <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
     <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
@@ -1525,7 +1535,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=f64618e3"></script>
+<script src="js/04-data-core.js?v=858cf8b4"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -3138,6 +3148,7 @@
 <script src="js/09-action-board.js?v=5637c4dc"></script>
 <script src="js/11-exec-board.js?v=32e4462d"></script>
 <script src="js/14-tm-ranong.js?v=2d0d161279fb45e40737396c776d5ccc"></script>
+<script src="js/15-pos-sales.js?v=b8dc4576"></script>
 <script src="js/13-guest-insights.js?v=ea78b067"></script>
 <script src="js/12-weather.js?v=29346f46"></script>
 </body>

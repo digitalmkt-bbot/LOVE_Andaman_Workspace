@@ -1196,6 +1196,8 @@ function nav(el){
     else if(view.indexOf('pok-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierPark(view.slice(4)); }
     /* §tmDoc · เอกสาร ตม. ระนอง · ต้องมาก่อน 'po-' เช่นกัน */
     else if(view.indexOf('pot-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} if(typeof renderPierTm==='function') renderPierTm(view.slice(4)); }
+    /* §posSales · ยอดขายร้านค้า (POS) แยกรายลำ */
+    else if(view.indexOf('pos-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} if(typeof renderPosSales==='function') renderPosSales(view.slice(4)); }
     /* §poCash · ต้องมาก่อน 'po-' ไม่งั้นโดนดักไปหน้าเบิก-คืนอุปกรณ์ */
     else if(view.indexOf('pop-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierCash(view.slice(4)); }
     else if(view.indexOf('po-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierOffice(view.slice(3)); }
