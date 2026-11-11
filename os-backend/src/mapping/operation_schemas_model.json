@@ -2338,6 +2338,30 @@
         "type": "bigint"
       },
       {
+        "name": "rn_adult_thai",
+        "type": "bigint"
+      },
+      {
+        "name": "rn_adult_fr",
+        "type": "bigint"
+      },
+      {
+        "name": "rn_child_thai",
+        "type": "bigint"
+      },
+      {
+        "name": "rn_child_fr",
+        "type": "bigint"
+      },
+      {
+        "name": "rn_infant_thai",
+        "type": "bigint"
+      },
+      {
+        "name": "rn_infant_fr",
+        "type": "bigint"
+      },
+      {
         "name": "kl",
         "type": "text"
       }

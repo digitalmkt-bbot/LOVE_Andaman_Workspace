@@ -2560,6 +2560,36 @@
       "kind": "scalar",
       "db_type": "bigint"
     },
+    "rn_adult_thai": {
+      "source": "seatRates[key].RN.adult-thai",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "rn_adult_fr": {
+      "source": "seatRates[key].RN.adult-fr",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "rn_child_thai": {
+      "source": "seatRates[key].RN.child-thai",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "rn_child_fr": {
+      "source": "seatRates[key].RN.child-fr",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "rn_infant_thai": {
+      "source": "seatRates[key].RN.infant-thai",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "rn_infant_fr": {
+      "source": "seatRates[key].RN.infant-fr",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
     "kl": {
       "source": "seatRates[key].KL",
       "kind": "json_text",
