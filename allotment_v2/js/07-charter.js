@@ -145,13 +145,15 @@ function saveCharterBoat(){
                    +'Overlapping periods hide each other - only the first one is read.\n\nSave anyway?')) return;
       }
       let e=_chEditLogId?b.log.find(x=>x&&x.id===_chEditLogId):null;
-      if(!e){ e={id:'sl'+Date.now(),s:'available'}; b.log.push(e); }
+      let _chNew=false; if(!e){ e={id:'sl'+Date.now(),s:'available'}; b.log.push(e); _chNew=true; }
       /* ที่ตั้งของช่วงนั้น · เขียนทับเฉพาะตอนที่มันยังเป็นค่าที่ระบบเติมให้จากท่าเดิม
          ถ้ามีคนไปตั้งที่ตั้งละเอียดไว้เอง (อู่ ท่าอื่น จังหวัดอื่น) อย่าไปลบของเขา */
       const oldAuto=CH_PIER_LOC[b.pier]||b.pier;
       if(!e.loc||e.loc===oldAuto) e.loc=CH_PIER_LOC[pier]||pier;
       e.from=from; e.to=to; e.note=note;
+      if(typeof flAudMark==='function') flAudMark([e.id], _chNew?'c':'u');   /* §flAud */
     }
+    if(typeof flAudMark==='function') flAudMark([b.id],'u');
     b.name=name; b.type=type; b.cap=cap; b.pier=pier;
     closeModal('charter-modal');
     _chEditId=''; _chEditLogId='';
@@ -176,5 +178,6 @@ function saveCharterBoat(){
     ownership:'charter',
     log:[{id:'sl'+Date.now(),s:'available',from,to,loc:CH_PIER_LOC[pier]||pier,note}]
   });
+  { const _nb=BOATS[BOATS.length-1]; if(typeof flAudMark==='function') flAudMark([_nb.id, _nb.log[0].id],'c'); }   /* §flAud · ใครกด + เรือเช่า */
   closeModal('charter-modal');renderBoats();save('config');
 }

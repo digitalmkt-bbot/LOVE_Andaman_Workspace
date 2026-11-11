@@ -429,6 +429,27 @@ function getStoredStatus(boat,ds){
   return {s:'available',loc:'-'};
 }
 function getBoat(id){return BOATS.find(b=>b.id===id);}
+/* ══ §flAud (2026-11-11) · ใครสร้าง/แก้เรือและแถวสถานะ · เก็บใน fl_audit (ไม่แตะตาราง boats) ══════════ */
+function flAudWho(){ try{ const m=window.LA_ME||{}; return String(m.name||m.username||'').trim()||'?'; }catch(_){ return '?'; } }
+function flAudGet(){ try{ const d=(typeof laBlob==='function')?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}'); const v=d.fl_audit; return (typeof v==='string')?(JSON.parse(v)||{}):(v&&typeof v==='object'?v:{}); }catch(_){ return {}; } }
+function flAudMark(ids, kind){   /* kind 'c' = สร้าง · 'u' = แก้ */
+  try{
+    if(typeof laBlob!=='function' || typeof laBlobSave!=='function') return;
+    const d=laBlob(); let a={}; try{ a=(typeof d.fl_audit==='string')?(JSON.parse(d.fl_audit)||{}):{}; }catch(_){ a={}; }
+    const w=flAudWho(), now=new Date().toISOString();
+    (ids||[]).filter(Boolean).forEach(id=>{ const e=Object.assign({}, a[id]||{});
+      if(kind==='c' && !e.cb){ e.cb=w; e.ca=now; } else { e.ub=w; e.ua=now; }
+      a[id]=e; });
+    d.fl_audit=JSON.stringify(a); laBlobSave();
+  }catch(e){ console.warn('flAud', e); }
+}
+function flAudFmt(iso){ try{ const x=new Date(iso); return x.getDate()+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][x.getMonth()]+' '+String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'); }catch(_){ return ''; } }
+function flAudEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+/* หัวเรือ · " · สร้างโดย X 11 พ.ย. 08:23 · แก้ล่าสุด Y …" · ไม่มีบันทึก (เรือก่อนมีระบบนี้) = ไม่ขึ้นอะไร */
+function flAudBoatTxt(id){ const e=flAudGet()[id]; if(!e) return '';
+  return (e.cb?(' · สร้างโดย <b>'+flAudEsc(e.cb)+'</b> '+flAudFmt(e.ca)):'')+(e.ub?(' · แก้ล่าสุด '+flAudEsc(e.ub)+' '+flAudFmt(e.ua)):''); }
+function flAudLine(id){ const e=flAudGet()[id]; if(!e) return '';
+  return '<div style="font-size:10.5px;color:#8A93A0;margin-top:2px">'+(e.cb?('บันทึกโดย '+flAudEsc(e.cb)+' · '+flAudFmt(e.ca)):'')+(e.ub?((e.cb?' · ':'')+'แก้โดย '+flAudEsc(e.ub)+' · '+flAudFmt(e.ua)):'')+'</div>'; }
 
 /* ══ §boatEff · สถานะเรือ = อ่านสด ไม่ใช่ค่าที่เขียนค้างไว้ ═══════════════════
    ของเดิม สถานะเรือกับใบงานซ่อมเป็นข้อมูลคนละชุดที่ไม่ผูกกันเลย
@@ -7090,6 +7111,7 @@ function renderBoatDetailPink(){
       <div style="min-width:0">
         <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="flex:none;background:${evSt.bg};color:${evSt.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${evSt.label}</span><span style="font-size:13px;color:#0F1B3D;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</span></div>
         ${locHtml}
+        ${ev.logId?flAudLine(ev.logId):''}
       </div>
       <span style="font-size:11.5px;color:${open?'#0F1B3D':'#5B6170'};font-weight:${open?700:500};white-space:nowrap">${ev.outcome}</span>
       <span style="color:#9A9A92;font-size:14px">${ev.logId?'›':''}</span>
@@ -7108,7 +7130,7 @@ function renderBoatDetailPink(){
       <div style="width:44px;height:44px;border-radius:50%;background:${ac};color:white;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700">${b.name}</span><button onclick="openBoatEdit('${b.id}')" title="${isCharter?'แก้ไขเรือเช่า':'แก้ไขชื่อ ประเภท ที่นั่ง ท่า'}" style="background:none;border:none;color:${dim.ink3};font-size:11px;cursor:pointer;padding:0">✎</button><label title="สีประจำเรือ — คลิกเพื่อเปลี่ยน" style="position:relative;display:inline-flex;align-items:center;cursor:pointer;line-height:0"><span style="width:15px;height:15px;border-radius:5px;background:${(_idc&&_idc.raw)||ac};border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18)"></span><input type="color" value="${(_idc&&_idc.raw)||(_idc&&/^#[0-9a-fA-F]{6}$/.test(_idc.text||'')?_idc.text:'#185FA5')}" onchange="flSetBoatColor('${b.id}',this.value)" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer"></label><span style="background:${ss.bg};color:${ss.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600">${ss.label}</span></div>
-        <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}</div>
+        <div style="font-size:11px;color:${dim.ink2};margin-top:2px">${b.type} · ${b.cap||'?'} PAX${engs.length?' · '+engs.length+' engines':''} · ${pierDisplay} · ID ${b.id}${flAudBoatTxt(b.id)}</div>
         ${(function(){
           if(typeof getActiveAssignment!=='function') return '';
           const active = getActiveAssignment(b);
@@ -7638,13 +7660,13 @@ function saveStatus(){
      แก้แถวเดิมแล้วไม่ได้ผ่าน dialog (เช่นเปลี่ยนเป็น fixing) ต้องล้างทิ้ง ไม่ให้ค้าง */
   if(editingSlId){
     const e=b.log.find(x=>x.id===editingSlId);
-    if(e){ Object.assign(e,{s:selSt,from,to,loc,province,locType,detail,note,reason});
+    if(e){ Object.assign(e,{s:selSt,from,to,loc,province,locType,detail,note,reason}); flAudMark([e.id],'u');   /* §flAud */
            if(_ovrJobs) e.ovrJobs=_ovrJobs; else delete e.ovrJobs; }
   } else {
     autoClosePrevLog(b,from,to);
     const _row={id:'sl'+Date.now(),s:selSt,from,to,loc,province,locType,detail,note,reason};
     if(_ovrJobs) _row.ovrJobs=_ovrJobs;
-    b.log.push(_row);
+    b.log.push(_row); flAudMark([_row.id],'c');   /* §flAud */
   }
   closeModal('status-modal');renderTimeline(b);renderBoats();save('config');
 }
@@ -7845,8 +7867,9 @@ function saveBoat(){
     if(curSt.s!==newSt){
       if(!b.log)b.log=[];
       autoClosePrevLog(b,TODAY_STR);
-      b.log.push({id:'sl'+Date.now(),s:newSt,from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''});
+      { const _r={id:'sl'+Date.now(),s:newSt,from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''}; b.log.push(_r); flAudMark([_r.id],'c'); }   /* §flAud */
     }
+    flAudMark([bid],'u');   /* §flAud */
     closeModal('boat-modal'); renderBoats(); save('config');
     if(typeof flRenderBoatList==='function'){flRenderBoatList();flSelBoat(bid);}
   } else {
@@ -7854,6 +7877,7 @@ function saveBoat(){
     fields.id=LA_UID('b');
     fields.log=[{id:'sl'+Date.now(),s:stMap[fmBoatSt],from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''}];
     BOATS.push(fields);
+    flAudMark([fields.id, fields.log[0]&&fields.log[0].id],'c');   /* §flAud */
     closeModal('boat-modal'); renderBoats(); save('config');
     if(typeof flRenderBoatList==='function') flRenderBoatList();
   }
@@ -9570,7 +9594,7 @@ function bop2SwapSave(){
     if(A && (typeof getStoredStatus!=='function' || (getStoredStatus(A, from)||{}).s==='available')){
       A.log=A.log||[]; if(typeof autoClosePrevLog==='function') autoClosePrevLog(A, from, null);
       const row={ id:'sl'+Date.now(), s:'fixing', from:from, to:null, loc:'', note:'เสียกลางทาง '+S.d+' · '+ev.cause+(ev.engine?(' · '+ev.engine):'')+(ev.place?(' · '+ev.place):''), reason:ev.cause, swapId:ev.id };
-      A.log.push(row); ev.logId=row.id; save('config');
+      A.log.push(row); ev.logId=row.id; flAudMark([row.id],'c'); save('config');   /* §flAud */
     }
   }
   save('operations');
