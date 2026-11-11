@@ -46150,7 +46150,8 @@ function rtBuildDetailBody(rt){
         : 'free · no extra charge';
       bundleFootnotes.push({ mark, rId, text: `${rName(rId)} includes Longtail Join — ${detail}` });
     }
-    ZONES.forEach((z,zi) => {
+    const _ZR = (typeof rtZonesForRoute==='function') ? rtZonesForRoute(rId, rr) : ZONES;   /* §rtZnView · โซนตามท่าของเส้นนี้ (ระนอง = RN + No transfer) */
+    _ZR.forEach((z,zi) => {
       const cell = rr[z];
       const isNotOffered = cell === null;     // explicit "Not Offered" marker
       const isMissing    = cell === undefined; // never defined · also treat as N/A
@@ -46158,15 +46159,15 @@ function rtBuildDetailBody(rt){
       const rowTop = zi===0 ? 'border-top:1px solid #E0DED8' : 'border-top:1px solid #F2F0EA';
       seatRows += `<tr style="${rowTop}${(isNotOffered||isMissing)?';background:#FBE4E018':''}">
         ${zi===0
-          ? `<td rowspan="3" style="padding:10px 14px 10px 0;vertical-align:top;font-size:12px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}${footMark}</td>`
+          ? `<td rowspan="${_ZR.length}" style="padding:10px 14px 10px 0;vertical-align:top;font-size:12px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}${footMark}</td>`
           : ''}
         <td style="padding:6px 12px;font-size:10px;color:${(isNotOffered||isMissing)?'#C44A36':'#5F5E5A'};text-transform:uppercase;letter-spacing:.06em;font-weight:600">${z==='NoTransfer'?'No transfer':z}</td>
         ${isOffered
           ? PAX.map((p,pi) => `<td style="padding:6px 12px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===NC.lastTh?'padding-right:24px;':''}${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${fmt(cell[p])}</td>`).join('')
           : `<td colspan="${PAX.length}" style="padding:6px 12px;text-align:center;font-size:10px;color:#C44A36;font-weight:700;letter-spacing:.06em;text-transform:uppercase"><span style="background:#FBE4E0;color:#C44A36;padding:2px 9px;border-radius:3px;font-size:9px;letter-spacing:.05em">${isNotOffered?'No Offer':'Not Set'}</span></td>`}
         ${zi===0
-          ? `<td rowspan="3" style="padding:10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A;border-left:1px solid #F2F0EA">${vFrom}</td>
-             <td rowspan="3" style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A">${vTo}</td>`
+          ? `<td rowspan="${_ZR.length}" style="padding:10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A;border-left:1px solid #F2F0EA">${vFrom}</td>
+             <td rowspan="${_ZR.length}" style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A">${vTo}</td>`
           : ''}
       </tr>`;
     });
