@@ -266,7 +266,7 @@ function pslDayHtml(ro){
 function pslAnData(pier, mon){
   var blob={}; try{ blob=(typeof laBlob==='function')?laBlob():{}; }catch(_){ }
   var keys=Object.keys(blob).filter(function(k){ return /^pos_sales_\d{6}$/.test(k) && (mon==='all' || k==='pos_sales_'+mon.replace('-','')); });
-  var A={days:0, net:0, pf:0, qty:0, alloc:0, allocAmt:0, xAmt:0, boat:{}, guide:{}, nat:{}, dom:{}, prod:{}, route:{}, pax:0};
+  var A={days:0, net:0, pf:0, qty:0, alloc:0, allocAmt:0, xAmt:0, boat:{}, guide:{}, nat:{}, dom:{}, prod:{}, route:{}, br:{}, pax:0};
   keys.forEach(function(k){ var m=(typeof ctRead==='function')?ctRead(k):null; if(!m) return;
     Object.keys(m).forEach(function(dk){ var sp=dk.split('|'); if(sp[0]!==pier) return; var date=sp[1], rec=m[dk]; if(!rec||!rec.items) return;
       A.days++;
@@ -287,6 +287,11 @@ function pslAnData(pier, mon){
         var RR=A.route[b.rid]=A.route[b.rid]||{name:b.route,trips:0,pax:0,amt:0,q:0,items:{},boats:{}};
         RR.trips++; RR.pax+=b.pax; RR.amt+=am; RR.q+=(dayQ[b.id]||0); RR.boats[b.id]=(RR.boats[b.id]||0)+1;
         Object.keys(dayIt[b.id]||{}).forEach(function(n){ RR.items[n]=(RR.items[n]||0)+dayIt[b.id][n]; });
+        /* §pslBR (2026-11-11) · owner "ยอดต้องแยกกันไหม" · แถวลำ = ลำ × โปรแกรม
+           ลำเดียวกันวิ่งคนละโปรแกรม ลูกค้าคนละกลุ่ม ยอดต่อหัวรวมกันแล้วเทียบกับลำอื่นไม่ได้ */
+        var BR=A.br[b.id+'|'+b.rid]=A.br[b.id+'|'+b.rid]||{bid:b.id,route:b.route,days:0,pax:0,amt:0,q:0,items:{}};
+        BR.days++; BR.pax+=b.pax; BR.amt+=am; BR.q+=(dayQ[b.id]||0);
+        Object.keys(dayIt[b.id]||{}).forEach(function(n){ BR.items[n]=(BR.items[n]||0)+dayIt[b.id][n]; });
         pslBoatGuides(date,b.id).forEach(function(g){ var G=A.guide[g]=A.guide[g]||{trips:0,pax:0,amt:0}; G.trips++; G.pax+=b.pax; G.amt+=am; });
         var N=pslBoatNats(date,b.id), tot=0; N.forEach(function(x){ tot+=x.n; });
         var dk2=(N[0] && N[0].n/(tot||1)>=0.5)?N[0].c:'ผสม'; var D=A.dom[dk2]=A.dom[dk2]||{trips:0,pax:0,amt:0}; D.trips++; D.pax+=b.pax; D.amt+=am;
@@ -317,12 +322,13 @@ function pslAnHtml(){
       +'<td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td>'
       +'<td class="l" style="font-size:11.5px;white-space:nowrap">'+pslTop(x.boats,9).map(function(id){ var b=(typeof getBoat==='function')?getBoat(id):null; return pslAvatar(id,(b&&b.name)||id,20); }).join(' ')+'</td></tr>'; });
   h+='</tbody></table></div></div>';
-  /* ลำ */
-  var bk=Object.keys(A.boat).sort(function(a,b){ var x=A.boat[a], y=A.boat[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
-  var mxB=0; bk.forEach(function(k){ var x=A.boat[k]; mxB=Math.max(mxB,x.pax?x.amt/x.pax:0); });
-  h+='<div class="card"><h3>ลำไหนขายดี <small>เรียงตามยอดต่อหัว · นับทุกเที่ยวที่ออกในวันที่มีข้อมูล แม้ไม่มียอดขาย</small></h3><div class="ov"><table><thead><tr><th class="l">เรือ</th><th class="l">โปรแกรม</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th></tr></thead><tbody>';
-  bk.forEach(function(k){ var x=A.boat[k], b=(typeof getBoat==='function')?getBoat(k):null, pp=x.pax?x.amt/x.pax:0;
-    h+='<tr><td class="l nm">'+pslBoatTag(k,(b&&b.name)||k,28)+'</td><td class="l" style="font-size:11.5px;line-height:1.35">'+(x.rt?Object.keys(x.rt).sort(function(p,q){ return x.rt[q]-x.rt[p]; }).map(function(r){ return e(r)+(Object.keys(x.rt).length>1?' <span style="color:#6B7591">×'+x.rt[r]+'</span>':''); }).join('<br>'):'—')+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
+  /* ลำ × โปรแกรม · §pslBR */
+  var bk=Object.keys(A.br).sort(function(a,b){ var x=A.br[a], y=A.br[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
+  var mxB=0; bk.forEach(function(k){ var x=A.br[k]; mxB=Math.max(mxB,x.pax?x.amt/x.pax:0); });
+  var nRt={}; bk.forEach(function(k){ var id=A.br[k].bid; nRt[id]=(nRt[id]||0)+1; });
+  h+='<div class="card"><h3>ลำไหนขายดี <small>1 แถว = ลำ × โปรแกรม · ลำที่วิ่งหลายโปรแกรมแยกแถว · เรียงตามยอดต่อหัว · นับทุกเที่ยวที่ออกในวันที่มีข้อมูล แม้ไม่มียอดขาย</small></h3><div class="ov"><table><thead><tr><th class="l">เรือ</th><th class="l">โปรแกรม</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th></tr></thead><tbody>';
+  bk.forEach(function(k){ var x=A.br[k], b=(typeof getBoat==='function')?getBoat(x.bid):null, pp=x.pax?x.amt/x.pax:0;
+    h+='<tr><td class="l nm">'+pslBoatTag(x.bid,(b&&b.name)||x.bid,28)+(nRt[x.bid]>1?' <span style="font-size:10.5px;font-weight:500;color:#6B7591">'+nRt[x.bid]+' โปรแกรม</span>':'')+'</td><td class="l" style="font-size:12px">'+e(x.route)+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
   h+='</tbody></table></div></div>';
   /* ไกด์ */
   var gk=Object.keys(A.guide).sort(function(a,b){ var x=A.guide[a], y=A.guide[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
