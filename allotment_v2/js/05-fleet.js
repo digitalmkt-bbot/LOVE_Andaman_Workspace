@@ -9747,7 +9747,14 @@ function _flRenderDRInner(){
     const _isCh = b.ownership==='charter';
     /* §drExtra · เรือเช่าที่วิ่งวันนั้นต้องมีแถวให้กรอกเสมอ แม้ยอดลูกค้าจะยังเป็น 0
        เพราะเหตุผลที่มันอยู่ในตารางคือ "เราเบิกของลงเรือลำนี้" ไม่ใช่ยอดขาย */
-    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b)) && !posI;   /* §drPos · วันที่ตีเรือต้องมีช่องให้ใส่น้ำมัน */
+    /* §drRescue (2026-11-10) · owner "เปลี่ยนเรือระหว่างทาง · ต้องมีเรื่องน้ำมันเพิ่มด้วยไหมของ Achilles"
+       เรือกู้ (TRIPS[d][เรือ].type='rescue' จาก §bopSwap) ไม่มีใบจองของตัวเอง (ใบจองยังผูกกับเรือที่เสีย)
+       pax จึงเป็น 0 แล้วแถวยุบเป็น "ไม่ออก" ทั้งที่เรือวิ่งจริง · เปิดช่องน้ำมัน/ชั่วโมงเครื่องให้กรอก
+       น้ำมันที่กรอกลง .fuel ปกติ → Trip P&L ใช้เป็นต้นทุนเรือกู้แทนค่าประมาณจากสูตร */
+    const rsc = (dayOp && dayOp.type==='rescue') ? dayOp : null;
+    const rscFor = rsc ? ((typeof getBoat==='function' && getBoat(rsc.rescueFor)) || {name:rsc.rescueFor}) : null;
+    const rscPax = rsc ? (+(((TRIPS[ds]||{})[rsc.rescueFor]||{}).swap||{}).pax || 0) : 0;
+    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b)) && !posI && !rsc;   /* §drPos · วันที่ตีเรือต้องมีช่องให้ใส่น้ำมัน */
     const posOnly = !!posI && pax===0;
 
     // ── Entry cards (Style A · fixed height · PAX/Fuel fixed-width so they line up across rows · engines fill the rest) ──
@@ -9802,7 +9809,8 @@ function _flRenderDRInner(){
         <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}${_isCh?'<span class="fs-ch">เช่า</span>':''}
           <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
     const _posChip = posI ? `<div class="fs-pos${locked?'':' on'}"${locked?'':` onclick="flPosOpen('${ds}','','${b.id}')"`} title="${posI.auto?'จากใบย้ายท่าใน Boat Status · ':''}${_e(posI.note||'')}"><b>&#8644; ตีเรือ</b> ${flPosLbl(posI)}${(!posOnly)?`<input class="fs-in" type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" placeholder="L" ${_DIS} onclick="event.stopPropagation()" onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ (แยกจากเที่ยวลูกค้า)">`:''}</div>` : '';
-    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
+    const _rscChip = rsc ? `<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:#E0F2FE;border:0.5px solid #7DD3FC;border-radius:6px;width:fit-content;margin-top:3px;font-size:10px;color:#075985;font-weight:700" title="เรือกู้ · บันทึกใน Boat Operation › เปลี่ยนกลางทาง · กรอกน้ำมันที่ใช้จริงของลำนี้">&#128735; เรือกู้ของ ${_e(rscFor.name||'')}${rscPax?(' · รับลูกค้า '+rscPax+' คน'):''}</div>` : '';
+    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_rscChip}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
     const IN='class="fs-in"';   /* §drNum · ช่องตัวเลขเป็น text+decimal เพื่อโชว์ , · ค่าดิบผ่าน _fsRaw */
     /* §drIssIdle (2026-09-12) · "แอดเพิ่ม เป็นชื่อเรือ กลายเป็นว่า
@@ -9841,7 +9849,7 @@ function _flRenderDRInner(){
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${_fsNum(pax||0)}</td>
       ${posOnly
         ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="text" inputmode="decimal" value="${posI.fuel!=null?_fsNum(posI.fuel):''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',_fsRaw(this))" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
-        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
+        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:(rsc?'<em style="color:#075985">เรือกู้</em>':'')}</td>`}
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="text" inputmode="decimal" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',_fsRaw(this))">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };

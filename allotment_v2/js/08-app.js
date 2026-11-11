@@ -31550,32 +31550,52 @@ function pxTransferPax(date, bid){
   });
   return o;
 }
+/* §pxVanJoin (2026-11-10) · owner "วันไหนที่ออก 2 ลำ บางทีมีจอยรถด้วยกัน จะคำนวณแบบไหน"
+   กติกาเดิมถูกอยู่แล้ว: รถคันเดียวส่งหลายลำ = ค่ารถ 1 คัน หารตามหัวที่ส่งขึ้นแต่ละลำ (รวมทุกลำ = 1 คันพอดี)
+   ที่ขาด 2 เรื่อง:
+   1) ใบจองที่แบ่งคนลงหลายคัน (ops.vanSplits) ไม่มี vanId → ไม่ถูกนับเลย ทั้งหัวของลำตัวเองและหัวรวมของคัน
+      ต.ค.–10 พ.ย. 27 ใบ · เช่น 21 ต.ค. Achilles กรุ๊ป 62 คน 6 คัน ค่ารถจริง ฿0 → ไปใช้สูตร · 7 ต.ค. Oceanus นับได้คันเดียว
+   2) โซนของคัน · เดิมแต่ละลำดูเฉพาะลูกค้าของตัวเอง ลำหนึ่งได้ราคา KL อีกลำได้ PK ทั้งที่เป็นรถคันเดียววิ่งรอบเดียว
+      → ยึดโซนของทั้งคัน (มีลูกค้า KL ในคัน = ราคา KL ทุกลำ) ผลรวมทุกลำจึงเท่ากับค่ารถ 1 คันจริง */
+/* §pxVanRun (2026-11-10) · owner "วิ่งแยกนับแยก"
+   หน่วยที่คิดเงินคือ "รอบรถ" ไม่ใช่ "รถหนึ่งคันต่อวัน"
+   · กรุ๊ปรถ (vanGroup) เลขเดียวกันทั้งวัน = รถโหลดเดียว · ต่างเส้นทางแต่กรุ๊ปเดียวกัน = จอยรอบเดียว หารตามหัว
+   · คันเดียวกัน คนละกรุ๊ป คนละเส้นทาง = วิ่งแยก 2 รอบ · แต่ละลำจ่ายรอบของตัวเองเต็ม
+     (เดิมหารกันเหมือนรอบเดียว เช่น 21 ต.ค. Love7 รับลค Irena 05:10 แล้วกลับมารับ LKC66 08:20 · คิดรวมแค่ ฿1,700)
+   · คันเดียวกัน เส้นทางเดียวกัน = รอบเดียวเสมอ (เรือออกเวลาเดียว วิ่งสองรอบไม่ทัน) แม้แยกกรุ๊ปไว้ */
 function pxVanCost(date, bid, routeId){
-  var mine={}, all={};
+  var legs=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    var vid=O.vanId; if(!vid) return;
     var tb=(O.boatId||t.charterBoatId)||'';
-    var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
-    all[vid]=(all[vid]||0)+pax;
-    if(tb===bid){
-      mine[vid]=(mine[vid]||0)+pax;
-      /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
-      var a=(b.pickupAreaId && typeof bookingV2GetArea==='function')?bookingV2GetArea(b.pickupAreaId):null;
-      var z=(a&&a.zone)||'';
-      if(z==='KL') mine['_z'+vid]='KL'; else if(!mine['_z'+vid]) mine['_z'+vid]='PK';
-    }
+    /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
+    var a=(b.pickupAreaId && typeof bookingV2GetArea==='function')?bookingV2GetArea(b.pickupAreaId):null;
+    var kl=((a&&a.zone)||'')==='KL';
+    var L=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
+      ? O.vanSplits.map(function(x){ return {vid:x.vanId, g:x.vanGroup, pax:+x.pax||0}; })
+      : [{vid:O.vanId, g:O.vanGroup, pax:(typeof ckBookedPax==='function')?ckBookedPax(t):0}];
+    L.forEach(function(l){ if(!l.vid || !(l.pax>0)) return;
+      legs.push({vid:l.vid, g:(l.g==null?'':String(l.g)), r:t.routeId||'', pax:l.pax, kl:kl, me:(tb===bid)}); });
   });
+  /* รวมขาเป็นรอบ · คันเดียวกัน + (กรุ๊ปเดียวกัน หรือ เส้นทางเดียวกัน) = รอบเดียว */
+  var P={};
+  function f(x){ while(P[x]!==x){ P[x]=P[P[x]]; x=P[x]; } return x; }
+  legs.forEach(function(l){ var kg=l.vid+'|g'+l.g, kr=l.vid+'|r'+l.r;
+    if(P[kg]==null) P[kg]=kg; if(P[kr]==null) P[kr]=kr;
+    var A=f(kg), B=f(kr); if(A!==B) P[A]=B; });
+  var all={}, mine={}, kl={}, vidOf={};
+  legs.forEach(function(l){ var k=f(l.vid+'|g'+l.g); vidOf[k]=l.vid;
+    all[k]=(all[k]||0)+l.pax; if(l.kl) kl[k]=1; if(l.me) mine[k]=(mine[k]||0)+l.pax; });
   var tot=0, list=[];
-  Object.keys(mine).forEach(function(vid){
-    if(vid.indexOf('_z')===0) return;
-    var v=(typeof vehGet==='function')?vehGet(vid):null; if(!v) return;
-    var day=vanDayCost(v, routeId, mine['_z'+vid]||'PK');
-    var share=(all[vid]>0)?(mine[vid]/all[vid]):1;
+  Object.keys(mine).forEach(function(k){
+    var v=(typeof vehGet==='function')?vehGet(vidOf[k]):null; if(!v) return;
+    var zone=kl[k]?'KL':'PK';
+    var day=vanDayCost(v, routeId, zone);
+    var share=(all[k]>0)?(mine[k]/all[k]):1;
     tot+=day*share;
-    list.push({name:v.name||vid, day:day, share:share, zone:mine['_z'+vid]||'PK'});
+    list.push({name:v.name||vidOf[k], day:day, share:share, zone:zone});
   });
   return {total:Math.round(tot), vans:list};
 }
@@ -71715,6 +71735,11 @@ function pc2CSS3(S){
     'body.btc #view-booking .btc-ft:hover .x{display:inline!important;white-space:nowrap!important}',
     'body.btc #view-booking .btc-ft:hover .s{display:none}',
     'body.btc #view-booking .btc-ft .btc-fa{background:transparent!important;color:#fff!important;padding:0!important;margin:0!important;font-size:inherit!important;text-decoration:underline;cursor:pointer}',
+    /* §retFtBot (2026-11-10) · owner "ทำไมขึ้นเตือนแบบนี้" (11 พ.ย. · ป้ายแดง ⚠ รถกลับ ทับป้ายเขียว "กลับ ลมใต้2" ของ Green Mango)
+       ป้ายเตือนรถกลับลอยที่ขอบบนของช่องตัวเอง แต่ป้ายรถกลับ (rtFt) ลอยที่ขอบล่าง · ป้ายบนของแถวล่างจึงไปทับป้ายล่างของแถวบน
+       ดูเหมือนเตือนใบบน ทั้งที่เป็นของใบล่าง · ย้ายป้ายเตือนในช่อง Send back ไปขอบล่างซ้ายแบบเดียวกับป้ายรถกลับ */
+    'body.btc #view-booking td.t2-sbk .btc-ft.ret{top:calc(100% - 8px);left:6px;right:auto}',
+    'body.btc #view-booking td.t2-sbk .btc-ft.ret:hover{top:calc(100% - 10px)}',
     'body.btc #view-booking .btc-ft.due{background:#FEE4E2;color:#B42318;box-shadow:0 1px 3px rgba(180,35,24,.18)}',
     'body.btc #view-booking .btc-ft.bk{top:-7px;right:2px;font-size:9px!important;line-height:13px!important;padding:0 5px;background:#EEF0F3;color:#8A8F9C!important;text-decoration:none!important;box-shadow:none}',
     'body.btc #view-booking .btc-ft.bk::before{content:"จอง "}',
@@ -72076,7 +72101,7 @@ function pc2CSS3(S){
         });
         if(alertEl){
           /* warning floats at the cell's top-right corner · hover shows the long text + the original "same van" button */
-          var ft = document.createElement('span'); ft.className = 'btc-ft'; ft.title = alertEl.title || '';
+          var ft = document.createElement('span'); ft.className = 'btc-ft ret'; ft.title = alertEl.title || '';   /* §retFtBot · ดู CSS */
           ft.innerHTML = '<span class="s">⚠ รถกลับ</span><span class="x">ยังไม่จัดรถกลับ ·</span>';
           if(actEl){ actEl.textContent = '↩ ใช้คันเดิม'; actEl.classList.add('x', 'btc-fa'); ft.appendChild(actEl); }
           alertEl.parentNode.removeChild(alertEl);
