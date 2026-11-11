@@ -64,7 +64,7 @@ function pslAvatar(bid,name,sz){
   try{ if(!c && b && typeof flBoatAvatarColor==='function') c=flBoatAvatarColor(b); }catch(_){ }
   var ini='?'; try{ ini=(typeof flBoatInitials==='function')?flBoatInitials(name||''):String(name||'?').slice(0,2).toUpperCase(); }catch(_){ }
   sz=sz||32;
-  return '<span class="av" style="width:'+sz+'px;height:'+sz+'px;background:'+(c||'#999')+';font-size:'+Math.round(sz*0.34)+'px">'+pslE(ini)+'</span>';
+  return '<span class="av" title="'+pslE(name)+'" style="width:'+sz+'px;height:'+sz+'px;background:'+(c||'#999')+';font-size:'+Math.round(sz*0.34)+'px">'+pslE(ini)+'</span>';
 }
 function pslBoatTag(bid,name,sz){ return '<span class="bt">'+pslAvatar(bid,name,sz)+'<b>'+pslE(name)+'</b></span>'; }
 function pslAllocSum(it){ var s=0, a=it.a||{}; Object.keys(a).forEach(function(k){ s+=(+a[k].q||0); }); return s; }
@@ -190,6 +190,7 @@ function pslCss(){
   +'.psl .card{background:#fff;border:1px solid #E1E6EF;border-radius:12px;margin-bottom:14px;overflow:hidden}.psl .card h3{font-size:14px;margin:0;padding:11px 14px;border-bottom:1px solid #E1E6EF;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.psl .card h3 small{font-weight:500;color:#6B7591;font-size:11.5px}'
   +'.psl .card .ov{overflow-x:auto}'
   +'.psl .av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;flex:none;letter-spacing:.02em}.psl .bt{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}.psl .bt b{font-size:13px;font-weight:600;color:#16223F}'
+  +'.psl .bh>span.rt{font-size:10.5px;font-weight:600;color:#1683C7;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +'.psl .hb{display:inline-block;height:8px;border-radius:4px;background:#1683C7;vertical-align:middle;margin-right:6px}'
   +'.psl .note{font-size:11.5px;color:#6B7591;padding:8px 14px}';
   document.head.appendChild(s);
@@ -240,7 +241,7 @@ function pslDayHtml(ro){
   cols.forEach(function(b){ var N=natOf[b.id], tot=0; N.forEach(function(x){ tot+=x.n; });
     var mix=N.slice(0,2).map(function(x){ return x.c+' '+Math.round(x.n/(tot||1)*100)+'%'; }).join(' · ');
     var g=b.gone?[]:pslBoatGuides(date,b.id);
-    h+='<th><div class="bh">'+pslBoatTag(b.id,b.name,30)+'<span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+'</div></th>'; });
+    h+='<th><div class="bh">'+pslBoatTag(b.id,b.name,30)+(b.gone?'':'<span class="rt" title="'+e(b.route)+'">'+e(b.route)+'</span>')+'<span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+'</div></th>'; });
   h+='<th><div class="bh"><b>ไม่ใช่ลูกค้าเรือ</b><span>walk-in / พนักงาน</span></div></th><th>เหลือ</th></tr></thead><tbody>';
   items.forEach(function(it,i){
     var left=it.q-pslAllocSum(it), a=it.a||{};
@@ -265,22 +266,27 @@ function pslDayHtml(ro){
 function pslAnData(pier, mon){
   var blob={}; try{ blob=(typeof laBlob==='function')?laBlob():{}; }catch(_){ }
   var keys=Object.keys(blob).filter(function(k){ return /^pos_sales_\d{6}$/.test(k) && (mon==='all' || k==='pos_sales_'+mon.replace('-','')); });
-  var A={days:0, net:0, pf:0, qty:0, alloc:0, allocAmt:0, xAmt:0, boat:{}, guide:{}, nat:{}, dom:{}, prod:{}, pax:0};
+  var A={days:0, net:0, pf:0, qty:0, alloc:0, allocAmt:0, xAmt:0, boat:{}, guide:{}, nat:{}, dom:{}, prod:{}, route:{}, pax:0};
   keys.forEach(function(k){ var m=(typeof ctRead==='function')?ctRead(k):null; if(!m) return;
     Object.keys(m).forEach(function(dk){ var sp=dk.split('|'); if(sp[0]!==pier) return; var date=sp[1], rec=m[dk]; if(!rec||!rec.items) return;
       A.days++;
-      var boats=pslBoats(pier,date), dayAmt={};
+      var boats=pslBoats(pier,date), dayAmt={}, dayQ={}, dayIt={};
       rec.items.forEach(function(it){ A.net+=it.net; A.pf+=it.pf; A.qty+=it.q; var u=it.q?it.net/it.q:0;
         var P=A.prod[it.n]=A.prod[it.n]||{q:0,amt:0,by:{}}; P.q+=it.q; P.amt+=it.net;
         Object.keys(it.a||{}).forEach(function(bid){ var c=it.a[bid], q=+c.q||0, am=q*u; if(!q) return;
           A.alloc+=q; A.allocAmt+=am;
           if(bid===PSL_X){ A.xAmt+=am; return; }
-          dayAmt[bid]=(dayAmt[bid]||0)+am; P.by[bid]=(P.by[bid]||0)+q;
+          dayAmt[bid]=(dayAmt[bid]||0)+am; dayQ[bid]=(dayQ[bid]||0)+q; (dayIt[bid]=dayIt[bid]||{})[it.n]=((dayIt[bid]||{})[it.n]||0)+q; P.by[bid]=(P.by[bid]||0)+q;
           var B=A.boat[bid]=A.boat[bid]||{days:0,pax:0,amt:0,q:0,items:{}}; B.amt+=am; B.q+=q; B.items[it.n]=(B.items[it.n]||0)+q;
           var nk=c.nat||'-'; var N=A.nat[nk]=A.nat[nk]||{q:0,amt:0,items:{}}; N.q+=q; N.amt+=am; N.items[it.n]=(N.items[it.n]||0)+q;
         }); });
       boats.forEach(function(b){ var B=A.boat[b.id]=A.boat[b.id]||{days:0,pax:0,amt:0,q:0,items:{}}; B.days++; B.pax+=b.pax; A.pax+=b.pax;
         var am=dayAmt[b.id]||0;
+        /* §pslRoute · โปรแกรม (เส้นทาง) ของเที่ยวนั้น · ลำเดียววิ่งหลายโปรแกรมในเดือนได้ จึงเก็บแยกทั้งสองทาง */
+        B.rt=B.rt||{}; B.rt[b.route]=(B.rt[b.route]||0)+1;
+        var RR=A.route[b.rid]=A.route[b.rid]||{name:b.route,trips:0,pax:0,amt:0,q:0,items:{},boats:{}};
+        RR.trips++; RR.pax+=b.pax; RR.amt+=am; RR.q+=(dayQ[b.id]||0); RR.boats[b.id]=(RR.boats[b.id]||0)+1;
+        Object.keys(dayIt[b.id]||{}).forEach(function(n){ RR.items[n]=(RR.items[n]||0)+dayIt[b.id][n]; });
         pslBoatGuides(date,b.id).forEach(function(g){ var G=A.guide[g]=A.guide[g]||{trips:0,pax:0,amt:0}; G.trips++; G.pax+=b.pax; G.amt+=am; });
         var N=pslBoatNats(date,b.id), tot=0; N.forEach(function(x){ tot+=x.n; });
         var dk2=(N[0] && N[0].n/(tot||1)>=0.5)?N[0].c:'ผสม'; var D=A.dom[dk2]=A.dom[dk2]||{trips:0,pax:0,amt:0}; D.trips++; D.pax+=b.pax; D.amt+=am;
@@ -302,12 +308,21 @@ function pslAnHtml(){
     +'<div class="tile"><div class="l">แยกลำแล้ว</div><div class="v">'+pct+'%</div><div class="pb"><i style="width:'+pct+'%"></i></div></div></div>';
   if(pct<80) h+='<div class="flash">แยกลำแล้ว '+pct+'% ของชิ้นที่ขาย · ตัวเลขรายลำและรายไกด์ด้านล่างยังต่ำกว่าจริง จนกว่าจะแยกครบ</div>';
   var bar=function(v,mx){ return '<i class="hb" style="width:'+Math.max(2,Math.round((mx?v/mx:0)*70))+'px"></i>'; };
+  /* §pslRoute · โปรแกรม */
+  var rk=Object.keys(A.route).sort(function(a,b){ var x=A.route[a], y=A.route[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
+  var mxR=0; rk.forEach(function(k){ var x=A.route[k]; mxR=Math.max(mxR,x.pax?x.amt/x.pax:0); });
+  h+='<div class="card"><h3>โปรแกรมไหนขายดี <small>ลูกค้าแต่ละโปรแกรมซื้อเฉลี่ยคนละเท่าไร · เรียงตามยอดต่อหัว</small></h3><div class="ov"><table><thead><tr><th class="l">โปรแกรม</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th><th class="l">เรือ</th></tr></thead><tbody>';
+  rk.forEach(function(k){ var x=A.route[k], pp=x.pax?x.amt/x.pax:0;
+    h+='<tr><td class="l nm">'+e(x.name)+'</td><td>'+x.trips+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxR)+'<b>'+pslB(pp)+'</b></td>'
+      +'<td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td>'
+      +'<td class="l" style="font-size:11.5px;white-space:nowrap">'+pslTop(x.boats,9).map(function(id){ var b=(typeof getBoat==='function')?getBoat(id):null; return pslAvatar(id,(b&&b.name)||id,20); }).join(' ')+'</td></tr>'; });
+  h+='</tbody></table></div></div>';
   /* ลำ */
   var bk=Object.keys(A.boat).sort(function(a,b){ var x=A.boat[a], y=A.boat[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
   var mxB=0; bk.forEach(function(k){ var x=A.boat[k]; mxB=Math.max(mxB,x.pax?x.amt/x.pax:0); });
-  h+='<div class="card"><h3>ลำไหนขายดี <small>เรียงตามยอดต่อหัว · นับทุกเที่ยวที่ออกในวันที่มีข้อมูล แม้ไม่มียอดขาย</small></h3><div class="ov"><table><thead><tr><th class="l">เรือ</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th></tr></thead><tbody>';
+  h+='<div class="card"><h3>ลำไหนขายดี <small>เรียงตามยอดต่อหัว · นับทุกเที่ยวที่ออกในวันที่มีข้อมูล แม้ไม่มียอดขาย</small></h3><div class="ov"><table><thead><tr><th class="l">เรือ</th><th class="l">โปรแกรม</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th></tr></thead><tbody>';
   bk.forEach(function(k){ var x=A.boat[k], b=(typeof getBoat==='function')?getBoat(k):null, pp=x.pax?x.amt/x.pax:0;
-    h+='<tr><td class="l nm">'+pslBoatTag(k,(b&&b.name)||k,28)+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
+    h+='<tr><td class="l nm">'+pslBoatTag(k,(b&&b.name)||k,28)+'</td><td class="l" style="font-size:11.5px;line-height:1.35">'+(x.rt?Object.keys(x.rt).sort(function(p,q){ return x.rt[q]-x.rt[p]; }).map(function(r){ return e(r)+(Object.keys(x.rt).length>1?' <span style="color:#6B7591">×'+x.rt[r]+'</span>':''); }).join('<br>'):'—')+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
   h+='</tbody></table></div></div>';
   /* ไกด์ */
   var gk=Object.keys(A.guide).sort(function(a,b){ var x=A.guide[a], y=A.guide[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
