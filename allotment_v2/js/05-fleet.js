@@ -21470,6 +21470,16 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         reason:finalReason
       });
     }
+    /* §swRelease · ซ่อมเสร็จ (ผลพร้อมใช้) และไม่มีใบอื่นกันเรือ → ปลดแถว "ซ่อม" ที่บันทึกเปลี่ยนกลางทางตั้งไว้ */
+    if(out.boatStatus==='available' && !_planRow && !((_blk.jobs||[]).length) && typeof bop2SwRelease==='function'){
+      const _swR=bop2SwRelease(b, TODAY_STR);
+      if(_swR.n){
+        const _last=b.log[b.log.length-1];
+        if(!skipBoatLog && _last && _last.from===TODAY_STR && _last.to && _swR.removedFrom.indexOf(bop2SwNext(_last.to))>=0) _last.to=null;
+        if(!m.progressLog) m.progressLog=[];
+        m.progressLog.push({date:TODAY_STR, text:'คืนสถานะเรือ · ปลดสถานะ "ซ่อม" จากบันทึกเปลี่ยนเรือกลางทาง '+_swR.n+' แถว'});
+      }
+    }
     if(!b.repairHistory) b.repairHistory=[];
     b.repairHistory.push({
       date:TODAY_STR,jobNo:m.no,title:m.title,detail:m.detail||'',

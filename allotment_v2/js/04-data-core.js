@@ -9571,6 +9571,24 @@ function bop2SwLogOpen(){
     +'<div style="padding:12px 20px;background:#FAFAF8;border-top:1px solid #EEE;display:flex;justify-content:flex-end"><button onclick="bop2SwClose()" style="padding:9px 16px;border:0;background:#3730A3;color:#fff;border-radius:9px;font-weight:800;font-size:12px;font-family:inherit;cursor:pointer">ปิด</button></div>';
   bop2SwShell(html, 720);
 }
+/* §swRelease · id ของแถวสถานะ "ซ่อม" ที่บันทึกเปลี่ยนกลางทางของเรือลำนี้ตั้งไว้ */
+function bop2SwRowIds(boatId){
+  const out=[]; try{ Object.keys((typeof TRIPS!=='undefined'&&TRIPS)||{}).forEach(d=>{ const o=TRIPS[d] && TRIPS[d][boatId]; if(o && o.swap && o.swap.logId) out.push(o.swap.logId); }); }catch(_){}
+  return out;
+}
+/* ปลดแถวเหล่านั้น · คืนจำนวนแถวที่ปลด · removedFrom = วันเริ่มของแถวที่ลบ (ไว้ต่อแถวพร้อมใช้ที่ถูกตัดสั้น) */
+function bop2SwRelease(b, today){
+  const ids=bop2SwRowIds(b && b.id); if(!ids.length || !Array.isArray(b.log)) return { n:0, removedFrom:[] };
+  let n=0; const removedFrom=[];
+  b.log=b.log.filter(l=>{
+    if(!l || ids.indexOf(l.id)<0 || l.s!=='fixing') return true;
+    if(l.to && l.to<today) return true;
+    n++;
+    if((l.from||'')>=today){ removedFrom.push(l.from); return false; }
+    l.to=laDayBefore(today); return true;
+  });
+  return { n:n, removedFrom:removedFrom };
+}
 function bop2SwNext(d){ return fmt(addDays(new Date(d+'T12:00:00'), 1)); }
 function bop2SwapSave(){
   const S=window._bop2Sw; if(!S) return;
