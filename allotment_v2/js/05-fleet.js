@@ -9835,7 +9835,7 @@ function _flRenderDRInner(){
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${_fsNum(pax||0)}</td>
       ${posOnly
         ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="text" inputmode="decimal" value="${posI.fuel!=null?_fsNum(posI.fuel):''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',_fsRaw(this))" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
-        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:(rsc?'<em style="color:#075985">เรือกู้</em>':'')}</td>`}
+        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:(rsc?((locked&&fuel==null)?'<em style="color:#B45309;font-weight:700" title="ท่านี้บันทึกแล้ว ช่องถูกล็อก · กด Edit ที่หัวการ์ดท่า แล้วกรอกลิตรที่ช่องนี้">เรือกู้ · กด Edit เพื่อกรอก</em>':'<em style="color:#075985">เรือกู้</em>'):'')   /* §drRescue2 · ท่าล็อกแล้วช่องว่างมองไม่เห็นว่ากรอกตรงไหน */}</td>`}
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="text" inputmode="decimal" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',_fsRaw(this))">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };
