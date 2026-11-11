@@ -57,6 +57,16 @@ function pslBoatGuides(date,bid){
     return F.filter(function(g){ return g.role==='guide'||g.role==='trainee'; }).map(function(g){ return g.name; });
   }catch(_){ return []; }
 }
+/* §pslAv (2026-11-11) · owner "ดีไซน์ของชื่อเรือ ใช้ของในหน้า Boat Status" · วงกลมสีประจำเรือ + ตัวย่อ แล้วชื่อเรือตัวหนา */
+function pslAvatar(bid,name,sz){
+  var b=(typeof getBoat==='function')?getBoat(bid):null, c='';
+  try{ if(typeof getBoatColor==='function'){ var gc=getBoatColor(bid); if(gc&&gc.text&&gc.text!=='#666') c=gc.fill||gc.text; } }catch(_){ }
+  try{ if(!c && b && typeof flBoatAvatarColor==='function') c=flBoatAvatarColor(b); }catch(_){ }
+  var ini='?'; try{ ini=(typeof flBoatInitials==='function')?flBoatInitials(name||''):String(name||'?').slice(0,2).toUpperCase(); }catch(_){ }
+  sz=sz||32;
+  return '<span class="av" style="width:'+sz+'px;height:'+sz+'px;background:'+(c||'#999')+';font-size:'+Math.round(sz*0.34)+'px">'+pslE(ini)+'</span>';
+}
+function pslBoatTag(bid,name,sz){ return '<span class="bt">'+pslAvatar(bid,name,sz)+'<b>'+pslE(name)+'</b></span>'; }
 function pslAllocSum(it){ var s=0, a=it.a||{}; Object.keys(a).forEach(function(k){ s+=(+a[k].q||0); }); return s; }
 
 /* ── อ่านไฟล์ POS ── */
@@ -170,7 +180,7 @@ function pslCss(){
   +'.psl .wrap th:first-child,.psl .wrap td:first-child{position:sticky;left:0;z-index:1;background:#fff;min-width:230px;max-width:320px;border-right:1px solid #E1E6EF}.psl .wrap th:first-child{z-index:3;background:#F5F7FB}'
   +'.psl td{padding:6px 8px;border-bottom:1px solid #EEF1F6;text-align:center;vertical-align:middle}'
   +'.psl td.nm{font-weight:600;font-size:12.5px;line-height:1.3}.psl td.r{text-align:right}'
-  +'.psl .bh{display:flex;flex-direction:column;align-items:center;gap:1px}.psl .bh b{font-size:12.5px;color:#16223F}.psl .bh span{font-weight:500;font-size:10px;color:#6B7591;max-width:130px;overflow:hidden;text-overflow:ellipsis}'
+  +'.psl .bh{display:flex;flex-direction:column;align-items:center;gap:1px}.psl .bh b{font-size:12.5px;color:#16223F}.psl .bh>span:not(.bt){font-weight:500;font-size:10px;color:#6B7591;max-width:130px;overflow:hidden;text-overflow:ellipsis}'
   +'.psl input.q{width:46px;text-align:center;border:1px solid #D5DBE7;border-radius:7px;padding:5px 2px;font:700 13px inherit;font-family:inherit;background:#fff}.psl input.q.has{background:#E2F4F0;border-color:#0E7C6B;color:#0A5C4F}.psl input.q:disabled{background:#F5F7FB;color:#9AA3B8}'
   +'.psl select.nat{display:block;margin:3px auto 0;width:62px;font-size:10px;border:1px solid #D5DBE7;border-radius:6px;padding:1px;background:#fff;color:#4B5675}.psl select.nat.off{visibility:hidden}'
   +'.psl .left{font-weight:700;color:#B45309}.psl .left.ok{color:#0E7C6B}'
@@ -179,6 +189,7 @@ function pslCss(){
   +'.psl .flash{background:#FDF1DD;color:#9A5B00;border-radius:9px;padding:8px 12px;margin-bottom:10px;font-weight:600}'
   +'.psl .card{background:#fff;border:1px solid #E1E6EF;border-radius:12px;margin-bottom:14px;overflow:hidden}.psl .card h3{font-size:14px;margin:0;padding:11px 14px;border-bottom:1px solid #E1E6EF;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.psl .card h3 small{font-weight:500;color:#6B7591;font-size:11.5px}'
   +'.psl .card .ov{overflow-x:auto}'
+  +'.psl .av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;flex:none;letter-spacing:.02em}.psl .bt{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}.psl .bt b{font-size:13px;font-weight:600;color:#16223F}'
   +'.psl .hb{display:inline-block;height:8px;border-radius:4px;background:#1683C7;vertical-align:middle;margin-right:6px}'
   +'.psl .note{font-size:11.5px;color:#6B7591;padding:8px 14px}';
   document.head.appendChild(s);
@@ -229,7 +240,7 @@ function pslDayHtml(ro){
   cols.forEach(function(b){ var N=natOf[b.id], tot=0; N.forEach(function(x){ tot+=x.n; });
     var mix=N.slice(0,2).map(function(x){ return x.c+' '+Math.round(x.n/(tot||1)*100)+'%'; }).join(' · ');
     var g=b.gone?[]:pslBoatGuides(date,b.id);
-    h+='<th><div class="bh"><b>'+e(b.name)+'</b><span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+'</div></th>'; });
+    h+='<th><div class="bh">'+pslBoatTag(b.id,b.name,30)+'<span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+'</div></th>'; });
   h+='<th><div class="bh"><b>ไม่ใช่ลูกค้าเรือ</b><span>walk-in / พนักงาน</span></div></th><th>เหลือ</th></tr></thead><tbody>';
   items.forEach(function(it,i){
     var left=it.q-pslAllocSum(it), a=it.a||{};
@@ -296,7 +307,7 @@ function pslAnHtml(){
   var mxB=0; bk.forEach(function(k){ var x=A.boat[k]; mxB=Math.max(mxB,x.pax?x.amt/x.pax:0); });
   h+='<div class="card"><h3>ลำไหนขายดี <small>เรียงตามยอดต่อหัว · นับทุกเที่ยวที่ออกในวันที่มีข้อมูล แม้ไม่มียอดขาย</small></h3><div class="ov"><table><thead><tr><th class="l">เรือ</th><th>เที่ยว</th><th>ลูกค้า</th><th>ยอดขาย</th><th>ชิ้น</th><th class="l">ยอด/หัว</th><th class="l">สินค้าขายดี</th></tr></thead><tbody>';
   bk.forEach(function(k){ var x=A.boat[k], b=(typeof getBoat==='function')?getBoat(k):null, pp=x.pax?x.amt/x.pax:0;
-    h+='<tr><td class="l nm">'+e((b&&b.name)||k)+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
+    h+='<tr><td class="l nm">'+pslBoatTag(k,(b&&b.name)||k,28)+'</td><td>'+x.days+'</td><td>'+x.pax+'</td><td class="r">'+pslB(x.amt)+'</td><td>'+x.q+'</td><td class="l">'+bar(pp,mxB)+'<b>'+pslB(pp)+'</b></td><td class="l" style="font-size:11.5px">'+e(pslTop(x.items,2).map(function(n){ return n.slice(0,34)+' ×'+x.items[n]; }).join(' · ')||'—')+'</td></tr>'; });
   h+='</tbody></table></div></div>';
   /* ไกด์ */
   var gk=Object.keys(A.guide).sort(function(a,b){ var x=A.guide[a], y=A.guide[b]; return (y.pax?y.amt/y.pax:0)-(x.pax?x.amt/x.pax:0); });
