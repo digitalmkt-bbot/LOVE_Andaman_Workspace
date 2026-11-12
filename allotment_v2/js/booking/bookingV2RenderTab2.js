@@ -1770,14 +1770,14 @@ function bookingV2RenderTab2(){
       + _pbPx('inf',_sInf,laT('ทารก · ไม่รวมเหมาลำ')) + _pbPx('foc',_sFoc,laT('FOC · ไม่รวมเหมาลำ'))
       + `<td colspan="${COLN-7}" class="pr"><div class="pw">`
       + _pbOffChip
-      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>/${_pbCap}<em class="${_notRun?'off':_pbCls}">${_notRun?'closed':(_pbAv<=0?'full':(_pbAv+' free'))}</em></span>`
+      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>${trLockedTotal>0?`<span class="pslk" data-lk="${trLockedTotal}" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}"><i>+</i>&#128274;<u>${trLockedTotal}</u></span>`:''}/${_pbCap}<em class="${_notRun?'off':_pbCls}">${_notRun?'closed':(_pbAv<=0?'full':(_pbAv+' free'))}</em></span>`
       /* สี่ช่องบวกกันไม่เท่าที่นั่งที่ใช้ไป = ต้องบอกว่าทำไม · ไม่งั้นดูเหมือนเลขผิด
          ที่นั่ง (getSeatsConsumed) หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้
          สี่ช่องคือยอดของแถวลูกค้าจอยที่ยืนยันแล้ว (ไม่รวมเหมาลำ ทั้งสองฝั่ง) */
       + (_seatPax!==_pbBk?`<span class="pb ptot" title="${laTp('ลูกค้าจอยที่ยืนยันแล้ว {0} คน', _seatPax)} · ${laT('ที่นั่งที่ใช้ไป: หัก No-show/CXL หน้าท่า · รวมใบรออนุมัติที่กันที่ไว้')}">${laT('รวม')} ${_seatPax} pax</span>`:'')
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + btSwChip(rid, date)
-      + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
+      /* §pbLock · ป้าย 🔒 ย้ายไปอยู่ติดยอดจองใน .ps แล้ว */
       + (trPendTotal>0?`<span class="plk ppd" title="${laT('ล็อกที่รอที่ว่าง · ยังไม่คอนเฟิร์ม ไม่กันที่นั่ง')}">&#9203; Pending ${trPendTotal}</span>`:'')
       /* §bkLock · เรือที่ถูกกันไว้ทั้งลำหายไปจากทั้งจำนวนลำและความจุข้างบน
          ถ้าไม่บอกตรงนี้ คนอ่านจะเห็นแค่ "วันนี้เรือน้อยลง" โดยไม่รู้ว่าหายไปไหน
@@ -2631,6 +2631,14 @@ function bookingV2RenderTab2(){
     .t2-pband .ps em.ok{background:#DCF4E8;color:#0C6B47}
     .t2-pband .ps em.low{background:#FAEEDA;color:#854F0B}
     .t2-pband .ps em.full{background:#FCEBEB;color:#A32D2D}
+    /* §pbLock · "6 + 🔒31 /38" · ป้าย ว่าง/เต็ม ใหญ่ */
+    .t2-pband .ps .pslk{color:#8E2B18;font-weight:800;margin:0 7px 0 0}
+    .t2-pband .ps .pslk i{font-style:normal;color:#9A948C;font-weight:600;margin:0 9px}
+    .t2-pband .ps .pslk u{text-decoration:none;margin-left:5px}
+    .t2-pband td.pr .ps .pslk{font-size:16px}   /* §pbLock2 · เท่ายอดจอง */
+    .t2-pband td.pr .ps em{font-size:14px;padding:4px 13px;border-radius:9px;margin-left:10px;letter-spacing:.01em}
+    .t2-pband td.pr .ps em.full{background:#B42318;color:#fff}
+    .t2-pband td.pr .ps em.low{background:#FDE7B0;color:#7A4A00}
     /* §pbPax · แถบเป็นช่องตามคอลัมน์ · ตัวเลขใหญ่กว่าแถวข้างล่าง (12.5px) ให้เห็นว่าเป็นยอดรวม */
     .t2-mtbl tr.t2-pband>td.pl{position:sticky;left:0;z-index:12;border-right:2px solid #C3CCD8;
       box-shadow:3px 0 6px -3px rgba(15,23,42,.18)}

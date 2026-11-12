@@ -11773,6 +11773,7 @@ function flRenderBoatDetailPink(){
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${b.retired?`<button onclick="flUnretireBoat('${b.id}')" style="background:#1D9E75;color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">↩ Restore</button>`:''}
+        ${(typeof bhBtn==='function')?bhBtn(b.id):''}
         <button onclick="flEquipOpen('${b.id}')" style="background:#fff;color:#0F6E56;border:1px solid #cfe0d8;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">&#8596; ถอด/สลับ</button>
         <button onclick="flOpenEditBoatModal('${b.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
       </div>
@@ -17912,7 +17913,7 @@ function flRenderMaint(){
           ${costPill}
         </div>
         <div style="font-size:12px;font-weight:${isSel?600:500};color:${dim.ink};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.title||'—'}</div>
-        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>
+        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>${flAssetChips(m,'mj')}
       </div>
       <div style="display:flex;flex-direction:column;align-items:end;gap:4px;flex-shrink:0">
         <span style="background:${ss.bg};color:${ss.color};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${ss.label}</span>
@@ -18034,7 +18035,7 @@ function flRenderMaint(){
     return `<div class="fj-row${isSel?' on':''}${done&&!isSel?' dim':''}" onclick="flSelMaint('${m.id}')"><div class="bar" style="background:${TY_BAR[m.type]||'#9AA3B8'}"></div>
       <div style="min-width:0"><div class="no">${fjE(m.no||'—')}<span class="fj-pill" style="background:${tp[0]};color:${tp[1]}">${tp[2]}</span>${b?`<span class="fj-boat" style="background:${bc?bc.text:'#5B6170'}">${fjE(b.name)}</span>`:''}${m.pinned&&!done?'<span title="Pinned" style="font-size:11px">📌</span>':''}</div>
         <div class="ttl">${fjE(m.title||'—')}${ph}</div>
-        <div class="mt">${fjE(meta.join(' · '))}</div></div>
+        <div class="mt">${fjE(meta.join(' · '))}</div>${flAssetChips(m,'mj')}</div>
       <div class="rt"><span class="fj-pill" style="background:${sp[0]};color:${sp[1]}">${sp[2]}</span><span class="num" style="color:${jobCost>0?'#0F1B3D':'#9AA3AE'}">${jobCost>0?'฿'+fmtKR(jobCost):'&mdash;'}</span>${fjTrk(stage,done)}</div></div>`;
   };
   const grp=(t,d,n)=>`<div class="fj-grp"><b>${t}</b><span>${d}</span>${n!=null?`<span class="mono" style="margin-left:auto;color:#3E4658">${n}</span>`:''}</div>`;
@@ -20379,6 +20380,49 @@ function _flMaintPartsInner(m){
 // Surgically refresh ONLY the parts list + subtotal + timeline + count badge — WITHOUT
 // re-rendering the whole detail mount. This keeps the +Withdraw button (and the part picker)
 // alive, so the page never jumps to the top after a withdraw / return.
+/* ══ §memoUseNow2 (2026-11-12) · owner "งานที่ Memo รอเบิกของ แต่ยังไม่ได้ขอทีละอัน ตัวใหม่จะขึ้นให้เลยไหม"
+   ของจาก Memo ของงานนี้ที่รับเข้าคลังไปแล้ว แต่ยังไม่ได้เบิกลงงาน → ปุ่มเดียวเบิกให้ครบ
+   เหลือ = รับแล้ว − ที่เบิกลงงานนี้ไปแล้ว (นับตามรายการอะไหล่เดียวกัน) · เบิกได้ไม่เกินของที่มีในคลังที่รับเข้า */
+function flMaintMemoPending(m){
+  var out=[]; if(!m) return out;
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){
+    if(!mo || mo.maintId!==m.id || mo.status==='cancelled') return;
+    (mo.items||[]).forEach(function(it){
+      if(typeof _memoIsPart==='function' && !_memoIsPart(it,mo)) return;
+      var r=+it.recvQty||0;
+      if(!r && (mo.status==='received'||mo.status==='paid') && !((mo.receipts||[]).length)) r=+it.qty||0;   /* ใบเก่าก่อนมี recvQty */
+      if(!(r>0) || !it.invId) return;
+      var inv=FL_INVENTORY.find(function(x){ return x.id===it.invId; }); if(!inv) return;
+      var used=(m.parts||[]).filter(function(p){ return p.invId===it.invId; }).reduce(function(a,p){ return a+(+p.qty||0); },0);
+      var prev=out.filter(function(o){ return o.inv.id===inv.id; }).reduce(function(a,o){ return a+o.want; },0);
+      var left=r-Math.max(0,used-prev); if(left<=0) return;
+      invSyncLegacy(inv);
+      var loc=mo.receivedLocation||(((mo.receipts||[]).slice(-1)[0]||{}).location)||'';
+      if(!loc || !(invQtyAt(inv,loc)>0)){ var st=(inv.stocks||[]).filter(function(x){ return (x.qty||0)>0; })[0]; loc=st?st.location:loc; }
+      var av=loc?invQtyAt(inv,loc):0;
+      out.push({mo:mo, it:it, inv:inv, loc:loc, want:left, qty:Math.min(left,av)});
+    });
+  });
+  return out;
+}
+function flMaintMemoBtnHtml(m){
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length) return '';
+  var nos={}; L.forEach(function(x){ nos[x.mo.no]=1; });
+  return '<button onclick="flMaintWithdrawFromMemos(\''+m.id+'\')" style="display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;background:#E9F7F1;color:#0B5A43;border:1px solid #B7E0CF;border-radius:10px;padding:9px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left">'
+    +'<span style="font-size:14px">&#128230;</span><span style="flex:1">เบิกของจาก Memo ที่รับเข้าคลังแล้ว · '+L.length+' รายการ<span style="display:block;font-weight:500;font-size:10px;color:#3E6B5C">'+Object.keys(nos).join(' · ')+' · กดครั้งเดียวเบิกลงงานนี้ครบ</span></span><span>&rsaquo;</span></button>';
+}
+function flMaintWithdrawFromMemos(jobId){
+  var m=FL_MAINT.find(function(x){ return x.id===jobId; }); if(!m) return;
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length){ flShowToast('ไม่มีของจาก Memo ที่รอเบิกแล้ว'); return; }
+  var txt=L.slice(0,12).map(function(x){ return '  · '+x.inv.name+' × '+x.qty+' '+(x.inv.unit||'')+' · '+x.loc+(x.qty<x.want?(' (ขาด '+(x.want-x.qty)+' · ของในคลังไม่พอ)'):''); }).join('\n')+(L.length>12?('\n  · และอีก '+(L.length-12)+' รายการ'):'');
+  if(!confirm('เบิกของจาก Memo ลงงาน '+(m.no||'')+' ทั้งหมด '+L.length+' รายการ?\n\n'+txt)) return;
+  var ok=0, bad=0;
+  L.forEach(function(x){ if(!flMaintWithdraw(jobId,x.inv.id,x.loc,x.qty)) ok++; else bad++; });
+  flSave();
+  flMaintRefreshParts(jobId);
+  var host=document.getElementById('maint-memo-wd-'+jobId); if(host) host.innerHTML=flMaintMemoBtnHtml(m);
+  flShowToast('เบิกลงงาน '+(m.no||'')+' แล้ว '+ok+' รายการ'+(bad?(' · ไม่สำเร็จ '+bad):''));
+}
 function flMaintRefreshParts(jobId){
   const m=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(x=>x.id===jobId);
   if(!m) return;
@@ -20616,7 +20660,7 @@ function flRenderMaintDetailPink(){
     _wdSeen[label]=true; window._maintInvLabelMap[label]=x.id;
     return `<option value="${label.replace(/"/g,'&quot;')}"></option>`;
   }).join('');
-  const withdrawForm=flMaintCanEditParts(m)?`<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+  const withdrawForm=flMaintCanEditParts(m)?`<div id="maint-memo-wd-${m.id}">${flMaintMemoBtnHtml(m)}</div><div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
       <input list="maint-inv-list-${m.id}" id="maint-inv-sel-${m.id}" onchange="flMaintFillLoc('${m.id}')" autocomplete="off" placeholder="พิมพ์ชื่ออะไหล่ / Part No..." style="flex:1 1 160px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0"/>
       <datalist id="maint-inv-list-${m.id}">${invOpts}</datalist>
       <select id="maint-inv-loc-${m.id}" style="flex:1 1 130px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0">
@@ -24313,6 +24357,11 @@ function flSaveReceive(){
       const note=document.getElementById('receive-note').value;
       const memoLocation = document.getElementById('receive-location')?.value || 'คลัง Tub Lamu';
       let updatedCount=0, createdCount=0;
+      /* §memoUseNow (2026-11-12) · owner "กด Memo แล้วอะไหล่เข้าคลัง แล้วค่อยไปเบิก มันหลายขั้นตอน"
+         ใบ memo ที่ผูกกับงานซ่อม · ติ๊ก "เบิกใช้กับงานนี้ทันที" (ค่าเริ่มต้น = ติ๊ก) = รับเข้าคลังแล้วเบิกลงงานในคลิกเดียว
+         ยังลงประวัติคลังครบทั้งรับและเบิก (flMaintWithdraw ตัวเดียวกับปุ่ม + Withdraw) · ต้นทุนงานไม่นับซ้ำ (flMaintCalcCost ข้ามของที่จ่ายผ่าน memo) */
+      const _useJob=!!(mo.maintId && document.getElementById('recv-use-job')?.checked && FL_MAINT.find(x=>x.id===mo.maintId));
+      let _issued=0, _issueFail=0;
       /* §memoPart · โมดัลวาดเฉพาะบรรทัด parts · index ของ input จึงนับตาม
          allItems ไม่ใช่ตาม mo.items · ของเดิมวนด้วย mo.items แล้วอ่าน recv-qty-i
          ใบไหนมีบรรทัดค่าแรงคั่นอยู่ จำนวนจะเลื่อนไปผิดบรรทัด */
@@ -24377,6 +24426,10 @@ function flSaveReceive(){
           it.invId=newInv.id;
           createdCount++;
         }
+        if(_useJob){   /* §memoUseNow */
+          const _iv=FL_INVENTORY.find(x=>x.id===it.invId);
+          if(_iv && !flMaintWithdraw(mo.maintId,_iv.id,memoLocation,qty)) _issued++; else _issueFail++;
+        }
       });
       /* §memoPart · เก็บว่ารอบนี้รับอะไรมาบ้าง · ใครรับ วันไหน เข้าคลังไหน
          ไม่งั้นรับสองรอบแล้วย้อนดูไม่ได้ว่ารอบไหนได้อะไร */
@@ -24398,6 +24451,7 @@ function flSaveReceive(){
       if(updatedCount&&createdCount) toastMsg+=` · อัพเดท ${updatedCount} · สร้างใหม่ ${createdCount}`;
       else if(updatedCount) toastMsg+=` · อัพเดท ${updatedCount}`;
       else if(createdCount) toastMsg+=` · สร้างใหม่ ${createdCount}`;
+      if(_useJob){ const _mj=FL_MAINT.find(x=>x.id===mo.maintId); toastMsg+=` · เบิกลงงาน ${(_mj&&_mj.no)||''} แล้ว ${_issued} รายการ`+(_issueFail?` (ไม่สำเร็จ ${_issueFail} · เบิกเองที่หน้างาน)`:''); }
       flShowToast(toastMsg);
     }
     _receiveMemoId=null;
@@ -25413,6 +25467,10 @@ function flOpenReceiveMemo(moId){
         <span style="color:var(--ink-soft);font-size:10px;min-width:24px">${it.unit||'ชิ้น'}</span>
       </div>`;
     }).join('')}
+    ${(()=>{ const _mj=mo.maintId?FL_MAINT.find(x=>x.id===mo.maintId):null; if(!_mj) return '';   /* §memoUseNow */
+      return `<label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 10px;background:#E9F7F1;border:1px solid #B7E0CF;border-radius:8px;cursor:pointer;font-size:11.5px;color:#0B5A43;line-height:1.4">
+        <input type="checkbox" id="recv-use-job" checked style="margin-top:2px;flex:none">
+        <span><b>เบิกใช้กับงาน ${_mj.no||''} ทันที</b><br><span style="font-size:10px;color:#3E6B5C">รับเข้าคลังแล้วตัดเบิกลงงานนี้ให้เลย ไม่ต้องไปกดเบิกที่หน้างานอีกรอบ · เอาติ๊กออกถ้าจะเก็บเข้าคลังไว้ก่อน</span></span></label>`; })()}
     <div style="font-size:9px;color:var(--ink-soft);margin-top:8px;padding:6px 8px;background:#FBFAF7;border-radius:6px">
       <span style="font-weight:600">หมายเหตุ:</span> ใส่ 0 ในบรรทัดที่ของยังไม่มา · ใบจะยังไม่ปิด กดรับของอีกครั้งได้ตอนของมาเพิ่ม
       · รายการ <span style="background:#FAEEDA;color:#854F0B;padding:0 4px;border-radius:3px;font-weight:600">+ ใหม่</span> จะถูกสร้างเป็น inventory item อัตโนมัติ (category: อื่นๆ — แก้ภายหลังได้)
@@ -28523,6 +28581,44 @@ function flpCSS(){
   document.head.appendChild(s);
 }
 try{ flpCSS(); }catch(_){}
+/* ══ §flAsset (2026-11-11) · owner "อยากเห็นว่าปัญหาเกิดกับชิ้นส่วนไหน · แม้แต่ใน Maintenance ก็ไม่เห็น"
+   ข้อมูลมีอยู่แล้ว · ใบงาน MJ เก็บ m.assets[] (engine/gearbox/propeller/hull/safety · label "SN · ตำแหน่ง")
+   ใบแจ้ง INC เก็บ x.damagedAssets[] · แค่หน้ารวมกับหน้า Maintenance ไม่เคยพิมพ์ออกมา
+   ตัวช่วยกลาง · ใบงานไม่มีชิ้นส่วน → ใช้ของใบแจ้งที่ผูกกัน (incidentId) และกลับกัน */
+var FL_ASSET_T={engine:['เครื่อง','#1E5FA8','#E6F0FB'], gearbox:['เกียร์','#7A4AB8','#F1EAFB'], propeller:['ใบจักร','#0F7A6B','#E2F4F0'],
+  hull:['ตัวเรือ','#8A5A12','#FBF0DE'], safety:['อุปกรณ์ปลอดภัย','#A3301E','#FCE9E5'], electrical:['ไฟฟ้า','#8A6D00','#FBF4D6']};
+function flAssetsOf(rec, kind){
+  if(!rec) return [];
+  var L=[];
+  try{
+    if(kind==='inc'){ L=Array.isArray(rec.damagedAssets)?rec.damagedAssets:[];
+      if(!L.length && rec.maintId){ var m=(FL_MAINT||[]).find(function(x){ return x&&x.id===rec.maintId; }); if(m&&Array.isArray(m.assets)) L=m.assets; } }
+    else { L=Array.isArray(rec.assets)?rec.assets:[];
+      if(!L.length && rec.incidentId){ var i=(FL_INCIDENTS||[]).find(function(x){ return x&&x.id===rec.incidentId; }); if(i&&Array.isArray(i.damagedAssets)) L=i.damagedAssets; } }
+  }catch(_){ L=[]; }
+  var seen={};
+  return L.filter(function(a){ if(!a) return false; var k=(a.type||'')+'|'+(a.label||a.id||''); if(seen[k]) return false; seen[k]=1; return !!(a.label||a.id); });
+}
+function flAssetChips(rec, kind, max){
+  var L=flAssetsOf(rec, kind); if(!L.length) return '';
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  max=max||4;
+  var h=L.slice(0,max).map(function(a){
+    var T=FL_ASSET_T[a.type]||[a.type||'ชิ้นส่วน','#3E4658','#EEF0F3'];
+    var parts=String(a.label||a.id||'').split(' · ').map(function(x){ return x.trim(); }).filter(Boolean);
+    var main, sub='';
+    if((a.type==='engine'||a.type==='gearbox'||a.type==='propeller') && parts.length>=2){ main=T[0]+' '+parts[parts.length-1]; sub=parts.slice(0,-1).join(' · '); }
+    else { main=(a.type==='hull'||!FL_ASSET_T[a.type])?parts.join(' · '):(T[0]+' · '+parts.join(' · ')); }
+    var sw=a.swapped?(' → '+e(a.swappedTo||'สลับแล้ว')):'';
+    return '<span class="fl-asc" style="background:'+T[2]+';color:'+T[1]+'" title="'+e(T[0]+' · '+(a.label||a.id||''))+(a.detail?(' · '+e(a.detail)):'')+'">'
+      +'<b>'+e(main)+'</b>'+(sub?('<i>'+e(sub)+'</i>'):'')+sw+'</span>';
+  }).join('');
+  if(L.length>max) h+='<span class="fl-asc" style="background:#EEF0F3;color:#3E4658"><b>+'+(L.length-max)+'</b></span>';
+  if(!document.getElementById('fl-asc-css')){ var st=document.createElement('style'); st.id='fl-asc-css';
+    st.textContent='.fl-ascs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.fl-asc{display:inline-flex;align-items:baseline;gap:5px;max-width:100%;font-size:10.5px;line-height:1.5;padding:1px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl-asc b{font-weight:700}.fl-asc i{font-style:normal;opacity:.75;font-family:"DM Mono",ui-monospace,monospace;font-size:10px}';
+    document.head.appendChild(st); }
+  return '<span class="fl-ascs">'+h+'</span>';
+}
 function flpChip(kind,rec,warnEmpty){
   var n=flpCount(kind,rec);
   if(!n && !warnEmpty) return '';
@@ -29577,7 +29673,7 @@ function flRenderWork(){
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?flwT('No owner'):'—');
       return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)" title="'+flwT('Double-click to open the job')+'">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
-        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i>'+flAssetChips(it.ref, it.kind==='inc'?'inc':'mj')+'</span>'
         +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">'+flwT('Done')+'</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">'+flwT('Parked')+'</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
         +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'||it.park?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
         +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park||it.done?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+(it.done?'&mdash;':flwTp('{0} d',it.silent))+'</span>'
@@ -30552,7 +30648,11 @@ function faRenderParts(kind){
   var bigN=kind==='prop'?P.filter(function(r){ return r.st==='active'; }).length:P.filter(function(r){ return r.st==='ready'; }).length;
   faShell({ big:bigN, bigT:(kind==='eng'?'Engines ready':kind==='gb'?'Gearboxes ready':'Propellers active'), bigS:'of '+P.length+' · '+Object.keys(brands).map(function(k){ return brands[k]+' '+k; }).join(' · '),
     badges:{docs:faDocAlertCount()}, stages:stages,
-    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):''), add:K.add });
+    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):'')
+      /* §engFix · คู่เครื่องที่เลขถูกแก้ชื่อแทนการถอด/สลับ · กดเพื่อดูและแก้ทีละคู่ */
+      +((kind==='eng' && typeof flEngFixPending==='function' && flEngFixPending().length)?('<span class="fa-chip red" style="cursor:pointer" onclick="flEngFixOpen()" title="แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ"><b>'+flEngFixPending().length+'</b>คู่ เลขถูกแก้ชื่อ · กดเพื่อแก้</span>'):'')
+      /* §engBase · ลูกที่ชั่วโมงตั้งต้นเป็น 0 ทั้งที่มีมิเตอร์ · กดเพื่อตั้งตามมิเตอร์ */
+      +((kind==='eng' && typeof flEngBaseList==='function' && flEngBaseList().length)?('<span class="fa-chip amb" style="cursor:pointer" onclick="flEngBaseOpen()" title="ตั้งชั่วโมงตั้งต้นให้เท่ามิเตอร์ครั้งแรก"><b>'+flEngBaseList().length+'</b>ลูก ชั่วโมงตั้งต้น 0 · ตั้งตามมิเตอร์</span>'):''), add:K.add });
   var keep=document.getElementById('fl-'+kind+'-listpanel'), kt=keep?keep.scrollTop:0;
   wrap.innerHTML='<div class="fa-3">'+bl+mid+det+'</div>';
   var lp=document.getElementById('fl-'+kind+'-listpanel'); if(lp) lp.scrollTop=kt;
@@ -30830,6 +30930,7 @@ function faBoatDetail(o){
   var head='<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;flex-wrap:wrap">'+faAv(b,44)
     +'<div style="flex:1;min-width:240px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:21px;font-weight:800">'+faE(b.name)+'</b><span style="padding:2px 8px;border-radius:6px;background:'+S[1]+';color:'+S[2]+';font-size:11.5px;font-weight:600">'+S[0]+'</span><span style="font-size:12px;color:#5B6170">อยู่ที่ '+faE(String(pierTxt).replace(' · อยู่อู่',''))+'</span></div>'
     +'<div style="font-size:12.5px;color:#5B6170">'+faE([b.type,b.material].filter(Boolean).join(' · '))+(br?(' · <b style="color:'+faBrandC(br)+'">'+faE(br)+'</b> '+faE(mdl)+' × '+o.engs.length):'')+(b.reg?(' · ทะเบียน '+faE(b.reg)):'')+(b.callsign?(' · '+faE(b.callsign)):'')+'</div></div>'
+    +'<button type="button" class="fa-btn" onclick="if(typeof bhOpen===\'function\')bhOpen(\''+b.id+'\')" title="ทริป · รายได้ · ต้นทุน · ค่าซ่อมแยก ตัวเรือ/เครื่องยนต์/เกียร์/ใบจักร · เหตุการณ์ ของเรือลำนี้">&#128202; ประวัติ &amp; ค่าใช้จ่าย</button>'   /* §boatHist2 */
     +'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+b.id+'\')">⇄ ถอด/สลับ</button><button type="button" class="fa-btn pri" onclick="flOpenEditBoatModal(\''+b.id+'\')">Edit</button></div>';
   var A=[];
   var bad=o.docs.filter(function(x){ return x.st==='exp'||x.st==='na'||x.st==='warn30'; }).sort(function(a,z){ return (a.days==null?-9999:a.days)-(z.days==null?-9999:z.days); });
