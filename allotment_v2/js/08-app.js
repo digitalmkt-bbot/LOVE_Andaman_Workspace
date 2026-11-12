@@ -73587,10 +73587,13 @@ function pkTkData(date, pier){
           var typed=pkNmGet(date,b.id,C.k,q);
           var pfix=pkFixGet(date,b.id,'ph|'+C.k+'|'+q); if(pfix===C.k) pfix='';   /* §pkFixKey · แก้เป็นประเภทเดิม = ไม่ได้แก้ */
           var nm=typed?pkTkName(typed):{f:'',l:''};
+          /* §pkThNat (2026-11-12) · ช่องประเภทไทย (ผญ/ดญ ไทย) = สัญชาติไทย ไม่ยืมหัวกรุ๊ป
+             เคส BK-26111656-76BU หัวกรุ๊ป PT · ไกด์ FOC ไทยพิมพ์ชื่อที่หน้านี้ → เคยขึ้น PRT ทั้งที่ตั๋วเป็นผู้ใหญ่ไทย */
+          var _phTH=/TH$/.test(String(pfix||C.k)), _phNat=_phTH?'TH':leadNat;
           people.push({ ph:true, typed:!!typed, seq:q, cat:(pfix||C.k), auto:C.k, fixed:!!pfix,
                         f:nm.f, l:nm.l, full:typed,
-                        nat2:leadNat, nat3:(typeof pckNat3==='function'?pckNat3(leadNat):leadNat),
-                        natName:pkTkNatName(leadNat), natFromLead:true,
+                        nat2:_phNat, nat3:(typeof pckNat3==='function'?pckNat3(_phNat):_phNat),
+                        natName:pkTkNatName(_phNat), natFromLead:!_phTH,
                         vc:vcs, bkId:b.id, lead:leadNm });
         }
         /* §pkTk9 · เลยหัวที่เหลือไปแล้วแต่ยังมีชื่อค้างอยู่ = ชื่อของคนที่ยกเลิก/ไม่มา
