@@ -10730,7 +10730,14 @@ function bkV2VanClearRoute(date, routeId){
   if(_bkV2&&_bkV2.vanAssignMode) bkV2RenderKeep();
 }
 // ── Manual van grouping · mark bookings that go together = 1 group · van assigned to the group later (optional) ──
-function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } bkV2RenderKeep(); }   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
+/* §vanTickFast (2026-11-12) · owner "คลิกแล้วดีเลย์" (13 พ.ย. · โหมด Van · ติ๊กเลือกใบ 1 ครั้ง = วาดทั้งหน้าใหม่ 2–3 วินาที · วัดจริง 2,080–3,380 ms)
+   ติ๊กแล้วเปลี่ยนสีช่องทันที · การวาดใหม่ทั้งหน้ารอ 350 ms หลังติ๊กครั้งสุดท้าย → ติ๊กหลายใบรัว ๆ ได้ วาดรอบเดียว
+   สถานะที่เลือก (_bkV2VanSel) อัปเดตทันทีเหมือนเดิม · ปุ่มอื่นที่อ่านค่านี้จึงเห็นค่าล่าสุดเสมอ */
+function bkV2VanSelToggle(bkId, el){ window._bkV2VanSel=window._bkV2VanSel||{}; var on;
+  if(window._bkV2VanSel[bkId]){ delete window._bkV2VanSel[bkId]; on=false; } else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; on=true; }
+  if(el && el.style){ try{ el.style.background=on?'#185FA5':'transparent'; el.style.color=on?'#fff':'transparent'; el.style.border=on?'1.5px solid #185FA5':'1.5px solid #C9CDD4'; }catch(_){ }
+    clearTimeout(window._bkV2VanSelT); window._bkV2VanSelT=setTimeout(function(){ window._bkV2VanSelT=0; bkV2RenderKeep(); }, 350); return; }
+  bkV2RenderKeep(); }   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
 function bkV2VanSelClear(){ window._bkV2VanSel={}; bkV2RenderKeep(); }
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
 // Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
@@ -33192,7 +33199,7 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
   const gc=g&&groupColor?groupColor[g]:null;
   const myVan = isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanId)||'') : (_O.vanId||'');
   const vn = myVan ? ((vehGet(myVan)||{}).name||'') : '';
-  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
+  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}',this)" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
   const gchip=g
     ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:88px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
     : '<span style="font-size:10px;color:#c4c2ba">—</span>';
