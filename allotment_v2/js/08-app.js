@@ -60222,7 +60222,7 @@ function bkV2RenderTab2(){
       + _pbPx('inf',_sInf,laT('ทารก · ไม่รวมเหมาลำ')) + _pbPx('foc',_sFoc,laT('FOC · ไม่รวมเหมาลำ'))
       + `<td colspan="${COLN-7}" class="pr"><div class="pw">`
       + _pbOffChip
-      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>${trLockedTotal>0?`<span class="pslk" data-lk="${trLockedTotal}" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}"><i>+</i>&#128274;${trLockedTotal}</span>`:''}/${_pbCap}<em class="${_notRun?'off':_pbCls}">${_notRun?'closed':(_pbAv<=0?'full':(_pbAv+' free'))}</em></span>`
+      + `<span class="ps" title="${laT('ที่นั่งที่ใช้ไป / ความจุเรือที่เปิดขาย')}"><b>${_pbBk}</b>${trLockedTotal>0?`<span class="pslk" data-lk="${trLockedTotal}" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}"><i>+</i>&#128274;<u>${trLockedTotal}</u></span>`:''}/${_pbCap}<em class="${_notRun?'off':_pbCls}">${_notRun?'closed':(_pbAv<=0?'full':(_pbAv+' free'))}</em></span>`
       /* สี่ช่องบวกกันไม่เท่าที่นั่งที่ใช้ไป = ต้องบอกว่าทำไม · ไม่งั้นดูเหมือนเลขผิด
          ที่นั่ง (getSeatsConsumed) หัก No-show/CXL หน้าท่าออก และรวมใบรออนุมัติที่กันที่ไว้
          สี่ช่องคือยอดของแถวลูกค้าจอยที่ยืนยันแล้ว (ไม่รวมเหมาลำ ทั้งสองฝั่ง) */
@@ -61084,9 +61084,10 @@ function bkV2RenderTab2(){
     .t2-pband .ps em.low{background:#FAEEDA;color:#854F0B}
     .t2-pband .ps em.full{background:#FCEBEB;color:#A32D2D}
     /* §pbLock · "6 + 🔒31 /38" · ป้าย ว่าง/เต็ม ใหญ่ */
-    .t2-pband .ps .pslk{color:#8E2B18;font-weight:800;margin:0 1px 0 0}
-    .t2-pband .ps .pslk i{font-style:normal;color:#9A948C;font-weight:600;margin:0 4px}
-    .t2-pband td.pr .ps .pslk{font-size:14px}
+    .t2-pband .ps .pslk{color:#8E2B18;font-weight:800;margin:0 7px 0 0}
+    .t2-pband .ps .pslk i{font-style:normal;color:#9A948C;font-weight:600;margin:0 9px}
+    .t2-pband .ps .pslk u{text-decoration:none;margin-left:5px}
+    .t2-pband td.pr .ps .pslk{font-size:16px}   /* §pbLock2 · เท่ายอดจอง */
     .t2-pband td.pr .ps em{font-size:14px;padding:4px 13px;border-radius:9px;margin-left:10px;letter-spacing:.01em}
     .t2-pband td.pr .ps em.full{background:#B42318;color:#fff}
     .t2-pband td.pr .ps em.low{background:#FDE7B0;color:#7A4A00}
@@ -88732,7 +88733,7 @@ function pc2CSS3(S){
     'body.btc #view-booking .t2-pband td.pr .btc-tbar i.l{background:repeating-linear-gradient(135deg,#D9A493 0 4px,#F3DDD5 4px 8px)}',
     'body.btc #view-booking .t2-pband td.pr .ps em{font-size:14px;padding:4px 13px;border-radius:12px}',
     'body.btl #view-booking .t2-pband td.pr .ps em{font-size:16px;padding:5px 16px;border-radius:14px}',
-    'body.btl #view-booking .t2-pband td.pr .ps .pslk{font-size:17px}'
+    'body.btl #view-booking .t2-pband td.pr .ps .pslk{font-size:20px}'
   ].join('\n');
 
   function ensureCss(){
