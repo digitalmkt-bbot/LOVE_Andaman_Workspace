@@ -17887,7 +17887,7 @@ function flRenderMaint(){
           ${costPill}
         </div>
         <div style="font-size:12px;font-weight:${isSel?600:500};color:${dim.ink};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.title||'—'}</div>
-        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>
+        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>${flAssetChips(m,'mj')}
       </div>
       <div style="display:flex;flex-direction:column;align-items:end;gap:4px;flex-shrink:0">
         <span style="background:${ss.bg};color:${ss.color};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${ss.label}</span>
@@ -18009,7 +18009,7 @@ function flRenderMaint(){
     return `<div class="fj-row${isSel?' on':''}${done&&!isSel?' dim':''}" onclick="flSelMaint('${m.id}')"><div class="bar" style="background:${TY_BAR[m.type]||'#9AA3B8'}"></div>
       <div style="min-width:0"><div class="no">${fjE(m.no||'—')}<span class="fj-pill" style="background:${tp[0]};color:${tp[1]}">${tp[2]}</span>${b?`<span class="fj-boat" style="background:${bc?bc.text:'#5B6170'}">${fjE(b.name)}</span>`:''}${m.pinned&&!done?'<span title="Pinned" style="font-size:11px">📌</span>':''}</div>
         <div class="ttl">${fjE(m.title||'—')}${ph}</div>
-        <div class="mt">${fjE(meta.join(' · '))}</div></div>
+        <div class="mt">${fjE(meta.join(' · '))}</div>${flAssetChips(m,'mj')}</div>
       <div class="rt"><span class="fj-pill" style="background:${sp[0]};color:${sp[1]}">${sp[2]}</span><span class="num" style="color:${jobCost>0?'#0F1B3D':'#9AA3AE'}">${jobCost>0?'฿'+fmtKR(jobCost):'&mdash;'}</span>${fjTrk(stage,done)}</div></div>`;
   };
   const grp=(t,d,n)=>`<div class="fj-grp"><b>${t}</b><span>${d}</span>${n!=null?`<span class="mono" style="margin-left:auto;color:#3E4658">${n}</span>`:''}</div>`;
@@ -28475,6 +28475,44 @@ function flpCSS(){
   document.head.appendChild(s);
 }
 try{ flpCSS(); }catch(_){}
+/* ══ §flAsset (2026-11-11) · owner "อยากเห็นว่าปัญหาเกิดกับชิ้นส่วนไหน · แม้แต่ใน Maintenance ก็ไม่เห็น"
+   ข้อมูลมีอยู่แล้ว · ใบงาน MJ เก็บ m.assets[] (engine/gearbox/propeller/hull/safety · label "SN · ตำแหน่ง")
+   ใบแจ้ง INC เก็บ x.damagedAssets[] · แค่หน้ารวมกับหน้า Maintenance ไม่เคยพิมพ์ออกมา
+   ตัวช่วยกลาง · ใบงานไม่มีชิ้นส่วน → ใช้ของใบแจ้งที่ผูกกัน (incidentId) และกลับกัน */
+var FL_ASSET_T={engine:['เครื่อง','#1E5FA8','#E6F0FB'], gearbox:['เกียร์','#7A4AB8','#F1EAFB'], propeller:['ใบจักร','#0F7A6B','#E2F4F0'],
+  hull:['ตัวเรือ','#8A5A12','#FBF0DE'], safety:['อุปกรณ์ปลอดภัย','#A3301E','#FCE9E5'], electrical:['ไฟฟ้า','#8A6D00','#FBF4D6']};
+function flAssetsOf(rec, kind){
+  if(!rec) return [];
+  var L=[];
+  try{
+    if(kind==='inc'){ L=Array.isArray(rec.damagedAssets)?rec.damagedAssets:[];
+      if(!L.length && rec.maintId){ var m=(FL_MAINT||[]).find(function(x){ return x&&x.id===rec.maintId; }); if(m&&Array.isArray(m.assets)) L=m.assets; } }
+    else { L=Array.isArray(rec.assets)?rec.assets:[];
+      if(!L.length && rec.incidentId){ var i=(FL_INCIDENTS||[]).find(function(x){ return x&&x.id===rec.incidentId; }); if(i&&Array.isArray(i.damagedAssets)) L=i.damagedAssets; } }
+  }catch(_){ L=[]; }
+  var seen={};
+  return L.filter(function(a){ if(!a) return false; var k=(a.type||'')+'|'+(a.label||a.id||''); if(seen[k]) return false; seen[k]=1; return !!(a.label||a.id); });
+}
+function flAssetChips(rec, kind, max){
+  var L=flAssetsOf(rec, kind); if(!L.length) return '';
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  max=max||4;
+  var h=L.slice(0,max).map(function(a){
+    var T=FL_ASSET_T[a.type]||[a.type||'ชิ้นส่วน','#3E4658','#EEF0F3'];
+    var parts=String(a.label||a.id||'').split(' · ').map(function(x){ return x.trim(); }).filter(Boolean);
+    var main, sub='';
+    if((a.type==='engine'||a.type==='gearbox'||a.type==='propeller') && parts.length>=2){ main=T[0]+' '+parts[parts.length-1]; sub=parts.slice(0,-1).join(' · '); }
+    else { main=(a.type==='hull'||!FL_ASSET_T[a.type])?parts.join(' · '):(T[0]+' · '+parts.join(' · ')); }
+    var sw=a.swapped?(' → '+e(a.swappedTo||'สลับแล้ว')):'';
+    return '<span class="fl-asc" style="background:'+T[2]+';color:'+T[1]+'" title="'+e(T[0]+' · '+(a.label||a.id||''))+(a.detail?(' · '+e(a.detail)):'')+'">'
+      +'<b>'+e(main)+'</b>'+(sub?('<i>'+e(sub)+'</i>'):'')+sw+'</span>';
+  }).join('');
+  if(L.length>max) h+='<span class="fl-asc" style="background:#EEF0F3;color:#3E4658"><b>+'+(L.length-max)+'</b></span>';
+  if(!document.getElementById('fl-asc-css')){ var st=document.createElement('style'); st.id='fl-asc-css';
+    st.textContent='.fl-ascs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.fl-asc{display:inline-flex;align-items:baseline;gap:5px;max-width:100%;font-size:10.5px;line-height:1.5;padding:1px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl-asc b{font-weight:700}.fl-asc i{font-style:normal;opacity:.75;font-family:"DM Mono",ui-monospace,monospace;font-size:10px}';
+    document.head.appendChild(st); }
+  return '<span class="fl-ascs">'+h+'</span>';
+}
 function flpChip(kind,rec,warnEmpty){
   var n=flpCount(kind,rec);
   if(!n && !warnEmpty) return '';
@@ -29529,7 +29567,7 @@ function flRenderWork(){
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?flwT('No owner'):'—');
       return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)" title="'+flwT('Double-click to open the job')+'">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
-        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i>'+flAssetChips(it.ref, it.kind==='inc'?'inc':'mj')+'</span>'
         +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">'+flwT('Done')+'</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">'+flwT('Parked')+'</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
         +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'||it.park?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
         +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park||it.done?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+(it.done?'&mdash;':flwTp('{0} d',it.silent))+'</span>'
