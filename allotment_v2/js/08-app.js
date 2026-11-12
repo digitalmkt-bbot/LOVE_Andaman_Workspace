@@ -20460,7 +20460,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.sheet.d4 .jsbig{font-size:15px}.sheet.d4 th{padding:2px 4px}'
   // ── ปากกาเน้นข้อความ · แถบเครื่องมือไม่ติดไปกับกระดาษ ──
   +'.svc{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:700;margin:0 2px 2px 0;white-space:nowrap}'
-  +'.nt{line-height:1.3}.nt b{font-weight:700}.nt .n2{color:#374151;font-size:10.5px}'
+  +'.nt{line-height:1.3}.nt b{font-weight:700}.nt .n2{color:#374151;font-size:10.5px}.ntref{display:inline-block;border:1px solid #6B7280;border-radius:4px;padding:0 5px;font-size:9.5px;font-weight:700;color:#374151;white-space:nowrap;margin-top:2px}.cnrow td{background:#F8FAFC;padding:6px 8px}.cnh{font-size:10px;font-weight:700;color:#6B7280;margin-bottom:3px}.cni{display:flex;gap:8px;align-items:baseline;font-size:10.5px;line-height:1.35;padding:2px 0}.cni .ntref{flex:none;margin:0}.cni .cnt{flex:1;color:#111827}.cni .cnn{flex:none;color:#6B7280;font-size:9.5px}'
   +'@media print{body{background:#fff}.tools{display:none}'
     +'.sheet{width:100%;height:auto;min-height:210mm;margin:0;box-shadow:none;page-break-after:always}'   /* §guidePage2 */
     +'.sheet:last-child{page-break-after:auto}}'
@@ -20547,7 +20547,47 @@ function pckGuideJobSheet(bid, date, rows, vd){
   //   การเดาพลาดได้สองทางและเสียทั้งคู่ — เดาน้อยไปตารางล้นทับ เดามากไปตัวหนังสือเล็กเกินจำเป็น
   //   (เจอจริง 1 ส.ค. · 28 booking ได้ d3 ตัวเล็ก แต่พิมพ์ออกมาเหลือที่ว่างล่างเกือบ 40%)
   //   เริ่มที่ระดับใหญ่สุดเสมอ แล้วให้สคริปต์วัดความสูงจริงหลังเรนเดอร์เป็นคนลดให้เท่าที่จำเป็น
-  var dens = 1;
+  var dens = 1, _ntW = 9;
+
+  /* §gNoteDup (2026-11-11) · owner "ดูตรงช่องไฟ เพราะเป็นข้อมูล Note จาก B2C เยอะ มันเลยกินพื้นที่"
+     ใบงานระนอง (Victoria Cliff 14 พ.ย.) · Note จากเว็บ B2C ยาว ~300 ตัวอักษร ซ้ำกันหลายใบ
+     ("ต้องนำบัตรประชาชนตัวจริง… ไม่สามารถใช้ Thai ID ได้…") · ช่อง Note กว้าง 9% แถวเดียวสูงเกือบครึ่งหน้า
+     ตัดเป็นท่อนตาม ** / // / ขึ้นบรรทัด · ท่อนที่ยาวพอและโผล่ตั้งแต่ 2 ใบขึ้นไปในใบงานเดียวกัน
+     ย้ายไปพิมพ์ครั้งเดียวเหนือตาราง (หมายเหตุรวม 1, 2…) · แถวเหลือป้ายอ้างอิงสั้น ๆ
+     ท่อนที่เหลือยังยาว ขยายช่อง Note โดยยืมจากช่องชื่อ */
+  var _ntSeg=function(s){ return String(s||'').split(/\s*(?:\*{2,}|\/\/|[\r\n]+)\s*/).map(function(x){ return x.replace(/^[\s*\/.,·\-]+|[\s*\/,·\-]+$/g,'').trim(); }).filter(Boolean); };
+  var _ntKey=function(s){ return String(s).replace(/[\s*\/.,:;!()·\-]+/g,'').toLowerCase(); };
+  var _ntCommon=[], _ntIdx={};
+  var _ntSplit=function(nt){   /* → {nt: แถวที่ตัดท่อนรวมออกแล้ว, refs: [เลขหมายเหตุรวม]} */
+    var refs=[];
+    if(!_ntCommon.length) return {nt:nt, refs:refs};
+    var out=[];
+    nt.forEach(function(x){
+      if(x.w){ out.push(x); return; }
+      var keep=[], hit=false;
+      _ntSeg(x.t).forEach(function(sg){ var i=_ntIdx[_ntKey(sg)]; if(i){ hit=true; if(refs.indexOf(i)<0) refs.push(i); } else keep.push(sg); });
+      if(!hit) out.push(x); else if(keep.length) out.push({w:0, t:keep.join(' · ')});
+    });
+    return {nt:out, refs:refs.sort(function(a,b){ return a-b; })};
+  };
+  (function(){
+    /* ท่อนที่ขึ้นในชุดใบจองเดียวกันเป๊ะ = ข้อความก้อนเดียวกัน (เช่นคำเตือนบัตรประชาชน 4 ท่อน) · รวมเป็นหมายเหตุรวมข้อเดียว
+       ท่อนสั้นกว่า 22 ตัวอักษร (เช่น "เปลี่ยนจากเกาะเซลาวา") มักเป็นเรื่องของใบนั้นเอง · คงไว้ในแถว */
+    var who={}, first={}, ord=[];
+    rows.forEach(function(r, ri){ var seen={};
+      pckJobNote(r.b,date).forEach(function(x){ if(x.w) return;
+        _ntSeg(x.t).forEach(function(sg){ var k=_ntKey(sg); if(k.length<22||seen[k]) return; seen[k]=1;
+          if(!who[k]){ who[k]=[]; first[k]=sg; ord.push(k); } who[k].push(ri); }); });
+    });
+    var grp={};
+    ord.forEach(function(k){ if(who[k].length<2) return; var sig=who[k].join(',');
+      if(!grp[sig]){ grp[sig]={i:_ntCommon.length+1, parts:[], n:who[k].length}; _ntCommon.push(grp[sig]); }
+      grp[sig].parts.push(first[k]); _ntIdx[k]=grp[sig].i; });
+    _ntCommon.forEach(function(c){ c.t=c.parts.join(' · '); });
+    var mx=0;
+    rows.forEach(function(r){ var L=0; _ntSplit(pckJobNote(r.b,date)).nt.forEach(function(x){ L+=String(x.t||'').length; }); if(L>mx) mx=L; });
+    if(mx>60){ wName-=7; _ntW=16; }   /* Note ยาว → ช่อง Note 9% → 16% */
+  })();
 
   var rowHtml=function(r){
     var b=r.b, pb=ckPaxBreak(r.t.pax), NM=pckJobNames(b);
@@ -20579,7 +20619,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var area=b.pickupArea||(b.pickupAreaId&&typeof bookingV2GetArea==='function'?((bookingV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
     var dropOff=pckJobDrop(b, date);                                     // §jobDrop
     var ao=pckJobService(r, date);
-    var nt=pckJobNote(b, date);
+    var _ns=_ntSplit(pckJobNote(b, date)), nt=_ns.nt;   /* §gNoteDup */
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
@@ -20602,12 +20642,14 @@ function pckGuideJobSheet(bid, date, rows, vd){
           return '<span class="svc"'+(_c?(' style="background:'+_c+';color:'+_i+'"'):'')+'>'+e(a.t)+'</span>';
         }).join(''):'<span class="dash">&mdash;</span>')+'</td>'):'')
       +(showLang?('<td class="lgc">'+lgHtml+'</td>'):'')
-      +'<td class="nt">'+(nt.length?nt.map(function(x){ return x.w?('<b>'+e(x.t)+'</b>'):('<span class="n2">'+e(x.t)+'</span>'); }).join('<br>'):'<span class="dash">&mdash;</span>')+'</td>'
+      +'<td class="nt">'+((nt.length||_ns.refs.length)?(nt.map(function(x){ return x.w?('<b>'+e(x.t)+'</b>'):('<span class="n2">'+e(x.t)+'</span>'); }).join('<br>')+(_ns.refs.length?((nt.length?'<br>':'')+_ns.refs.map(function(i){ return '<span class="ntref">หมายเหตุรวม '+i+'</span>'; }).join(' ')):'')):'<span class="dash">&mdash;</span>')+'</td>'
       +'</tr>';
   };
 
   // จัดกลุ่มแบบเดียวกับหน้าจอ · โซน → รถ
   var body='';
+  if(_ntCommon.length) body+='<tr class="cnrow"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'"><div class="cnh">หมายเหตุที่ซ้ำกันหลายใบ · แถวที่เกี่ยวข้องมีป้าย “หมายเหตุรวม”</div>'
+    +_ntCommon.map(function(c,i){ return '<div class="cni"><span class="ntref">หมายเหตุรวม '+(i+1)+'</span><span class="cnt">'+e(c.t)+'</span><span class="cnn">'+c.n+' ใบ</span></div>'; }).join('')+'</td></tr>';   /* §gNoteDup */
   ['PK','KL','OWN','NOVAN'].forEach(function(zk){
     var zr=rows.filter(function(r){ return r.arr===zk && !r._ovnBack; }); if(!zr.length) return;
     var vgs={}, vord=[];
@@ -20690,7 +20732,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<th style="width:'+wPick+'%">สถานที่รับ &middot; ส่ง &middot; โซน</th>'
     +(showSvc?'<th style="width:10%">Service</th>':'')
     +(showLang?'<th class="lgc" style="width:4%">ไกด์</th>':'')
-    +'<th style="width:9%">Note</th></tr></thead>';
+    +'<th style="width:'+_ntW+'%">Note</th></tr></thead>';   /* §gNoteDup */
 
   // §sheetColor (2026-08-01) · หัวใบใช้สีประจำเรือชุดเดียวกับหน้าจอ
   //   วางใบงาน 5 ลำเรียงกันบนโต๊ะแล้วต้องหยิบถูกลำโดยไม่ต้องอ่านชื่อ — สีคือตัวช่วยนั้น
@@ -41020,7 +41062,8 @@ function rtBuildDetailBody(rt){
         : 'free · no extra charge';
       bundleFootnotes.push({ mark, rId, text: `${rName(rId)} includes Longtail Join — ${detail}` });
     }
-    ZONES.forEach((z,zi) => {
+    const _ZR = (typeof rtZonesForRoute==='function') ? rtZonesForRoute(rId, rr) : ZONES;   /* §rtZnView · โซนตามท่าของเส้นนี้ (ระนอง = RN + No transfer) */
+    _ZR.forEach((z,zi) => {
       const cell = rr[z];
       const isNotOffered = cell === null;     // explicit "Not Offered" marker
       const isMissing    = cell === undefined; // never defined · also treat as N/A
@@ -41028,15 +41071,15 @@ function rtBuildDetailBody(rt){
       const rowTop = zi===0 ? 'border-top:1px solid #E0DED8' : 'border-top:1px solid #F2F0EA';
       seatRows += `<tr style="${rowTop}${(isNotOffered||isMissing)?';background:#FBE4E018':''}">
         ${zi===0
-          ? `<td rowspan="3" style="padding:10px 14px 10px 0;vertical-align:top;font-size:12px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}${footMark}</td>`
+          ? `<td rowspan="${_ZR.length}" style="padding:10px 14px 10px 0;vertical-align:top;font-size:12px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}${footMark}</td>`
           : ''}
         <td style="padding:6px 12px;font-size:10px;color:${(isNotOffered||isMissing)?'#C44A36':'#5F5E5A'};text-transform:uppercase;letter-spacing:.06em;font-weight:600">${z==='NoTransfer'?'No transfer':z}</td>
         ${isOffered
           ? PAX.map((p,pi) => `<td style="padding:6px 12px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===NC.lastTh?'padding-right:24px;':''}${pi===NC.firstFr&&NC.th.length?'border-left:1px solid #F2F0EA;':''}">${fmt(cell[p])}</td>`).join('')
           : `<td colspan="${PAX.length}" style="padding:6px 12px;text-align:center;font-size:10px;color:#C44A36;font-weight:700;letter-spacing:.06em;text-transform:uppercase"><span style="background:#FBE4E0;color:#C44A36;padding:2px 9px;border-radius:3px;font-size:9px;letter-spacing:.05em">${isNotOffered?'No Offer':'Not Set'}</span></td>`}
         ${zi===0
-          ? `<td rowspan="3" style="padding:10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A;border-left:1px solid #F2F0EA">${vFrom}</td>
-             <td rowspan="3" style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A">${vTo}</td>`
+          ? `<td rowspan="${_ZR.length}" style="padding:10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A;border-left:1px solid #F2F0EA">${vFrom}</td>
+             <td rowspan="${_ZR.length}" style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#5F5E5A">${vTo}</td>`
           : ''}
       </tr>`;
     });
