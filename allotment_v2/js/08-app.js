@@ -18211,7 +18211,7 @@ function bkNatLeadCap(b,t){
   if(!b || !t || bkNatHas(t)) return null;
   var lead=String(b.leadNationality||'').trim().toUpperCase();
   if(!lead || lead==='TH') return null;
-  var K=['ad','chd','inf','foc'], thP=0;
+  var K=['ad','chd','inf'], thP=0;   /* §focLead · FOC ไม่อยู่ในกติกานี้ · ดูหมายเหตุด้านล่าง */
   K.forEach(function(k){ thP+=bkNatTH(t,k); });
   if(!thP) return null;
   var named=0;
@@ -18219,8 +18219,12 @@ function bkNatLeadCap(b,t){
   if(named>=thP) return null;
   var left=named, o={};
   K.forEach(function(k){ var v=Math.min(bkNatTH(t,k), left); o[k]=v; left-=v; });
+  o.foc=bkNatTH(t,'foc');
   return o;
 }
+/* §focLead (2026-11-12) · owner "หน้าตั๋วอุทยานนับ FOC เป็น ตช ทั้งที่ในระบบเลือกไทย" (BK-26111656-76BU · หัวกรุ๊ป PT · FOC ไทย 1 · ไกด์/TL)
+   §natLead เคยตัด FOC ด้วย · FOC ไทยมาจากคนเลือกในฟอร์มเท่านั้น (B2C ไม่เคยวาง foc_th · §focNat) และไม่มีราคา
+   ส่วนใหญ่เป็นไกด์/หัวหน้าทัวร์คนไทยที่ไม่อยู่ในรายชื่อแขก · ตัดตามจำนวนชื่อ TH จึงผิดทุกใบ → เชื่อช่องที่เลือก */
 function bkNatTHb(b,t,k){
   if(k==='foc'){ var v=bkFocThInfer(b,t); if(v!=null) return v; }
   var C=bkNatLeadCap(b,t); if(C) return C[k];   /* §natLead */
