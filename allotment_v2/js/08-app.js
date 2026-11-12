@@ -55736,6 +55736,10 @@ function bkV2RenderTripsSection(){
                    ตรงนี้เคยตก · ปุ่มจึงขีดฆ่าทั้งที่ใบนั้นไม่ได้ใช้ตารางราคาเลย */
                 if(d.priceMode === 'manual') return true;
                 if(!t.routeId || !rt) return true;
+                /* §chZone (2026-11-12) · เหมาลำคิดจากเรตเหมา ไม่ใช่ราคาที่นั่งรายโซน → ไม่เอาราคาที่นั่งมาปิดปุ่ม
+                   เคส ABSOLUTE · NANA-MAINHI · Similan Speedboat เหมา · No Transfer ที่นั่ง 0/0 → ปุ่มถูกขีดฆ่า
+                   กดได้ทุกโซนที่ท่าของเส้นนั้นมี (ระนอง = RN + No Transfer · ท่าอื่น = PK / KL / No Transfer) */
+                if(isCharter) return (typeof rtZonesForRoute==='function') ? rtZonesForRoute(t.routeId).indexOf(z)>=0 : true;
                 const sr = rt.seatRates?.[t.routeId]?.[z];
                 if(!sr) return false;
                 return (sr['adult-fr']||0) > 0 || (sr['adult-thai']||0) > 0;
