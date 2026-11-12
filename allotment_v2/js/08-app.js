@@ -11341,21 +11341,39 @@ function _bkV2SyncAltPickupSplitsRaw(b){
   const cur = Array.isArray(b.ops.vanSplits) ? b.ops.vanSplits : [];
   // respect a MANUAL split (not auto) — leave it alone
   if(cur.length && !_bkV2IsAltAutoSplit(b)) return false;   // ops.altSplitAuto ไม่ถูก map ลง DB — ต้องดูจาก marker ใน vanSplits
+  /* §altMan (2026-11-12) · ก้อนที่คนจัดรถกด ✂ แยกเอง บนใบที่มีจุดรับเพิ่ม · ต้องรอดจากการสร้างใหม่
+     เคส BK-26100528-EP54 (13 พ.ย. · เหมา 31 คน · Local Guide รับที่ NB House Karon) · แยก 10 คน → [20,1,10]
+     ตัวซิงก์นี้สร้างใหม่จาก altPickups ทุกครั้งที่วาดหน้า → กลับเป็น [30,1] · "กดแยกจำนวนคนออกไม่ได้"
+     ก้อนแยกเอง = ไม่ใช่ก้อนแรก · ไม่มี marker ของจุดรับเพิ่ม (fromAlt / pickHotel / pickAreaId / altWho / จุดส่งของตัวเอง) */
+  const _isAltPart = (x)=> !!(x && (x.fromAlt || x.pickHotel || x.pickAreaId || x.altWho || (x.dropHotel||'').trim() || x.dropAreaId));
+  let _man = cur.filter((x,i)=> i>0 && x && !x.main && !_isAltPart(x) && bkPaxSum(bkSplitPax(x))>0);
+  let _manSum = _man.reduce((acc,x)=>bkPaxAdd(acc, bkSplitPax(x)), {ad:0,chd:0,inf:0,foc:0});
+  const _oldAlt = cur.filter((x,i)=> i>0 && _isAltPart(x));
   // no usable alt pickups (or they overflow the group) → collapse any auto split back to a single row
   if(!alt.length || altTot>=hc || hc<2){
     if(cur.length && _bkV2IsAltAutoSplit(b)){
-      const f=cur[0]||{}; b.ops.vanGroup=+f.vanGroup||0; b.ops.vanId=f.vanId||null; b.ops.vanReturnId=f.vanReturnId||null;
+      const f=cur[0]||{};
+      /* §altMan · จุดรับเพิ่มหมดแล้วแต่ยังมีก้อนแยกเอง → เหลือเป็น split ธรรมดา ไม่ยุบทิ้ง */
+      if(_man.length && hc>=2 && bkPaxSum(_manSum)<hc && PAX_K.every(k=>(+_manSum[k]||0)<=(+_bkPax[k]||0))){
+        const _mp=bkPaxSub(_bkPax,_manSum);
+        b.ops.vanSplits=[Object.assign({ pax:bkPaxSum(_mp), vanGroup:+f.vanGroup||0, vanId:f.vanId||null, vanReturnId:f.vanReturnId||null, vanSeq:+f.vanSeq||0 }, _mp)].concat(_man);
+        delete b.ops.altSplitAuto; return true;
+      }
+      b.ops.vanGroup=+f.vanGroup||0; b.ops.vanId=f.vanId||null; b.ops.vanReturnId=f.vanReturnId||null;
       delete b.ops.vanSplits; delete b.ops.altSplitAuto; return true;
     }
     return false;
   }
-  const mainQty = hc - altTot;
   // seed van assignments: from existing splits (by index) else from the flat ops fields (main)
-  const old = cur.length ? cur : [{vanGroup:+b.ops.vanGroup||0, vanId:b.ops.vanId||null, vanReturnId:b.ops.vanReturnId||null, vanSeq:+b.ops.vanSeq||0}];
+  const old = cur.length ? [cur[0]].concat(_oldAlt) : [{vanGroup:+b.ops.vanGroup||0, vanId:b.ops.vanId||null, vanReturnId:b.ops.vanReturnId||null, vanSeq:+b.ops.vanSeq||0}];
   const o0 = old[0]||{};
   // จุดรับหลัก = ยอดบุ๊กกิ้ง ลบ ทุกจุดรับเพิ่ม · หักทีละประเภท เด็ก/ทารกจึงไม่ถูกแปลงเป็นผู้ใหญ่
   const _altSum = alt.reduce((acc,a)=>bkPaxAdd(acc, bkAltPax(a)), {ad:0,chd:0,inf:0,foc:0});
-  const _mainPax = bkPaxSub(_bkPax, _altSum);
+  /* §altMan · ก้อนแยกเองหักจากก้อนหลักด้วย · ถ้ายอดใบเปลี่ยนจนหักไม่ลง (เกินประเภทใด หรือก้อนหลักเหลือ 0) = ทิ้งก้อนแยกเอง */
+  const _afterAlt = bkPaxSub(_bkPax, _altSum);
+  if(_man.length && !(PAX_K.every(k=>(+_manSum[k]||0)<=(+_afterAlt[k]||0)) && bkPaxSum(_manSum) < (hc-altTot))){ _man=[]; _manSum={ad:0,chd:0,inf:0,foc:0}; }
+  const mainQty = hc - altTot - bkPaxSum(_manSum);
+  const _mainPax = bkPaxSub(_afterAlt, _manSum);
   const splits = [Object.assign({ pax:mainQty, vanGroup:+o0.vanGroup||0, vanId:o0.vanId||null, vanReturnId:o0.vanReturnId||null, vanSeq:+o0.vanSeq||0, main:true }, _mainPax)];
   alt.forEach((a,i)=>{ const _p=bkAltPax(a);
     /* §altDrop · แถวที่ "รับที่เดิม แต่ส่งคนละที่" ขาไปนั่งรถคันเดียวกับกลุ่มหลักแน่นอน
@@ -11372,6 +11390,7 @@ function _bkV2SyncAltPickupSplitsRaw(b){
     splits.push(Object.assign({ pax:Math.max(1,bkPaxSum(_p)), vanGroup:+o.vanGroup||0, vanId:o.vanId||null, vanReturnId:o.vanReturnId||null, vanSeq:+o.vanSeq||0, fromAlt:true, pickAreaId:a.areaId||'', pickHotel:(a.place||'').trim(), pickZone:a.zone||'', altWho:(a.who||'').trim() }, _d, _p,
       /* §splitPickTime · เก็บเวลารับของแถวนี้ไว้ ถ้าจุดรับยังเป็นที่เดิม */
       (_ownPick && o.pickTime && (o.pickAreaId||'')===(a.areaId||'') && String(o.pickHotel||'').trim()===(a.place||'').trim()) ? {pickTime:o.pickTime} : {})); });
+  _man.forEach(x=>splits.push(x));   /* §altMan · ก้อนแยกเองต่อท้าย · รถ/กลุ่มที่จัดไว้อยู่ครบ */
   b.ops.vanSplits = splits; b.ops.altSplitAuto = true;
   delete b.ops.vanGroup; delete b.ops.vanId;   // main now lives in split[0]
   return true;
