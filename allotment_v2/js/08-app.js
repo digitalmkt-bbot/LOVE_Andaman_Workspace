@@ -12355,7 +12355,16 @@ function vbRows(){
     map[k].retPax+=x.pax; map[k].bk++;
     if(x.drop) map[k].drops[x.drop]=(map[k].drops[x.drop]||0)|(x.chg?1:0);
   });
-  return Object.keys(map).sort().map(function(k){ return map[k]; });
+  /* §vbVanOrder (2026-11-12) · owner "ในแต่ละวัน user อยากได้ให้เรียงตาม Van1 Van2 Van3"
+     เดิมเรียงตามคีย์ วัน~เส้นทาง~id รถ → ในวันเดียวกันโดนแบ่งตามโปรแกรมก่อน (VAN4…VAN9 แล้วค่อย VAN1…VAN3)
+     ตอนนี้ วัน → ชื่อรถ (เลขเรียงแบบตัวเลข VAN2 ก่อน VAN10) → เส้นทาง → ขาไปก่อนขากลับ */
+  var _vnm=function(id){ var v=(typeof vehGet==='function')?vehGet(id):null; return String((v&&v.name)||id||''); };
+  return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    var c=_vnm(a.vanId).localeCompare(_vnm(b.vanId), undefined, {numeric:true, sensitivity:'base'}); if(c) return c;
+    if(a.routeId!==b.routeId) return String(a.routeId).localeCompare(String(b.routeId));
+    return (a.ret?1:0)-(b.ret?1:0);
+  });
 }
 function vbSet(field,val){
   var st=vbState(), k='@'+field;
