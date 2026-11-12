@@ -30542,7 +30542,9 @@ function faRenderParts(kind){
   var bigN=kind==='prop'?P.filter(function(r){ return r.st==='active'; }).length:P.filter(function(r){ return r.st==='ready'; }).length;
   faShell({ big:bigN, bigT:(kind==='eng'?'Engines ready':kind==='gb'?'Gearboxes ready':'Propellers active'), bigS:'of '+P.length+' · '+Object.keys(brands).map(function(k){ return brands[k]+' '+k; }).join(' · '),
     badges:{docs:faDocAlertCount()}, stages:stages,
-    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):''), add:K.add });
+    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):'')
+      /* §engFix · คู่เครื่องที่เลขถูกแก้ชื่อแทนการถอด/สลับ · กดเพื่อดูและแก้ทีละคู่ */
+      +((kind==='eng' && typeof flEngFixPending==='function' && flEngFixPending().length)?('<span class="fa-chip red" style="cursor:pointer" onclick="flEngFixOpen()" title="แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ"><b>'+flEngFixPending().length+'</b>คู่ เลขถูกแก้ชื่อ · กดเพื่อแก้</span>'):''), add:K.add });
   var keep=document.getElementById('fl-'+kind+'-listpanel'), kt=keep?keep.scrollTop:0;
   wrap.innerHTML='<div class="fa-3">'+bl+mid+det+'</div>';
   var lp=document.getElementById('fl-'+kind+'-listpanel'); if(lp) lp.scrollTop=kt;
