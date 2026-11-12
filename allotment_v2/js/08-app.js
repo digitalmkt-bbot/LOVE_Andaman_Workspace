@@ -35549,7 +35549,7 @@ function pxPlanFor(routeId){
 /* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
 function pxPax(date, bid){
-  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0, fam:0,famTH:0,famL:[],zeroL:[]};   /* §pxFam */
+  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0, fam:0,famTH:0,famRev:0,famL:[],zeroL:[]};   /* §pxFam */
   var KIND=['ad','chd','inf','foc'];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
@@ -35586,14 +35586,18 @@ function pxPax(date, bid){
        FOC 1–2 คนในใบที่จ่ายเงิน (หัวหน้าทัวร์) ไม่ใช่ FAM · ขากลับค้างคืน (ovnLeg) ราคา 0 โดยตั้งใจ ข้าม ══ */
     try{
       var _a0=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
-      if(!_a0 && !t.ovnLeg){
+      /* §famExtra · ทุกคนเป็น FOC และค่าที่นั่ง ฿0 = FAM ถึงมียอดค่าเพิ่ม/add-on (ค่าอุทยานวางบิล ฯลฯ)
+         ค่าที่นั่ง > 0 (B2C ลง FOC แต่จ่ายเงิน · FAM ที่ agent ซื้อ) = ใบขาย เหมือนเดิม */
+      var _fc0=(+px.foc||0)+(+px.foc_fr||0)+(+px.foc_th||0), _pb0=b.priceBreakdown||null;
+      var _allF=(bookedTot>0 && _fc0>=bookedTot) && (!_a0 || (!!_pb0 && !(+_pb0.seat)));
+      if((!_a0 || _allF) && !t.ovnLeg){
         var _ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
         var _an=_ag?(_ag.name||_ag.code||'\u2014'):(/^b2c_/.test(String(b.id||''))?'Love Andaman':String(b.channel||'walk-in'));
-        var _st=/staff|welfare/i.test(_an), _fc=(+px.foc||0)+(+px.foc_fr||0)+(+px.foc_th||0);
-        if(_st || (bookedTot>0 && _fc>=bookedTot)){
-          o.fam+=tot; o.famTH+=th*ratio;
+        var _st=/staff|welfare/i.test(_an), _fc=_fc0;
+        if((_st && !_a0) || _allF){
+          o.fam+=tot; o.famTH+=th*ratio; o.famRev+=_a0*_shr;   /* §famExtra · ยอดที่เก็บได้ (ค่าอุทยานวางบิล ฯลฯ) หักจากต้นทุน FAM */
           o.famL.push({ id:b.id, name:_an, pax:tot, staff:_st, full:Math.round(Math.abs(+((b.priceBreakdown||{}).focDiscount)||0)*_shr) });
-        } else o.zeroL.push({ id:b.id, name:_an, pax:tot });
+        } else if(!_a0) o.zeroL.push({ id:b.id, name:_an, pax:tot });
       }
     }catch(_){ }
   });
@@ -36023,6 +36027,8 @@ function pxTrip(date, bid){
       rows.forEach(function(r){ var a1=M1[r.id]||0; if(a1<=0) return; var sh=1-(M2[r.id]||0)/a1; if(sh<=0) return; famCost+=(+r.use||0)*Math.min(1,sh); });
     }catch(_){ famCost=0; } }
   }
+  /* §famExtra · ใบ FAM ที่มียอด (ค่าอุทยานวางบิล) · หักยอดนั้นออก → คอลัมน์ FAM = ต้นทุนสุทธิของ FAM · Sales ไม่รับเงินก้อนนี้ */
+  if(!noSail && PX.fam>0 && PX.famRev>0) famCost=Math.max(0, famCost-PX.famRev);
   famCost=Math.round(famCost);
   var be=null;
   try{ if(typeof ctBreakEven==='function'){
