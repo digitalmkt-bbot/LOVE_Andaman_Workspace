@@ -24266,6 +24266,11 @@ function flSaveReceive(){
       const note=document.getElementById('receive-note').value;
       const memoLocation = document.getElementById('receive-location')?.value || 'คลัง Tub Lamu';
       let updatedCount=0, createdCount=0;
+      /* §memoUseNow (2026-11-12) · owner "กด Memo แล้วอะไหล่เข้าคลัง แล้วค่อยไปเบิก มันหลายขั้นตอน"
+         ใบ memo ที่ผูกกับงานซ่อม · ติ๊ก "เบิกใช้กับงานนี้ทันที" (ค่าเริ่มต้น = ติ๊ก) = รับเข้าคลังแล้วเบิกลงงานในคลิกเดียว
+         ยังลงประวัติคลังครบทั้งรับและเบิก (flMaintWithdraw ตัวเดียวกับปุ่ม + Withdraw) · ต้นทุนงานไม่นับซ้ำ (flMaintCalcCost ข้ามของที่จ่ายผ่าน memo) */
+      const _useJob=!!(mo.maintId && document.getElementById('recv-use-job')?.checked && FL_MAINT.find(x=>x.id===mo.maintId));
+      let _issued=0, _issueFail=0;
       /* §memoPart · โมดัลวาดเฉพาะบรรทัด parts · index ของ input จึงนับตาม
          allItems ไม่ใช่ตาม mo.items · ของเดิมวนด้วย mo.items แล้วอ่าน recv-qty-i
          ใบไหนมีบรรทัดค่าแรงคั่นอยู่ จำนวนจะเลื่อนไปผิดบรรทัด */
@@ -24330,6 +24335,10 @@ function flSaveReceive(){
           it.invId=newInv.id;
           createdCount++;
         }
+        if(_useJob){   /* §memoUseNow */
+          const _iv=FL_INVENTORY.find(x=>x.id===it.invId);
+          if(_iv && !flMaintWithdraw(mo.maintId,_iv.id,memoLocation,qty)) _issued++; else _issueFail++;
+        }
       });
       /* §memoPart · เก็บว่ารอบนี้รับอะไรมาบ้าง · ใครรับ วันไหน เข้าคลังไหน
          ไม่งั้นรับสองรอบแล้วย้อนดูไม่ได้ว่ารอบไหนได้อะไร */
@@ -24351,6 +24360,7 @@ function flSaveReceive(){
       if(updatedCount&&createdCount) toastMsg+=` · อัพเดท ${updatedCount} · สร้างใหม่ ${createdCount}`;
       else if(updatedCount) toastMsg+=` · อัพเดท ${updatedCount}`;
       else if(createdCount) toastMsg+=` · สร้างใหม่ ${createdCount}`;
+      if(_useJob){ const _mj=FL_MAINT.find(x=>x.id===mo.maintId); toastMsg+=` · เบิกลงงาน ${(_mj&&_mj.no)||''} แล้ว ${_issued} รายการ`+(_issueFail?` (ไม่สำเร็จ ${_issueFail} · เบิกเองที่หน้างาน)`:''); }
       flShowToast(toastMsg);
     }
     _receiveMemoId=null;
@@ -25366,6 +25376,10 @@ function flOpenReceiveMemo(moId){
         <span style="color:var(--ink-soft);font-size:10px;min-width:24px">${it.unit||'ชิ้น'}</span>
       </div>`;
     }).join('')}
+    ${(()=>{ const _mj=mo.maintId?FL_MAINT.find(x=>x.id===mo.maintId):null; if(!_mj) return '';   /* §memoUseNow */
+      return `<label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 10px;background:#E9F7F1;border:1px solid #B7E0CF;border-radius:8px;cursor:pointer;font-size:11.5px;color:#0B5A43;line-height:1.4">
+        <input type="checkbox" id="recv-use-job" checked style="margin-top:2px;flex:none">
+        <span><b>เบิกใช้กับงาน ${_mj.no||''} ทันที</b><br><span style="font-size:10px;color:#3E6B5C">รับเข้าคลังแล้วตัดเบิกลงงานนี้ให้เลย ไม่ต้องไปกดเบิกที่หน้างานอีกรอบ · เอาติ๊กออกถ้าจะเก็บเข้าคลังไว้ก่อน</span></span></label>`; })()}
     <div style="font-size:9px;color:var(--ink-soft);margin-top:8px;padding:6px 8px;background:#FBFAF7;border-radius:6px">
       <span style="font-weight:600">หมายเหตุ:</span> ใส่ 0 ในบรรทัดที่ของยังไม่มา · ใบจะยังไม่ปิด กดรับของอีกครั้งได้ตอนของมาเพิ่ม
       · รายการ <span style="background:#FAEEDA;color:#854F0B;padding:0 4px;border-radius:3px;font-weight:600">+ ใหม่</span> จะถูกสร้างเป็น inventory item อัตโนมัติ (category: อื่นๆ — แก้ภายหลังได้)
