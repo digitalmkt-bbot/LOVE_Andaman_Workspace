@@ -11756,6 +11756,7 @@ function flRenderBoatDetailPink(){
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${b.retired?`<button onclick="flUnretireBoat('${b.id}')" style="background:#1D9E75;color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">↩ Restore</button>`:''}
+        ${(typeof bhBtn==='function')?bhBtn(b.id):''}
         <button onclick="flEquipOpen('${b.id}')" style="background:#fff;color:#0F6E56;border:1px solid #cfe0d8;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">&#8596; ถอด/สลับ</button>
         <button onclick="flOpenEditBoatModal('${b.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
       </div>
