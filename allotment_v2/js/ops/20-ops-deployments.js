@@ -369,8 +369,11 @@
      Legacy's form runs as it is (it validates, builds the record, writes the two cells, renders). Then the two cells go
      to the server in one call, never through the diff (which would post the rescue boat as a plain deployment that sells
      its seats). The server answers both rows and they become what is confirmed. If it refuses, the two cells go back to
-     what the server holds and the server's text is shown. The broken boat's "fixing from tomorrow" status line is legacy's
-     own save('config'), which the boats adapter sends on its own; a refused swap leaves it. */
+     what the server holds and the server's text is shown. The broken boat's "fixing from tomorrow" status line (the form's
+     checkbox bop2sw-st) is the server's write too (sync 11-12: legacy's save('config') reached no server, and the status-log
+     API can't take an open-ended row with no place): the checkbox goes as fixing_from_next_day, the server answers the row
+     and names it on the record (logId), and the boat is read again so its log is the server's. The undo removes the row on
+     the server the same way. */
   function swapPath(d, b){ return '/operations/deployments/' + encodeURIComponent(d) + '/' + encodeURIComponent(b) + '/mid-trip-swap'; }
   function adoptRows(d, rows, removed){
     var T = trips(); if(!T) return;
@@ -392,14 +395,21 @@
       if(was) (T[d] = T[d] || {})[b] = O.clone(was); else if(T[d]) delete T[d][b];
     });
   }
-  function swapWrite(d, boats, send, done){
+  /* the broken boat's log as the server holds it (its "fixing from tomorrow" row is the server's; legacy's local copy goes) */
+  function boatAgain(boatId){
+    try{ if(O.fleetBoats && typeof O.fleetBoats.refetchBoat === 'function') return O.fleetBoats.refetchBoat(boatId).catch(function(){ return null; }); }catch(_){}
+    return null;
+  }
+  function swapWrite(d, boats, send, done, after){
     boats.forEach(function(b){ swapBusy[key(d, b)] = true; });
     function free(){ boats.forEach(function(b){ delete swapBusy[key(d, b)]; }); }
     return O.queue(send).then(function(j){
       free(); done(j); O.wrote('deployments'); rerender();
+      if(after) after();
     }, function(e){
       free(); backToServer(d, boats); rerender();
       try{ if(typeof bop2SwClose === 'function') bop2SwClose(); }catch(_){}
+      if(after) after();
       O.fail('Mid-trip swap not saved', e);
     });
   }
@@ -411,11 +421,12 @@
         if(!O.enabled() || !ready || !S || !S.d || !S.from) return save.apply(this, arguments);
         var d = S.d, from = S.from, T = trips();
         var had = T && T[d] && T[d][from] && T[d][from].swap;
+        var stEl = document.getElementById('bop2sw-st'), fix = !!(stEl && stEl.checked);   // read before legacy's form closes
         var ret = save.apply(this, arguments);
         var cell = T && T[d] && T[d][from], ev = cell && cell.swap;
         if(!ev || !ev.to || ev === had) return ret;                              // legacy refused it (alert): nothing written
-        swapWrite(d, [from, ev.to], function(){ return O.call('PUT', swapPath(d, from), { to_boat_id: ev.to, record: O.clone(ev) }); },
-          function(j){ adoptRows(d, j && j.deployments, []); });
+        swapWrite(d, [from, ev.to], function(){ return O.call('PUT', swapPath(d, from), { to_boat_id: ev.to, record: O.clone(ev), fixing_from_next_day: fix }); },
+          function(j){ adoptRows(d, j && j.deployments, []); }, function(){ boatAgain(from); });
         return ret;
       };
       ws.__opsSwap = true; window.bop2SwapSave = ws;
@@ -435,7 +446,7 @@
         }, function(j){
           if(j && j.notOnServer){ schedule(); return; }
           adoptRows(d, j && j.deployments, j && j.removed);
-        });
+        }, function(){ boatAgain(fromId); });
         return ret;
       };
       wu.__opsSwap = true; window.bop2SwapUndo = wu;
