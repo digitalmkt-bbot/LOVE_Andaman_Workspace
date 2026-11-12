@@ -219,7 +219,7 @@ function bhRender(){
   h+='<div class="bh-sec"><h3>เกิดอะไรขึ้นบ้าง</h3><div class="bh-per" style="margin-bottom:8px">'+fb('key','เหตุการณ์สำคัญ')+fb('maint','ซ่อมทั้งหมด')
     +CK.slice(0,4).map(function(k){ return fb('m:'+k,'ซ่อม · '+bhCatName(k)); }).join('')+fb('swap','เปลี่ยนเรือกลางทาง')+fb('status','เปลี่ยนสถานะ')+fb('sail','ออกเรือ')+fb('all','ทั้งหมด')+'</div>'
     +(EV.length?EV.slice(0,LIM).map(function(x){
-        var amt=(x.amt==null)?'<span class="mut">—</span>':('<span class="'+(x.amt<0?'r':'g')+'">'+(x.pl?bhSg(x.amt):('−'+bhN(Math.abs(x.amt))))+'</span>');
+        var amt=(x.amt==null || (x.kind==='maint' && !Math.round(x.amt)))?'<span class="mut">—</span>':('<span class="'+(x.amt<0?'r':'g')+'">'+(x.pl?bhSg(x.amt):('−'+bhN(Math.abs(x.amt))))+'</span>');
         return '<div class="bh-ev'+(x.mj?' lk':'')+'"'+(x.mj?(' onclick="bhGoMj(\''+e(x.mj)+'\')" title="เปิดใบงาน"'):'')+'><span class="d">'+bhD(x.d)+'</span><span><span class="bh-pl '+cls(x)+'">'+e(x.tag)+'</span></span><span class="t" title="'+e(x.text)+'">'+e(x.text)+'</span><span class="c">'+amt+'</span></div>'; }).join('')
       :'<div class="mut" style="padding:14px 0">ไม่มีรายการในช่วงนี้</div>')
     +(EV.length>LIM?('<div class="bh-note">แสดง '+LIM+' จาก '+EV.length+' รายการ · เลือกช่วงเวลาสั้นลงหรือ Export เพื่อดูทั้งหมด</div>'):'')

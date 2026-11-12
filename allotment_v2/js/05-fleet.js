@@ -30822,6 +30822,7 @@ function faBoatDetail(o){
   var head='<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;flex-wrap:wrap">'+faAv(b,44)
     +'<div style="flex:1;min-width:240px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:21px;font-weight:800">'+faE(b.name)+'</b><span style="padding:2px 8px;border-radius:6px;background:'+S[1]+';color:'+S[2]+';font-size:11.5px;font-weight:600">'+S[0]+'</span><span style="font-size:12px;color:#5B6170">อยู่ที่ '+faE(String(pierTxt).replace(' · อยู่อู่',''))+'</span></div>'
     +'<div style="font-size:12.5px;color:#5B6170">'+faE([b.type,b.material].filter(Boolean).join(' · '))+(br?(' · <b style="color:'+faBrandC(br)+'">'+faE(br)+'</b> '+faE(mdl)+' × '+o.engs.length):'')+(b.reg?(' · ทะเบียน '+faE(b.reg)):'')+(b.callsign?(' · '+faE(b.callsign)):'')+'</div></div>'
+    +'<button type="button" class="fa-btn" onclick="if(typeof bhOpen===\'function\')bhOpen(\''+b.id+'\')" title="ทริป · รายได้ · ต้นทุน · ค่าซ่อมแยก ตัวเรือ/เครื่องยนต์/เกียร์/ใบจักร · เหตุการณ์ ของเรือลำนี้">&#128202; ประวัติ &amp; ค่าใช้จ่าย</button>'   /* §boatHist2 */
     +'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+b.id+'\')">⇄ ถอด/สลับ</button><button type="button" class="fa-btn pri" onclick="flOpenEditBoatModal(\''+b.id+'\')">Edit</button></div>';
   var A=[];
   var bad=o.docs.filter(function(x){ return x.st==='exp'||x.st==='na'||x.st==='warn30'; }).sort(function(a,z){ return (a.days==null?-9999:a.days)-(z.days==null?-9999:z.days); });
