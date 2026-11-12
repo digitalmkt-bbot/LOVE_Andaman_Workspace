@@ -29,7 +29,8 @@ function bhNextDay(ds){ var d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()+1)
 function bhCompute(id, from, to){
   var b=(typeof getBoat==='function')?getBoat(id):null;
   var D={ id:id, boat:b||{}, from:from, to:to, trips:[], G:{}, n:0, pax:0, rev:0, cost:0, profit:0,
-          mRows:[], mCat:{}, mTot:0, mDone:0, mProc:0, units:{}, months:{}, ev:[], down:{}, downN:0, err:[] };
+          mRows:[], mCat:{}, mTot:0, mDone:0, mProc:0, units:{}, months:{}, ev:[], down:{}, downN:0, err:[],
+          prjIn:{}, prjTot:0, proj:[], projOut:{n:0,total:0} };   /* §bhProj */
   var mon=function(ds){ var k=String(ds).slice(0,7); return D.months[k]||(D.months[k]={k:k,n:0,pax:0,rev:0,cost:0,maint:0}); };
   /* 1 · ทริป */
   try{
@@ -61,16 +62,31 @@ function bhCompute(id, from, to){
       var c=+r.cost||0, keys=(r.cats&&r.cats.length)?r.cats:['other'], share=c/keys.length;
       keys.forEach(function(k){ var o=D.mCat[k]||(D.mCat[k]={k:k,tot:0,n:0,seen:{}}); o.tot+=share; if(!o.seen[r.id]){ o.seen[r.id]=1; o.n++; } });
       D.mTot+=c; if(r.done) D.mDone+=c; else D.mProc+=c; mon(dt).maint+=c;
-      var names=[];
-      if(r.kind!=='memo'){ var m=((typeof FL_MAINT!=='undefined'&&FL_MAINT)||[]).find(function(x){ return x.id===r.id; });
+      var names=[], pid='';   /* §bhProj · ใบงานลูกของ Project / memo ที่ผูก Project ตรง */
+      if(r.kind==='memo'){ var mo0=((typeof FL_MEMOS!=='undefined'&&FL_MEMOS)||[]).find(function(x){ return x.id===r.id; }); pid=(mo0&&mo0.projectId)||''; }
+      if(r.kind!=='memo'){ var m=((typeof FL_MAINT!=='undefined'&&FL_MAINT)||[]).find(function(x){ return x.id===r.id; }); pid=(m&&m.parentProjectId)||'';
         ((m&&m.assets)||[]).forEach(function(a,ix){ var uid=a.engId||a.gbId||a.propId; if(!uid) return; var k=keys[ix]||keys[0];
           var lb=''; try{ lb=(typeof costUnitLabel==='function')?costUnitLabel(uid,k,a):(a.label||uid); }catch(e){ lb=a.label||uid; }
           var u=D.units[uid]||(D.units[uid]={id:uid,cat:k,label:lb,cost:0,n:0}); u.cost+=share; u.n++; names.push(lb); }); }
-      D.mRows.push({ id:r.id, no:r.no, title:r.title, date:dt, cost:c, cats:keys, done:!!r.done, memo:(r.kind==='memo'), units:names });
+      var pno=''; if(pid){ D.prjIn[pid]=(D.prjIn[pid]||0)+c; D.prjTot+=c;
+        var pj=((typeof FL_PROJECTS!=='undefined'&&FL_PROJECTS)||[]).find(function(x){ return x.id===pid; }); pno=(pj&&(pj.no||pj.id))||'Project'; }
+      D.mRows.push({ id:r.id, no:r.no, title:r.title, date:dt, cost:c, cats:keys, done:!!r.done, memo:(r.kind==='memo'), units:names, prj:pno });
       D.ev.push({ d:dt, kind:'maint', cats:keys, tag:keys.map(function(k){ return bhCatName(k); }).join(' + '),
-                  text:(r.no||'')+' '+(r.title||'')+(names.length?(' · '+names.join(', ')):'')+(r.done?'':' · ยังไม่ปิดงาน'), amt:-c, mj:(r.kind==='memo'?'':r.id) });
+                  text:(r.no||'')+' '+(r.title||'')+(names.length?(' · '+names.join(', ')):'')+(r.done?'':' · ยังไม่ปิดงาน'), amt:-c, mj:(r.kind==='memo'?'':r.id), prj:pno });
     });
   }catch(e){ D.err.push('maint'); }
+  /* §bhProj · Project ของเรือลำนี้ · ยอดทั้ง Project ใช้ตัวคิดของหน้า Projects (flProjCostBreakdown) */
+  try{
+    ((typeof FL_PROJECTS!=='undefined'&&FL_PROJECTS)||[]).forEach(function(pj){
+      if(!pj || pj.boatId!==id) return;
+      var bd={parts:0,labour:0,memos:0,total:0}; try{ if(typeof flProjCostBreakdown==='function') bd=flProjCostBreakdown(pj.id)||bd; }catch(e){}
+      var pf=String(pj.actualFrom||pj.planFrom||'').slice(0,10), pt=String(pj.actualTo||pj.planTo||'').slice(0,10);
+      var inR=D.prjIn[pj.id]||0, ov=!!(pf && pf<=to && (!pt || pt>=from));
+      var row={ id:pj.id, no:pj.no||pj.id, name:pj.name||'', st:pj.status||'', from:pf, to:pt, vendor:pj.vendor||'', bd:bd, inR:inR, budget:+pj.plannedBudget||0 };
+      if(ov || inR>0) D.proj.push(row); else { D.projOut.n++; D.projOut.total+=(+bd.total||0); }
+    });
+    D.proj.sort(function(a,z){ return (a.from<z.from)?1:-1; });
+  }catch(e){ D.err.push('project'); }
   /* 3 · สถานะ + วันใช้ไม่ได้ */
   try{
     ((b&&b.log)||[]).forEach(function(l){ if(!l || !l.from || l.from<from || l.from>to) return;
@@ -157,6 +173,8 @@ function bhPer(p){ _bh.per=p; if(p==='custom'){ var r=bhRange(); _bh.from=_bh.fr
 function bhCust(k,v){ if(v){ _bh[k]=v; bhLoad(); } }
 function bhFlt(f){ _bh.flt=(_bh.flt===f&&f!=='key')?'key':f; bhRender(); }
 function bhTog(g){ _bh.open[g]=!_bh.open[g]; bhRender(); }
+function bhGoPrj(id){ try{ var nv=document.querySelector('[data-view=fl-projects]'); if(!nv || typeof nav!=='function') return; bhClose(); nav(nv);
+  setTimeout(function(){ try{ _selProjId=id; if(typeof flRenderProjects==='function') flRenderProjects(); }catch(e){} },150); }catch(e){} }
 function bhGoMj(id){ try{ if(typeof flSelMaint!=='function') return; bhClose(); var nv=document.querySelector('[data-view=fl-maintenance]'); if(nv && typeof nav==='function') nav(nv); setTimeout(function(){ try{ flSelMaint(id); }catch(e){} },120); }catch(e){} }
 
 function bhRender(){
@@ -177,7 +195,7 @@ function bhRender(){
     +'<div class="bh-k"><small>ออกเรือ</small><b>'+D.n+' เที่ยว</b><span>'+bhN(D.pax)+' คน'+(D.n?(' · เฉลี่ย '+(D.pax/D.n).toFixed(1)+'/เที่ยว'):'')+'</span></div>'
     +'<div class="bh-k"><small>รายได้ (ไม่รวม VAT)</small><b>'+bhB(D.rev)+'</b><span>'+(D.pax?(bhB(D.rev/D.pax)+' / คน'):'—')+'</span></div>'
     +'<div class="bh-k"><small>ต้นทุนทริป</small><b>'+bhB(D.cost)+'</b><span>'+(D.rev?(Math.round(D.cost/D.rev*100)+'% ของรายได้'):'—')+'</span></div>'
-    +'<div class="bh-k"><small>ค่าซ่อมบำรุง</small><b class="'+(D.mTot?'r':'mut')+'">'+bhB(D.mTot)+'</b><span>'+nM+' รายการ'+(D.mProc?(' · ยังไม่ปิด '+bhB(D.mProc)):'')+'</span></div>'
+    +'<div class="bh-k"><small>ค่าซ่อมบำรุง</small><b class="'+(D.mTot?'r':'mut')+'">'+bhB(D.mTot)+'</b><span>'+nM+' รายการ'+(D.prjTot?(' · ในนี้เป็น Project '+bhB(D.prjTot)):'')+(D.mProc?(' · ยังไม่ปิด '+bhB(D.mProc)):'')+'</span></div>'
     +'<div class="bh-k"><small>กำไรหลังหักซ่อม</small><b class="'+(D.net<0?'r':'g')+'">'+bhSg(D.net)+'</b><span>'+(D.rev?(Math.round(D.net/D.rev*100)+'% ของรายได้'):'—')+'</span></div>'
     +((b.ownership==='charter')
         ? '<div class="bh-k"><small>วันที่ใช้ไม่ได้</small><b class="mut">—</b><span>เรือเช่า · นับเฉพาะช่วงที่เช่าไม่ได้</span></div></div>'
@@ -207,20 +225,34 @@ function bhRender(){
         return '<div class="bh-k'+(_bh.flt==='m:'+k?' on':'')+'" style="border-top-color:'+bhCatCol(k)+'" onclick="bhFlt(\'m:'+k+'\')" title="คลิกเพื่อดูรายการของส่วนนี้"><small>'+e(bhCatName(k))+'</small><b'+(o.tot?'':' class="mut"')+'>'+bhB(o.tot)+'</b><span>'+(o.n?(o.n+' รายการ'):'ไม่มีในช่วงนี้')+'</span>'
           +(us.length?('<div class="u">'+us.slice(0,6).map(function(u){ return e(u.label)+' '+bhB(u.cost); }).join('<br>')+'</div>'):'')+'</div>'; }).join('')
     +'</div><div class="bh-note">หมวดเดียวกับหน้า Fleet → Analytics · ใบงานที่แตะหลายส่วน เงินหารเท่ากันตามจำนวนชิ้น · แยกรายเครื่อง/เกียร์/ใบจักรเมื่อใบงานระบุชิ้นไว้ · "memo ตรง" = memo ที่ระบุเรือแต่ไม่ผูกใบงาน</div></div>';
+  /* §bhProj · Project ของเรือลำนี้ */
+  var PST={planning:'วางแผน',inprogress:'กำลังทำ',in_progress:'กำลังทำ',awaiting_bill:'รอบิล',done:'เสร็จ',completed:'เสร็จ',cancelled:'ยกเลิก',on_hold:'พักงาน'};
+  if(D.proj.length || D.projOut.n){
+    h+='<div class="bh-sec"><h3>Project ของเรือลำนี้ (ขึ้นคาน · งานใหญ่)</h3>';
+    if(D.proj.length){
+      h+='<table><thead><tr><th>Project</th><th style="text-align:left">ช่วงงาน</th><th style="text-align:left">สถานะ</th><th>อะไหล่</th><th>ค่าแรง</th><th>อื่น ๆ</th><th>รวมทั้ง Project</th><th>อยู่ในช่วงที่เลือก</th></tr></thead><tbody>'
+        +D.proj.map(function(x){ return '<tr style="cursor:pointer" onclick="bhGoPrj(\''+e(x.id)+'\')" title="เปิด Project"><td style="white-space:normal"><b>'+e(x.no)+'</b> '+e(x.name)+(x.vendor?(' <span class="mut">· '+e(x.vendor)+'</span>'):'')+'</td>'
+            +'<td style="text-align:left">'+(x.from?bhDY(x.from):'—')+(x.to?(' – '+bhDY(x.to)):'')+'</td><td style="text-align:left">'+e(PST[x.st]||x.st||'—')+'</td>'
+            +'<td>'+bhN(x.bd.parts)+'</td><td>'+bhN(x.bd.labour)+'</td><td>'+bhN(x.bd.memos)+'</td><td><b>'+bhB(x.bd.total)+'</b></td><td'+(x.inR?' class="r"':' class="mut"')+'>'+bhB(x.inR)+'</td></tr>'; }).join('')
+        +'</tbody></table>';
+    } else h+='<div class="mut">ไม่มี Project ในช่วงนี้</div>';
+    if(D.projOut.n) h+='<div class="bh-note" style="color:#8A5A00;font-weight:600">มีอีก '+D.projOut.n+' Project ของลำนี้อยู่นอกช่วงที่เลือก · รวม '+bhB(D.projOut.total)+' · เลือก "ปีนี้" หรือ "เลือกเอง" เพื่อดู</div>';
+    h+='<div class="bh-note">"รวมทั้ง Project" = ตัวเลขเดียวกับหน้า Projects (ใบงานลูก + memo ที่ผูก Project) ไม่ขึ้นกับช่วงเวลา · "อยู่ในช่วงที่เลือก" = ส่วนที่นับอยู่ในค่าซ่อมบำรุงข้างบนแล้ว (ไม่บวกซ้ำ) · สองตัวเลขต่างกันได้เพราะวันที่ และเพราะของที่ซื้อเข้าสต็อกจะนับเมื่อเบิกใช้</div></div>';
+  }
   /* ไทม์ไลน์ */
   var F=_bh.flt, fb=function(k,l){ return '<button class="bh-pb'+(F===k?' on':'')+'" onclick="bhFlt(\''+k+'\')">'+l+'</button>'; };
   var EV=D.ev.filter(function(x){
     if(F==='all') return true; if(F==='key') return x.kind!=='sail';
-    if(F==='maint') return x.kind==='maint'; if(F==='swap') return x.kind==='swap'; if(F==='status') return x.kind==='status'; if(F==='sail') return x.kind==='sail';
+    if(F==='maint') return x.kind==='maint'; if(F==='prj') return x.kind==='maint' && !!x.prj; if(F==='swap') return x.kind==='swap'; if(F==='status') return x.kind==='status'; if(F==='sail') return x.kind==='sail';
     if(F.indexOf('m:')===0) return x.kind==='maint' && (x.cats||[]).indexOf(F.slice(2))>=0;
     return true; });
   var cls=function(x){ return x.kind==='maint'?'p1':(x.kind==='swap'?'p2':(x.kind==='sail'?'p3':(x.st==='available'?'p5':'p4'))); };
   var LIM=200;
   h+='<div class="bh-sec"><h3>เกิดอะไรขึ้นบ้าง</h3><div class="bh-per" style="margin-bottom:8px">'+fb('key','เหตุการณ์สำคัญ')+fb('maint','ซ่อมทั้งหมด')
-    +CK.slice(0,4).map(function(k){ return fb('m:'+k,'ซ่อม · '+bhCatName(k)); }).join('')+fb('swap','เปลี่ยนเรือกลางทาง')+fb('status','เปลี่ยนสถานะ')+fb('sail','ออกเรือ')+fb('all','ทั้งหมด')+'</div>'
+    +CK.slice(0,4).map(function(k){ return fb('m:'+k,'ซ่อม · '+bhCatName(k)); }).join('')+(D.prjTot?fb('prj','Project'):'')+fb('swap','เปลี่ยนเรือกลางทาง')+fb('status','เปลี่ยนสถานะ')+fb('sail','ออกเรือ')+fb('all','ทั้งหมด')+'</div>'
     +(EV.length?EV.slice(0,LIM).map(function(x){
         var amt=(x.amt==null || (x.kind==='maint' && !Math.round(x.amt)))?'<span class="mut">—</span>':('<span class="'+(x.amt<0?'r':'g')+'">'+(x.pl?bhSg(x.amt):('−'+bhN(Math.abs(x.amt))))+'</span>');
-        return '<div class="bh-ev'+(x.mj?' lk':'')+'"'+(x.mj?(' onclick="bhGoMj(\''+e(x.mj)+'\')" title="เปิดใบงาน"'):'')+'><span class="d">'+bhD(x.d)+'</span><span><span class="bh-pl '+cls(x)+'">'+e(x.tag)+'</span></span><span class="t" title="'+e(x.text)+'">'+e(x.text)+'</span><span class="c">'+amt+'</span></div>'; }).join('')
+        return '<div class="bh-ev'+(x.mj?' lk':'')+'"'+(x.mj?(' onclick="bhGoMj(\''+e(x.mj)+'\')" title="เปิดใบงาน"'):'')+'><span class="d">'+bhD(x.d)+'</span><span><span class="bh-pl '+cls(x)+'">'+e(x.tag)+'</span></span><span class="t" title="'+e(x.text)+'">'+(x.prj?('<span class="bh-pl p4" style="margin-right:6px">'+e(x.prj)+'</span>'):'')+e(x.text)+'</span><span class="c">'+amt+'</span></div>'; }).join('')
       :'<div class="mut" style="padding:14px 0">ไม่มีรายการในช่วงนี้</div>')
     +(EV.length>LIM?('<div class="bh-note">แสดง '+LIM+' จาก '+EV.length+' รายการ · เลือกช่วงเวลาสั้นลงหรือ Export เพื่อดูทั้งหมด</div>'):'')
     +'<div class="bh-note">ตัวเลขท้ายแถว: ออกเรือ = กำไร/ขาดทุนของเที่ยว · ซ่อม = ค่าใช้จ่ายของใบงาน'+(D.err.length?(' · <span class="r">คำนวณบางส่วนไม่ได้: '+e(D.err.slice(0,4).join(', '))+'</span>'):'')+'</div></div>';
@@ -238,7 +270,8 @@ function bhExport(){
       .concat([[],['หมวดต้นทุนทริป','บาท']]).concat(Object.keys(D.G).map(function(k){ return [k,R(D.G[k].tot)]; })));
     add('รายเดือน',[['เดือน','เที่ยว','คน','รายได้','ต้นทุนทริป','ซ่อม','กำไร']].concat(Object.keys(D.months).sort().map(function(k){ var M=D.months[k]; return [k,M.n,M.pax,R(M.rev),R(M.cost),R(M.maint),R(M.rev-M.cost-M.maint)]; })));
     add('ทริป',[['วันที่','โปรแกรม','คน','FAM','รายได้','ต้นทุน','กำไร','เรือกู้']].concat(D.trips.map(function(x){ return [x.d,x.rn,x.pax,x.fam,R(x.rev),R(x.cost),R(x.profit),x.rescue?'ใช่':'']; })));
-    add('ซ่อม',[['วันที่','เลขที่','รายการ','ส่วน','ชิ้น','บาท','สถานะ']].concat(D.mRows.map(function(x){ return [x.date,x.no,x.title,x.cats.map(bhCatName).join(' + '),x.units.join(', '),R(x.cost),x.done?'ปิดแล้ว':'ยังไม่ปิด']; })));
+    add('ซ่อม',[['วันที่','เลขที่','รายการ','ส่วน','ชิ้น','บาท','สถานะ','Project']].concat(D.mRows.map(function(x){ return [x.date,x.no,x.title,x.cats.map(bhCatName).join(' + '),x.units.join(', '),R(x.cost),x.done?'ปิดแล้ว':'ยังไม่ปิด',x.prj||'']; })));
+    add('Project',[['Project','ชื่อ','เริ่ม','จบ','สถานะ','อะไหล่','ค่าแรง','อื่น ๆ','รวมทั้ง Project','อยู่ในช่วงที่เลือก']].concat(D.proj.map(function(x){ return [x.no,x.name,x.from,x.to,x.st,R(x.bd.parts),R(x.bd.labour),R(x.bd.memos),R(x.bd.total),R(x.inR)]; })));
     add('เหตุการณ์',[['วันที่','ประเภท','รายละเอียด','บาท']].concat(D.ev.map(function(x){ return [x.d,x.tag,x.text,(x.amt==null?'':R(x.amt))]; })));
     XLSX.writeFile(wb, 'boat_history_'+String(b.name||D.id).replace(/[^\w฀-๿-]+/g,'_')+'_'+D.from+'_'+D.to+'.xlsx');
   }catch(e){ console.warn('boatHist export', e); if(typeof toast==='function') toast('Export ไม่สำเร็จ'); }
