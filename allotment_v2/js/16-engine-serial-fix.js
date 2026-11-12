@@ -17,9 +17,7 @@ var FL_ENG_FIX=[
   {k:'alu1b', a:'e2',  aOrig:'BBNJ-1011995', b:'e3',  bOrig:'BBNJ-8010521', t:'Aluminous1 · C.Port ↔ C.Std'},
   {k:'zeus',  a:'e26', aOrig:'BBNJ-1000049', b:'e28', bOrig:'BBNJ-8000137', t:'Zeus · Port ↔ Std'},
   {k:'romver',a:'e17', aOrig:'BBNJ-1001137', b:'e19', bOrig:'BBNJ-8000285', t:'Romeo · Port ↔ Verona · Std'},
-  {k:'ver53', a:'e22', aOrig:'BBNJ-1010053', b:'emv0s57otfxl0e', bOrig:null, aNow:'BBNJ-8010033', bNow:'BBNJ-1010053',
-     t:'Verona · Port ↔ Romeo · Std (เลขซ้ำ BBNJ-8010033 + เรคคอร์ดที่สร้างใหม่)',
-     ask:'เลขจริงบนแผ่นป้ายของเครื่องที่ติดอยู่ Verona · Port ตอนนี้'}
+  /* คู่ Verona·Port ↔ Romeo·Std เดิม (ver53) ถูกแทนด้วย §engFix33 ด้านล่าง · owner ยืนยันว่า BBNJ-8010033 สองเรคคอร์ดคือเครื่องลูกเดียวกัน */
   /* Aluminous2 (e33 32501F-440231 ↔ e36 32501F-440247) ยังไม่ใส่ · ใบงาน พ.ค.–ส.ค. ใช้เลขสองตัวสลับไปมา หาวันแก้เลขจากใบงานไม่ได้ · รอผลแผ่นป้าย */
 ];
 function _efK(s){ return String(s||'').toUpperCase().replace(/[\s\-]/g,''); }
@@ -28,11 +26,12 @@ function _efWhere(e){ var b=e.boatId?((typeof getBoat==='function'&&getBoat(e.bo
 function _efCanEdit(){ try{ return !(typeof window.laIsAdmin==='function') || !!window.laIsAdmin(); }catch(_){ return true; } }
 /* คู่ที่ยังต้องแก้ · ข้อมูลต้องยังอยู่ในสภาพที่ถูกแก้ชื่อ */
 function flEngFixPending(){
-  return FL_ENG_FIX.filter(function(P){
+  var sp=(typeof flEngFix33Ok==='function' && flEngFix33Ok())?[FL_ENG_FIX33]:[];
+  return sp.concat(FL_ENG_FIX.filter(function(P){
     var A=flGetEng(P.a), B=flGetEng(P.b); if(!A||!B) return false;
     var aNow=P.aNow||P.bOrig, bNow=P.bNow||P.aOrig;
     return _efK(A.serial)===_efK(aNow) && _efK(B.serial)===_efK(bNow);
-  });
+  }));
 }
 /* ใบงาน/ใบแจ้งที่อ้างเครื่อง · พร้อมเลขที่พิมพ์ในใบ */
 function _efRefs(id){
@@ -120,6 +119,7 @@ function flEngFixApply(k){
 function flEngFixUndo(k){
   if(!_efCanEdit()) return;
   var U={}; try{ U=JSON.parse(localStorage.getItem('la_engfix_undo')||'{}'); }catch(_){ }
+  if(k==='ver33') return flEngFix33Undo();
   var u=U[k], P=FL_ENG_FIX.filter(function(x){ return x.k===k; })[0]; if(!u||!P){ alert('ไม่มีข้อมูลสำรองของคู่นี้ในเครื่องนี้'); return; }
   if(!confirm('ยกเลิกการแก้คู่ '+P.t+' · คืนข้อมูลกลับเป็นก่อนกดแก้?\n\n(สิ่งที่บันทึกเพิ่มกับสองลูกนี้หลังกดแก้ จะหายไปด้วย)')) return;
   var put=function(id,snap){ var i=(FL_ENGINES||[]).findIndex(function(x){ return x.id===id; }); if(i>=0) FL_ENGINES[i]=snap; };
@@ -139,7 +139,7 @@ function flEngFixClose(){ var m=document.getElementById('ef-modal'); if(m) m.rem
 function flEngFixOpen(){
   flEngFixClose();
   var pend=flEngFixPending(), U={}; try{ U=JSON.parse(localStorage.getItem('la_engfix_undo')||'{}'); }catch(_){ }
-  var done=FL_ENG_FIX.filter(function(P){ return U[P.k] && !pend.some(function(x){ return x.k===P.k; }); });
+  var done=FL_ENG_FIX.concat([FL_ENG_FIX33]).filter(function(P){ return U[P.k] && !pend.some(function(x){ return x.k===P.k; }); });
   var e=_efE, ro=!_efCanEdit();
   var card=function(P){
     var pl=flEngFixPlan(P), A=pl.A, B=pl.B;
@@ -156,7 +156,7 @@ function flEngFixOpen(){
       +(ro?'':'<button class="go" onclick="flEngFixApply(\''+P.k+'\')">แก้คู่นี้</button>')+'</div></div>';
   };
   var h='<div class="ef-box"><div class="ef-top"><div><b>เลขเครื่องที่ถูกแก้ชื่อ</b><span>แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ · ทำทีละคู่ · ยกเลิกได้จากเครื่องนี้</span></div><button onclick="flEngFixClose()">&#10005;</button></div><div class="ef-body">'
-    +(pend.length?pend.map(card).join(''):'<div class="ef-empty">&#10003; ไม่มีคู่ที่ต้องแก้แล้ว</div>')
+    +(pend.length?pend.map(function(P){ return P.k==='ver33'?flEngFix33Card(ro):card(P); }).join(''):'<div class="ef-empty">&#10003; ไม่มีคู่ที่ต้องแก้แล้ว</div>')
     +(done.length?('<div class="ef-done"><b>แก้แล้ว</b>'+done.map(function(P){ return '<div><span>&#10003; '+e(P.t)+' · '+e(String(U[P.k].at||'').slice(0,16).replace('T',' '))+'</span>'+(ro?'':'<button onclick="flEngFixUndo(\''+P.k+'\')">ยกเลิกการแก้</button>')+'</div>'; }).join('')+'</div>'):'')
     +'</div></div>';
   var m=document.createElement('div'); m.id='ef-modal'; m.innerHTML='<style>'
@@ -177,4 +177,120 @@ function flEngFixOpen(){
     +'</style>'+h;
   m.addEventListener('click',function(ev){ if(ev.target===m) flEngFixClose(); });
   document.body.appendChild(m);
+}
+
+/* ══ §engFix33 (2026-11-12) · BBNJ-8010033 สองเรคคอร์ด = เครื่องลูกเดียวกัน ═══════════════════════
+   owner: "มันควรเป็นลูกเดียวกัน" · "ไม่ได้ย้ายตั้งแต่ต้น User ไปกดเปลี่ยนชื่อเอง" · Artemis·Port เป็น 8010303 · ที่คลัง Tub Lamu ไม่มีเครื่องลูกนี้
+   ของจริง · ราว 10 ต.ค. เครื่อง 8010033 ออกจาก Artemis·Port ไปติด Verona·Port · Artemis·Port ใส่ 8010303 (ซ่อมเสร็จ MJ-023)
+             เครื่อง 1010053 (เดิม Verona·Port) ไปอยู่ Romeo·Std
+   ในระบบ · ไม่มีใครกดถอด/สลับ · เรคคอร์ด Verona·Port (e22) ถูกแก้เลข 1010053 → 8010033 · สร้างเรคคอร์ดใหม่ 1010053 ที่ Romeo·Std
+            เรคคอร์ดจริงของ 8010033 (e20) ค้างที่ Artemis จน 7 พ.ย. แล้วถูกถอดไป "คลัง Tub Lamu" (ไม่มีเครื่องจริง)
+   หลักฐานวัน · ใบงาน Verona ใบแรกที่พิมพ์ 8010033 = MJ-125 "เปลี่ยนอะไหล่ก่อนใช้งาน" 10 ต.ค. · MJ-148 (16 ต.ค. Artemis) เขียนลูกซ้ายเป็น 8010303
+   ปุ่มทำ 3 อย่าง (ตัดที่ 10 ต.ค.):
+     1 e20 (8010033 ตัวจริง ประวัติ 5,2xx ชม.) → ย้ายไป Verona·Port · รับใบงาน/ประวัติ/มิเตอร์ ของ e22 ตั้งแต่ 10 ต.ค. · ปรับชั่วโมงให้ต่อเนื่อง
+     2 ของบน Artemis ที่ค้างอยู่กับ e20 ตั้งแต่ 10 ต.ค. → ย้ายให้ e5 (8010303)
+     3 e22 → คืนเลข 1010053 · ย้ายไป Romeo·Std · รวมทุกอย่างของเรคคอร์ดที่สร้างใหม่ แล้วลบเรคคอร์ดใหม่ทิ้ง
+   ผู้ใช้กดเอง · admin · ยกเลิกได้จากเครื่องที่กด */
+var FL_ENG_FIX33={k:'ver33', t:'BBNJ-8010033 สองเรคคอร์ด = ลูกเดียวกัน (Verona · Port) + คืน BBNJ-1010053 ให้ Romeo · Std', cut:'2026-10-10',
+  real:'e20', ver:'e22', dup:'emv0s57otfxl0e', art:'e5'};
+function flEngFix33Ok(){
+  var F=FL_ENG_FIX33, K=flGetEng(F.real), V=flGetEng(F.ver), N=flGetEng(F.dup), A=flGetEng(F.art);
+  return !!(K&&V&&N&&A && _efK(K.serial)==='BBNJ8010033' && _efK(V.serial)==='BBNJ8010033' && _efK(N.serial)==='BBNJ1010053' && !K.boatId);
+}
+function _ef33Daily(id, fromCut){   /* [{ds,bid,tk,v}] เรียงตามวัน */
+  var out=[], cut=FL_ENG_FIX33.cut;
+  Object.keys(FL_DAILY||{}).forEach(function(ds){ if(fromCut===true && ds<cut) return; if(fromCut===false && ds>=cut) return; var d=FL_DAILY[ds]||{};
+    Object.keys(d).forEach(function(bid){ var tr=(d[bid]||{}).trips||{}; Object.keys(tr).forEach(function(tk){ var en=(tr[tk]||{}).engines; if(en && (id in en)) out.push({ds:ds,bid:bid,tk:tk,v:en[id]}); }); }); });
+  return out.sort(function(a,b){ return a.ds<b.ds?-1:(a.ds>b.ds?1:0); });
+}
+function flEngFix33Plan(){
+  var F=FL_ENG_FIX33, cut=F.cut, K=flGetEng(F.real), V=flGetEng(F.ver), N=flGetEng(F.dup), A=flGetEng(F.art);
+  var after=function(r){ return (r.date||'')>=cut; };
+  var kArt=_efRefs(F.real).filter(after);                                                   /* งานบน Artemis หลังตัด → e5 */
+  var vNew=_efRefs(F.ver).filter(function(r){ return after(r) && _efLabelSn(r.a)!=='BBNJ1010053'; });   /* งานบน Verona หลังตัด → e20 */
+  var nAll=_efRefs(F.dup);                                                                  /* งานของเรคคอร์ดใหม่ → e22 */
+  var pre=_ef33Daily(F.real,false).filter(function(x){ return +x.v>0; }), post=_ef33Daily(F.ver,true).filter(function(x){ return +x.v>0; });
+  var base=+K.baseHours||0, hCut=pre.length?(base+(+pre[pre.length-1].v-(+pre[0].v))):base;
+  var newBase=(pre.length&&post.length)?+(hCut-(+post[0].v-(+pre[0].v))).toFixed(1):base;
+  var hNow=post.length?+(hCut+(+post[post.length-1].v-(+post[0].v))).toFixed(1):+hCut.toFixed(1);
+  return {K:K,V:V,N:N,A:A,cut:cut,kArt:kArt,vNew:vNew,nAll:nAll,pre:pre,post:post,hCut:+hCut.toFixed(1),newBase:newBase,hNow:hNow,
+    kDaily:_ef33Daily(F.real,true), nDaily:_ef33Daily(F.dup,null)};
+}
+function flEngFix33Card(ro){
+  var p=flEngFix33Plan(), e=_efE, F=FL_ENG_FIX33;
+  var li=function(t){ return '<tr><td colspan="4" style="line-height:1.55">'+t+'</td></tr>'; };
+  return '<div class="ef-card"><div class="ef-h"><b>'+e(F.t)+'</b><span>ตัดที่ '+e(p.cut)+' (ใบงาน MJ-125 ของ Verona)</span></div>'
+    +'<table><tr><th colspan="4">สิ่งที่จะเกิดขึ้น</th></tr>'
+    +li('<b>1 · BBNJ-8010033 เหลือเรคคอร์ดเดียวที่ Verona · Port</b><br><span>เรคคอร์ด "'+e(_efWhere(p.K))+'" (ประวัติเดิม) ย้ายไป Verona · Port · รับงานบน Verona ตั้งแต่ '+e(p.cut)+' จำนวน '+p.vNew.length+' ใบ และมิเตอร์ '+p.post.length+' วัน · ชั่วโมงสะสมจะเป็นราว <b>'+p.hNow.toLocaleString()+' ชม.</b> (ตอนถอดจาก Artemis '+p.hCut.toLocaleString()+' + ที่วิ่งบน Verona)</span>')
+    +li('<b>2 · งานบน Artemis ตั้งแต่ '+e(p.cut)+' ย้ายให้ '+e(p.A.serial)+' (Artemis · Port)</b><br><span>'+p.kArt.length+' ใบ ที่ค้างอยู่กับเรคคอร์ด 8010033 · มิเตอร์ Artemis ช่วงเดียวกัน '+p.kDaily.length+' ช่อง ('+e(p.A.serial)+' มีของตัวเองอยู่แล้ว)</span>')
+    +li('<b>3 · BBNJ-1010053 เหลือเรคคอร์ดเดียวที่ Romeo · Std</b><br><span>เรคคอร์ด Verona · Port เดิมคืนเลขเป็น BBNJ-1010053 แล้วย้ายไป Romeo · Std · รวมงาน '+p.nAll.length+' ใบและมิเตอร์ '+p.nDaily.length+' ช่องของเรคคอร์ดที่สร้างใหม่ 9 ต.ค. · แล้วลบเรคคอร์ดที่สร้างใหม่</span>')
+    +'</table><div class="ef-f"><span>เกียร์และใบจักรอยู่ตำแหน่งเดิม · "คลัง Tub Lamu" จะไม่มีเครื่องลูกนี้อีก · เลขซ้ำหาย</span>'
+    +(ro?'':'<button class="go" onclick="flEngFix33Apply()">แก้ชุดนี้</button>')+'</div></div>';
+}
+function flEngFix33Apply(){
+  if(!_efCanEdit()){ alert('เฉพาะ admin แก้ได้'); return; }
+  if(!flEngFix33Ok()){ alert('ข้อมูลเปลี่ยนไปจากที่ตรวจไว้ · ไม่ได้ทำอะไร'); flEngFixOpen(); return; }
+  var F=FL_ENG_FIX33, p=flEngFix33Plan(), K=p.K, V=p.V, N=p.N, A=p.A, cut=p.cut, today=(typeof TODAY_STR!=='undefined')?TODAY_STR:'';
+  if(!confirm('แก้ชุด BBNJ-8010033 / BBNJ-1010053\n\n'
+    +'1) 8010033 เหลือลูกเดียวที่ Verona · Port · ชั่วโมงราว '+p.hNow.toLocaleString()+'\n'
+    +'2) งานบน Artemis ตั้งแต่ '+cut+' ('+p.kArt.length+' ใบ) ย้ายให้ '+A.serial+'\n'
+    +'3) 1010053 เหลือลูกเดียวที่ Romeo · Std · ลบเรคคอร์ดที่สร้างใหม่\n\nยืนยัน?')) return;
+  var undo={k:'ver33', special:1, at:new Date().toISOString(), engs:[K,V,N,A].map(function(x){ return JSON.parse(JSON.stringify(x)); }), dupIdx:(FL_ENGINES||[]).indexOf(N), refs:[], gb:[], daily:[]};
+  var mv=function(r,to){ var f=(r.kind==='mj')?'engId':'id'; undo.refs.push({kind:r.kind,id:r.rec.id,i:r.i,f:f,was:r.a[f]}); r.a[f]=to; };
+  var cell=function(c){ return ((((FL_DAILY[c.ds]||{})[c.bid]||{}).trips||{})[c.tk]||{}).engines; };
+  var dmove=function(c,from,to){ var en=cell(c); if(!en) return; undo.daily.push({ds:c.ds,bid:c.bid,tk:c.tk,from:from,to:to,v:en[from],hadTo:(to in en),toV:en[to]}); if(to && !(to in en)) en[to]=en[from]; delete en[from]; };
+  /* 2 · Artemis หลังตัด: e20 → e5 */
+  p.kArt.forEach(function(r){ mv(r,F.art); });
+  p.kDaily.forEach(function(c){ dmove(c,F.real,F.art); });
+  var kl=(K.log||[]), kOld=kl.filter(function(l){ return (l.date||'')<cut || l.type==='remove'; }), kNew=kl.filter(function(l){ return (l.date||'')>=cut && l.type!=='remove'; });
+  /* 1 · Verona หลังตัด: e22 → e20 */
+  p.vNew.forEach(function(r){ mv(r,F.real); });
+  _ef33Daily(F.ver,true).forEach(function(c){ dmove(c,F.ver,F.real); });
+  var vl=(V.log||[]), vOld=vl.filter(function(l){ return (l.date||'')<cut; }), vNew=vl.filter(function(l){ return (l.date||'')>=cut; });
+  var by=(typeof laBy==='function')?laBy():'';
+  var kWas=_efWhere(K), vSvc={h:V.lastServiceHours,d:V.lastServiceDate}, vPos={boatId:V.boatId,pos:V.pos,status:V.status};
+  A.log=(A.log||[]).concat(kNew);
+  A.log.push({date:today,type:'note',by:by,desc:'รับใบงาน/ประวัติบน Artemis ตั้งแต่ '+cut+' ที่เคยบันทึกไว้กับเรคคอร์ด BBNJ-8010033 ('+p.kArt.length+' ใบ) · เครื่องที่ติด Artemis · Port ช่วงนั้นคือลูกนี้'});
+  K.log=kOld.concat(vNew);
+  K.boatId=vPos.boatId; K.pos=vPos.pos; K.status=vPos.status; K.spareLocation=null;
+  if(p.pre.length&&p.post.length) K.baseHours=p.newBase;
+  if((vSvc.d||'')>=cut){ K.lastServiceDate=vSvc.d; K.lastServiceHours=p.hCut; }
+  K.log.push({date:cut,type:'swap',by:by,desc:'ย้ายจาก Artemis · Port → '+_efWhere(K)+' · บันทึกย้อนหลัง (เดิมไม่ได้กดถอด/สลับ · เรคคอร์ด Verona · Port ถูกแก้เลขเป็นเลขนี้แทน)'});
+  K.log.push({date:today,type:'rename',by:by,desc:'รวมสองเรคคอร์ดของ BBNJ-8010033 เป็นลูกเดียว · เดิมค้างที่ "'+kWas+'" · ชั่วโมงตั้งต้นปรับให้ต่อเนื่อง ('+p.hCut+' ชม. ตอนออกจาก Artemis)'});
+  /* 3 · e22 = 1010053 → Romeo·Std + รวมเรคคอร์ดที่สร้างใหม่ */
+  p.nAll.forEach(function(r){ mv(r,F.ver); });
+  p.nDaily.forEach(function(c){ dmove(c,F.dup,F.ver); });
+  V.log=vOld.concat(N.log||[]);
+  V.serial='BBNJ-1010053'; V.boatId=N.boatId; V.pos=N.pos; V.status=N.status; V.spareLocation=N.spareLocation||null;
+  V.lastServiceHours=N.lastServiceHours; V.lastServiceDate=N.lastServiceDate; if(!(+V.baseHours>0) && +N.baseHours>0) V.baseHours=N.baseHours;
+  V.log.push({date:cut,type:'swap',by:by,desc:'ย้ายจาก Verona · Port → '+_efWhere(V)+' · บันทึกย้อนหลัง'});
+  V.log.push({date:today,type:'rename',by:by,desc:'แก้เลขกลับเป็นเลขเดิม BBNJ-8010033 → BBNJ-1010053 · รวมกับเรคคอร์ดที่ถูกสร้างซ้ำเมื่อ 9 ต.ค.'});
+  /* เกียร์อยู่ตำแหน่งเดิม */
+  (FL_GEARBOXES||[]).forEach(function(g){ if(!g) return;
+    if(g.engineId===F.ver){ undo.gb.push({id:g.id,was:F.ver}); g.engineId=F.real; }
+    else if(g.engineId===F.dup){ undo.gb.push({id:g.id,was:F.dup}); g.engineId=F.ver; } });
+  FL_ENGINES=(FL_ENGINES||[]).filter(function(x){ return x.id!==F.dup; });
+  if(typeof flGbBoatHeal==='function') try{ flGbBoatHeal([F.real,F.ver]); }catch(_){ }
+  try{ var U=JSON.parse(localStorage.getItem('la_engfix_undo')||'{}'); U.ver33=undo; localStorage.setItem('la_engfix_undo', JSON.stringify(U)); }catch(_){ }
+  if(typeof flSave==='function') flSave();
+  flEngFixOpen();
+  if(typeof flRenderAsset==='function') try{ flRenderAsset(); }catch(_){ }
+}
+function flEngFix33Undo(){
+  if(!_efCanEdit()) return;
+  var U={}; try{ U=JSON.parse(localStorage.getItem('la_engfix_undo')||'{}'); }catch(_){ }
+  var u=U.ver33, F=FL_ENG_FIX33; if(!u){ alert('ไม่มีข้อมูลสำรองของชุดนี้ในเครื่องนี้'); return; }
+  if(!confirm('ยกเลิกการแก้ชุด BBNJ-8010033 / BBNJ-1010053 · คืนข้อมูลกลับเป็นก่อนกดแก้?\n\n(สิ่งที่บันทึกเพิ่มกับเครื่อง 4 ลูกนี้หลังกดแก้ จะหายไปด้วย)')) return;
+  (u.engs||[]).forEach(function(snap){ var i=(FL_ENGINES||[]).findIndex(function(x){ return x.id===snap.id; });
+    if(i>=0) FL_ENGINES[i]=snap; else FL_ENGINES.splice(Math.max(0,Math.min(u.dupIdx||FL_ENGINES.length,FL_ENGINES.length)),0,snap); });
+  (u.refs||[]).slice().reverse().forEach(function(r){ var L=(r.kind==='mj')?FL_MAINT:FL_INCIDENTS, rec=(L||[]).find(function(x){ return x.id===r.id; }); if(!rec) return;
+    var arr=(r.kind==='mj')?rec.assets:rec.damagedAssets; if(arr && arr[r.i]) arr[r.i][r.f]=r.was; });
+  (u.gb||[]).forEach(function(g){ var o=(FL_GEARBOXES||[]).find(function(x){ return x.id===g.id; }); if(o) o.engineId=g.was; });
+  (u.daily||[]).slice().reverse().forEach(function(c){ var en=((((FL_DAILY[c.ds]||{})[c.bid]||{}).trips||{})[c.tk]||{}).engines; if(!en) return;
+    en[c.from]=c.v; if(c.hadTo) en[c.to]=c.toV; else delete en[c.to]; });
+  if(typeof flGbBoatHeal==='function') try{ flGbBoatHeal([F.real,F.ver,F.dup]); }catch(_){ }
+  delete U.ver33; try{ localStorage.setItem('la_engfix_undo', JSON.stringify(U)); }catch(_){ }
+  if(typeof flSave==='function') flSave();
+  flEngFixOpen();
+  if(typeof flRenderAsset==='function') try{ flRenderAsset(); }catch(_){ }
 }
