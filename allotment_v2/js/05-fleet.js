@@ -20347,6 +20347,49 @@ function _flMaintPartsInner(m){
 // Surgically refresh ONLY the parts list + subtotal + timeline + count badge — WITHOUT
 // re-rendering the whole detail mount. This keeps the +Withdraw button (and the part picker)
 // alive, so the page never jumps to the top after a withdraw / return.
+/* ══ §memoUseNow2 (2026-11-12) · owner "งานที่ Memo รอเบิกของ แต่ยังไม่ได้ขอทีละอัน ตัวใหม่จะขึ้นให้เลยไหม"
+   ของจาก Memo ของงานนี้ที่รับเข้าคลังไปแล้ว แต่ยังไม่ได้เบิกลงงาน → ปุ่มเดียวเบิกให้ครบ
+   เหลือ = รับแล้ว − ที่เบิกลงงานนี้ไปแล้ว (นับตามรายการอะไหล่เดียวกัน) · เบิกได้ไม่เกินของที่มีในคลังที่รับเข้า */
+function flMaintMemoPending(m){
+  var out=[]; if(!m) return out;
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){
+    if(!mo || mo.maintId!==m.id || mo.status==='cancelled') return;
+    (mo.items||[]).forEach(function(it){
+      if(typeof _memoIsPart==='function' && !_memoIsPart(it,mo)) return;
+      var r=+it.recvQty||0;
+      if(!r && (mo.status==='received'||mo.status==='paid') && !((mo.receipts||[]).length)) r=+it.qty||0;   /* ใบเก่าก่อนมี recvQty */
+      if(!(r>0) || !it.invId) return;
+      var inv=FL_INVENTORY.find(function(x){ return x.id===it.invId; }); if(!inv) return;
+      var used=(m.parts||[]).filter(function(p){ return p.invId===it.invId; }).reduce(function(a,p){ return a+(+p.qty||0); },0);
+      var prev=out.filter(function(o){ return o.inv.id===inv.id; }).reduce(function(a,o){ return a+o.want; },0);
+      var left=r-Math.max(0,used-prev); if(left<=0) return;
+      invSyncLegacy(inv);
+      var loc=mo.receivedLocation||(((mo.receipts||[]).slice(-1)[0]||{}).location)||'';
+      if(!loc || !(invQtyAt(inv,loc)>0)){ var st=(inv.stocks||[]).filter(function(x){ return (x.qty||0)>0; })[0]; loc=st?st.location:loc; }
+      var av=loc?invQtyAt(inv,loc):0;
+      out.push({mo:mo, it:it, inv:inv, loc:loc, want:left, qty:Math.min(left,av)});
+    });
+  });
+  return out;
+}
+function flMaintMemoBtnHtml(m){
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length) return '';
+  var nos={}; L.forEach(function(x){ nos[x.mo.no]=1; });
+  return '<button onclick="flMaintWithdrawFromMemos(\''+m.id+'\')" style="display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;background:#E9F7F1;color:#0B5A43;border:1px solid #B7E0CF;border-radius:10px;padding:9px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left">'
+    +'<span style="font-size:14px">&#128230;</span><span style="flex:1">เบิกของจาก Memo ที่รับเข้าคลังแล้ว · '+L.length+' รายการ<span style="display:block;font-weight:500;font-size:10px;color:#3E6B5C">'+Object.keys(nos).join(' · ')+' · กดครั้งเดียวเบิกลงงานนี้ครบ</span></span><span>&rsaquo;</span></button>';
+}
+function flMaintWithdrawFromMemos(jobId){
+  var m=FL_MAINT.find(function(x){ return x.id===jobId; }); if(!m) return;
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length){ flShowToast('ไม่มีของจาก Memo ที่รอเบิกแล้ว'); return; }
+  var txt=L.slice(0,12).map(function(x){ return '  · '+x.inv.name+' × '+x.qty+' '+(x.inv.unit||'')+' · '+x.loc+(x.qty<x.want?(' (ขาด '+(x.want-x.qty)+' · ของในคลังไม่พอ)'):''); }).join('\n')+(L.length>12?('\n  · และอีก '+(L.length-12)+' รายการ'):'');
+  if(!confirm('เบิกของจาก Memo ลงงาน '+(m.no||'')+' ทั้งหมด '+L.length+' รายการ?\n\n'+txt)) return;
+  var ok=0, bad=0;
+  L.forEach(function(x){ if(!flMaintWithdraw(jobId,x.inv.id,x.loc,x.qty)) ok++; else bad++; });
+  flSave();
+  flMaintRefreshParts(jobId);
+  var host=document.getElementById('maint-memo-wd-'+jobId); if(host) host.innerHTML=flMaintMemoBtnHtml(m);
+  flShowToast('เบิกลงงาน '+(m.no||'')+' แล้ว '+ok+' รายการ'+(bad?(' · ไม่สำเร็จ '+bad):''));
+}
 function flMaintRefreshParts(jobId){
   const m=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(x=>x.id===jobId);
   if(!m) return;
@@ -20584,7 +20627,7 @@ function flRenderMaintDetailPink(){
     _wdSeen[label]=true; window._maintInvLabelMap[label]=x.id;
     return `<option value="${label.replace(/"/g,'&quot;')}"></option>`;
   }).join('');
-  const withdrawForm=flMaintCanEditParts(m)?`<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+  const withdrawForm=flMaintCanEditParts(m)?`<div id="maint-memo-wd-${m.id}">${flMaintMemoBtnHtml(m)}</div><div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
       <input list="maint-inv-list-${m.id}" id="maint-inv-sel-${m.id}" onchange="flMaintFillLoc('${m.id}')" autocomplete="off" placeholder="พิมพ์ชื่ออะไหล่ / Part No..." style="flex:1 1 160px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0"/>
       <datalist id="maint-inv-list-${m.id}">${invOpts}</datalist>
       <select id="maint-inv-loc-${m.id}" style="flex:1 1 130px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0">
