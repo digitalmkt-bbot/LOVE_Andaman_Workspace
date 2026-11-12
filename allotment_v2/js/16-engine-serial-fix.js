@@ -294,3 +294,68 @@ function flEngFix33Undo(){
   flEngFixOpen();
   if(typeof flRenderAsset==='function') try{ flRenderAsset(); }catch(_){ }
 }
+
+/* ══ §engBase (2026-11-12) · ชั่วโมงตั้งต้น = มิเตอร์ครั้งแรก ═══════════════════════════════════════
+   owner: "ตั้งตามมิเตอร์ เพื่อจะได้รู้อายุของเครื่องยนต์จริงๆ"
+   flEngHours = baseHours + (มิเตอร์ล่าสุด − มิเตอร์ครั้งแรกที่บันทึก) · ลูกที่ baseHours เป็น 0 จึงแสดงแค่ชั่วโมงที่วิ่งตั้งแต่เริ่มบันทึก
+   (Aluminous1 88 ชม. ทั้งที่มิเตอร์ 5,256) · ตั้ง baseHours = มิเตอร์ครั้งแรก → ชั่วโมงสะสม = มิเตอร์ล่าสุด
+   lastServiceHours อยู่ในสเกลเดิม ต้องเลื่อนตามเท่ากัน ไม่งั้นรอบเซอร์วิสจะขึ้นเกินกำหนดทันที
+   ผู้ใช้กดเอง · admin · ต้องแก้เลขที่ถูกแก้ชื่อให้ครบก่อน (การแก้เลขย้ายมิเตอร์ข้ามเรคคอร์ด) · ยกเลิกได้จากเครื่องที่กด */
+function flEngBaseList(){
+  var out=[];
+  (FL_ENGINES||[]).forEach(function(e){
+    if(!e || (+e.baseHours>0)) return;
+    var first=null, fd='', last=null, ld='';
+    Object.keys(FL_DAILY||{}).forEach(function(ds){ var d=FL_DAILY[ds]||{};
+      Object.keys(d).forEach(function(bid){ var tr=(d[bid]||{}).trips||{}; Object.keys(tr).forEach(function(tk){ var v=((tr[tk]||{}).engines||{})[e.id]; if(v==null || !(+v>0)) return;
+        if(first===null || ds<fd){ fd=ds; first=+v; } if(ds>ld){ ld=ds; last=+v; } }); }); });
+    if(first===null || !(first>0)) return;
+    out.push({e:e, first:first, fd:fd, last:last, now:(typeof flEngHours==='function')?flEngHours(e.id):0});
+  });
+  return out.sort(function(a,b){ return _efWhere(a.e).localeCompare(_efWhere(b.e)); });
+}
+function flEngBaseApply(){
+  if(!_efCanEdit()){ alert('เฉพาะ admin แก้ได้'); return; }
+  if(flEngFixPending().length){ alert('แก้เลขที่ถูกแก้ชื่อให้ครบก่อน แล้วค่อยตั้งชั่วโมง'); return; }
+  var L=flEngBaseList(); if(!L.length) return;
+  if(!confirm('ตั้งชั่วโมงตั้งต้นของ '+L.length+' ลูก ให้เท่ามิเตอร์ครั้งแรกที่บันทึก?\n\nชั่วโมงสะสมจะเท่ากับมิเตอร์ล่าสุด · รอบเซอร์วิสเลื่อนตามให้ ระยะถึงรอบถัดไปไม่เปลี่ยน')) return;
+  var by=(typeof laBy==='function')?laBy():'', today=(typeof TODAY_STR!=='undefined')?TODAY_STR:'', undo=[];
+  L.forEach(function(x){ var e=x.e; undo.push({id:e.id, base:e.baseHours, svc:e.lastServiceHours});
+    e.baseHours=x.first;
+    if(e.lastServiceHours!=null && e.lastServiceHours!=='') e.lastServiceHours=+((+e.lastServiceHours||0)+x.first).toFixed(1);
+    if(!e.log) e.log=[];
+    e.log.push({date:today, type:'note', by:by, desc:'ตั้งชั่วโมงตั้งต้น = มิเตอร์ครั้งแรก '+x.first+' ('+x.fd+') · ชั่วโมงสะสม '+x.now+' → '+x.last+' · รอบเซอร์วิสเลื่อนตาม'}); });
+  try{ localStorage.setItem('la_engbase_undo', JSON.stringify({at:new Date().toISOString(), rows:undo})); }catch(_){ }
+  if(typeof flSave==='function') flSave();
+  flEngBaseOpen();
+  if(typeof flRenderAsset==='function') try{ flRenderAsset(); }catch(_){ }
+}
+function flEngBaseUndo(){
+  if(!_efCanEdit()) return;
+  var U=null; try{ U=JSON.parse(localStorage.getItem('la_engbase_undo')||'null'); }catch(_){ }
+  if(!U || !U.rows){ alert('ไม่มีข้อมูลสำรองในเครื่องนี้'); return; }
+  if(!confirm('ยกเลิกการตั้งชั่วโมงตามมิเตอร์ของ '+U.rows.length+' ลูก?')) return;
+  U.rows.forEach(function(r){ var e=flGetEng(r.id); if(!e) return; e.baseHours=r.base; e.lastServiceHours=r.svc; if(e.log && e.log.length && /ตั้งชั่วโมงตั้งต้น = มิเตอร์ครั้งแรก/.test(e.log[e.log.length-1].desc||'')) e.log.pop(); });
+  try{ localStorage.removeItem('la_engbase_undo'); }catch(_){ }
+  if(typeof flSave==='function') flSave();
+  flEngBaseOpen();
+  if(typeof flRenderAsset==='function') try{ flRenderAsset(); }catch(_){ }
+}
+function flEngBaseOpen(){
+  flEngFixClose();
+  var L=flEngBaseList(), e=_efE, ro=!_efCanEdit(), pend=flEngFixPending().length, U=null;
+  try{ U=JSON.parse(localStorage.getItem('la_engbase_undo')||'null'); }catch(_){ }
+  var n=function(v){ return (Math.round(v*10)/10).toLocaleString(); };
+  var h='<div class="ef-box"><div class="ef-top"><div><b>ชั่วโมงตั้งต้นเป็น 0 · ตั้งตามมิเตอร์</b><span>ชั่วโมงสะสมจะเท่ากับมิเตอร์ล่าสุดใน Daily Fleet Log · รอบเซอร์วิสเลื่อนตาม ระยะถึงรอบถัดไปไม่เปลี่ยน</span></div><button onclick="flEngFixClose()">&#10005;</button></div><div class="ef-body">'
+    +(pend?'<div class="ef-card"><div class="ef-w">&#9888; ยังมีเลขที่ถูกแก้ชื่อค้างอยู่ '+pend+' ชุด · แก้ให้ครบก่อน แล้วค่อยตั้งชั่วโมง</div></div>':'')
+    +(L.length?('<div class="ef-card"><table><tr><th>เครื่อง</th><th>ตำแหน่ง</th><th style="text-align:right">ชั่วโมงตอนนี้</th><th></th><th style="text-align:right">หลังตั้ง (= มิเตอร์ล่าสุด)</th><th>มิเตอร์ครั้งแรก</th></tr>'
+        +L.map(function(x){ return '<tr><td><b class="sn">'+e(x.e.serial)+'</b></td><td><span>'+e(_efWhere(x.e))+'</span></td><td style="text-align:right">'+n(x.now)+'</td><td class="ar">&rarr;</td><td style="text-align:right"><b class="sn ok">'+n(x.last)+'</b></td><td class="n">'+n(x.first)+' · '+e(x.fd)+'</td></tr>'; }).join('')
+        +'</table><div class="ef-f"><span>'+L.length+' ลูก · เครื่องที่เพิ่งเปลี่ยนเข้ามาจะได้ชั่วโมงตามมิเตอร์ของตำแหน่งนั้น ถ้าชั่วโมงจริงของลูกไหนต่างจากนี้ แก้ที่ Edit ของลูกนั้นได้ภายหลัง</span>'
+        +((ro||pend)?'':'<button class="go" onclick="flEngBaseApply()">ตั้งทั้ง '+L.length+' ลูก</button>')+'</div></div>')
+      :'<div class="ef-empty">&#10003; ไม่มีเครื่องที่ชั่วโมงตั้งต้นเป็น 0 แล้ว</div>')
+    +((U&&U.rows&&!ro)?('<div class="ef-done"><div><span>&#10003; ตั้งไปแล้ว '+U.rows.length+' ลูก · '+e(String(U.at||'').slice(0,16).replace('T',' '))+'</span><button onclick="flEngBaseUndo()">ยกเลิกการตั้ง</button></div></div>'):'')
+    +'</div></div>';
+  flEngFixOpen();                                   /* ยืม style ของหน้าต่างแก้เลข */
+  var m=document.getElementById('ef-modal'); if(!m) return;
+  var st=m.querySelector('style'); m.innerHTML=(st?st.outerHTML:'')+h;
+}

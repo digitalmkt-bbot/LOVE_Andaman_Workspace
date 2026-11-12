@@ -30544,7 +30544,9 @@ function faRenderParts(kind){
     badges:{docs:faDocAlertCount()}, stages:stages,
     chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):'')
       /* §engFix · คู่เครื่องที่เลขถูกแก้ชื่อแทนการถอด/สลับ · กดเพื่อดูและแก้ทีละคู่ */
-      +((kind==='eng' && typeof flEngFixPending==='function' && flEngFixPending().length)?('<span class="fa-chip red" style="cursor:pointer" onclick="flEngFixOpen()" title="แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ"><b>'+flEngFixPending().length+'</b>คู่ เลขถูกแก้ชื่อ · กดเพื่อแก้</span>'):''), add:K.add });
+      +((kind==='eng' && typeof flEngFixPending==='function' && flEngFixPending().length)?('<span class="fa-chip red" style="cursor:pointer" onclick="flEngFixOpen()" title="แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ"><b>'+flEngFixPending().length+'</b>คู่ เลขถูกแก้ชื่อ · กดเพื่อแก้</span>'):'')
+      /* §engBase · ลูกที่ชั่วโมงตั้งต้นเป็น 0 ทั้งที่มีมิเตอร์ · กดเพื่อตั้งตามมิเตอร์ */
+      +((kind==='eng' && typeof flEngBaseList==='function' && flEngBaseList().length)?('<span class="fa-chip amb" style="cursor:pointer" onclick="flEngBaseOpen()" title="ตั้งชั่วโมงตั้งต้นให้เท่ามิเตอร์ครั้งแรก"><b>'+flEngBaseList().length+'</b>ลูก ชั่วโมงตั้งต้น 0 · ตั้งตามมิเตอร์</span>'):''), add:K.add });
   var keep=document.getElementById('fl-'+kind+'-listpanel'), kt=keep?keep.scrollTop:0;
   wrap.innerHTML='<div class="fa-3">'+bl+mid+det+'</div>';
   var lp=document.getElementById('fl-'+kind+'-listpanel'); if(lp) lp.scrollTop=kt;
