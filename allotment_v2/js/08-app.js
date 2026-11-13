@@ -27709,7 +27709,12 @@ function tsRows(date){
     const s=ckSummary(b,date)||{booked:ckBookedPax(t),noShow:0};
     const v=O.vanCheckin||null, pcv=O.pierCheckin||null;
     const evV=ckEventTally(v), evP=ckEventTally(pcv);
-    const events=[].concat(ckEvLive(v&&v.events), ckEvLive(pcv&&pcv.events));   /* §ckBack */
+    /* §tsSplitEv (2026-11-13) · เจ้าของ: "ระบุเหตุผลอันนี้ กับ หน้าเช็คอิน ตรงกันไหม" → ไม่ตรง
+       ใบที่แยกรถ เช็คอินเก็บเหตุผลรายจุดไว้ใน ops.<van|pier>Checkin._s[i].events · บรรทัดนี้อ่านแต่ชั้นบน
+       เคส BK-26100528-EP54 (13 พ.ย.) หน้าท่ากด "ยกเลิกหน้างาน 1 AD · ไกด์แจ้งลูกค้าไม่ได้เดินทางมา" ในแถวรถคันที่สาม
+       ที่นี่กลับขึ้น "หาย 1 · ไม่ระบุเหตุ" · ใช้ตัวรวมทุกชั้นตัวเดียวกับที่นับคนหาย (_ckAllEv · ตัดตัวซ้ำและตัวที่กดถอนแล้ว) */
+    const events=(typeof _ckAllEv==='function') ? [].concat(_ckAllEv(O,'van'), _ckAllEv(O,'pier'))
+                                                 : [].concat(ckEvLive(v&&v.events), ckEvLive(pcv&&pcv.events));   /* §ckBack */
     const booked=s.booked, noShow=s.noShow||0;
     // §tsIssueReal · คนที่ไม่ได้เดินทางจริง (หักเคสมาเองที่ท่า / หน้าท่ายืนยันแล้วออกให้)
     const _L=(typeof ckLostByType==='function')?(ckLostByType(b,date)||{}):{};
