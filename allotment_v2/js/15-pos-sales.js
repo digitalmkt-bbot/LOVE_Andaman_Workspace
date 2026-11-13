@@ -7,8 +7,9 @@
    เก็บ · ctWrite('pos_sales_YYYYMM') = { 'pier|YYYY-MM-DD': {f,at,by,items:[{n,q,net,pf,a:{boatId:{q,nat}}}]} }
      แยกก้อนรายเดือน กัน blob โต · smerge ของเซิร์ฟเวอร์รวมราย sub-key → สองท่าบันทึกพร้อมกันไม่ทับกัน
      a['_x'] = ไม่ใช่ลูกค้าเรือ (walk-in / พนักงาน) · nat = สัญชาติผู้ซื้อ (ไม่บังคับ)
-   ไม่แตะข้อมูลเดิมใด ๆ · อ่าน TRIPS / SB_BOOKINGS / ใบสั่งงานไกด์ อย่างเดียว */
-var _psl={ pier:'panwa', date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), tab:'day', mon:'' };
+   ไม่แตะข้อมูลเดิมใด ๆ · อ่าน TRIPS / SB_BOOKINGS / ใบสั่งงานไกด์ อย่างเดียว
+   §pslProd (2026-11-13) · หน้าบันทึกรายวันแบบใหม่ + แท็บทะเบียนสินค้า (รูป · ชื่อที่ใช้แสดง · ประเภท) · ดูหัวบล็อกด้านล่าง */
+var _psl={ pier:'panwa', date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), tab:'day', mon:'', q:'', only:false, rq:'', rcat:'', rnoimg:false };
 var PSL_X='_x';
 function pslE(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function pslB(n){ return '฿'+Math.round(+n||0).toLocaleString(); }
@@ -192,32 +193,145 @@ function pslCss(){
   +'.psl .av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;flex:none;letter-spacing:.02em}.psl .bt{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}.psl .bt b{font-size:13px;font-weight:600;color:#16223F}'
   +'.psl .bh>span.rt{font-size:10.5px;font-weight:600;color:#1683C7;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +'.psl .hb{display:inline-block;height:8px;border-radius:4px;background:#1683C7;vertical-align:middle;margin-right:6px}'
-  +'.psl .note{font-size:11.5px;color:#6B7591;padding:8px 14px}';
+  +'.psl .note{font-size:11.5px;color:#6B7591;padding:8px 14px}'
+  /* §pslProd · หน้าบันทึกรายวันแบบใหม่ + ทะเบียนสินค้า */
+  +'.psl .bar.top{gap:12px}'
+  +'.psl .kp{display:flex;gap:20px;align-items:center;margin-left:6px}.psl .kp>div{display:flex;flex-direction:column;line-height:1.25}.psl .kp i{font-style:normal;font-size:10.5px;color:#6B7591;font-weight:600}.psl .kp b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.psl .kp small{font-size:11px;color:#6B7591;font-weight:500}'
+  +'.psl .prog{flex:1 1 170px;max-width:300px;min-width:150px}.psl .prog .l{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#4B5675}.psl .prog .pb{height:8px;border-radius:5px;margin-top:4px}'
+  +'.psl input.sr{border:1px solid #D5DBE7;border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:500;font-family:inherit;width:170px;background:#fff;color:#16223F}'
+  +'.psl .btn{font-size:12.5px;font-weight:600}.psl select.btn{padding-right:8px}'
+  +'.psl .btn.only{color:#8A5A12;background:#FFF6E0;border-color:#EBD3A3}.psl .btn.only.on{background:#8A5A12;border-color:#8A5A12;color:#fff}'
+  +'.psl .wrap.day{max-height:calc(100vh - 235px)}.psl .wrap.day td{padding:5px 6px}'
+  +'.psl .wrap tr.cat td,.psl .wrap tr.cat td:first-child{text-align:left;background:#F5F7FB;padding:5px 12px;font-size:11px;color:#4B5675;border-bottom:1px solid #E1E6EF;border-right:0;max-width:none}'
+  +'.psl tr.cat b{font-weight:700;margin-right:8px}.psl tr.cat span{color:#9AA3B8}'
+  +'.psl .pw{display:flex;align-items:center;gap:10px;min-width:0}.psl .pm{min-width:0;display:flex;flex-direction:column;line-height:1.3}.psl .pm b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.psl .pm i{font-style:normal;font-size:10.5px;color:#6B7591;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +'.psl .pt{flex:none;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;font-weight:700;color:rgba(22,34,63,.45)}.psl .pt img{width:100%;height:100%;object-fit:cover;display:block}.psl .pt.ck{cursor:pointer}'
+  +'.psl .wrap.day input.q{width:44px;height:28px;padding:0;border-style:dashed;border-radius:8px;box-sizing:border-box;font-size:13px;font-weight:700}.psl .wrap.day input.q.has{border-style:solid;border-width:1.5px}.psl .wrap.day input.q:focus{outline:2px solid #1683C7;outline-offset:1px;border-style:solid}'
+  +'.psl .wrap.day select.nat{margin-top:2px}'
+  +'.psl .st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 10px;white-space:nowrap}.psl .st.ok{background:#E1F3EA;color:#0F6E56}.psl .st.lf{background:#FCEBDD;color:#B4541A}'
+  +'.psl .bh.v2>span.qc{font-weight:800;font-size:10px;max-width:none;border-radius:999px;padding:1px 9px;margin-top:3px}'
+  +'.psl .wrap.day th{padding:8px 4px}.psl .bh.v2>span.rt{max-width:112px}.psl .bh.v2>span:not(.bt):not(.qc){max-width:112px;white-space:nowrap}'
+  +'.psl .wrap.day th:last-child,.psl .wrap.day tbody td:last-child,.psl .wrap.day tfoot td:last-child{position:sticky;right:0;box-shadow:-1px 0 0 #E1E6EF;min-width:76px}.psl .wrap.day tbody td:last-child{background:#fff}.psl .wrap.day th:last-child{z-index:3}'
+  +'.psl tr.nores td,.psl .wrap tr.nores td:first-child{padding:22px;color:#6B7591;text-align:center;max-width:none;border-right:0}'
+  +'.psl .rg{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}'
+  +'.psl .pc{background:#fff;border:1px solid #E1E6EF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;min-width:0}.psl .pc:hover{box-shadow:0 4px 14px rgba(22,34,63,.1)}'
+  +'.psl .pc .ph{height:140px;display:flex;align-items:center;justify-content:center}.psl .pc .ph img{width:100%;height:100%;object-fit:cover;display:block}'
+  +'.psl .add{font-size:12px;font-weight:700;color:#4B5675;border:1.5px dashed rgba(22,34,63,.3);border-radius:10px;padding:8px 13px;background:rgba(255,255,255,.6)}.psl .noi,.psl-md .noi{font-size:12px;color:rgba(22,34,63,.45);font-weight:600}'
+  +'.psl .pc>b{font-size:12.5px;font-weight:600;padding:10px 12px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.psl .pc>i{font-style:normal;font-size:11px;color:#6B7591;padding:2px 12px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +'.psl .pf{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px 11px}.psl .pf span{font-weight:700;font-variant-numeric:tabular-nums}.psl .pf em{font-style:normal;font-size:10.5px;color:#0E7C6B;font-weight:700;white-space:nowrap}'
+  +'.psl-md{position:fixed;inset:0;z-index:99980;background:rgba(15,25,45,.45);display:flex;align-items:center;justify-content:center;padding:20px}'
+  +'.psl-md .bx{background:#fff;border-radius:16px;overflow:hidden;display:flex;width:min(760px,100%);max-height:90vh;color:#16223F;font-size:13px}'
+  +'.psl-md .im{flex:0 0 46%;min-height:320px;display:flex;align-items:center;justify-content:center}.psl-md .im img{width:100%;height:100%;max-height:90vh;object-fit:contain;display:block}'
+  +'.psl-md .fm{flex:1;padding:20px 22px;display:flex;flex-direction:column;gap:6px;min-width:0}'
+  +'.psl-md .ttl{font-size:16px;font-weight:700;margin-bottom:6px}.psl-md .fm>label{font-size:11px;font-weight:700;color:#6B7591;margin-top:6px}'
+  +'.psl-md .fm>input{border:1px solid #D5DBE7;border-radius:9px;padding:8px 10px;font-size:13px;font-weight:500;font-family:inherit;color:#16223F}'
+  +'.psl-md .mt{font-size:11.5px;color:#6B7591;line-height:1.6;margin-top:8px}'
+  +'.psl-md .ac{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:14px;flex-wrap:wrap}'
+  +'.psl-md .btn{border:1px solid #D5DBE7;background:#fff;border-radius:9px;padding:7px 13px;font-size:12.5px;font-weight:600;font-family:inherit;color:#16223F;cursor:pointer;display:inline-flex;align-items:center;gap:6px}.psl-md .btn.pri{background:#1683C7;border-color:#1683C7;color:#fff}.psl-md .btn.del{color:#B42B26;border-color:#F1C4C1}'
+  +'@media(max-width:640px){.psl-md .bx{flex-direction:column;overflow:auto}.psl-md .im{flex:none;min-height:220px}}';
   document.head.appendChild(s);
 }
+
+/* ══ §pslProd (2026-11-13) · ทะเบียนสินค้า + รูปสินค้า · และหน้าบันทึกรายวันแบบใหม่ ══════════════
+   owner: "ปรับดีไซน์หน้านี้หน่อย และเราจะทำทะเบียนรายการของ ให้สามารถเพิ่มรูปสินค้าได้"
+   ตกลงกันไว้: ไซส์ของสินค้าเดียวกันรวมเป็นใบเดียว (รูปเดียว) · ประเภทให้ระบบเดาจากชื่อใน POS แล้วแก้เองได้ · ช่องในทะเบียน = รูป · ชื่อที่ใช้แสดง · ประเภท
+
+   สินค้าไม่ต้องคีย์เข้าทะเบียน · ระบบรวบรวมจากไฟล์ POS ที่เคยอัปโหลดทุกวัน ทุกท่า
+   ชื่อใน POS หน้าตาแบบ  "Beach Shoe.Phuket TOTO..Multi-Color.40-41 00594-40-41"  = ประเภท.ยี่ห้อ.รุ่น.สี.ไซส์ รหัส
+     → ตัดท่อนสุดท้าย (ไซส์+รหัส) ออก ที่เหลือคือ "สินค้า" หนึ่งใบ · ชื่อที่ไม่มีจุดแบบนี้ = หนึ่งชื่อหนึ่งใบ
+   เก็บ · ctWrite('pos_products') = { famKey: {nm, cat, img:{id,url}, at, by} }  เฉพาะใบที่มีคนแก้ · smerge ราย sub-key เหมือน pos_sales
+   รูป · ไฟล์จริงอยู่ตาราง attachments (POST /api/attach · ท่อเดียวกับสลิป/รูปโปรเจกต์) · blob เก็บแค่ ref · ย่อเหลือ 900px ก่อนส่ง
+   ทะเบียนใช้ร่วมกันทุกท่า */
+var _pslFamC={};
+function pslFam(n){
+  n=String(n||'').replace(/\s+/g,' ').trim();
+  var c=_pslFamC[n]; if(c) return c;
+  var parts=n.split('.'), o;
+  if(parts.length>=4){
+    var head=parts.slice(0,-1).map(function(x){ return x.trim(); }), v=parts[parts.length-1].trim();
+    var m=/^(.+?)\s+(\S*\d\S*)-\1$/.exec(v); if(m) v=m[1]+' · '+m[2];
+    o={key:head.join('.').toLowerCase(), cat:head[0]||'อื่น ๆ', name:head.filter(Boolean).join(' · '), v:v};
+  } else {
+    o={key:n.toLowerCase(), cat:(/waterproof\s*bag/i.test(n)?'Waterproof Bag':(n.split(/[ .]/)[0]||'อื่น ๆ')), name:n, v:''};
+  }
+  return (_pslFamC[n]=o);
+}
+function pslProdMap(){ var m=(typeof ctRead==='function')?ctRead('pos_products'):null; return (m&&typeof m==='object'&&!Array.isArray(m))?m:{}; }
+/* ข้อมูลที่ใช้แสดงของสินค้าหนึ่งชื่อ · ของที่แก้ในทะเบียนทับของที่เดา */
+function pslProdOf(n, PM){
+  var f=pslFam(n), r=(PM||pslProdMap())[f.key]||{};
+  return { key:f.key, name:r.nm||f.name, cat:r.cat||f.cat, v:f.v, img:(r.img&&r.img.url)?r.img.url:'' };
+}
+function pslProdSave(key, patch){
+  if(!pslCanEdit()){ alert('บัญชีนี้ดูได้อย่างเดียว'); return false; }
+  var m=pslProdMap(), cur=m[key]||{};
+  Object.keys(patch).forEach(function(k){ if(patch[k]===null||patch[k]==='') delete cur[k]; else cur[k]=patch[k]; });
+  cur.at=new Date().toISOString(); cur.by=(typeof laBy==='function'?laBy():'');
+  m[key]=cur;
+  if(typeof ctWrite==='function') ctWrite('pos_products', m);
+  return true;
+}
+/* กล่องรูปเล็ก · ไม่มีรูป = ตัวอักษรแรกของประเภทบนพื้นสีประจำประเภท */
+function pslCatColor(cat){ var s=String(cat||''), h=0; for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return ['#F3E3C8','#D6E8F5','#DDEFE3','#F5DCE6','#E3E1F2','#F7EFD2','#DCEFF0','#F1E0D6'][h%8]; }
+function pslThumb(P, sz, click){
+  sz=sz||34;
+  var st='width:'+sz+'px;height:'+sz+'px;'+(P.img?'':'background:'+pslCatColor(P.cat)+';font-size:'+Math.round(sz*0.4)+'px');
+  return '<span class="pt'+(click?' ck':'')+'" style="'+st+'"'+(click?' onclick="pslProdOpen(\''+pslE(encodeURIComponent(P.key))+'\')" title="ดูรูป / แก้ในทะเบียนสินค้า"':'')+'>'
+    +(P.img?'<img src="'+pslE(P.img)+'" loading="lazy" alt="">':pslE(String(P.cat||'?').trim().slice(0,1).toUpperCase()))+'</span>';
+}
+/* สีประจำเรือ (ชุดเดียวกับวงกลมชื่อเรือ) · ใช้ระบายช่องที่ใส่จำนวนแล้ว */
+function pslBoatColor(bid){
+  var b=(typeof getBoat==='function')?getBoat(bid):null, c='';
+  try{ if(typeof getBoatColor==='function'){ var gc=getBoatColor(bid); if(gc&&gc.text&&gc.text!=='#666') c=gc.fill||gc.text; } }catch(_){ }
+  try{ if(!c && b && typeof flBoatAvatarColor==='function') c=flBoatAvatarColor(b); }catch(_){ }
+  return /^#[0-9a-f]{6}$/i.test(c||'')?c:'#0E7C6B';
+}
+function pslTint(hex,a){ var r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return 'rgba('+r+','+g+','+b+','+a+')'; }
+/* ตัวอักษรบนพื้นขาว · สีเรือที่อ่อนเกินทำให้เข้มขึ้น */
+function pslInk(hex){ var r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16), n=0;
+  while((0.2126*r+0.7152*g+0.0722*b)/255>0.45 && n<12){ r=Math.round(r*0.88); g=Math.round(g*0.88); b=Math.round(b*0.88); n++; }
+  return 'rgb('+r+','+g+','+b+')'; }
+
+/* ── ค้นหา / เฉพาะที่ยังไม่แยก · ซ่อนแถวใน DOM ไม่วาดใหม่ (ช่องค้นหาไม่เสีย focus) ── */
+function pslFilter(){
+  var root=document.querySelector('#psl-host-'+_psl.pier+' .psl'); if(!root) return;
+  var q=String(_psl.q||'').trim().toLowerCase(), only=!!_psl.only, n=0;
+  var rows=root.querySelectorAll('tr[data-s]');
+  for(var i=0;i<rows.length;i++){ var r=rows[i];
+    var ok=(!q || r.getAttribute('data-s').indexOf(q)>=0) && (!only || r.getAttribute('data-left')!=='0');
+    r.style.display=ok?'':'none'; if(ok) n++; }
+  var cats=root.querySelectorAll('tr.cat');
+  for(var j=0;j<cats.length;j++){ var c=cats[j], x=c.nextElementSibling, any=false;
+    while(x && !x.classList.contains('cat')){ if(x.style.display!=='none'){ any=true; break; } x=x.nextElementSibling; }
+    c.style.display=any?'':'none'; }
+  var em=root.querySelector('.nores'); if(em) em.style.display=n?'none':'';
+}
+function pslSearch(v){ _psl.q=v; pslFilter(); }
+function pslOnly(){ _psl.only=!_psl.only; var b=document.querySelector('#psl-host-'+_psl.pier+' .psl .btn.only'); if(b) b.classList.toggle('on',!!_psl.only); pslFilter(); }
 
 function renderPosSales(pier){
   if(pier) _psl.pier=pier;
   var host=document.getElementById('psl-host-'+_psl.pier); if(!host) return;
   pslCss();
   if(!_psl.date) _psl.date=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10));
-  var ro=!pslCanEdit(), e=pslE;
-  var h='<div class="psl"><div class="bar"><div style="margin-right:auto"><h2>ยอดขายร้านค้า · '+e(pslPierName(_psl.pier))+'</h2>'
-    +'<div class="sub">อัปโหลดรายงานยอดขายตามสินค้าจาก POS แล้วแยกว่าขายให้ลูกค้าลำไหน</div></div>'
-    +'<div class="seg"><button class="'+(_psl.tab==='day'?'on':'')+'" onclick="pslTab(\'day\')">บันทึกรายวัน</button><button class="'+(_psl.tab==='an'?'on':'')+'" onclick="pslTab(\'an\')">วิเคราะห์</button></div></div>';
-  h+=(_psl.tab==='an')?pslAnHtml():pslDayHtml(ro);
+  var ro=!pslCanEdit(), e=pslE, t=_psl.tab;
+  var tb=function(k,l){ return '<button class="'+(t===k?'on':'')+'" onclick="pslTab(\''+k+'\')">'+l+'</button>'; };
+  var h='<div class="psl"><div class="bar"><div style="margin-right:auto"><h2>ยอดขายร้านค้า · '+e(pslPierName(_psl.pier))+'</h2></div>'
+    +'<div class="seg">'+tb('day','บันทึกรายวัน')+tb('an','วิเคราะห์')+tb('reg','ทะเบียนสินค้า')+'</div></div>';
+  h+=(t==='an')?pslAnHtml():(t==='reg')?pslRegHtml(ro):pslDayHtml(ro);
   host.innerHTML=h+'</div>';
   _psl.flash='';
+  if(t==='day') pslFilter();
 }
 function pslDayHtml(ro){
   var e=pslE, pier=_psl.pier, date=_psl.date, rec=pslDay(pier,date), boats=pslBoats(pier,date);
   var up=ro?'':'<label class="btn pri">&#11014; '+(rec?'อัปโหลดไฟล์ใหม่':'อัปโหลดไฟล์ POS')+'<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="pslPick(this)"></label>';
-  var h='<div class="bar"><div class="dt"><button class="btn" onclick="pslShift(-1)">&#8249;</button><input type="date" id="psl-date-'+e(pier)+'" value="'+e(date)+'" onchange="pslSetDate(this.value)"><button class="btn" onclick="pslShift(1)">&#8250;</button></div>'
-    +'<span class="sub">เรือออกจากท่านี้ '+boats.length+' ลำ</span><span style="margin-left:auto"></span>'+up
-    +((rec&&!ro)?'<button class="btn del" onclick="pslDelDay()">ลบของวันนี้</button>':'')+'</div>';
-  if(_psl.flash) h+='<div class="flash">&#9888; '+e(_psl.flash)+'</div>';
+  var dnav='<div class="dt"><button class="btn" onclick="pslShift(-1)">&#8249;</button><input type="date" id="psl-date-'+e(pier)+'" value="'+e(date)+'" onchange="pslSetDate(this.value)"><button class="btn" onclick="pslShift(1)">&#8250;</button></div>';
   if(!rec){
-    return h+'<div class="empty"><b style="font-size:15px;color:#16223F">ยังไม่มีรายการขายของวันที่ '+e(date)+'</b><br>'
+    return '<div class="bar">'+dnav+'<span class="sub">เรือออกจากท่านี้ '+boats.length+' ลำ</span><span style="margin-left:auto"></span>'+up+'</div>'
+      +(_psl.flash?'<div class="flash">&#9888; '+e(_psl.flash)+'</div>':'')
+      +'<div class="empty"><b style="font-size:15px;color:#16223F">ยังไม่มีรายการขายของวันที่ '+e(date)+'</b><br>'
       +'1 · ที่เครื่อง POS ออกรายงาน <b>ยอดขายตามสินค้า</b> ของวันนี้ (วันเดียว) เป็นไฟล์ Excel<br>'
       +'2 · เลือกวันที่ด้านบนให้ตรงกับวันที่ขาย แล้วกด <b>อัปโหลดไฟล์ POS</b><br>'
       +'3 · ใส่จำนวนชิ้นที่ขายให้ลูกค้าแต่ละลำ<br><span class="sub">ไฟล์จาก POS ไม่มีวันที่และสาขา ระบบจึงใช้วันที่ที่เลือกและท่าของหน้านี้</span></div>';
@@ -226,40 +340,152 @@ function pslDayHtml(ro){
   /* ลำที่เคยแยกไว้แต่วันนี้ไม่อยู่ในรายการแล้ว (ย้ายลำ/ยกเลิกทีหลัง) · ยังต้องเห็น */
   var seen={}; cols.forEach(function(b){ seen[b.id]=1; });
   items.forEach(function(it){ Object.keys(it.a||{}).forEach(function(k){ if(k!==PSL_X && !seen[k]){ seen[k]=1; var bb=(typeof getBoat==='function')?getBoat(k):null; cols.push({id:k,name:(bb&&bb.name)||k,pax:0,route:'ไม่ได้ออกจากท่านี้แล้ว',gone:1}); } }); });
-  var tq=0,tn=0,tp=0,ta=0, colAmt={}, colQ={};
-  items.forEach(function(it){ tq+=it.q; tn+=it.net; tp+=it.pf; var u=it.q?it.net/it.q:0;
-    Object.keys(it.a||{}).forEach(function(k){ var q=+it.a[k].q||0; ta+=q; colQ[k]=(colQ[k]||0)+q; colAmt[k]=(colAmt[k]||0)+q*u; }); });
+  var tq=0,tn=0,tp=0,ta=0, colAmt={}, colQ={}, nLeft=0;
+  items.forEach(function(it){ tq+=it.q; tn+=it.net; tp+=it.pf; var u=it.q?it.net/it.q:0, s=0;
+    Object.keys(it.a||{}).forEach(function(k){ var q=+it.a[k].q||0; s+=q; ta+=q; colQ[k]=(colQ[k]||0)+q; colAmt[k]=(colAmt[k]||0)+q*u; });
+    if(it.q-s>0) nLeft++; });
   var pct=tq?Math.round(ta/tq*100):0;
-  h+='<div class="tiles">'
-    +'<div class="tile"><div class="l">ยอดขายสุทธิ</div><div class="v">'+pslB(tn)+'</div><div class="s">'+items.length+' สินค้า · '+tq+' ชิ้น</div></div>'
-    +'<div class="tile"><div class="l">กำไร</div><div class="v">'+pslB(tp)+'</div><div class="s">'+(tn?Math.round(tp/tn*100):0)+'% ของยอดขาย</div></div>'
-    +'<div class="tile"><div class="l">แยกแล้ว</div><div class="v">'+ta+' / '+tq+' ชิ้น</div><div class="pb"><i style="width:'+pct+'%"></i></div></div>'
-    +'<div class="tile"><div class="l">ไฟล์</div><div class="v" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e(rec.f||'—')+'</div><div class="s">'+e(rec.by||'')+' · '+e(String(rec.at||'').slice(0,10))+'</div></div></div>';
+  /* แถบบน · วันที่ · ตัวเลขหลัก · ความคืบหน้า · ค้นหา · ปุ่ม */
+  var h='<div class="bar top">'+dnav
+    +'<div class="kp"><div><i>ยอดขายสุทธิ</i><b>'+pslB(tn)+'</b></div><div><i>กำไร</i><b>'+pslB(tp)+' <small>'+(tn?Math.round(tp/tn*100):0)+'%</small></b></div>'
+    +'<div><i>สินค้า</i><b>'+items.length+' <small>รายการ · '+tq+' ชิ้น</small></b></div></div>'
+    +'<div class="prog" title="ไฟล์ '+e(rec.f||'—')+' · '+e(rec.by||'')+' · '+e(String(rec.at||'').slice(0,10))+'"><div class="l"><span>แยกแล้ว '+ta+' / '+tq+' ชิ้น</span><span>'+pct+'%</span></div><div class="pb"><i style="width:'+pct+'%"></i></div></div>'
+    +'<span style="margin-left:auto"></span>'
+    +'<input class="sr" type="search" placeholder="ค้นหาสินค้า" value="'+e(_psl.q||'')+'" oninput="pslSearch(this.value)">'
+    +'<button class="btn only'+(_psl.only?' on':'')+'" onclick="pslOnly()" title="แสดงเฉพาะสินค้าที่ยังแยกไม่ครบ">ยังไม่แยก · '+nLeft+'</button>'
+    +up+((!ro)?'<button class="btn del" onclick="pslDelDay()" title="ลบรายการขายของวันนี้ทั้งหมด">ลบของวันนี้</button>':'')+'</div>';
+  if(_psl.flash) h+='<div class="flash">&#9888; '+e(_psl.flash)+'</div>';
   if(!cols.length) h+='<div class="flash">วันที่ '+e(date)+' ไม่มีเรือออกจากท่านี้ในระบบ · ตรวจว่าเลือกวันที่ถูกไหม</div>';
-  var natOf={}; cols.forEach(function(b){ natOf[b.id]=b.gone?[]:pslBoatNats(date,b.id); });
-  h+='<div class="wrap"><table><thead><tr><th class="l">สินค้า</th><th>ขาย</th><th>ยอดสุทธิ</th>';
+  var natOf={}, colC={}; cols.forEach(function(b){ natOf[b.id]=b.gone?[]:pslBoatNats(date,b.id); colC[b.id]=pslBoatColor(b.id); });
+  colC[PSL_X]='#8A5A12';
+  var chip=function(id){ var c=colC[id], q=colQ[id]||0; return '<span class="qc" style="color:'+pslInk(c)+';background:'+pslTint(c,q?0.13:0.06)+'">'+q+' ชิ้น</span>'; };
+  h+='<div class="wrap day"><table><thead><tr><th class="l">สินค้า</th><th>ขาย</th><th class="r">ยอดสุทธิ</th>';
   cols.forEach(function(b){ var N=natOf[b.id], tot=0; N.forEach(function(x){ tot+=x.n; });
     var mix=N.slice(0,2).map(function(x){ return x.c+' '+Math.round(x.n/(tot||1)*100)+'%'; }).join(' · ');
     var g=b.gone?[]:pslBoatGuides(date,b.id);
-    h+='<th><div class="bh">'+pslBoatTag(b.id,b.name,30)+(b.gone?'':'<span class="rt" title="'+e(b.route)+'">'+e(b.route)+'</span>')+'<span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+'</div></th>'; });
-  h+='<th><div class="bh"><b>ไม่ใช่ลูกค้าเรือ</b><span>walk-in / พนักงาน</span></div></th><th>เหลือ</th></tr></thead><tbody>';
-  items.forEach(function(it,i){
-    var left=it.q-pslAllocSum(it), a=it.a||{};
-    h+='<tr><td class="l nm">'+e(it.n)+'</td><td><b>'+it.q+'</b></td><td class="r">'+pslB(it.net)+'</td>';
-    cols.concat([{id:PSL_X}]).forEach(function(b){
-      var c=a[b.id]||{q:0,nat:''}, N=natOf[b.id]||[];
-      var opts='<option value="">สัญชาติ</option>'+N.map(function(x){ return '<option value="'+e(x.c)+'"'+(c.nat===x.c?' selected':'')+'>'+e(x.c)+'</option>'; }).join('')
-        +((c.nat&&c.nat!=='OTH'&&!N.some(function(x){ return x.c===c.nat; }))?'<option selected value="'+e(c.nat)+'">'+e(c.nat)+'</option>':'')+'<option value="OTH"'+(c.nat==='OTH'?' selected':'')+'>อื่น ๆ</option>';
-      h+='<td ondblclick="pslFill('+i+',\''+b.id+'\')" title="ดับเบิลคลิก = ใส่ที่เหลือทั้งหมด"><input class="q'+(c.q?' has':'')+'" data-k="'+i+'|'+b.id+'" type="text" inputmode="numeric" value="'+(c.q||'')+'" '+(ro?'disabled':'')+' onchange="pslSet('+i+',\''+b.id+'\',this,\'q\')" onfocus="this.select()">'
-        +(b.id===PSL_X?'':'<select class="nat'+(c.q?'':' off')+'" '+(ro?'disabled':'')+' title="สัญชาติผู้ซื้อ (ไม่บังคับ)" onchange="pslSet('+i+',\''+b.id+'\',this,\'nat\')">'+opts+'</select>')+'</td>';
+    h+='<th><div class="bh v2"><span class="bt">'+pslAvatar(b.id,b.name,26)+'</span><b>'+e(b.name)+'</b>'+(b.gone?'':'<span class="rt" title="'+e(b.route)+'">'+e(b.route)+'</span>')
+      +'<span title="'+e(b.route)+'">'+(b.gone?e(b.route):(b.pax+' คน'+(mix?' · '+e(mix):'')))+'</span>'+(g.length?'<span title="'+e(g.join(', '))+'">'+e(g.join(', '))+'</span>':'')+chip(b.id)+'</div></th>'; });
+  h+='<th><div class="bh v2"><b>ไม่ใช่ลูกค้าเรือ</b><span>walk-in / พนักงาน</span>'+chip(PSL_X)+'</div></th><th>สถานะ</th></tr></thead><tbody>';
+  /* จัดกลุ่มตามประเภท · ลำดับกลุ่ม = ลำดับที่เจอในไฟล์ · i = ลำดับเดิมในไฟล์ (ตัวบันทึกอ้างเลขนี้) */
+  var PM=pslProdMap(), G={}, ord=[];
+  items.forEach(function(it,i){ var P=pslProdOf(it.n,PM); if(!G[P.cat]){ G[P.cat]=[]; ord.push(P.cat); } G[P.cat].push({it:it,i:i,P:P}); });
+  var ncol=cols.length+5;
+  ord.forEach(function(cat){
+    h+='<tr class="cat"><td colspan="'+ncol+'"><b>'+e(cat)+'</b><span>'+G[cat].length+' รายการ</span></td></tr>';
+    G[cat].forEach(function(x){ var it=x.it, i=x.i, P=x.P;
+      var left=it.q-pslAllocSum(it), a=it.a||{};
+      h+='<tr data-s="'+e((it.n+' '+P.name+' '+P.cat).toLowerCase())+'" data-left="'+left+'"><td class="l pn"><div class="pw">'+pslThumb(P,34,true)
+        +'<div class="pm" title="'+e(it.n)+'"><b>'+e(P.name)+'</b>'+(P.v?'<i>'+e(P.v)+'</i>':'')+'</div></div></td><td><b>'+it.q+'</b></td><td class="r">'+pslB(it.net)+'</td>';
+      cols.concat([{id:PSL_X}]).forEach(function(b){
+        var c=a[b.id]||{q:0,nat:''}, N=natOf[b.id]||[], bc=colC[b.id];
+        var opts='<option value="">สัญชาติ</option>'+N.map(function(y){ return '<option value="'+e(y.c)+'"'+(c.nat===y.c?' selected':'')+'>'+e(y.c)+'</option>'; }).join('')
+          +((c.nat&&c.nat!=='OTH'&&!N.some(function(y){ return y.c===c.nat; }))?'<option selected value="'+e(c.nat)+'">'+e(c.nat)+'</option>':'')+'<option value="OTH"'+(c.nat==='OTH'?' selected':'')+'>อื่น ๆ</option>';
+        h+='<td ondblclick="pslFill('+i+',\''+b.id+'\')" title="ดับเบิลคลิก = ใส่ที่เหลือทั้งหมด"><input class="q'+(c.q?' has':'')+'"'+(c.q?' style="border-color:'+bc+';background:'+pslTint(bc,0.1)+';color:'+pslInk(bc)+'"':'')
+          +' data-k="'+i+'|'+b.id+'" type="text" inputmode="numeric" value="'+(c.q||'')+'" '+(ro?'disabled':'')+' onchange="pslSet('+i+',\''+b.id+'\',this,\'q\')" onfocus="this.select()">'
+          +((b.id===PSL_X||!c.q)?'':'<select class="nat" '+(ro?'disabled':'')+' title="สัญชาติผู้ซื้อ (ไม่บังคับ)" onchange="pslSet('+i+',\''+b.id+'\',this,\'nat\')">'+opts+'</select>')+'</td>';
+      });
+      h+='<td>'+(left===0?'<span class="st ok">&#10003; ครบ</span>':'<span class="st lf">เหลือ '+left+'</span>')+'</td></tr>';
     });
-    h+='<td class="left'+(left===0?' ok':'')+'">'+(left===0?'&#10003;':left)+'</td></tr>';
   });
+  h+='<tr class="nores" style="display:none"><td colspan="'+ncol+'">ไม่พบสินค้าที่ตรงกับตัวกรอง</td></tr>';
   h+='</tbody><tfoot><tr><td class="l">ยอดต่อลำ</td><td>'+tq+'</td><td class="r">'+pslB(tn)+'</td>';
-  cols.forEach(function(b){ var am=colAmt[b.id]||0; h+='<td>'+(am?pslB(am):'—')+'<div style="font-weight:500;font-size:10.5px;color:#6B7591">'+(colQ[b.id]||0)+' ชิ้น'+(b.pax&&am?' · '+pslB(am/b.pax)+'/คน':'')+'</div></td>'; });
-  h+='<td>'+(colAmt[PSL_X]?pslB(colAmt[PSL_X]):'—')+'</td><td class="left'+(tq-ta===0?' ok':'')+'">'+(tq-ta===0?'&#10003;':(tq-ta))+'</td></tr></tfoot></table></div>'
-    +'<div class="note">ใส่จำนวนชิ้นในช่องของลำที่ซื้อ · ดับเบิลคลิกช่อง = ใส่ที่เหลือทั้งหมด · เลือกสัญชาติผู้ซื้อใต้ช่องได้ (ไม่บังคับ) · บันทึกอัตโนมัติทุกครั้งที่แก้</div>';
+  cols.forEach(function(b){ var am=colAmt[b.id]||0; h+='<td>'+(am?pslB(am):'—')+(b.pax&&am?'<div style="font-weight:500;font-size:10.5px;color:#6B7591">'+pslB(am/b.pax)+'/คน</div>':'')+'</td>'; });
+  h+='<td>'+(colAmt[PSL_X]?pslB(colAmt[PSL_X]):'—')+'</td><td>'+(tq-ta===0?'<span class="st ok">&#10003; ครบ</span>':'<span class="st lf">เหลือ '+(tq-ta)+'</span>')+'</td></tr></tfoot></table></div>'
+    +'<div class="note">ใส่จำนวนชิ้นในช่องของลำที่ซื้อ · ดับเบิลคลิกช่อง = ใส่ที่เหลือทั้งหมด · ใส่แล้วเลือกสัญชาติผู้ซื้อใต้ช่องได้ (ไม่บังคับ) · คลิกรูปเพื่อเพิ่ม/ดูรูปสินค้า · บันทึกอัตโนมัติทุกครั้งที่แก้</div>';
   return h;
+}
+
+/* ── ทะเบียนสินค้า ── */
+function pslRegData(){
+  var blob={}; try{ blob=(typeof laBlob==='function')?laBlob():{}; }catch(_){ }
+  var PM=pslProdMap(), M={}, cut=''; try{ var d=new Date(); d.setDate(d.getDate()-30); cut=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }catch(_){ }
+  Object.keys(blob).filter(function(k){ return /^pos_sales_\d{6}$/.test(k); }).forEach(function(k){
+    var m=(typeof ctRead==='function')?ctRead(k):null; if(!m) return;
+    Object.keys(m).forEach(function(dk){ var date=dk.split('|')[1]||'', rec=m[dk]; if(!rec||!rec.items) return;
+      rec.items.forEach(function(it){ var P=pslProdOf(it.n,PM);
+        var x=M[P.key]=M[P.key]||{key:P.key,name:P.name,cat:P.cat,img:P.img,vars:{},q:0,q30:0,last:'',price:0};
+        if(P.v) x.vars[P.v]=1; x.q+=it.q; if(date>=cut) x.q30+=it.q;
+        if(date>=x.last && it.q){ x.last=date; x.price=it.net/it.q; } }); }); });
+  return Object.keys(M).map(function(k){ M[k].nv=Object.keys(M[k].vars).length; return M[k]; })
+    .sort(function(a,b){ return (b.q30-a.q30)||(b.q-a.q)||a.name.localeCompare(b.name); });
+}
+function pslRegSet(k,v){ _psl['r'+k]=v; renderPosSales(_psl.pier); if(k==='q'){ var i=document.getElementById('psl-rq'); if(i){ i.focus(); try{ i.setSelectionRange(i.value.length,i.value.length); }catch(_){ } } } }
+function pslRegHtml(ro){
+  var e=pslE, L=pslRegData(), q=String(_psl.rq||'').trim().toLowerCase(), cat=_psl.rcat||'', noimg=!!_psl.rnoimg;
+  var cats={}; L.forEach(function(x){ cats[x.cat]=(cats[x.cat]||0)+1; });
+  var nImg=L.filter(function(x){ return x.img; }).length;
+  var S=L.filter(function(x){ return (!q || (x.name+' '+x.key+' '+x.cat).toLowerCase().indexOf(q)>=0) && (!cat || x.cat===cat) && (!noimg || !x.img); });
+  var h='<div class="bar top"><input class="sr" id="psl-rq" style="width:240px" type="search" placeholder="ค้นหาชื่อ / รหัส" value="'+e(_psl.rq||'')+'" onchange="pslRegSet(\'q\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()">'
+    +'<select class="btn" onchange="pslRegSet(\'cat\',this.value)"><option value="">ประเภท: ทั้งหมด</option>'+Object.keys(cats).sort().map(function(c){ return '<option value="'+e(c)+'"'+(cat===c?' selected':'')+'>'+e(c)+' ('+cats[c]+')</option>'; }).join('')+'</select>'
+    +'<button class="btn only'+(noimg?' on':'')+'" onclick="pslRegSet(\'noimg\','+(noimg?'false':'true')+')">ยังไม่มีรูป · '+(L.length-nImg)+'</button>'
+    +'<span style="margin-left:auto" class="sub">'+L.length+' สินค้า · มีรูปแล้ว '+nImg+'</span></div>';
+  if(!L.length) return h+'<div class="empty">ยังไม่มีสินค้าในทะเบียน · สินค้าจะเข้ามาเองเมื่ออัปโหลดไฟล์ POS ในแท็บ “บันทึกรายวัน”</div>';
+  if(!S.length) return h+'<div class="empty">ไม่พบสินค้าที่ตรงกับตัวกรอง</div>';
+  h+='<div class="rg">';
+  S.forEach(function(x){ var ek=e(encodeURIComponent(x.key));
+    h+='<div class="pc" onclick="pslProdOpen(\''+ek+'\')"><div class="ph" style="background:'+pslCatColor(x.cat)+'">'
+      +(x.img?'<img src="'+e(x.img)+'" loading="lazy" alt="">':(ro?'<span class="noi">ไม่มีรูป</span>':'<span class="add">&#65291; เพิ่มรูป</span>'))+'</div>'
+      +'<b title="'+e(x.name)+'">'+e(x.name)+'</b><i>'+e(x.cat)+(x.nv>1?' · '+x.nv+' ไซส์/แบบ':'')+'</i>'
+      +'<div class="pf"><span>'+(x.price?pslB(x.price):'—')+'</span><em>ขาย 30 วัน · '+x.q30+' ชิ้น</em></div></div>'; });
+  return h+'</div><div class="note">สินค้าเข้าทะเบียนเองจากไฟล์ POS · ไซส์ของสินค้าเดียวกันรวมเป็นใบเดียว · คลิกใบเพื่อเพิ่มรูป แก้ชื่อที่ใช้แสดง หรือเปลี่ยนประเภท · ทะเบียนใช้ร่วมกันทุกท่า · ราคา = ยอดสุทธิต่อชิ้นของวันที่ขายล่าสุด</div>';
+}
+/* กล่องแก้สินค้า · class la-modal = ตัวดึงข้อมูลใหม่จะไม่วาดหน้าทับระหว่างเปิดอยู่ */
+function pslProdClose(){ var m=document.getElementById('psl-prod-modal'); if(m) m.remove(); }
+function pslProdOpen(ek){
+  var key=decodeURIComponent(ek), x=pslRegData().filter(function(y){ return y.key===key; })[0]; if(!x) return;
+  var e=pslE, ro=!pslCanEdit(), cats={}; pslRegData().forEach(function(y){ cats[y.cat]=1; });
+  pslProdClose();
+  var m=document.createElement('div'); m.id='psl-prod-modal'; m.className='la-modal psl-md';
+  m.onclick=function(ev){ if(ev.target===m) pslProdClose(); };
+  m.innerHTML='<div class="bx"><div class="im" style="background:'+pslCatColor(x.cat)+'">'+(x.img?'<img src="'+e(x.img)+'" alt="">':'<span class="noi">ยังไม่มีรูป</span>')+'</div>'
+    +'<div class="fm"><div class="ttl">ทะเบียนสินค้า</div>'
+    +'<label>ชื่อที่ใช้แสดง</label><input id="psl-pn" value="'+e(x.name)+'" '+(ro?'disabled':'')+'>'
+    +'<label>ประเภท</label><input id="psl-pc" list="psl-pcl" value="'+e(x.cat)+'" '+(ro?'disabled':'')+'><datalist id="psl-pcl">'+Object.keys(cats).sort().map(function(c){ return '<option value="'+e(c)+'">'; }).join('')+'</datalist>'
+    +'<div class="mt">'+(x.nv?('ไซส์/แบบ: '+e(Object.keys(x.vars).slice(0,8).join(' , '))+(x.nv>8?' …':'')+'<br>'):'')+'ราคาล่าสุด '+(x.price?pslB(x.price):'—')+' · ขายรวม '+x.q+' ชิ้น · 30 วัน '+x.q30+' ชิ้น</div>'
+    +(ro?'':'<div class="ac"><label class="btn pri">&#128247; '+(x.img?'เปลี่ยนรูป':'เพิ่มรูป')+'<input type="file" accept="image/*" style="display:none" onchange="pslProdImg(\''+e(ek)+'\',this)"></label>'
+      +(x.img?'<button class="btn del" onclick="pslProdImgDel(\''+e(ek)+'\')">ลบรูป</button>':'')
+      +'<span style="margin-left:auto"></span><button class="btn" onclick="pslProdClose()">ปิด</button><button class="btn pri" onclick="pslProdSaveForm(\''+e(ek)+'\')">บันทึก</button></div>')
+    +(ro?'<div class="ac"><span style="margin-left:auto"></span><button class="btn" onclick="pslProdClose()">ปิด</button></div>':'')
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+function pslProdSaveForm(ek){
+  var key=decodeURIComponent(ek), f=null; Object.keys(_pslFamC).some(function(n){ if(_pslFamC[n].key===key){ f=_pslFamC[n]; return true; } return false; });
+  var nm=String((document.getElementById('psl-pn')||{}).value||'').trim(), cat=String((document.getElementById('psl-pc')||{}).value||'').trim();
+  /* ตรงกับที่ระบบเดาอยู่แล้ว = ไม่ต้องเก็บ · ถ้าวันหลังปรับตัวเดาจะได้ตามไปเอง */
+  if(!pslProdSave(key, { nm:(f&&nm===f.name)?'':nm, cat:(f&&cat===f.cat)?'':cat })) return;
+  pslProdClose(); renderPosSales(_psl.pier);
+}
+function pslProdImg(ek, inp){
+  var key=decodeURIComponent(ek), file=inp.files&&inp.files[0]; inp.value=''; if(!file) return;
+  if(!/^image\//.test(file.type||'')){ alert('เลือกไฟล์รูปภาพ'); return; }
+  var old=(pslProdMap()[key]||{}).img;
+  var post=function(blob, mime){
+    if(blob && blob.size>6*1024*1024){ alert('รูปใหญ่เกิน 6MB · ย่อรูปก่อน'); return; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var b64=String(fr.result).split(',')[1]||'';
+      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({bookingId:'pos_product', filename:(file.name||'product').replace(/\.[^.]+$/,'')+'.jpg', mime:mime||'image/jpeg', dataB64:b64})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if(!j || j.error || !j.id){ alert('อัปโหลดรูปไม่สำเร็จ: '+((j&&j.error)||'ไม่ทราบสาเหตุ')); return; }
+          if(!pslProdSave(key,{ img:{ id:j.id, url:'/api/attach/'+encodeURIComponent(j.id) } })) return;
+          if(old && old.id && old.id!==j.id) fetch('/api/attach/'+encodeURIComponent(old.id),{method:'DELETE'}).catch(function(){});
+          renderPosSales(_psl.pier); pslProdOpen(ek); })
+        .catch(function(er){ alert('อัปโหลดรูปไม่สำเร็จ: '+((er&&er.message)||er)); });
+    };
+    fr.onerror=function(){ alert('อ่านไฟล์รูปไม่ได้'); };
+    fr.readAsDataURL(blob);
+  };
+  if(typeof _bkV2DownscaleImage==='function') _bkV2DownscaleImage(file, 900, function(b,mm){ if(b) post(b,mm); else post(file,file.type); });
+  else post(file,file.type);
+}
+function pslProdImgDel(ek){
+  var key=decodeURIComponent(ek), old=(pslProdMap()[key]||{}).img; if(!old) return;
+  if(!confirm('ลบรูปของสินค้านี้?')) return;
+  if(!pslProdSave(key,{img:null})) return;
+  if(old.id) fetch('/api/attach/'+encodeURIComponent(old.id),{method:'DELETE'}).catch(function(){});
+  renderPosSales(_psl.pier); pslProdOpen(ek);
 }
 
 /* ── วิเคราะห์ ── */
@@ -357,7 +583,8 @@ function pslAnHtml(){
   var pk=Object.keys(A.prod).sort(function(a,b){ return A.prod[b].amt-A.prod[a].amt; }).slice(0,20);
   h+='<div class="card"><h3>สินค้าขายดี 20 อันดับ</h3><div class="ov"><table><thead><tr><th class="l">สินค้า</th><th>ชิ้น</th><th>ยอดขาย</th><th class="l">ลำที่ซื้อมากสุด</th></tr></thead><tbody>';
   pk.forEach(function(n){ var x=A.prod[n];
-    h+='<tr><td class="l nm">'+e(n)+'</td><td>'+x.q+'</td><td class="r">'+pslB(x.amt)+'</td><td class="l" style="font-size:11.5px">'+e(pslTop(x.by,2).map(function(k){ var b=(typeof getBoat==='function')?getBoat(k):null; return ((b&&b.name)||k)+' ×'+x.by[k]; }).join(' · ')||'—')+'</td></tr>'; });
+    var _P=pslProdOf(n);
+    h+='<tr><td class="l nm"><div class="pw">'+pslThumb(_P,30,true)+'<div class="pm" title="'+e(n)+'"><b>'+e(_P.name)+'</b>'+(_P.v?'<i>'+e(_P.v)+'</i>':'')+'</div></div></td><td>'+x.q+'</td><td class="r">'+pslB(x.amt)+'</td><td class="l" style="font-size:11.5px">'+e(pslTop(x.by,2).map(function(k){ var b=(typeof getBoat==='function')?getBoat(k):null; return ((b&&b.name)||k)+' ×'+x.by[k]; }).join(' · ')||'—')+'</td></tr>'; });
   h+='</tbody></table></div></div>';
   return h;
 }
