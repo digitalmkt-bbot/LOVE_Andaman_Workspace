@@ -34125,12 +34125,12 @@ function _vehDayCellInner(v,date){
     const cols=routes.map(rid=>{ const rt=_vehRoute(rid); return (rt&&rt.color)?rt.color:'#9AA3AF'; });
     const n=cols.length;
     const stops=cols.map((c,i)=>`${c} ${Math.round(i/n*100)}%, ${c} ${Math.round((i+1)/n*100)}%`).join(', ');
-    bg=`linear-gradient(135deg, ${stops})`; bd='1px solid rgba(0,0,0,.12)'; fg='#fff'; txt=n;
-    ttl=routes.map(rid=>(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(rid):rid)).join(' + ');
+    bg=`linear-gradient(135deg, ${stops})`; bd='1px solid rgba(0,0,0,.12)'; fg='#fff'; txt=_vehRouteAbbr(routes[0])+`<span style="position:absolute;bottom:-5px;right:-5px;height:13px;padding:0 3px;border-radius:7px;background:#fff;border:1.5px solid #3F4654;color:#3F4654;font-size:7.5px;line-height:10px;font-weight:800">+${n-1}</span>`;   /* §routeCode · รหัสแรก +จำนวนที่เหลือ */
+    ttl=routes.map(rid=>_vehRouteAbbr(rid)+' '+_vehRouteShort(rid)).join(' + ').replace(/"/g,'&quot;');
   }
   else if(routes.length===1){
     const dr=routes[0]; const rt=_vehRoute(dr); const rc=rt?rt.color:null;
-    if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
+    if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=_vehRouteAbbr(dr); ttl=(_vehRouteAbbr(dr)+' · '+String(rt.name||'')).replace(/"/g,'&quot;'); }   /* §routeCode */
     else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
     else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }
   }
@@ -34145,7 +34145,7 @@ function _vehDayCellInner(v,date){
   const rnBadge=_rnMore?`<span title="วันนี้วิ่ง ${_rnTot} รอบ (คนละเวลา) — ใบงานรถแยกใบตามรอบ" style="position:absolute;bottom:-5px;left:-5px;height:13px;padding:0 3px;border-radius:7px;background:#fff;border:1.5px solid #5B289A;color:#5B289A;font-size:7.5px;line-height:10px;font-weight:800;letter-spacing:-.02em">&times;${_rnTot}</span>`:'';
   const jbBadge=(routes.length>0&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
   const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:4px auto;width:26px;height:22px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
+  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:4px auto;width:26px;height:22px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:${(routes.length&&String(txt).replace(/<[^>]*>/g,'').length>4)?8:9.5}px;letter-spacing:-.02em;cursor:pointer">${txt}${jbBadge}${rnBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -34245,7 +34245,61 @@ function _vehFamsOpenOn(date){ if(typeof ROUTES==='undefined') return (typeof _B
 // ── Real-program (route) helpers · matrix assigns actual ROUTES, not grouped families ──
 function _vehRoute(rid){ return (typeof ROUTES!=='undefined'?ROUTES:[]).find(r=>r.id===rid)||null; }
 function _vehRouteZone(rid){ const r=_vehRoute(rid); if(!r)return null; return r.pier==='panwa'?'PK':r.pier==='tublamu'?'KL':r.pier==='ranong'?'RN':null; }   /* §rnVan */
-function _vehRouteAbbr(rid){ return String(rid||'').replace(/^r/i,''); }
+/* ══ §routeCode (2026-11-13) · รหัสย่อของโปรแกรม ═══════════════════════════════════════
+   เจ้าของ: "ตอนนี้เราใช้ รหัส ปรับอะไรได้บ้างไหม … ที่จะขึ้นทุกโปรแกรม"
+   ของเดิม = เลข id ตัด r ออก · โปรแกรมรุ่นแรกได้ 1–12 แต่ที่สร้างทีหลัง (ระนองทั้งหมด · โปรแกรมบก) id เป็นเลขเวลา 13 หลัก
+   ช่องกว้าง 26px จึงเห็นแค่ "8823…" อ่านไม่ออก · ตอนนี้ทุกโปรแกรมมีรหัสตัวอักษร 3 ตัว
+   ลำดับที่ใช้:  1) รหัสที่ตั้งเองในหน้าแก้ไขโปรแกรม  2) รหัสที่ตกลงกันไว้ของโปรแกรมที่มีอยู่ (ตามชื่อ)  3) ระบบตั้งจากชื่อ · ไม่ซ้ำกัน
+   รหัสที่ตั้งเองเก็บที่ ctWrite('route_codes') = { routeId:'ABC' } → app_meta (smerge ราย sub-key)
+     ไม่เก็บบนตัว route · ตาราง routes ฝั่งเซิร์ฟเวอร์มีคอลัมน์ตายตัว ช่องใหม่จะหายตอนโหลดใหม่ */
+var LA_ROUTE_CODE_PRESET={
+  'early similan islands (05.30)':'ES5','early similan islands (06.00)':'ES6','early similan islands (07.00)':'ES7',
+  'early similan islands exclusive':'ESX','similan islands exclusive':'SMX','similan islands by catamaran':'SMC',
+  'similan islands by speedboat':'SMS','surin islands by speedboat':'SRS',
+  'early phi phi bamboo':'EPB','early sy phi phi bamboo':'ESY','phi phi bamboo - fs':'PBF','phi phi bamboo by speedboat':'PBS',
+  'early krabi + phang nga':'EKP','whale shark phi phi maiton sunset':'WSM',
+  'day trip - se la va':'SLV','day trip - nyaung oo phee island':'NOP','day trip - sali':'SAL',
+  'city tour 6 hrs':'CT6','city tour 8 hrs':'CT8','city tour':'CTR','other transfer':'OTR',
+  'airport (phuket) ↔ phuket':'APK','airport (phuket) ↔ khao lak (phang nga)':'AKL','private transfer to pier':'PTP',
+  'carnival magic':'CMG','phuket fantasea':'FAN' };
+var _laRouteCodeC=null;
+function laRouteCodeNorm(c){ return String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4); }
+function laRouteCodeGuess(name){
+  var t=String(name||'').toLowerCase().match(/[a-z0-9฀-๿]+/g)||[];
+  var stop={islands:1,island:1,by:1,the:1,to:1,and:1,day:1,trip:1,phuket:1,hrs:1,hr:1,ticket:1,only:1};
+  t=t.filter(function(w){ return !stop[w]; });
+  var c=!t.length?'':(t.length>=3?(t[0][0]+t[1][0]+t[2][0]):(t.length===2?(t[0][0]+t[1].slice(0,2)):t[0].slice(0,3)));
+  return String(c).toUpperCase();
+}
+function laRouteCodeMap(){
+  var now=Date.now(); if(_laRouteCodeC && now-_laRouteCodeC.at<1500) return _laRouteCodeC;
+  var R=(typeof ROUTES!=='undefined'&&ROUTES)||[], man={}, used={}, map={}, auto={};
+  try{ var m=(typeof ctRead==='function')?ctRead('route_codes'):null; if(m&&typeof m==='object'&&!Array.isArray(m)) man=m; }catch(_){ }
+  var take=function(id,c){ map[id]=c; used[c]=1; };
+  R.forEach(function(r){ var c=laRouteCodeNorm(man[r.id]); if(c && !used[c]) take(r.id,c); });                       /* ตั้งเอง มาก่อน */
+  R.forEach(function(r){ if(map[r.id]) return; var c=LA_ROUTE_CODE_PRESET[String(r.name||'').toLowerCase().replace(/\s+/g,' ').trim()];
+    if(c && !used[c]){ take(r.id,c); auto[r.id]=c; } });
+  R.forEach(function(r,i){ if(map[r.id]) return; var b=laRouteCodeGuess(r.name)||('P'+(i+1)), c=b, n=2;
+    while(used[c] && n<100){ c=(n<10?b.slice(0,2):b.slice(0,1))+n; n++; }
+    take(r.id,c); auto[r.id]=c; });
+  /* รหัสที่ระบบจะตั้งให้ถ้าไม่ตั้งเอง · ใช้เป็นตัวอย่างในช่องกรอก */
+  R.forEach(function(r){ if(!auto[r.id]) auto[r.id]=LA_ROUTE_CODE_PRESET[String(r.name||'').toLowerCase().replace(/\s+/g,' ').trim()]||laRouteCodeGuess(r.name)||''; });
+  return (_laRouteCodeC={at:now, map:map, auto:auto, man:man});
+}
+function laRouteCode(rid){ var c=laRouteCodeMap().map[rid]; return c||String(rid||'').replace(/^r/i,'').slice(0,3); }
+/* บันทึกรหัสที่ตั้งเอง · ว่าง หรือเท่ากับที่ระบบตั้งให้ = ไม่เก็บ · ซ้ำกับโปรแกรมอื่น = ไม่รับ (คืนข้อความเตือน) */
+function laRouteCodeSave(rid, val){
+  if(!rid) return '';
+  _laRouteCodeC=null;
+  var c=laRouteCodeNorm(val), M=laRouteCodeMap(), man=Object.assign({}, M.man), R=(typeof ROUTES!=='undefined'&&ROUTES)||[];
+  if(c){ var clash=R.filter(function(r){ return r.id!==rid && M.map[r.id]===c; })[0];
+    if(clash) return 'รหัส '+c+' ใช้กับ "'+clash.name+'" อยู่แล้ว · ใช้รหัสที่ระบบตั้งให้แทน'; }
+  var had=!!man[rid];
+  if(!c || c===M.auto[rid]){ if(!had) return ''; delete man[rid]; } else { if(man[rid]===c) return ''; man[rid]=c; }
+  if(typeof ctWrite==='function') ctWrite('route_codes', man);
+  _laRouteCodeC=null; return '';
+}
+function _vehRouteAbbr(rid){ return laRouteCode(rid); }
 function _vehRouteShort(rid){ const r=_vehRoute(rid); if(!r)return rid; return String(r.name||rid).replace(/\bIslands?\b/gi,'').replace(/\bby\b/gi,'').replace(/\s+/g,' ').trim(); }
 function _vehRoutesOpenOn(date){ const rs=((typeof ROUTES!=='undefined'&&ROUTES)||[]).filter(r=> typeof laFleetRouteOk!=='function' || laFleetRouteOk(r));   /* §rnVan · คนผูกท่าเห็นเฉพาะโปรแกรมท่าตัวเอง */ const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
 // Customer demand on a route+date · pax = total seat pax · pickup = pax needing transfer (zone PK/KL, not No-Transfer)
@@ -34397,7 +34451,8 @@ function vehMatrixCSS(){
   +H+' .vmx-legend{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:0 0 3px;font-size:9.5px;color:#8a8a82}'
   +H+' .vmx-lgk{font-weight:800;letter-spacing:.04em;margin-right:2px;white-space:nowrap}'
   +H+' .vmx-lg{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:600;color:#3F4654;white-space:nowrap;margin-right:4px}'
-  +H+' .vmx-lg i{width:14px;height:14px;font-size:8px;border-radius:4px}'
+  +H+' .vmx-lg i{width:auto;min-width:14px;padding:0 3px;height:14px;font-size:8px;border-radius:4px}'
+  +H+' .vmx-chip i{width:auto;min-width:16px;padding:0 3px}'   /* §routeCode · รหัส 3 ตัวอักษร กว้างตามตัวอักษร */
   +H+' .vmx-more{border:1px dashed #CBD5E1;background:transparent;border-radius:999px;padding:1px 8px;font:700 9.5px inherit;font-family:inherit;color:#64748B;cursor:pointer}'
   +H+' .vmx-key{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-left:6px}'
   +H+' .vmx-key i{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid}'

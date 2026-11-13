@@ -1512,6 +1512,8 @@
       </div>
       <div class="form-row"><label class="form-label">ชื่อโปรแกรม</label><input type="text" id="fm-route-name" style="width:100%" placeholder="เช่น Similan Islands"></div>
       <div class="form-row"><label class="form-label">เกาะ / จุดหมาย</label><input type="text" id="fm-route-islands" style="width:100%" placeholder="เช่น เกาะ 5, 6, 7, 8, 9"></div>
+      <!-- §routeCode · รหัสย่อ 3 ตัวอักษร ที่ขึ้นในตารางรถ (Transfer Fleet › ตารางเดือน) -->
+      <div class="form-row"><label class="form-label">รหัสย่อ <span style="font-weight:400;color:#8a8a82">· ขึ้นในตารางรถ · 2–4 ตัวอักษร A–Z / 0–9 · เว้นว่าง = ระบบตั้งให้</span></label><input type="text" id="fm-route-code" maxlength="4" style="width:140px;text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:.08em" placeholder="ระบบตั้งให้จากชื่อ" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div>
       <!-- §famField · กลุ่มโปรแกรม · เดิมเดาจากชื่อโปรแกรม ตอนนี้เก็บเป็นค่าจริง -->
       <div class="form-row"><label class="form-label">กลุ่มโปรแกรม (Family)</label><select id="fm-route-family" style="width:100%"></select></div>
       <!-- §otherPier · โควตาที่นั่งต่อวัน · ใช้เฉพาะโปรแกรมบก (เรือนับจากการจัดเรือใน Boat Operation) -->
@@ -1535,7 +1537,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=858cf8b4"></script>
+<script src="js/04-data-core.js?v=b87975d8"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -3144,7 +3146,7 @@
   </div>
 </div>
 
-<script src="js/08-app.js?v=450df84a"></script>
+<script src="js/08-app.js?v=68a810a3"></script>
 <script src="js/16-boat-history.js?v=c59cd0ed"></script>
 <script src="js/09-action-board.js?v=5637c4dc"></script>
 <script src="js/11-exec-board.js?v=32e4462d"></script>
