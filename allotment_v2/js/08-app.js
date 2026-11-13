@@ -8040,6 +8040,16 @@ function _rcKeepSent(bk, o){
 function _rcIsInvoiceAgent(ag){ return !!(ag&&(ag.payType==='invoice'||ag.payType==='credit')); }
 function _rcPaid(bk){ return (typeof acctBookingPaid==='function')&&acctBookingPaid(bk); }
 function _rcDayMatch(bk,date){ return (bk.schemaVer===2)?(bk.trips||[]).some(function(t){return t.date===date;}):(bk.travelDate===date); }
+/* §rcProgCol · สีตัวอักษรของชื่อโปรแกรม · สีอ่อนเกิน → ผสมดำจนอ่านได้ · ไม่มีสี = สีตัวอักษรปกติ */
+function _rcProgInk(hex){
+  var m=/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex||'').trim()); if(!m) return {ink:'#2C2C2A', dot:'#C9C7BF'};
+  var h=m[1]; if(h.length===3) h=h.replace(/./g,function(c){ return c+c; });
+  var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  var lum=function(){ return (0.2126*r+0.7152*g+0.0722*b)/255; }, n=0;
+  while(lum()>0.42 && n<12){ r=Math.round(r*0.88); g=Math.round(g*0.88); b=Math.round(b*0.88); n++; }
+  var x=function(v){ return ('0'+v.toString(16)).slice(-2); };
+  return {ink:'#'+x(r)+x(g)+x(b), dot:'#'+h};
+}
 function _rcActiveRows(date){ var rows=[]; SB_BOOKINGS.forEach(function(bk){ if(_RC_CXL.includes(bk.status))return;
   if(bk.schemaVer===2){ (bk.trips||[]).forEach(function(t){ if(t.date===date) rows.push({bk:bk,t:t,routeId:t.routeId}); }); }
   else if(bk.travelDate===date){ rows.push({bk:bk,t:null,routeId:bk.programId}); } }); return rows; }
@@ -8066,7 +8076,7 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
     van.name=_vh.name||_vid; van.missing=!_vh.id; van.plate=(_vi.plate||_vh.plate||''); if(van.plate==='-') van.plate=''; }
   if(_rvid && _rvid!==_vid){ var _rh=(typeof vehGet==='function'?vehGet(_rvid):null)||{}, _ri=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(_rvid,_d):{};
     van.retName=_rh.name||_rvid; van.retPlate=(_ri.plate||_rh.plate||''); if(van.retPlate==='-') van.retPlate=''; }
-  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel, van:van,
+  return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, progCol:(route&&route.color)||'', agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel, van:van,
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     drop:_rcDrop(bk),   /* §rcDrop */
@@ -8432,7 +8442,10 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
       +'<thead><tr>'+cols.map(function(c){return '<th style="'+TH+((c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room')?';text-align:center':'')+'">'+esc(c.l)+'</th>';}).join('')+'</tr></thead>'; }
   function _rcCellVal(k,d){ switch(k){
-    case 'prog': return esc(d.prog);
+    /* §rcProgCol (2026-11-13) · เจ้าของ: "ตัวโปรแกรม ขอใช้สีแยกให้หน่อย" · สีประจำโปรแกรม (ROUTES.color · ชุดเดียวกับหน้า By trip)
+       จุดสี = สีจริงของโปรแกรม · ตัวอักษร = สีเดียวกันแต่ทำให้เข้มพอจะอ่านบนพื้นขาว (เหลือง/ฟ้าอ่อนอ่านไม่ออกถ้าใช้ตรง ๆ) */
+    case 'prog': var _pc=_rcProgInk(d.progCol);
+      return '<span style="display:inline-flex;align-items:center;gap:6px;max-width:100%;vertical-align:top;font-weight:600;color:'+_pc.ink+'"><i style="flex:none;width:8px;height:8px;border-radius:50%;background:'+_pc.dot+'"></i><span style="overflow:hidden;text-overflow:ellipsis">'+esc(d.prog)+'</span></span>';
     case 'agent': return agChip(d,false);
     case 'voucher': return '<span style="'+MONO+';color:#5F5E5A">'+esc(d.voucher)+'</span>';
     /* §rcBy · ผู้บันทึก booking · เก็บที่ createdBy เหมือนที่หน้าเช็คอินรถอ่าน
