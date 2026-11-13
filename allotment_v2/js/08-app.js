@@ -294,8 +294,31 @@ function vehGet(id){ return (SB_VEHICLES||[]).find(v=>v.id===id); }
    ผู้ใช้ที่ผูกท่าระนอง (§pierScope) เห็นเฉพาะรถโซน RN และโปรแกรมท่าระนองในหน้าฝั่งรถ
    ผู้ใช้ที่ผูกท่าอื่น ไม่เห็นรถโซน RN (PK/KL ใช้ร่วมกันสองท่าเหมือนเดิม) · admin / ไม่ผูกท่า เห็นครบ
    กรองตอนแสดงผลเท่านั้น · vehGet ยังหาเจอทุกคัน (ใบที่จัดรถไว้แล้วต้องอ่านชื่อรถได้เสมอ) */
-function laVehOk(v){ var my=(typeof laMyPier==='function')?laMyPier():''; if(!my) return true; var rn=String((v&&v.zoneBase)||'')==='RN'; return my==='ranong' ? rn : !rn; }
+/* ══ §rnVan2 (2026-11-13) · แยกขาดสองฝั่ง ══════════════════════════════════════
+   เจ้าของ: "ให้เห็นแยกออกไปเลย · ฝั่งที่ดู Phuket Khaolak ก็จะเห็นแต่ของที่เขาทำ · ระนองก็จะเห็นแต่ของระนอง
+            และตอนจัดรถ ตอนเลือกรถ ก็ต้องกรองแยกกันเลย"
+   รอบแรก (§rnVan) กรองเฉพาะคนที่ผูกท่า · คนจัดรถภูเก็ต/เขาหลักส่วนใหญ่ไม่ได้ผูกท่า จึงยังเห็นของระนองปนมา
+   ตอนนี้หน้าฝั่งรถมี "ฝั่ง" สองฝั่งที่ไม่ปนกันเลย:  main = ภูเก็ต · เขาหลัก (รถโซน PK/KL + โปรแกรมที่ไม่ใช่ท่าระนอง)  |  rn = ระนอง (รถโซน RN + โปรแกรมท่าระนอง)
+     · ผูกท่าระนอง → ล็อกฝั่งระนอง · ผูกท่าอื่น → ล็อกฝั่งภูเก็ต·เขาหลัก
+     · admin / ไม่ผูกท่า → เปิดมาเป็นฝั่งภูเก็ต·เขาหลัก มีปุ่มสลับไปดูฝั่งระนองที่หัวหน้า (จำต่อแท็บ ไม่ sync)
+   ตัวเลือกรถตอนจัดรถกรองจากท่าของโปรแกรม ไม่ขึ้นกับปุ่มสลับ: โปรแกรมท่าระนอง ↔ รถโซน RN เท่านั้น · โปรแกรมอื่น ↔ รถ PK/KL เท่านั้น */
+function laVehIsRN(v){ return String((v&&v.zoneBase)||'')==='RN'; }
+function laRouteIsRN(rid){ var r=(rid&&typeof rid==='object')?rid:((typeof getRoute==='function')?getRoute(rid):null); return !!(r && r.pier==='ranong'); }
+function laFleetScope(){ var my=(typeof laMyPier==='function')?laMyPier():''; if(my) return my==='ranong'?'rn':'main'; return window._laFleetScope==='rn'?'rn':'main'; }
+function laFleetSetScope(sc, fn){ if(typeof laMyPier==='function' && laMyPier()) return; window._laFleetScope=(sc==='rn')?'rn':'main'; try{ if(typeof window[fn]==='function') window[fn](); }catch(_){ } }
+function laFleetRouteOk(rid){ return laRouteIsRN(rid)===(laFleetScope()==='rn'); }
+/* ปุ่มสลับฝั่ง · คนผูกท่าไม่มีปุ่ม (ล็อกอยู่แล้ว) */
+function laFleetScopeSeg(fn){
+  if(typeof laMyPier==='function' && laMyPier()) return '';
+  var sc=laFleetScope(), b=function(k,l){ var on=sc===k; return '<button type="button" onclick="laFleetSetScope(\''+k+'\',\''+fn+'\')" style="border:none;border-radius:14px;padding:5px 13px;font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap;font-weight:'+(on?700:500)+';background:'+(on?(k==='rn'?'#6A3FA0':'#185FA5'):'transparent')+';color:'+(on?'#fff':'#666')+'">'+l+'</button>'; };
+  return '<span title="รถและงานของสองฝั่งแยกกัน ไม่แสดงปนกัน" style="display:inline-flex;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:24px;padding:2px">'+b('main','ภูเก็ต · เขาหลัก')+b('rn','ระนอง')+'</span>';
+}
+function laVehOk(v){ return laVehIsRN(v)===(laFleetScope()==='rn'); }
 function laVehList(){ return (SB_VEHICLES||[]).filter(laVehOk); }
+/* วางบิลรถร่วมไม่มีปุ่มสลับ · กรองเฉพาะคนที่ผูกท่า (admin/บัญชีเห็นครบ) */
+function laVehPierOk(v){ var my=(typeof laMyPier==='function')?laMyPier():''; if(!my) return true; return laVehIsRN(v)===(my==='ranong'); }
+/* รถคันนี้ใช้กับโปรแกรมนี้ได้ไหม · ระนองกับที่เหลือไม่ข้ามกัน */
+function laVehFitsRoute(v, rid){ return laVehIsRN(v)===laRouteIsRN(rid); }
 function vehName(id){ const v=vehGet(id); return v?(v.name+(v.plate&&v.plate!=='-'?(' · '+v.plate):'')):'—'; }
 function staffGet(id){ return (SB_STAFF||[]).find(s=>s.id===id); }
 function staffQuota(id, year){ const s=staffGet(id); return (s && s.quota && s.quota[String(year)]) || 0; }
@@ -10734,8 +10757,8 @@ function bkV2VanAutoAssign(date, routeId){
   const rows=baSeatBookingsForRoute(date,routeId).filter(({b,t})=>{ const z=t.zone||b.pickupZone||'NoTransfer'; return z!=='NoTransfer'&&z!=='NT'; });
   if(!rows.length){ alert('No transfer bookings to group on this program (all self-arrive or none).'); return; }
   const z=(typeof _vehRouteZone==='function')?_vehRouteZone(routeId):null;
-  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId));
-  const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]);
+  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId) && laVehFitsRoute(v,routeId));   /* §rnVan2 */
+  const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
   if(!pool.length){ alert('No van available for this program today.\nAssign vans to this program in Transfer Fleet > month matrix, or add a vehicle in the zone.'); return; }
   const load={}; pool.forEach(v=>load[v.id]=0);
   rows.forEach(({b,t})=>{ const vid=bkOpsRead(b,date).vanId; if(vid&&load[vid]!==undefined) load[vid]+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
@@ -11571,11 +11594,11 @@ function _bkV2SplitColor(id){ id=String(id||''); let h=0; for(let i=0;i<id.lengt
 function vehEffectiveZone(v, date){ if(!v) return null; const _dr=(typeof _vehDayRoutes==='function')?_vehDayRoutes(v,date):((v.dayRoute&&v.dayRoute[date])?[].concat(v.dayRoute[date]):[]); if(date && _dr.length){ for(const rid of _dr){ let z=(typeof _vehRouteZone==='function')?_vehRouteZone(rid):null; if(!z && typeof _vehFamZone==='function') z=_vehFamZone(rid); if(z) return z; } } if(date && v.dayZone && v.dayZone[date]) return v.dayZone[date]; if(date && Array.isArray(v.zoneOverrides)){ const o=v.zoneOverrides.find(o=>o.zone && (!o.from||date>=o.from) && (!o.to||date<=o.to)); if(o) return o.zone; } return v.zoneBase; }
 // _vehUsableOn = active AND not หยุด/ซ่อม on that date (vehStatusOn: ''/'available' = OK · 'off'/'maintenance' = excluded from van pools)
 function _vehUsableOn(v, date){ if(!v||!v.active) return false; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; return st!=='off' && st!=='maintenance'; }
-function vanVehiclesForZone(zone, date){ if(zone==='NoTransfer'||zone==='NT') return []; const z=(zone==='PK')?'PK':(zone==='KL')?'KL':null; return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && (!z || vehEffectiveZone(v,date)===z)); }
+function vanVehiclesForZone(zone, date){ if(zone==='NoTransfer'||zone==='NT') return []; const z=(zone==='PK')?'PK':(zone==='KL')?'KL':null; const rn=(zone==='RN'); return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && laVehIsRN(v)===rn && (!z || vehEffectiveZone(v,date)===z)); }   /* §rnVan2 · โซน RN ↔ รถระนองเท่านั้น · โซนอื่นไม่เห็นรถระนอง */
 // Vans assigned to THIS program (route) that day via the month-matrix; if none assigned yet, fall back to all active vans in the zone
 // Vans selectable for a route+date = ONLY those assigned to this route in the Transfer-Fleet month matrix (v.dayRoute[date]===routeId).
 // (No zone fallback · per user: a van not assigned in the month matrix must NOT be pickable here — assign it in the matrix first.)
-function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && _vehDayRoutes(v,date).includes(routeId)); }
+function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && _vehDayRoutes(v,date).includes(routeId) && laVehFitsRoute(v,routeId)); }   /* §rnVan2 */
 // Van Job Order · bilingual (EN/TH) printable sheet for one vehicle on a date
 // ── Van Job Orders · dedicated sidebar page (nav: vanjobs · under Transfer Fleet) ──
 let _vanJobsDate = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
@@ -12227,7 +12250,7 @@ function vbIsFar(a){ return !!VB_FAR[String(a||'').trim().toLowerCase()] || !!VB
 function vbVans(){
   var V=(typeof SB_VEHICLES!=='undefined'&&Array.isArray(SB_VEHICLES))?SB_VEHICLES:
         ((typeof VEHICLES!=='undefined'&&Array.isArray(VEHICLES))?VEHICLES:[]);
-  return V.filter(function(v){ return v && v.ownership==='partner' && (typeof laVehOk!=='function' || laVehOk(v)); });   /* §rnVan */
+  return V.filter(function(v){ return v && v.ownership==='partner' && (typeof laVehPierOk!=='function' || laVehPierOk(v)); });   /* §rnVan */
 }
 function vbSuppliers(){
   var m={}; vbVans().forEach(function(v){ var n=String(v.partnerName||'').trim()||'(ไม่ระบุผู้ให้บริการ)'; m[n]=1; });
@@ -13939,7 +13962,7 @@ function renderVanJobs(){
     }
     if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
     const t=(b.trips||[]).find(t=>(t.date||'')===date)||{};
-    if(typeof laRouteIdOk==='function' && !laRouteIdOk(t.routeId)) return;   /* §rnVan · ใบงานรถ: คนผูกท่าเห็นเฉพาะงานของโปรแกรมท่าตัวเอง */
+    if(typeof laFleetRouteOk==='function' && !laFleetRouteOk(t.routeId)) return;   /* §rnVan2 · แยกฝั่ง · ใบงานรถ: คนผูกท่าเห็นเฉพาะงานของโปรแกรมท่าตัวเอง */
     // §OVN — the return leg is a DROP-OFF day. The customer is coming back from the island on a boat;
     // nobody is waiting in a hotel lobby. Before this, the leg inherited b.hotelName + the outbound
     // zone, so the sheet told a driver to go and collect her from a hotel she had already left.
@@ -14139,7 +14162,7 @@ function renderVanJobs(){
      แล้วตัดเหลือ 4 ใบ — โปรแกรมที่ออกเช้าสุดแต่รถน้อยจึงหายไปจากการ์ดเลย */
   const routeSeg=Object.keys(routeVan).sort(_rtCmp);
   const _routeColors=['#13B96A','#19A7C9','#8B5CF6','#F25CA2','#BA7517'];
-  const _dateStep=laDateBar(date,'vanJobsDateShift','vanJobsToday','','vanJobsSetDate');
+  const _dateStep='<span style="display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end">'+((typeof laFleetScopeSeg==='function')?laFleetScopeSeg('renderVanJobs'):'')+laDateBar(date,'vanJobsDateShift','vanJobsToday','','vanJobsSetDate')+'</span>';   /* §rnVan2 · ปุ่มสลับฝั่ง */
   const _filters=`<span style="display:inline-flex;border:1px solid #cfe0d8;border-radius:18px;overflow:hidden">${segBtn('all','ทั้งหมด')}${segBtn('company','บริษัท+เช่า')}${segBtn('partner','รถร่วม')}</span> <select onchange="vanJobsSetRoute(this.value)" style="border:1px solid #d7dbe2;border-radius:18px;padding:6px 12px;font-size:11.5px;color:#3F4654;font-family:inherit;background:#fff;cursor:pointer">${routeOpts}</select>`;
   const headerMini=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px"><span style="font-size:17px;font-weight:600;color:#1A1A1A">&#128656; ใบงานรถ</span>${_dateStep}</div>`;
   const _segBar = routeSeg.length ? routeSeg.slice(0,4).map(function(r,i){ var pct=ids.length?Math.round(routeVan[r]/ids.length*100):0; var c=(((typeof getRoute==='function')&&getRoute(r))||{}).color||_routeColors[i%5]; return '<div style="display:flex;align-items:center;gap:9px;background:'+(i===0?'#ECF7DB':'#fff')+';border:0.5px solid '+(i===0?'#d4e8b8':'rgba(0,0,0,.08)')+';border-radius:12px;padding:10px 13px"><span style="width:10px;height:10px;border-radius:50%;background:'+c+';flex:none"></span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;color:#1A1A1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e(rName(r))+'</div><div style="font-size:10.5px;color:#999">'+(_rtDep(r)!=='99:99'?('เรือออก '+_rtDep(r)+' &middot; '):'')+routeVan[r]+' คัน</div></div><b style="font-size:12.5px;color:#1A1A1A">'+pct+'%</b></div>'; }).join('') : '';
@@ -33207,7 +33230,7 @@ function bkV2NtRetSel(bk, date, routeId){
   const ar=(bk.dropoffAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.dropoffAreaId):null;
   const dz=(ar&&ar.zone)||null;
   const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, dz):[];
-  const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(dz, date):[];
+  const _zPool=((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(dz, date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
   const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];
   const rvid=_O.vanReturnId||'';
   let ropts='<option value="">&#8617; รถกลับ</option>';
@@ -33236,7 +33259,7 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
   let retSel='';
   if(g){
     const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, zone):[];
-    const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
+    const _zPool=((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
     let ropts='<option value="">&#8617;</option>';
@@ -34224,7 +34247,7 @@ function _vehRoute(rid){ return (typeof ROUTES!=='undefined'?ROUTES:[]).find(r=>
 function _vehRouteZone(rid){ const r=_vehRoute(rid); if(!r)return null; return r.pier==='panwa'?'PK':r.pier==='tublamu'?'KL':r.pier==='ranong'?'RN':null; }   /* §rnVan */
 function _vehRouteAbbr(rid){ return String(rid||'').replace(/^r/i,''); }
 function _vehRouteShort(rid){ const r=_vehRoute(rid); if(!r)return rid; return String(r.name||rid).replace(/\bIslands?\b/gi,'').replace(/\bby\b/gi,'').replace(/\s+/g,' ').trim(); }
-function _vehRoutesOpenOn(date){ const rs=((typeof ROUTES!=='undefined'&&ROUTES)||[]).filter(r=> typeof laRouteOk!=='function' || laRouteOk(r));   /* §rnVan · คนผูกท่าเห็นเฉพาะโปรแกรมท่าตัวเอง */ const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
+function _vehRoutesOpenOn(date){ const rs=((typeof ROUTES!=='undefined'&&ROUTES)||[]).filter(r=> typeof laFleetRouteOk!=='function' || laFleetRouteOk(r));   /* §rnVan · คนผูกท่าเห็นเฉพาะโปรแกรมท่าตัวเอง */ const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
 // Customer demand on a route+date · pax = total seat pax · pickup = pax needing transfer (zone PK/KL, not No-Transfer)
 function _vehRouteDemand(routeId,date){ let pax=0,pickup=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; (b.trips||[]).forEach(t=>{ if(t.routeId!==routeId||t.date!==date)return; if(t.bookingMode==='charter')return; const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT')pickup+=p; }); }); return {pax,pickup}; }
 // A van can run MORE THAN ONE program in a day (2 jobs) → dayRoute[date] may be a single routeId (legacy) OR an array of routeIds. Always read via this normalizer.
@@ -34298,7 +34321,7 @@ function _vehDayStats(day){
 }
 function _vehMatrixSummaryHTML(day){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const rts=((typeof ROUTES!=='undefined'&&ROUTES)||[]).filter(r=> typeof laRouteOk!=='function' || laRouteOk(r));   /* §rnVan */
+  const rts=((typeof ROUTES!=='undefined'&&ROUTES)||[]).filter(r=> typeof laFleetRouteOk!=='function' || laFleetRouteOk(r));   /* §rnVan */
   const ST=_vehDayStats(day), Z0={pax:0,pickup:0}, G0={total:0,withVan:0,woVan:0};
   const _dm=rid=>ST.dm[rid]||Z0, _grp=rid=>ST.grp[rid]||G0;
   const counts={}; let avail=0, busy=0;
@@ -34442,7 +34465,7 @@ function vehAdd(){
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;   /* §edit-guard · VC view-only → no add */
   let mx=0; SB_VEHICLES.forEach(v=>{ const n=parseInt(String(v.id).replace(/^veh/,''))||0; if(n>mx)mx=n; });
   const id='veh'+String(mx+1).padStart(2,'0')+Math.random().toString(36).slice(2,5);   // +random · multi-user unique (parser reads leading digits)
-  SB_VEHICLES.push({id, name:'', plate:'', type:'van', capacity:9, ownership:'own', partnerName:'', zoneBase:((typeof laMyPier==='function'&&laMyPier()==='ranong')?'RN':'PK'), driver:'', driverPhone:'', active:true, note:'', log:[{at:new Date().toISOString(),kind:'created',text:'เพิ่มรถใหม่'}]});
+  SB_VEHICLES.push({id, name:'', plate:'', type:'van', capacity:9, ownership:'own', partnerName:'', zoneBase:((typeof laFleetScope==='function'&&laFleetScope()==='rn')?'RN':'PK'), driver:'', driverPhone:'', active:true, note:'', log:[{at:new Date().toISOString(),kind:'created',text:'เพิ่มรถใหม่'}]});
   sbVehiclesPersist(); renderVehicles();
 }
 function vehSetField(id, field, val){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')){ renderVehicles(); return; }   /* §edit-guard · VC view-only → revert control */
@@ -34463,7 +34486,7 @@ function vehFormOpen(id){
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;   /* §edit-guard · VC view-only → no add/edit form */
   const v=id?vehGet(id):null;
   _vehForm = v ? {id:v.id, name:v.name||'', plate:v.plate||'', type:v.type||'van', capacity:v.capacity||9, ownership:v.ownership||'own', partnerName:v.partnerName||'', zoneBase:v.zoneBase||'PK', driver:v.driver||'', driverPhone:v.driverPhone||'', active:v.active!==false}
-              : {id:null, name:'', plate:'', type:'van', capacity:9, ownership:'own', partnerName:'', zoneBase:((typeof laMyPier==='function'&&laMyPier()==='ranong')?'RN':'PK'), driver:'', driverPhone:'', active:true};   /* §rnVan · คนระนองเพิ่มรถ = รถระนอง */
+              : {id:null, name:'', plate:'', type:'van', capacity:9, ownership:'own', partnerName:'', zoneBase:((typeof laFleetScope==='function'&&laFleetScope()==='rn')?'RN':'PK'), driver:'', driverPhone:'', active:true};   /* §rnVan · คนระนองเพิ่มรถ = รถระนอง */
   vehFormRender();
 }
 // เลือกสีในฟอร์ม · '' = กลับไปใช้สีอัตโนมัติ (hash ของ id)
@@ -34695,7 +34718,7 @@ function renderVehicles(){
   const cap=SB_VEHICLES.filter(v=>v.active).reduce((a,v)=>a+(v.capacity||0),0);
   const kpi=(lab,val,col)=>`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:12px 15px;min-width:110px"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82">${lab}</div><div style="font-size:22px;font-weight:700;color:${col||'#1B2A55'};font-family:'DM Mono',monospace;margin-top:3px">${val}</div></div>`;
   const tabBtn=(k,lbl)=>`<button onclick="vehSetTab('${k}')" style="background:${_vehTab===k?'#1A1A1A':'transparent'};color:${_vehTab===k?'#fff':'#666'};border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:${_vehTab===k?600:500};cursor:pointer;font-family:inherit">${lbl}</button>`;
-  const tabGroup=`<div style="background:white;border:1px solid rgba(0,0,0,.04);border-radius:24px;padding:2px;display:flex">${tabBtn('status','สถานะ')}${tabBtn('matrix','ตารางเดือน')}${tabBtn('registry','ทะเบียน')}${tabBtn('daily','รายวัน')}</div>`;
+  const tabGroup=`<div style="background:white;border:1px solid rgba(0,0,0,.04);border-radius:24px;padding:2px;display:flex">${tabBtn('status','สถานะ')}${tabBtn('matrix','ตารางเดือน')}${tabBtn('registry','ทะเบียน')}${tabBtn('daily','รายวัน')}</div>${(typeof laFleetScopeSeg==='function')?laFleetScopeSeg('renderVehicles'):''}`;   /* §rnVan2 · ปุ่มสลับฝั่ง ภูเก็ต·เขาหลัก / ระนอง */
   // ── Shared Fleet-Insights-style header (used by all tabs) ──
   const _vt=bkV2LocalYMD(new Date());
   const _vSt=function(v){ return (typeof vehStatusOn==='function')?vehStatusOn(v,_vt):''; };
@@ -59778,7 +59801,7 @@ function bkV2RenderTab2(){
         const _mOps=a=>(typeof bkOpsRead==='function')?bkOpsRead(a.r.bk,date):((a.r.bk.ops)||{});
         const ctime=(mem.map(_aTime).find(Boolean))||'';
         const rvid=((mem.filter(a=>a.vanId).map(_mOps).find(o=>o&&o.vanReturnId))||{}).vanReturnId||'';
-        const _retPool=[...pool, ...((typeof vanVehiclesForZone==='function'?vanVehiclesForZone(z,date):[]).filter(v=>!pool.some(p=>p.id===v.id)))];   // ขากลับ = รถ zone เดียวกันคันไหนก็ได้ในวันนั้น (กว้างกว่า ขาไป)
+        const _retPool=[...pool, ...((typeof vanVehiclesForZone==='function'?vanVehiclesForZone(z,date):[]).filter(v=>!pool.some(p=>p.id===v.id) && laVehFitsRoute(v,rid)))];   /* §rnVan2 */   // ขากลับ = รถ zone เดียวกันคันไหนก็ได้ในวันนั้น (กว้างกว่า ขาไป)
         let ropts='<option value="">'+laT('กลับคันเดิม')+'</option>';   /* §vgBar · มีไอคอนขากลับนำหน้าแล้ว */
         _retPool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>กลับ: ${esc(v.name||v.id)}</option>`; });
         if(rvid && !_retPool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>กลับ: ${esc((vo&&vo.name)||rvid)}</option>`; }
