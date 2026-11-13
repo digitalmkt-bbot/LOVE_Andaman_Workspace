@@ -14008,6 +14008,7 @@ function renderVanJobs(){
   /* §strandMove · คันที่เคยมีงานในวันนี้ แต่ใบถูกเลื่อนวันออกไปแล้ว */
   if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(r=>{
     if(!r.vanId) return;
+    if(typeof laFleetRouteOk==='function' && !laFleetRouteOk(r.t.routeId)) return;   /* §rnVan3 · ของค้างจากใบที่เลื่อนวัน ก็ต้องแยกฝั่งเหมือนกัน · เดิมหลุดตัวกรอง โผล่ในฝั่งระนอง */
     /* §vjRound · ของค้างต้องไปเกาะใบของรอบตัวเอง ไม่ใช่ไปกองที่ใบแรกเสมอ */
     const _mg=+((r.O&&r.O.vanGroup)||0);
     const _mr=_mg?vjRoundPick(_VJRA[r.vanId+'~'+(r.t.routeId||'')],_mg):null;
