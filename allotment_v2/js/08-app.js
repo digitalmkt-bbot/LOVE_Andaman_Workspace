@@ -36701,6 +36701,10 @@ function pxCSS(){ return ''
  +'#trippl-host .dbx>.twrap{position:absolute;inset:0;display:flex;flex-direction:column}'
  +'#trippl-host .dbx .tscroll.cap{max-height:none;flex:1 1 auto;min-height:0}'
  +'#trippl-host .mst{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}'
+ /* §px2col · Monthly: Sales vs FAM | Unabsorbed boat rent วางคู่กัน */
+ +'#trippl-host .px2col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:stretch;margin-bottom:12px}'
+ +'#trippl-host .px2col>.eg{margin-bottom:0;min-width:0}'
+ +'@media(max-width:1100px){#trippl-host .px2col{grid-template-columns:minmax(0,1fr)}}'
  +'#trippl-host .mst .b{flex:1;min-width:150px;background:#F8FAFC;border:1px solid var(--pl);'
    +'border-radius:10px;padding:8px 12px}'
  +'#trippl-host .mst .b small{display:block;font-size:10px;color:var(--pm);margin-bottom:2px}'
@@ -37692,7 +37696,9 @@ function pxMonth(e){
   var rentIdle=pxRentIdleHtml(e, pxRentIdle(days), T.profit);   /* §rentIdle */
   var famHtml=famAny?(hasF?pxFamMonth(T, FAG, mLbl, e):pxFamMini(T)):'';   /* §pxFam */
 
-  return hero+kpi+famHtml+rentIdle
+  /* §px2col · มีครบทั้งสองกล่อง (และ FAM ไม่ได้ถูกซ่อน) → วางคู่กันคนละคอลัมน์ */
+  var _two=(famAny && hasF && rentIdle) ? ('<div class="px2col">'+famHtml+rentIdle+'</div>') : (famHtml+rentIdle);
+  return hero+kpi+_two
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
       +'<span class="pill bl">'+e(mLbl)+'</span></h2>'
       +'<p>Light blue = revenue · green/red = the net result of that day · click a bar to open that day</p></div>'
