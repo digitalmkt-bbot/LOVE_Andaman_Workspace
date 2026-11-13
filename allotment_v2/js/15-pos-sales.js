@@ -285,7 +285,13 @@ function pslBoatColor(bid){
   var b=(typeof getBoat==='function')?getBoat(bid):null, c='';
   try{ if(typeof getBoatColor==='function'){ var gc=getBoatColor(bid); if(gc&&gc.text&&gc.text!=='#666') c=gc.fill||gc.text; } }catch(_){ }
   try{ if(!c && b && typeof flBoatAvatarColor==='function') c=flBoatAvatarColor(b); }catch(_){ }
-  return /^#[0-9a-f]{6}$/i.test(c||'')?c:'#0E7C6B';
+  /* §pslProd2 (2026-11-13) · owner "ทำไมไม่แยกสีเหมือน Mockup" · getBoatColor คืนสีเป็น rgb(r,g,b) ไม่ใช่ #hex
+     ตัวเช็คเดิมรับแต่ #hex จึงตกไปใช้สีเขียวกลางทุกลำ · แปลงทั้งสองรูปแบบเป็น #hex ก่อน */
+  c=String(c||'').trim();
+  var m=/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(c);
+  if(m){ var x=function(v){ return ('0'+Math.max(0,Math.min(255,+v)).toString(16)).slice(-2); }; return '#'+x(m[1])+x(m[2])+x(m[3]); }
+  if(/^#[0-9a-f]{3}$/i.test(c)) return '#'+c.slice(1).replace(/./g,function(ch){ return ch+ch; });
+  return /^#[0-9a-f]{6}$/i.test(c)?c:'#0E7C6B';
 }
 function pslTint(hex,a){ var r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return 'rgba('+r+','+g+','+b+','+a+')'; }
 /* ตัวอักษรบนพื้นขาว · สีเรือที่อ่อนเกินทำให้เข้มขึ้น */
