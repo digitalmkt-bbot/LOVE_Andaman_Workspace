@@ -33730,9 +33730,22 @@ function bkUpgVanOf(date, rid, gid){
     var kk=t.upg.van.key||''; if(k===null) k=kk; else if(k!==kk) return null; }
   return { key:k, from:m[0].t.upg.fromRouteId, gid:m[0].t.upg.van.gid, n:m.length };
 }
-function bkUpgVanBtn(date, rid, zone, gid){
+/* §vgBar · ไอคอนของแถบรถ (เส้นเดียวกันทั้งชุด · สีตามตัวอักษรของช่อง) */
+function _vgbI(k){
+  var P={ van:'<path d="M3 7h11l4 4h3v6h-2"/><path d="M3 7v10h2"/><path d="M9 17h6"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+    warn:'<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.1"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    ret:'<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>', user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    up:'<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>', sort:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>',
+    x:'<path d="M6 6l12 12M18 6 6 18"/>', plus:'<path d="M12 5v14M5 12h14"/>', chk:'<path d="m5 12 5 5 9-10"/>' };
+  var z=(k==='plus'||k==='chk')?12:14;
+  return '<svg class="vgb-ic" width="'+z+'" height="'+z+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[k]||'')+'</svg>';
+}
+function bkUpgVanBtn(date, rid, zone, gid, ic){
   var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var U=bkUpgVanOf(date, rid, gid);
+  /* §vgBar · ic = แบบย่อของแถบรถใหม่ · ปุ่มไป = ไอคอน · ปุ่มย้ายกลับยังมีข้อความ (เป็นสถานะที่ต้องเห็น) */
+  if(ic && U) return '<button type="button" class="up" data-upgvan="undo" onclick="event.stopPropagation();bkV2VanUpgUndo(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('ทั้งคันนี้ย้ายมาจาก')+' '+bkUpgRouteName(U.from)+' · '+laT('กดเพื่อย้ายกลับทั้งคัน'))+'">&#8617; '+e(laT('ยกเลิก Upgrade'))+'</button>';
+  if(ic) return '<button type="button" class="up" data-upgvan="go" onclick="event.stopPropagation();bkV2VanUpgrade(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('Upgrade ทั้งคัน')+' · '+laT('ย้ายทุกใบในกรุ๊ปนี้ไปโปรแกรมอื่น · รถคันเดิม ลำดับรับเดิม'))+'">'+_vgbI('up')+'</button>';
   if(U) return '<button type="button" data-upgvan="undo" onclick="event.stopPropagation();bkV2VanUpgUndo(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('ทั้งคันนี้ย้ายมาจาก')+' '+bkUpgRouteName(U.from)+' · '+laT('กดเพื่อย้ายกลับทั้งคัน'))+'" style="background:#F7F1FC;border:1px solid #D9CFFA;color:#6B289A;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; '+e(laT('ยกเลิก Upgrade ทั้งคัน'))+'</button>';
   return '<button type="button" data-upgvan="go" onclick="event.stopPropagation();bkV2VanUpgrade(\''+e(date)+'\',\''+e(rid)+'\',\''+e(zone)+'\','+(+gid)+')" title="'+e(laT('ย้ายทุกใบในกรุ๊ปนี้ไปโปรแกรมอื่น · รถคันเดิม ลำดับรับเดิม'))+'" style="background:#fff;border:1px solid #D9CFFA;color:#6B289A;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#10548; '+e(laT('Upgrade ทั้งคัน'))+'</button>';
 }
@@ -59717,7 +59730,7 @@ function bkV2RenderTab2(){
           const _uo=(typeof bkOpsRead==='function')?bkOpsRead(a.r.bk,date):null;
           _usedG[a.vanId]={g:a.g, tm:(_uo&&_uo.pickupTimeFinal)||''}; } });
         const pool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date,rid,z):[];
-        let opts=pool.length?'<option value="">— เลือกรถ (ทีหลังได้) —</option>':'<option value="">— ยังไม่มีรถจัดให้โปรแกรมนี้ (จัดในตารางเดือน) —</option>';
+        let opts=pool.length?'<option value="">เลือกรถ</option>':'<option value="">ยังไม่มีรถจัดให้โปรแกรมนี้</option>';
         pool.forEach(v=>{ const _uu=(v.id!==vid)?_usedG[v.id]:null; const overCap=v.id!==vid&&(v.capacity||0)>0&&gpax>(v.capacity||0); opts+=`<option value="${v.id}" ${vid===v.id?'selected':''} ${overCap?'disabled':''}>${esc(v.name||v.id)}${v.capacity?(' · '+v.capacity+' ที่นั่ง'):''}${v.plate&&v.plate!=='-'?(' · '+esc(v.plate)):''}${_uu?(' · \u21bb รอบถัดไป (อยู่กรุ๊ป '+_uu.g+(_uu.tm?(' · '+_uu.tm):'')+')'):''}${overCap?' · ที่นั่งไม่พอ':''}</option>`; });
         if(vid && !pool.some(v=>v.id===vid)){ const vo=vehGet(vid); opts+=`<option value="${vid}" selected>${esc((vo&&vo.name)||vid)}</option>`; }
         const cap=vid?((vehGet(vid)||{}).capacity||0):0; const over=cap&&gseat>cap;
@@ -59736,25 +59749,41 @@ function bkV2RenderTab2(){
         const ctime=(mem.map(_aTime).find(Boolean))||'';
         const rvid=((mem.filter(a=>a.vanId).map(_mOps).find(o=>o&&o.vanReturnId))||{}).vanReturnId||'';
         const _retPool=[...pool, ...((typeof vanVehiclesForZone==='function'?vanVehiclesForZone(z,date):[]).filter(v=>!pool.some(p=>p.id===v.id)))];   // ขากลับ = รถ zone เดียวกันคันไหนก็ได้ในวันนั้น (กว้างกว่า ขาไป)
-        let ropts='<option value="">รถกลับ: เหมือนเดิม</option>';
+        let ropts='<option value="">'+laT('กลับคันเดิม')+'</option>';   /* §vgBar · มีไอคอนขากลับนำหน้าแล้ว */
         _retPool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>กลับ: ${esc(v.name||v.id)}</option>`; });
         if(rvid && !_retPool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>กลับ: ${esc((vo&&vo.name)||rvid)}</option>`; }
         const _drvO=(typeof VANJOB_DRIVER!=='undefined'&&vid)?(VANJOB_DRIVER[date+'::'+vid]||{}):{}; const _drvV=vid?(vehGet(vid)||{}):{};   // per-date driver/phone (shared with the Van Job Order page)
-        return `<tr data-grp="${g}" data-gk="${_gk}" ${_gDrag} ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="background:${vid?(_rndBg||c[0]):'#FCEDED'};box-shadow:inset 4px 0 0 ${vid?c[1]:'#D64545'};padding:6px 12px;${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            ${_gHandle}<span style="font-weight:700;font-size:12px;color:${vid?c[1]:'#C0392B'}">&#128656; กรุ๊ป ${g}${vid?'':' · ⚠ ยังไม่เลือกรถ'}</span>
-            ${_rndChip}${_rndWarn}
-            ${_gConfChip}
-            <span style="font-size:11px;color:#6a6a64">${mem.length} booking · <b style="color:${over?'#A32D2D':c[1]}">${gseat}${cap?'/'+cap:''} pax</b>${_vsSeat?`<span title="ลูกค้า ${gpax} คน + คนติดรถ ${_vsSeat} คน" style="color:#0E7490;font-weight:600"> · ลูกค้า ${gpax} + ติดรถ ${_vsSeat}</span>`:''}</span>
-            ${_vsBtn}
-            <select onchange="event.stopPropagation();bkV2VanGroupSetVan('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()" style="border:1px solid ${vid?'#9FE1CB':'#E6C9C3'};border-radius:6px;padding:3px 7px;font-size:11px;font-family:inherit;background:#fff;font-weight:${vid?'700':'400'}">${opts}</select>
-            <input type="text" value="${esc(ctime)}" placeholder="ตั้งเวลาทั้งกรุ๊ป" onclick="event.stopPropagation()" oninput="bkV2VanGroupSetTime('${date}','${rid}','${z}','${g}',this.value)" title="ตั้งเวลารับให้ทุกแถวในกรุ๊ป (ปรับรายโรงแรมได้ที่คอลัมน์เวลา)" style="border:1px solid #ddd;border-radius:6px;padding:3px 7px;font-size:11px;font-family:'DM Mono',monospace;width:108px">
-            <select onchange="event.stopPropagation();bkV2VanGroupSetReturn('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากขาไป)" style="border:1px solid ${rvid?'#C7B8E8':'#ddd'};border-radius:6px;padding:3px 7px;font-size:11px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#888'}">${ropts}</select>
-            ${vid?`<span onclick="event.stopPropagation()" title="คนขับวันนี้ของรถคันนี้ — เชื่อมกับใบงานรถ (แก้ที่ไหนก็อัปเดตอีกที่)" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#5a6b62">&#128100;<input value="${esc(_drvO.driver||'')}" oninput="vanJobsSetDriver('${date}','${vid}','driver',this)" placeholder="${esc(_drvV.driver||'คนขับ')}" style="width:86px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:inherit;color:#1B2A55"><input value="${esc(_drvO.phone||'')}" oninput="vanJobsSetDriver('${date}','${vid}','phone',this)" placeholder="${esc(_drvV.driverPhone||'เบอร์')}" style="width:96px;border:1px solid #d7dbe2;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#1B2A55">${_drvV.ownership==='partner'?`<input value="${esc(_drvO.plate||'')}" oninput="vanJobsSetDriver('${date}','${vid}','plate',this)" placeholder="${esc((_drvV.plate&&_drvV.plate!=='-')?_drvV.plate:'ทะเบียน')}" title="ทะเบียนรถวันนี้ (รถร่วม)" style="width:84px;border:1px solid #E6C9A3;border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Mono',monospace;color:#8a5500">`:''}${(_drvO.driver||_drvO.phone||_drvO.plate)?'<span style="font-size:9px" title="อัปเดตแล้ว">&#128204;</span>':''}</span>`:''}
-            <button onclick="event.stopPropagation();bkV2VanGroupSave('${date}')" title="บันทึก · ถ้าติ๊กแถวไว้จะจัดลำดับตามที่ติ๊ก" style="background:#0F6E56;border:none;color:#fff;border-radius:6px;padding:3px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; Save</button>
-            ${mem.some(a=>a.seq>0)?`<button onclick="event.stopPropagation();bkV2VanGroupClearSeq('${date}','${rid}','${z}','${g}')" title="ล้างลำดับที่ตั้งเอง → กลับไปเรียงตามเวลา" style="background:transparent;border:1px solid #d7dbe2;color:#6a6a64;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">&#8635; เรียงตามเวลา</button>`:''}
-            <span style="margin-left:auto"></span>${(typeof bkUpgVanBtn==='function')?bkUpgVanBtn(date,rid,z,g):''}
-            <button onclick="event.stopPropagation();bkV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer;font-family:inherit">ยกเลิกกรุ๊ป</button>
+        /* ══ §vgBar (2026-11-13) · แถบรถแบบใหม่ ═══════════════════════════════════
+           เจ้าของ: "ปรับดีไซน์แถบรถใหม่ ให้ตรงกัน ให้ดูกระชับ" · เลือกแบบ A1
+           ของเดิมแถบเดียวกันเรียงปุ่มไม่เหมือนกันระหว่าง Classic กับ Layer/Compact
+           (ตัวจัดหน้า vanGroups ย้ายปุ่มด้วย order ทีหลัง) และกรุ๊ปที่ยังไม่มีรถก็เรียงอีกแบบ
+           ตอนนี้ทุกมุมมองใช้ markup+CSS ชุดเดียว (tr.vgb) · ลำดับตายตัว · ช่องกว้างคงที่ ตรงกันทุกแถบ
+             กรุ๊ป · คน/ที่นั่ง · รถ · เวลารับ · รถกลับ · คนขับ+เบอร์ · ป้าย · [+จุดแวะ][Upgrade|เรียง][✕][Save]
+           ตัวกรอก/ปุ่มทุกตัวเรียกฟังก์ชันเดิม ไม่มีอะไรเปลี่ยนด้านข้อมูล
+           พื้นหลังอยู่ที่ div ข้างใน · Layer บังคับสี td ของหัวกรุ๊ปเป็นเทา (tr.ly-in[data-grp]>td) สีรถ/สีแดงจะหายถ้าอยู่ที่ td */
+        const _vcol=vid?c[1]:'#D9534A', _vbg=vid?(_rndBg||c[0]):'#FBE9E6';
+        const _capPct=cap?Math.min(100,Math.round(gseat*100/cap)):0;
+        const _noPool=!pool.length;
+        const _vsBtnC = vid
+          ? `<button type="button" class="vgb-b" onclick="event.stopPropagation();vsOpen('${date}','${rid}',{vanId:'${vid}',vanGroup:${g},zone:'${esc(z)}'})" title="${laT('เพิ่มจุดแวะที่ไม่ใช่ลูกค้า · ไกด์ติดรถ หรือแวะเอาของ')}">${_vgbI('plus')}${laT('จุดแวะ')}${_vsN?(' ('+_vsN+')'):''}</button>`
+          : `<span class="vgb-b dis" title="${laT('จุดแวะผูกกับรถ · เลือกรถให้กรุ๊ปนี้ก่อน แล้วปุ่มนี้จะกดได้')}">${_vgbI('plus')}${laT('จุดแวะ')}</span>`;
+        const _hasSeq=mem.some(a=>a.seq>0);
+        return `<tr class="vgb ${vid?'on':'off'}" data-grp="${g}" data-gk="${_gk}" ${_gDrag} ${vid?`id="vg-${rid}-${vid}"`:''}><td colspan="${COLN}" style="padding:0;background:${_vbg};${(_rnd&&_rnd.no>1)?('border-top:1px dashed '+c[1]+'88;'):''}${vid?'':'border-top:2px solid #E05B5B;border-left:2px solid #E05B5B;border-right:2px solid #E05B5B'}">
+          <div class="vgb-in" style="--vc:${_vcol};background:${_vbg}">
+            ${_gHandle}<span class="vgb-g" title="${vid?'':laT('ยังไม่เลือกรถ')}">${laT('กรุ๊ป')} ${g}</span>
+            <span class="vgb-n" title="${mem.length} booking · ${gseat}${cap?'/'+cap:''} pax${_vsSeat?(' · '+laT('ลูกค้า')+' '+gpax+' + '+laT('ติดรถ')+' '+_vsSeat):''}"><span class="vgb-cap${over?' over':''}"><b>${gseat}</b>${cap?`<i>/${cap}</i><em><s style="width:${_capPct}%"></s></em>`:'<i> pax</i>'}</span><span class="vgb-bk">${mem.length} booking${_vsSeat?` · <span style="color:#0E7490;font-weight:700">+${_vsSeat} ${laT('ติดรถ')}</span>`:''}</span></span>
+            <span class="vgb-f v ${vid?'sel':'need'}" onclick="event.stopPropagation()" title="${vid?laT('รถของกรุ๊ปนี้'):(_noPool?laT('ยังไม่มีรถจัดให้โปรแกรมนี้ · จัดในตารางเดือน'):laT('ยังไม่เลือกรถ · เลือกทีหลังได้'))}">${_vgbI(vid?'van':'warn')}<select onchange="event.stopPropagation();bkV2VanGroupSetVan('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()">${opts}</select></span>
+            <span class="vgb-f t" onclick="event.stopPropagation()" title="${laT('ตั้งเวลารับให้ทุกแถวในกรุ๊ป (ปรับรายโรงแรมได้ที่คอลัมน์เวลา)')}">${_vgbI('clock')}<input type="text" value="${esc(ctime)}" placeholder="${laT('เวลารับ')}" onclick="event.stopPropagation()" oninput="bkV2VanGroupSetTime('${date}','${rid}','${z}','${g}',this.value)"></span>
+            <span class="vgb-f r${rvid?' set':''}" onclick="event.stopPropagation()" title="${laT('รถขากลับ (ถ้าต่างจากขาไป)')}">${_vgbI('ret')}<select onchange="event.stopPropagation();bkV2VanGroupSetReturn('${date}','${rid}','${z}','${g}',this.value)" onclick="event.stopPropagation()">${ropts}</select></span>
+            ${vid?`<span class="vgb-f d" onclick="event.stopPropagation()" title="${laT('คนขับวันนี้ของรถคันนี้ — เชื่อมกับใบงานรถ (แก้ที่ไหนก็อัปเดตอีกที่)')}">${_vgbI('user')}<input class="dn" value="${esc(_drvO.driver||'')}" oninput="vanJobsSetDriver('${date}','${vid}','driver',this)" placeholder="${esc(_drvV.driver||laT('คนขับ'))}"><i class="sep"></i><input class="dp" value="${esc(_drvO.phone||'')}" oninput="vanJobsSetDriver('${date}','${vid}','phone',this)" placeholder="${esc(_drvV.driverPhone||laT('เบอร์'))}">${_drvV.ownership==='partner'?`<i class="sep"></i><input class="dl" value="${esc(_drvO.plate||'')}" oninput="vanJobsSetDriver('${date}','${vid}','plate',this)" placeholder="${esc((_drvV.plate&&_drvV.plate!=='-')?_drvV.plate:laT('ทะเบียน'))}" title="${laT('ทะเบียนรถวันนี้ (รถร่วม)')}">`:''}${(_drvO.driver||_drvO.phone||_drvO.plate)?`<span style="font-size:9px" title="${laT('อัปเดตแล้ว')}">&#128204;</span>`:''}</span>`
+                 :`<span class="vgb-f d dis" title="${laT('คนขับผูกกับรถ · เลือกรถก่อน')}">${_vgbI('user')}<span>${laT('เลือกรถก่อน')}</span></span>`}
+            ${_rndChip}${_rndWarn}${_gConfChip}
+            <span class="vgb-act">${_vsBtnC}
+            <span class="vgb-seg">${(typeof bkUpgVanBtn==='function')?bkUpgVanBtn(date,rid,z,g,true):''}${_hasSeq
+              ?`<button type="button" onclick="event.stopPropagation();bkV2VanGroupClearSeq('${date}','${rid}','${z}','${g}')" title="${laT('เรียงตามเวลา · ล้างลำดับที่ตั้งเอง')}">${_vgbI('sort')}</button>`
+              :`<span class="dis" title="${laT('เรียงตามเวลาอยู่แล้ว')}">${_vgbI('sort')}</span>`}</span>
+            <button type="button" class="vgb-x" onclick="event.stopPropagation();bkV2VanGroupDisband('${date}','${rid}','${z}','${g}')" title="${laT('ยกเลิกกรุ๊ปนี้ (booking กลับไปยังไม่จัด)')}">${_vgbI('x')}</button>
+            <button type="button" class="vgb-sv" onclick="event.stopPropagation();bkV2VanGroupSave('${date}')" title="${laT('บันทึก · ถ้าติ๊กแถวไว้จะจัดลำดับตามที่ติ๊ก')}">${_vgbI('chk')}Save</button></span>
           </div></td></tr>`;
       };
       /* ══ §vanStop · แถวจุดแวะในกรุ๊ปรถ ═══════════════════════════════════════
@@ -61243,6 +61272,57 @@ function bkV2RenderTab2(){
     tr[data-grp] .grp-grab:active{cursor:grabbing}
     tr.grp-dragging>td{opacity:.45}
     tr.grp-dropinto>td{box-shadow:inset 0 3px 0 #0F6E56 !important}
+    /* §vgBar · แถบรถ (โหมดจัดรถ) · ชุดเดียวทุกมุมมอง */
+    tr.vgb>td{padding:0 !important}
+    tr.vgb .vgb-in{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-height:40px;padding:6px 12px 6px 10px;box-sizing:border-box;
+      box-shadow:inset 4px 0 0 var(--vc);font-size:12px;line-height:1.2;white-space:nowrap;color:#1B2A55}
+    tr.vgb .vgb-ic{flex:none;display:block}
+    tr.vgb .vgb-g{flex:none;min-width:70px;height:24px;padding:0 10px;border-radius:8px;background:var(--vc);color:#fff;font-weight:800;font-size:12px;
+      display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+    tr.vgb .vgb-n{flex:none;width:136px;display:inline-flex;align-items:center;gap:8px;overflow:hidden}
+    tr.vgb .vgb-cap{position:relative;display:inline-flex;align-items:baseline;gap:1px;font-family:'DM Mono',monospace;padding-bottom:5px;top:2px;color:var(--vc)}
+    tr.vgb .vgb-cap b{font-size:14px;font-weight:500}
+    tr.vgb .vgb-cap i{font-style:normal;font-size:11px;color:#8d8b83}
+    tr.vgb .vgb-cap em{position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:2px;background:rgba(27,42,85,.13);overflow:hidden}
+    tr.vgb .vgb-cap s{display:block;height:100%;background:var(--vc);border-radius:2px}
+    tr.vgb .vgb-cap.over{color:#A32D2D} tr.vgb .vgb-cap.over s{background:#A32D2D}
+    tr.vgb.off .vgb-cap{color:#B4392B}
+    tr.vgb .vgb-bk{font-size:11px;color:#7d7b74;overflow:hidden;text-overflow:ellipsis}
+    tr.vgb .vgb-f{flex:none;height:28px;box-sizing:border-box;border-radius:8px;background:#fff;box-shadow:0 0 0 1px rgba(27,42,85,.12);
+      display:inline-flex;align-items:center;gap:6px;padding:0 8px;color:#1B2A55;overflow:hidden}
+    tr.vgb .vgb-f>.vgb-ic{opacity:.55}
+    tr.vgb .vgb-f select,tr.vgb .vgb-f input{border:0 !important;outline:0;background-color:transparent !important;box-shadow:none !important;
+      font-family:inherit;font-size:12px !important;color:inherit;height:26px !important;padding:0 !important;margin:0;min-width:0;border-radius:0 !important}
+    tr.vgb .vgb-f select{-webkit-appearance:none;appearance:none;cursor:pointer;flex:1 1 auto;width:100%;text-overflow:ellipsis;padding-right:15px !important;
+      background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8f9c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 1px center !important}
+    tr.vgb .vgb-f input::placeholder{color:#a5a39b}
+    tr.vgb .vgb-f.v{width:236px}
+    tr.vgb .vgb-f.v.sel{box-shadow:0 0 0 1.5px var(--vc)} tr.vgb .vgb-f.v.sel select{font-weight:700}
+    tr.vgb .vgb-f.v.need{box-shadow:0 0 0 1.5px #D9534A;color:#B4392B} tr.vgb .vgb-f.v.need>.vgb-ic{opacity:1}
+    tr.vgb .vgb-f.v.need select{font-weight:700} tr.vgb .vgb-f.v.need option{color:#1B2A55;font-weight:400}
+    tr.vgb .vgb-f.t{width:114px} tr.vgb .vgb-f.t input{width:100%;font-family:'DM Mono',monospace}
+    tr.vgb .vgb-f.r{width:150px} tr.vgb .vgb-f.r select{color:#8d8b83}
+    tr.vgb .vgb-f.r.set{box-shadow:0 0 0 1.5px #C7B8E8} tr.vgb .vgb-f.r.set select{color:#534AB7;font-weight:700}
+    tr.vgb .vgb-f.d input.dn{width:72px} tr.vgb .vgb-f.d input.dp{width:98px;font-family:'DM Mono',monospace}
+    tr.vgb .vgb-f.d input.dl{width:78px;font-family:'DM Mono',monospace;color:#8a5500}
+    tr.vgb .vgb-f.d .sep{flex:none;width:1px;height:13px;background:#d5dbe0}
+    tr.vgb .vgb-f.d.dis{min-width:213px;background:transparent;box-shadow:none;border:1px dashed rgba(27,42,85,.2);color:#a9a7a0;font-size:11.5px}
+    tr.vgb .vgb-act{flex:none;margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+    tr.vgb .vgb-b,tr.vgb .vgb-x,tr.vgb .vgb-seg{flex:none;height:28px;box-sizing:border-box;border:0;border-radius:8px;background:rgba(255,255,255,.85);
+      box-shadow:0 0 0 1px rgba(27,42,85,.12)}
+    tr.vgb .vgb-b{padding:0 10px;display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-size:11.5px;font-weight:700;color:#3d5a66;cursor:pointer}
+    tr.vgb .vgb-b.dis{opacity:.4;cursor:not-allowed}
+    tr.vgb .vgb-seg{display:inline-flex;overflow:hidden}
+    tr.vgb .vgb-seg>*{border:0;background:transparent;min-width:30px;height:28px;box-sizing:border-box;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;
+      gap:4px;cursor:pointer;color:#55636b;font-family:inherit;font-size:11px;font-weight:700;border-radius:0}
+    tr.vgb .vgb-seg>*+*{border-left:1px solid rgba(27,42,85,.12)}
+    tr.vgb .vgb-seg>.up{color:#534AB7} tr.vgb .vgb-seg>.dis{opacity:.35;cursor:default}
+    tr.vgb .vgb-x{width:28px;padding:0;margin:0 4px 0 2px;display:inline-flex;align-items:center;justify-content:center;color:#B4392B;cursor:pointer}
+    tr.vgb .vgb-sv{flex:none;height:28px;border:0;border-radius:8px;padding:0 14px;background:#0F6E56;color:#fff;font-family:inherit;font-weight:700;font-size:12px;
+      cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+    tr.vgb .vgb-b:not(.dis):hover,tr.vgb .vgb-x:hover,tr.vgb .vgb-seg>button:hover{background:#fff;filter:brightness(.97)}
+    tr.vgb .vgb-sv:hover{filter:brightness(1.08)}
+    tr.vgb .vgb-f:focus-within{box-shadow:0 0 0 2px var(--vc)}
     .t2-vsrow .vsleg{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;
       padding:1px 7px;margin-left:6px;white-space:nowrap;vertical-align:middle}
     .t2-vsrow .vsnote{font-size:11.5px;font-style:italic;color:#57807F;display:block;
@@ -88949,6 +89029,7 @@ function pc2CSS3(S){
       var tr = trs[i]; var d = tr.querySelector('td > div'); if(!d) continue;
       var vsel = d.querySelector('select[onchange*="bkV2VanGroupSetVan"]');
       if(!vsel){ continue; }                                  // not van mode → leave
+      if(tr.classList.contains('vgb')) continue;              // §vgBar · แถบรถแบบใหม่จัดลำดับ+ป้ายเองแล้ว ไม่ต้องย้ายอะไร
       tr.classList.add('btc-vg');
       var tin = d.querySelector('input[oninput*="bkV2VanGroupSetTime"]');
       var rsel = d.querySelector('select[onchange*="bkV2VanGroupSetReturn"]');
@@ -89239,7 +89320,7 @@ function pc2CSS3(S){
         var k = zone.k, C = ZC[k] || ZC.oth, grp = 0, novan = 0, unN = 0;
         zrows.forEach(function(r){
           r.classList.add('ly-in', 'ly-z-' + k); r.style.setProperty('--lyc', C[0]); r.style.setProperty('--lyb', C[1]);
-          if(r.hasAttribute('data-grp')){ grp++; if(/ยังไม่เลือกรถ|ยังไม่จัดรถ/.test(r.textContent)) novan++; }
+          if(r.hasAttribute('data-grp')){ grp++; if((r.classList.contains('vgb')&&r.classList.contains('off'))||/ยังไม่เลือกรถ|ยังไม่จัดรถ/.test(r.textContent)) novan++;   /* §vgBar · แถบใหม่ไม่มีข้อความนี้แล้ว ดูจาก class */ }
           if(r.classList.contains('t2-unhd')){ var m = r.textContent.match(/(\d+)\s*booking/); unN += m ? +m[1] : 1; }
         });
         var vis = zrows.filter(function(r){ return r.style.display !== 'none'; });
