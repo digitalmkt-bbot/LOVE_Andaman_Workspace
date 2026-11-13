@@ -8039,7 +8039,12 @@ function _rcKeepSent(bk, o){
 }
 function _rcIsInvoiceAgent(ag){ return !!(ag&&(ag.payType==='invoice'||ag.payType==='credit')); }
 function _rcPaid(bk){ return (typeof acctBookingPaid==='function')&&acctBookingPaid(bk); }
-function _rcDayMatch(bk,date){ return (bk.schemaVer===2)?(bk.trips||[]).some(function(t){return t.date===date;}):(bk.travelDate===date); }
+/* §rcPier (2026-11-13) · เจ้าของ: "ใช้ผ่านของ Reconfirm ได้ไหม แต่ของ Ranong ก็จะเห็นแต่ของเขา"
+   ผู้ใช้ที่ผูกท่า (§pierScope · สิทธิ์ "เห็นเฉพาะท่า…") เห็นและกดส่งได้เฉพาะใบของท่าตัวเอง · admin และคนที่ไม่ผูกท่าเห็นครบเหมือนเดิม
+   กรองที่ตัวรวบรวมแถวตัวเดียว (_rcActiveRows) หน้าจอ · ยอดบนหัว · ใบ Sheet ตามไปเอง
+   ปุ่มส่ง/ยกเลิกส่งไล่ SB_BOOKINGS เอง จึงต้องกรองที่ _rcDayMatch ด้วย · ไม่งั้นคนระนองกดส่งการ์ด B2C แล้วใบของท่าอื่นถูกติ๊กส่งไปด้วย */
+function _rcRouteOk(rid){ return (typeof laRouteIdOk==='function') ? laRouteIdOk(rid) : true; }
+function _rcDayMatch(bk,date){ return (bk.schemaVer===2)?(bk.trips||[]).some(function(t){return t.date===date && _rcRouteOk(t.routeId);}):(bk.travelDate===date && _rcRouteOk(bk.programId)); }
 /* §rcProgCol · สีตัวอักษรของชื่อโปรแกรม · สีอ่อนเกิน → ผสมดำจนอ่านได้ · ไม่มีสี = สีตัวอักษรปกติ */
 function _rcProgInk(hex){
   var m=/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex||'').trim()); if(!m) return {ink:'#2C2C2A', dot:'#C9C7BF'};
@@ -8051,8 +8056,8 @@ function _rcProgInk(hex){
   return {ink:'#'+x(r)+x(g)+x(b), dot:'#'+h};
 }
 function _rcActiveRows(date){ var rows=[]; SB_BOOKINGS.forEach(function(bk){ if(_RC_CXL.includes(bk.status))return;
-  if(bk.schemaVer===2){ (bk.trips||[]).forEach(function(t){ if(t.date===date) rows.push({bk:bk,t:t,routeId:t.routeId}); }); }
-  else if(bk.travelDate===date){ rows.push({bk:bk,t:null,routeId:bk.programId}); } }); return rows; }
+  if(bk.schemaVer===2){ (bk.trips||[]).forEach(function(t){ if(t.date===date && _rcRouteOk(t.routeId)) rows.push({bk:bk,t:t,routeId:t.routeId}); }); }
+  else if(bk.travelDate===date && _rcRouteOk(bk.programId)){ rows.push({bk:bk,t:null,routeId:bk.programId}); } }); return rows; }
 function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===r.routeId;}):null;
   var ag=bk.agentId?sbGetAgent(bk.agentId):null;
   var agentName=(typeof bkV2Norm==='function')?bkV2Norm(bk).agentName:((ag&&ag.name)||'—');
