@@ -5093,9 +5093,9 @@ function flLoad(){
     let _moMax = FL_MEMOS.reduce(function(mx,x){
       var v = parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; }, 0);
     // §noFree · ยืนยันว่าเลขที่จะออกยังว่างจริง ไม่ใช่แค่มากกว่าเลขสูงสุด
-    let no;
-    do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
-    while(FL_MEMOS.some(function(x){ return x.no===no; }));
+    let no = (typeof laDocNo==='function') ? laDocNo('MO') : null;   /* §docNo · เลขจากเซิร์ฟเวอร์ */
+    if(!no){ do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
+    while(FL_MEMOS.some(function(x){ return x.no===no; })); }
     const memo = {
       id: LA_UID('m') + '_' + jobNo,
       no,
@@ -14462,7 +14462,7 @@ function flSaveMemo(){
   const _moMaxNo = FL_MEMOS.length
     ? Math.max(0, ...FL_MEMOS.map(m => parseInt(String(m.no||'').replace(/^MO-/,'')) || 0))
     : 0;
-  const no='MO-'+String(_moMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MO'):('MO-'+String(_moMaxNo+1).padStart(3,'0'));   /* §docNo */
   const memo={
     id:LA_UID('m'),no,title:subject,
     to:document.getElementById('memo-to').value,
@@ -20926,7 +20926,7 @@ function flEngSplitIntoJobs(jobId){
       return;
     }
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -20979,7 +20979,7 @@ function flSplitExistingJob(jobId){
   engAssets.slice(1).forEach((a,idx)=>{
     const suffix=suffixOf(a);
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -22206,7 +22206,7 @@ function flSaveCreateJob(){
 
         inc.damagedAssets.forEach((a,idx)=>{
           _mjBaseNo++;
-          const jobNo='MJ-'+String(_mjBaseNo).padStart(3,'0');
+          const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjBaseNo).padStart(3,'0'));   /* §docNo */
           const subtitle=`${typeLabel[a.type]||'Asset'} ${labelFor(a)}`;
           const aid=a.type==='engine'?'engId':a.type==='gearbox'?'gbId':a.type==='propeller'?'propId':null;
           const jobAsset={type:a.type,label:a.label||labelFor(a),detail:a.note||a.detail||'',status:'fixing'};
@@ -22243,7 +22243,7 @@ function flSaveCreateJob(){
   const _mjMaxNo = FL_MAINT.length
     ? Math.max(0, ...FL_MAINT.map(m => parseInt(String(m.no||'').replace(/^MJ-/,'')) || 0))
     : 0;
-  const no='MJ-'+String(_mjMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjMaxNo+1).padStart(3,'0'));   /* §docNo */
   // Copy damaged assets from incident if linked (single unit case)
   let initialAssets=[];
   if(incId){
@@ -23589,7 +23589,7 @@ function flSaveIncident(){
   const _incMaxNo = FL_INCIDENTS.length
     ? Math.max(0, ...FL_INCIDENTS.map(i => parseInt(String(i.no||'').replace(/^INC-/,'')) || 0))
     : 0;
-  const no='INC-'+String(_incMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('INC'):('INC-'+String(_incMaxNo+1).padStart(3,'0'));   /* §docNo */
 
   // Build remark — prepend Root cause if specified
   const remarkParts = [];

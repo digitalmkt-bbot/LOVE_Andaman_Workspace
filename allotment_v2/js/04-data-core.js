@@ -13388,3 +13388,32 @@ initOpListeners();
 function _safeRenderDash(){ try{ renderDash(); }catch(e){ console.error('renderDash failed:',e); } }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _safeRenderDash);
 else _safeRenderDash();
+
+/* ══ §docNo (2026-11-14) · เลขเอกสาร MO / MJ / INC ออกที่เซิร์ฟเวอร์
+   owner "ตรวจหน่อย และเกิดขึ้นได้อย่างไร" (MO-377 ซ้ำ 2 ใบ · กมลณัฐ กับ Ruk กดสร้างห่างกัน 1.4 วินาที)
+   เดิมแต่ละเครื่องคิดเลขเอง = เลขสูงสุดที่เครื่องนั้นเห็น + 1 · กดพร้อมกันได้เลขเดียวกัน
+   ตอนนี้: ถาม POST /api/v1/_docno (เซิร์ฟเวอร์ล็อกแล้วจองเลขถัดไป) · แบบ synchronous ให้ตัวสร้างเดิมทุกตัวใช้ได้โดยไม่ต้องรื้อเป็น async
+   ต่อเซิร์ฟเวอร์ไม่ได้ (ออฟไลน์ / ไม่มีสิทธิ์) → ใช้เลขที่เครื่องคิดเอง (เลขสูงสุด + 1 ที่ยังว่าง) เหมือนเดิม ══ */
+var _laDocNoUsed={};
+function laDocArr(kind){ return kind==='MO'?(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]):kind==='MJ'?(typeof FL_MAINT!=='undefined'?FL_MAINT:[]):(typeof FL_INCIDENTS!=='undefined'?FL_INCIDENTS:[]); }
+function laDocFmt(kind,n){ return kind+'-'+String(n).padStart(3,'0'); }
+function laDocTaken(kind,n){ var no=laDocFmt(kind,n); return (_laDocNoUsed[kind]||{})[n] || laDocArr(kind).some(function(x){ return x && x.no===no; }); }
+/* เลขที่เครื่องคิดเอง · ใช้แสดงตัวอย่างก่อนกดสร้าง และเป็นตัวสำรองตอนต่อเซิร์ฟเวอร์ไม่ได้ */
+function laDocNoLocal(kind){
+  var mx=laDocArr(kind).reduce(function(m,x){ var v=parseInt(String((x&&x.no)||'').replace(/\D/g,''),10); return (v>m)?v:m; },0);
+  var n=mx; do{ n++; }while(laDocTaken(kind,n)); return n;
+}
+function laDocNoPeek(kind){ return laDocFmt(kind, laDocNoLocal(kind)); }
+function laDocNo(kind){
+  kind=String(kind||'').toUpperCase();
+  var loc=laDocNoLocal(kind), n=loc, src='local';
+  try{
+    var x=new XMLHttpRequest(); x.open('POST','/api/v1/_docno',false); x.setRequestHeader('Content-Type','application/json');
+    x.send(JSON.stringify({kind:kind, min:loc}));
+    if(x.status===200){ var r=JSON.parse(x.responseText||'{}'); if(r && +r.n>0){ n=+r.n; src='server'; } }
+  }catch(_){ }
+  while(laDocTaken(kind,n)) n++;          // กันไว้อีกชั้น · เลขที่เครื่องนี้มีอยู่แล้วหรือออกไปแล้วในรอบนี้
+  (_laDocNoUsed[kind]=_laDocNoUsed[kind]||{})[n]=1;
+  try{ console.log('[docNo] '+laDocFmt(kind,n)+' ('+src+')'); }catch(_){ }
+  return laDocFmt(kind,n);
+}

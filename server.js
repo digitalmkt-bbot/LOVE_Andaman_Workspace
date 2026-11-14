@@ -3331,6 +3331,37 @@ const server = http.createServer((req, res) => {
     const done=e=>J(res,500,{error:e.message});
     if(!resName){ const out={}; for(const [n,r] of Object.entries(REST_RES)) out[n]=r.container; return J(res,200,{resources:out}); }
     const canWrite = s.role==='admin' || s.edit!==false;
+    /* §docNo (2026-11-14) · ออกเลขเอกสาร MO / MJ / INC ที่เซิร์ฟเวอร์ · กันเลขซ้ำตอนหลายคนกดสร้างพร้อมกัน (MO-377)
+       body {kind:'MO'|'MJ'|'INC', min:<เลขที่เครื่องคิดเอง>} → {kind, n, no} · จองใน doc_seq ทันที (ตาราง: migration 050) */
+    if(resName==='_docno'){
+      if(m!=='POST') return J(res,405,{error:'method not allowed'});
+      if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
+      readBody(req, body=>{
+        let p; try{ p=JSON.parse(body||'{}'); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
+        const DOC_T={ MO:'fleet_memos', MJ:'fleet_maintenance', INC:'fleet_incidents' };
+        const kind=String(p.kind||'').toUpperCase(), t=DOC_T[kind];
+        if(!t) return J(res,400,{error:'kind must be MO, MJ or INC'});
+        const minNext=Math.max(0, parseInt(p.min,10)||0);
+        (async()=>{
+          const c=await pool.connect();
+          try{
+            await c.query('BEGIN');
+            await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['docno:'+kind]);
+            const mx=(await c.query(`SELECT COALESCE(MAX(NULLIF(regexp_replace(${qic('no')}, '[^0-9]', '', 'g'), '')::bigint), 0) AS n FROM ${fqt(t)}`)).rows[0];
+            const sq=(await c.query(`SELECT last FROM ${fqt('doc_seq')} WHERE kind=$1`, [kind])).rows[0];
+            const next=Math.max(Number(mx&&mx.n)||0, Number(sq&&sq.last)||0, minNext-1)+1;
+            await c.query(`INSERT INTO ${fqt('doc_seq')}(kind, last, at, ${qic('by')}) VALUES($1,$2,$3,$4)
+                           ON CONFLICT (kind) DO UPDATE SET last=EXCLUDED.last, at=EXCLUDED.at, ${qic('by')}=EXCLUDED.${qic('by')}`,
+                          [kind, next, new Date().toISOString(), s.username||'']);
+            await c.query('COMMIT');
+            console.log('[docno] '+kind+'-'+next+' → '+(s.username||'?'));
+            J(res,200,{ kind, n:next, no: kind+'-'+String(next).padStart(3,'0') });
+          }catch(e){ try{ await c.query('ROLLBACK'); }catch(_){ } J(res,500,{error:e.message}); }
+          finally{ c.release(); }
+        })();
+      });
+      return;
+    }
     if(resName==='_batch'){
       if(m!=='POST') return J(res,405,{error:'method not allowed'});
       if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
