@@ -58,7 +58,7 @@ function openCharterModal(){
   document.getElementById('ch-from').value=TODAY_STR;
   document.getElementById('ch-to').value=TODAY_STR;
   chSetPierPill('tublamu');
-  if(typeof chCapOpen==='function') chCapOpen(null);   /* §capHist · เพิ่มเรือเช่าใหม่ ไม่มีช่วงที่นั่ง */
+  if(typeof chCapSummary==='function') chCapSummary(null);   /* §capHist2 · เพิ่มเรือเช่าใหม่ ไม่มีช่วงที่นั่ง */
   openModal('charter-modal');
   chSyncDates();
 }
@@ -105,7 +105,7 @@ function openBoatEdit(id){
       + '<br>ช่วงอื่นเพิ่มหรือแก้ได้ที่ปฏิทินและรายการสถานะในแผงด้านขวา';
     hint.style.display='';
   }
-  if(typeof chCapOpen==='function') chCapOpen(b);   /* §capHist */
+  if(typeof chCapSummary==='function') chCapSummary(b);   /* §capHist2 · สรุป + ปุ่มเปิดหน้าต่างจัดการที่นั่ง (ตัวจัดการอยู่ Company Asset) */
   openModal('charter-modal');
   chSyncDates();
 }
@@ -196,21 +196,65 @@ function chCapD(ds){ var x=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||''); if(!x) retur
   return (+x[3])+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][+x[2]-1]+' '+x[1]; }
 function chCapToday(){ return (typeof TODAY_STR!=='undefined'&&TODAY_STR)||new Date().toISOString().slice(0,10); }
 function chCapPick(date){ return (typeof boatCapHistPick==='function')?boatCapHistPick(_chCapDraft||[],date):null; }
-function chCapBaseVal(){ var el=document.getElementById('ch-cap'); return parseInt(el&&el.value,10)||0; }
+function chCapBaseVal(){ var el=document.getElementById('capm-base'); return parseInt(el&&el.value,10)||0; }
 function chCapLicVal(){ var el=document.getElementById('ch-lic'); return parseInt(el&&el.value,10)||0; }
-function chCapOpen(b){
-  var host=document.getElementById('ch-caphist'), md=document.querySelector('#charter-modal .modal');
-  if(!host) return;
-  if(!b){ _chCapDraft=null; _chCapBoatId=''; host.innerHTML=''; host.style.display='none'; if(md) md.style.maxWidth='440px'; return; }
+/* §capHist2 · หน้าต่างจัดการที่นั่งของเรือ (เปิดจาก Company Asset › Boats · หรือปุ่มในหน้าต่างแก้ไขเรือของ Boat Status)
+   แก้ในร่าง · กดบันทึกของหน้าต่างนี้ = เขียน cap ตั้งต้น + capHist + licensePax แล้ว save('config') */
+function capMgrOpen(boatId){
+  var b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b){ alert('Boat not found'); return; }
+  var old=document.getElementById('capm-ov'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='capm-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(10,18,48,.56);display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;width:min(640px,100%);box-shadow:0 24px 70px rgba(2,10,30,.45);font-family:\'DM Sans\',\'IBM Plex Sans Thai\',sans-serif;color:#0F1B3D">'
+    +'<div style="padding:18px 22px 6px;display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#8A8F9C">COMPANY ASSET · BOAT</div>'
+      +'<div style="font-size:19px;font-weight:800">💺 ที่นั่ง · '+chCapE(b.name||b.id)+'</div><div style="font-size:12px;color:#6B7385;margin-top:2px">'+chCapE(b.type||'')+' · ตั้งที่นั่งตามช่วงวันที่ · วันที่ผ่านมาแล้วไม่เปลี่ยนตาม</div></div>'
+      +'<button type="button" onclick="capMgrClose()" style="border:1px solid #E4E1D9;background:#fff;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="padding:8px 22px 4px"><label style="font-size:11px;font-weight:600;color:#6B7385">ที่นั่งตั้งต้น (Capacity) · ใช้กับวันที่ไม่มีช่วงไหนคลุม</label>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-top:4px"><input id="capm-base" type="number" min="1" value="'+(+b.cap||0)+'" style="width:110px;border:1px solid #E4E1D9;border-radius:9px;padding:8px 11px;font-size:18px;font-weight:800;font-family:\'DM Mono\',monospace;background:#FBFAF7">'
+      +'<span style="font-size:11px;color:#A0570A">แก้ค่านี้ = มีผลทุกวันที่ไม่มีช่วง รวมวันที่ผ่านมา · ถ้าเปลี่ยนจริงให้เพิ่มเป็นช่วงด้านล่างแทน</span></div></div>'
+    +'<div id="capm-host" style="padding:6px 22px 0"></div>'
+    +'<div style="padding:12px 22px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #F0EDE6"><button type="button" onclick="capMgrClose()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">ยกเลิก</button>'
+      +'<button type="button" onclick="capMgrSave()" style="border:none;background:#0F1B3D;color:#fff;border-radius:10px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">บันทึก</button></div>'
+    +'</div>';
+  ov.addEventListener('mousedown',function(e){ if(e.target===ov) capMgrClose(); });
+  document.body.appendChild(ov);
   _chCapBoatId=b.id;
   _chCapDraft=JSON.parse(JSON.stringify(Array.isArray(b.capHist)?b.capHist:[]));
-  host.style.display=''; if(md) md.style.maxWidth='620px';
-  host.dataset.lic=String(+b.licensePax||'');
-  var ci=document.getElementById('ch-cap'); if(ci) ci.oninput=function(){ if(_chCapDraft) chCapRender(); };
+  document.getElementById('capm-host').dataset.lic=String(+b.licensePax||'');
+  document.getElementById('capm-base').oninput=function(){ if(_chCapDraft) chCapRender(); };
   chCapRender();
 }
+function capMgrClose(){ var ov=document.getElementById('capm-ov'); if(ov) ov.remove(); _chCapDraft=null; _chCapBoatId=''; }
+function capMgrSave(){
+  var b=(typeof getBoat==='function')?getBoat(_chCapBoatId):null; if(!b){ capMgrClose(); return; }
+  var base=chCapBaseVal(); if(!(base>0)){ alert('ใส่ที่นั่งตั้งต้นก่อนครับ'); return; }
+  if(!chCapPreSave()) return;
+  if(base!==(+b.cap||0) && !confirm('เปลี่ยนที่นั่งตั้งต้นจาก '+(+b.cap||0)+' เป็น '+base+'\n\nค่านี้มีผลกับทุกวันที่ไม่มีช่วงคลุม รวมวันที่ผ่านมาแล้ว\nถ้าตั้งใจเปลี่ยนตั้งแต่วันหนึ่งเป็นต้นไป ให้ยกเลิกแล้วเพิ่มเป็นช่วงแทน\n\nยืนยันเปลี่ยนค่าตั้งต้น?')) return;
+  b.cap=base;
+  chCapApply(b);
+  if(typeof flAudMark==='function') flAudMark([b.id],'u');
+  capMgrClose();
+  if(typeof save==='function') save('config');
+  try{ if(typeof flRenderAsset==='function') flRenderAsset(); }catch(_){}
+  try{ if(typeof renderBoats==='function') renderBoats(); }catch(_){}
+}
+/* บรรทัดสรุปใต้ช่อง Capacity ในหน้าต่างแก้ไขเรือ (Boat Status) */
+function chCapSummary(b){
+  var host=document.getElementById('ch-caphist'); if(!host) return;
+  _chCapDraft=null;
+  if(!b){ host.innerHTML=''; host.style.display='none'; return; }
+  var today=chCapToday(), H=Array.isArray(b.capHist)?b.capHist:[];
+  var now=(typeof boatCapHistPick==='function')?boatCapHistPick(H,today):null;
+  var fut=H.filter(function(h){ return h&&h.from>today; }).sort(function(a,z){ return a.from<z.from?-1:1; })[0];
+  host.style.display='';
+  host.innerHTML='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F6FAFE;border:1px solid #CFE0EF;border-radius:10px;padding:8px 12px;margin:-4px 0 12px;font-size:12px;color:#33405A">'
+    +'<span>💺 ขายวันนี้ <b style="font-family:\'DM Mono\',monospace">'+(now?(+now.cap):(+b.cap||0))+'</b>'+(now?(' <span style="color:#6B7385">ตามช่วง '+chCapE(now.reason||'')+'</span>'):'')
+    +(fut?(' · ถัดไป <b style="font-family:\'DM Mono\',monospace;color:#0C447C">'+(+fut.cap)+'</b> ตั้งแต่ '+chCapD(fut.from)):'')
+    +(b.licensePax?(' · ทะเบียน '+(+b.licensePax)):'')+'</span>'
+    +'<button type="button" onclick="closeModal(\'charter-modal\');capMgrOpen(\''+chCapE(b.id)+'\')" style="margin-left:auto;border:1px solid #CFE0EF;background:#fff;color:#185FA5;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">จัดการช่วงที่นั่ง ›</button></div>';
+}
 function chCapRender(){
-  var host=document.getElementById('ch-caphist'); if(!host||!_chCapDraft) return;
+  var host=document.getElementById('capm-host'); if(!host||!_chCapDraft) return;
   var keep={}; ['chc-from','chc-to','chc-cap','chc-reason','chc-note','ch-lic'].forEach(function(id){ var el=document.getElementById(id); if(el) keep[id]=el.value; });
   var today=chCapToday(), base=chCapBaseVal();
   var hNow=chCapPick(today), capNow=hNow?(+hNow.cap):base;
