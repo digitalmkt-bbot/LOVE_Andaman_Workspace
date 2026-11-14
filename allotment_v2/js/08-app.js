@@ -38614,7 +38614,7 @@ var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต
   ['ut','ไฟ น้ำ ซักรีด แคนู',0,'f'],['pay','Payroll สำนักงาน',0,'f'],
   ['orf','ค่าเช่าและค่าบริการประจำ (สำนักงาน รถตู้ เว็บ โทรศัพท์ ไฟ สอบบัญชี)',0,'f'],
   ['oin','ประกันและภาษี รถ / เรือ (จ่ายเป็นงวด)',0,'f'],
-  ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0,'c'],['sm','Sales & Marketing',0,'c'],
+  ['bm','ซ่อมเรือจริง เทียบค่าเสื่อมที่หักไว้',0,'c'],['sm','Sales & Marketing',0,'c'],
   ['omt','ซ่อมบำรุงทั่วไป (ไม่ใช่เรือ)',0,'c'],['ovh','รถและน้ำมัน (น้ำมันรถรับลูกค้า สำนักงาน ซ่อมรถ)',0,'c'],
   ['obk','ค่าธรรมเนียมธนาคารและบัตร',0,'c'],['oms','เบ็ดเตล็ด (วัสดุ บริจาค อื่น ๆ)',0,'c']];
 /* §pxFcOpx (2026-11-14) · owner: "Operating expenses แยกให้อีก" + ตกลงตามข้อเสนอ
@@ -38714,7 +38714,12 @@ function pxForecast(e){
   MT.p=PMT.c;
   if(cv && !CEN.own){ cv=Object.assign({}, cv); PX_FC_NOCARRY.forEach(function(q){ delete cv[q]; }); }   /* §pxFcOpx · Owner exp. ไม่ยกข้ามเดือน */
   var owV=cv?(+cv.ow||0):0;
-  if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.max(0, Math.round(MT.c-DP.c)) }); bmSys=true; }
+  /* §pxFcBack (2026-11-14) · owner: "ถ้าสิ้นเดือนเราใช้ไม่ถึง 1.2M แล้วเราจะคืนเงินที่เราหักไว้คืนยังไง"
+     บรรทัดนี้เป็นค่าบวก/ลบได้ = ซ่อมจริงของเดือน − ค่าเสื่อมที่หักไว้ในขั้นที่ 3
+       ซ่อมเกินค่าเสื่อม → หักเพิ่ม (เหมือนเดิม)
+       ซ่อมไม่ถึง       → ติดลบ = คืนส่วนที่ไม่ได้ใช้กลับเข้า EBITDA
+     ผลรวมสองขั้น (ค่าเสื่อม + บรรทัดนี้) = ยอดซ่อมจริงเสมอ · ตรงกับวิธีที่งบจริงลง Boat Maintenance */
+  if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.round(MT.c-DP.c) }); bmSys=true; }
   /* §pxFcCore (2026-11-14) · owner: "ควรแยกไหม เพราะเราอยากเห็นส่วนที่เป็นรายได้หลักก่อน"
      ขั้นที่ 4 = ค่าใช้จ่ายส่วนกลางอย่างเดียว → EBITDA ทัวร์ (ธุรกิจหลัก) · ตัวเลขหลักของหน้า
      ขั้นที่ 5 = รายได้อื่นสุทธิ (ไม่ใช่ทัวร์) → EBITDA รวม · ตัวที่เทียบกับงบจริงได้
@@ -38842,11 +38847,12 @@ function pxForecast(e){
     function cenRow(c){ var v=cv?(+cv[c[0]]||0):0;
         var sysBm=(c[0]==='bm' && bmSys);
         return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])
-          +(sysBm?('<small class="fcsys n">จากระบบ · Memo ซ่อม '+pxN(MT.c)+' \u2212 ค่าเสื่อม '+pxN(DP.c)+(ed?' · กรอกเพื่อทับ':'')+'</small>'):'')
+          +(sysBm?('<small class="fcsys n">จากระบบ · Memo ซ่อม '+pxN(MT.c)+' \u2212 ค่าเสื่อม '+pxN(DP.c)+((MT.c<DP.c)?' · ใช้ไม่ถึง จึงคืนส่วนต่าง':' · เกิน จึงหักเพิ่ม')+(ed?' · กรอกเพื่อทับ (ใส่ติดลบได้)':'')+'</small>'):'')
           +'</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
           +'<td class="mc">'+(ed?('<input class="fcin n" inputmode="numeric" value="'+(sysBm?'':(v||''))+'" placeholder="'+(sysBm?pxN(v):'0')+'" '
               +'onchange="pxFcSet(\''+e(ym)+'\',\''+c[0]+'\',this.value)">')
-            :('<span class="n"'+(c[2]&&v?' style="color:#0A6B49"':'')+'>'+(v?((c[2]?'+':'')+pxN(v)):'—')+'</span>'))+'</td>'
+            :((!c[2] && v<0)?('<span class="n" style="color:#0A6B49">คืน +'+pxN(-v)+'</span>')   /* §pxFcBack */
+              :('<span class="n"'+(c[2]&&v?' style="color:#0A6B49"':'')+'>'+(v?((c[2]?'+':'')+pxN(v)):'—')+'</span>')))+'</td>'
           +'<td class="pv"><span class="n">—</span></td></tr>'; }
   }
   var table='<div class="eg"><div class="phd"><div><h2>Forecast by step <span class="pill pu">'+e(mLbl)+'</span></h2>'
