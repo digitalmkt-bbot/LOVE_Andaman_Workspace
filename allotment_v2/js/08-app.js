@@ -38613,7 +38613,7 @@ var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต
   ['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0,'f'],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0,'f'],
   ['ut','ไฟ น้ำ ซักรีด แคนู',0,'f'],['pay','Payroll สำนักงาน',0,'f'],
   ['orf','ค่าเช่าและค่าบริการประจำ (สำนักงาน รถตู้ เว็บ โทรศัพท์ ไฟ สอบบัญชี)',0,'f'],
-  ['oin','ประกันและภาษี รถ / เรือ',0,'f'],
+  ['oin','ประกันและภาษี รถ / เรือ (จ่ายเป็นงวด)',0,'f'],
   ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0,'c'],['sm','Sales & Marketing',0,'c'],
   ['omt','ซ่อมบำรุงทั่วไป (ไม่ใช่เรือ)',0,'c'],['ovh','รถและน้ำมัน (น้ำมันรถรับลูกค้า สำนักงาน ซ่อมรถ)',0,'c'],
   ['obk','ค่าธรรมเนียมธนาคารและบัตร',0,'c'],['oms','เบ็ดเตล็ด (วัสดุ บริจาค อื่น ๆ)',0,'c']];
@@ -38622,6 +38622,10 @@ var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต
    ข้อมูลเก่าที่เคยกรอก opx ไว้ก้อนเดียว → แสดงที่ "เบ็ดเตล็ด" จนกว่าจะกรอกแยก (ยอดรวมไม่หาย)
    Owner exp. (ow) = ขั้นที่ 6 ใต้ EBITDA ตามงบจริง · ไม่ยกยอดข้ามเดือน · เดือนที่ยังไม่กรอก = 0 */
 var PX_FC_OPX=['orf','oin','omt','ovh','obk','oms'];
+/* §pxFcIns (2026-11-14) · owner: "ประกันและภาษี รถ / เรือ มันไม่ใช่ประจำทุกเดือน"
+   งบจริง: ก.ค. 31,145 · ส.ค. 223,714 · ก.ย. 0 · ต.ค. 231,983 · จ่ายเป็นงวด ยกยอดเดือนก่อนมาใช้ไม่ได้
+   รายการในลิสต์นี้ไม่ยกยอดข้ามเดือน · เดือนที่ยังไม่กรอก = 0 */
+var PX_FC_NOCARRY=['ow','oin'];
 function pxFcNorm(v){
   if(!v || v.opx==null) return v;
   if(PX_FC_OPX.some(function(k){ return v[k]!=null; })) return v;
@@ -38646,7 +38650,7 @@ function pxFcCentral(ym){
 function pxFcSet(ym, k, raw){
   var n=parseFloat(String(raw==null?'':raw).replace(/[,\s฿]/g,'')); if(!isFinite(n)) n=0;
   var all=pxFcSaved();
-  var cur=all[ym]; if(!cur){ var _src=pxFcCentral(ym); cur=Object.assign({}, _src.v||{}); if(!_src.own){ delete cur.bm; delete cur.ow; } }
+  var cur=all[ym]; if(!cur){ var _src=pxFcCentral(ym); cur=Object.assign({}, _src.v||{}); if(!_src.own){ delete cur.bm; PX_FC_NOCARRY.forEach(function(q){ delete cur[q]; }); } }
   else cur=pxFcNorm(cur);   /* §pxFcMaint · ยอดซ่อมไม่ยกข้ามเดือน */
   if(k==='bm' && String(raw==null?'':raw).trim()==='') delete cur.bm;   /* §pxFcMaint · ว่าง = ใช้ยอดจากระบบ */
   else cur[k]=Math.round(n);
@@ -38708,7 +38712,7 @@ function pxForecast(e){
   /* §pxFcMaint */
   var MT=pxFcMaint(ym, today, act.length, rem.length), PMT=pxFcMaint(pym, today, plast, 0), bmSys=false;
   MT.p=PMT.c;
-  if(cv && !CEN.own){ cv=Object.assign({}, cv); delete cv.ow; }   /* §pxFcOpx · Owner exp. ไม่ยกข้ามเดือน */
+  if(cv && !CEN.own){ cv=Object.assign({}, cv); PX_FC_NOCARRY.forEach(function(q){ delete cv[q]; }); }   /* §pxFcOpx · Owner exp. ไม่ยกข้ามเดือน */
   var owV=cv?(+cv.ow||0):0;
   if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.max(0, Math.round(MT.c-DP.c)) }); bmSys=true; }
   /* §pxFcCore (2026-11-14) · owner: "ควรแยกไหม เพราะเราอยากเห็นส่วนที่เป็นรายได้หลักก่อน"
