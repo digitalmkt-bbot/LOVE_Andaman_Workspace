@@ -38713,11 +38713,12 @@ function pxForecast(e){
     +'<b class="n" style="color:'+pxSgC(HEAD)+'">'+(HEAD<0?'−':'+')+mil(HEAD)+' <u>ล้าน ฿</u></b>'
     +'<p>'+(hasCen?('หลังหักค่าใช้จ่ายส่วนกลางสุทธิ '+pxN(cenNet)+' ฿'+(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src)))))
         :(_px.pier?'กรองท่าอยู่ · ขั้นที่ 4 เป็นยอดทั้งบริษัท จึงไม่นำมาหัก':'ยังไม่ได้กรอกขั้นที่ 4 · ตัวเลขนี้ยังไม่ใช่ EBITDA'))+'</p></div>'
+    +fcLine   /* §pxFcRow · owner: "เอาเส้นไปอยู่แถวเดียวกัน" · ซ้าย = ตัวเลข · กลาง = เส้น · ขวา = กล่อง */
     +'<div class="fch-r">'
     +'<div><small>ACTUAL '+e(dA)+'</small><b class="n" style="color:'+pxSgC(S3.a)+'">'+pxSg(S3.a)+'</b><u>หลังค่าเสื่อม</u></div>'
     +'<div><small>FORECAST '+e(dB)+'</small><b class="n" style="color:'+pxSgC(S3.b)+'">'+pxSg(S3.b)+'</b><u>หลังค่าเสื่อม</u></div>'
     +'<div><small>'+e(pLbl.toUpperCase())+' · SYSTEM</small><b class="n" style="color:'+pxSgC(S3.p)+'">'+pxSg(S3.p)+'</b><u>หลังค่าเสื่อม ทั้งเดือน</u></div>'
-    +'</div>'+fcLine+'</div>';
+    +'</div></div>';
 
   function kcard(col, lb, big, bigCol, l2, w, l3, l3Col, neg){
     return '<div class="fck'+(neg?' neg':'')+'" style="border-top-color:'+col+'"><small>'+lb+'</small>'
@@ -38825,10 +38826,11 @@ function pxFcCSS(){ var H='#trippl-host '; return ''
  +H+'.fch-l b u{text-decoration:none;font-size:17px;font-weight:700;color:#0F1B3D;letter-spacing:0}'
  +H+'.fch-l p{margin:6px 0 0;font-size:12px;color:#5B6679}'
  +H+'.fch-r{display:flex;flex-wrap:wrap;gap:10px}'
- +H+'.fch-r>div{border:1px solid #E3E8F0;border-radius:10px;padding:9px 14px;min-width:150px}'
+ +H+'.fch-r>div{border:1px solid #E3E8F0;border-radius:10px;padding:8px 12px;min-width:128px}'
  +H+'.fch-r b{display:block;font-size:17px;font-weight:800;margin-top:3px}'
  +H+'.fch-r u{text-decoration:none;font-size:10.5px;color:#5B6679}'
- +H+'.fcl{position:relative;flex:1 1 100%;height:86px;margin-top:2px}'
+ +H+'.fcl{position:relative;flex:1 1 340px;min-width:300px;height:86px}'
+ +H+'.fch-l{flex:0 0 auto}'+H+'.fch-r{flex:0 0 auto}'
  +H+'.fcl i,'+H+'.fcl b,'+H+'.fcl span,'+H+'.fcl u,'+H+'.fcl em{position:absolute;font-style:normal;text-decoration:none;white-space:nowrap}'
  +H+'.fcl .trk{left:0;right:0;top:28px;height:10px;border-radius:5px;background:#E3E8F0}'
  +H+'.fcl .rng{top:28px;height:10px;border-radius:5px;background:#B45309}'
