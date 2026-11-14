@@ -37142,7 +37142,7 @@ function pxBar(e){
       +'<input type="date" value="'+e(_px.date)+'" onchange="pxPick(this.value)">'
       +'<button class="pbtn arw" onclick="pxShift(1)">'+pxIcoSvg(PX_SVG.rt)+'</button>'
       +'<button class="pbtn" onclick="pxToday()">Today</button>'+pierSel;
-  else if(T==='m') ctl='<button class="pbtn arw" onclick="pxMonShift(-1)">'+pxIcoSvg(PX_SVG.lt)+'</button>'
+  else if(T==='m' || T==='f') ctl='<button class="pbtn arw" onclick="pxMonShift(-1)">'+pxIcoSvg(PX_SVG.lt)+'</button>'
       +'<input type="month" value="'+e(_px.mon||String(_px.date).slice(0,7))+'" onchange="pxMonPick(this.value)">'
       +'<button class="pbtn arw" onclick="pxMonShift(1)">'+pxIcoSvg(PX_SVG.rt)+'</button>'+pierSel;
   else ctl='<select onchange="pxAnRange(this.value)">'
@@ -37155,6 +37155,7 @@ function pxBar(e){
       +'<button class="'+(T==='d'?'on':'')+'" onclick="pxTab(\'d\')">Daily</button>'
       +'<button class="'+(T==='m'?'on':'')+'" onclick="pxTab(\'m\')">Monthly</button>'
       +'<button class="'+(T==='a'?'on':'')+'" onclick="pxTab(\'a\')">Analysis</button>'
+      +'<button class="'+(T==='f'?'on':'')+'" onclick="pxTab(\'f\')">Forecast</button>'   /* §pxForecast */
     +'</nav><div class="pctl">'+ctl+'</div></div>';
 }
 
@@ -37313,7 +37314,11 @@ function pxDaily(e){
   if(D.length>1 && tPax>=10) DAVG=tR/tPax;
   var cells=D.map(function(t){ return pxDetail(t, e, GORD, DAVG); }).join('');
 
-  return hero+kpi
+  /* §pxSteps */
+  var _stA={ st:{} }; D.forEach(function(t){ pxStAdd(_stA, t); });
+  var stepHtml=pxStepTable(e, pxStMerge([_stA.st]), 'Profit by step',
+    'รายได้ → 1 Operation cost → 2 ค่าจ้าง → 3 ค่าเสื่อม · ช่องสุดท้ายเท่ากับ Net เดิมของวันนี้');
+  return hero+kpi+stepHtml
     +'<div class="eg"><div class="phd"><div><h2>Boat summary '
       +'<span class="pill pu">'+D.length+' boat'+(D.length===1?'':'s')+' scheduled</span>'
       +(nNo?('<span class="pill ns">'+nNo+' did not sail</span>'):'')
@@ -37352,8 +37357,9 @@ function pxDayAgg(date, pier){
   var D=pxDay(date,pier);
   var a={ date:date, trips:D.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0,
           routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
-          best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0 };   /* §pxFam */
+          best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0, st:{} };   /* §pxFam · §pxSteps */
   D.forEach(function(t){
+    pxStAdd(a, t);   /* §pxSteps */
     a.rev+=t.rev; a.cost+=t.cost; a.profit+=t.profit; a.pax+=t.px.tot; a.bk+=t.px.bk;
     if(t.profit<0) a.loss++;
     if(!a.best || t.profit>a.best.profit) a.best={ name:t.name, profit:t.profit };
@@ -37698,7 +37704,10 @@ function pxMonth(e){
 
   /* §px2col · มีครบทั้งสองกล่อง (และ FAM ไม่ได้ถูกซ่อน) → วางคู่กันคนละคอลัมน์ */
   var _two=(famAny && hasF && rentIdle) ? ('<div class="px2col">'+famHtml+rentIdle+'</div>') : (famHtml+rentIdle);
-  return hero+kpi+_two
+  /* §pxSteps */
+  var stepHtml=pxStepTable(e, pxStMerge(A.map(function(x){ return x.st; })), 'Profit by step <span class="pill bl">'+e(mLbl)+'</span>',
+    'รายได้ → 1 Operation cost → 2 ค่าจ้าง → 3 ค่าเสื่อม · ช่องสุดท้ายเท่ากับ Net เดิมของหน้านี้');
+  return hero+kpi+stepHtml+_two
     +'<div class="eg mb"><div class="phd"><div><h2>Daily revenue and net '
       +'<span class="pill bl">'+e(mLbl)+'</span></h2>'
       +'<p>Light blue = revenue · green/red = the net result of that day · click a bar to open that day</p></div>'
@@ -38482,6 +38491,301 @@ function pxAnalysis(e){
       +'</div>';
 }
 function rkc(i){ return ['t1','t2','t3'][i]||''; }
+/* ══ §pxSteps (2026-11-14) · owner: "แยก ค่าจ้าง กับ ค่าเสื่อม ออกมา" ═══════════════════
+   ต้นทุนต่อเที่ยวก้อนเดิม แบ่งเป็น 3 ขั้นให้เทียบกับงบจริงได้ทีละชั้น
+     1 · Operation cost  ทุกบรรทัดที่ไม่ใช่ค่าจ้างและค่าเสื่อม
+     2 · Wages           ไกด์ ไกด์ต่างชาติ กัปตัน เด็กเรือ (อัตราที่วางไว้ต่อวันออกเรือ)
+     3 · Depreciation    ค่าเสื่อมเรือ · ตัวแทนค่าซ่อมบำรุงเรือ เทียบกับ Boat Maintenance ในงบ
+   ไม่แตะตัวเลขเดิม · op + wage + dep = t.cost เสมอ (ส่วนต่างปัดเศษลงที่ "อื่น ๆ") */
+var PX_ST_LINE={ park:'park', meal:'fb', meal2:'fb', ob:'fb', snk:'fb', fuel:'fuel', van:'van', rent:'rent',
+  ltj:'lt', ltc:'lt', con:'sup', gear:'sup', med:'sup', ins:'ins', pier:'pier',
+  guide:'guide', xtdyay2:'fguide', cap:'cap', crew:'crew', dep:'dep' };
+var PX_ST_WAGE={ guide:1, fguide:1, cap:1, crew:1, wage_o:1 };
+var PX_ST_OP=[['park','ค่าเข้าอุทยาน'],['fb','อาหารและเครื่องดื่ม'],['fuel','น้ำมันเรือ'],['van','รถรับส่ง'],
+  ['rent','ค่าเช่าเรือ'],['lt','เรือหางยาว'],['sup','วัสดุ + มาส์ก + ยา'],['ins','ประกันลูกค้า'],
+  ['pier','ค่าเรือเทียบท่า'],['oth','อื่น ๆ']];
+var PX_ST_WG=[['guide','ไกด์'],['fguide','ไกด์ต่างชาติ'],['cap','กัปตัน'],['crew','เด็กเรือ'],['wage_o','ค่าจ้างอื่น']];
+function pxStOf(t){
+  var ln={}, sum=0, op=0, wage=0, dep=0;
+  (t.rows||[]).forEach(function(r){
+    var v=+r.use||0; if(!v) return;
+    var k=PX_ST_LINE[r.id] || (r.g==='ค่าตอบแทนลูกเรือและไกด์' ? 'wage_o' : 'oth');
+    ln[k]=(ln[k]||0)+v; sum+=v;
+  });
+  var diff=(+t.cost||0)-sum;
+  if(Math.abs(diff)>=0.5) ln.oth=(ln.oth||0)+diff;
+  Object.keys(ln).forEach(function(k){ if(k==='dep') dep+=ln[k]; else if(PX_ST_WAGE[k]) wage+=ln[k]; else op+=ln[k]; });
+  return { ln:ln, op:op, wage:wage, dep:dep };
+}
+function pxStFam(t){
+  var f=null; try{ f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.rid):null; }catch(_){ f=null; }
+  if(f && f.id) return { k:'f:'+f.id, name:f.name||f.id, color:f.color||'#64748B' };
+  var rt=t.route||{};
+  if((rt.pier||'')==='ranong') return { k:'p:ranong', name:'Ranong', color:'#8A4FBF' };
+  return { k:'r:'+(t.rid||rt.name||'-'), name:rt.name||'—', color:rt.color||'#64748B' };
+}
+function pxStNew(F){ return { k:F.k, name:F.name, color:F.color, n:0, pax:0, rev:0, op:0, wage:0, dep:0, ln:{} }; }
+function pxStAdd(a, t){
+  if(!a.st) a.st={};
+  var F=pxStFam(t), S=pxStOf(t), G=a.st[F.k]||(a.st[F.k]=pxStNew(F));
+  if(!t.noSail) G.n++;
+  G.pax+=(t.px&&t.px.tot)||0; G.rev+=(+t.rev||0); G.op+=S.op; G.wage+=S.wage; G.dep+=S.dep;
+  Object.keys(S.ln).forEach(function(k){ G.ln[k]=(G.ln[k]||0)+S.ln[k]; });
+}
+/* รวมหลายวันเป็นก้อนเดียว · คืน { fam:{}, T:{} } */
+function pxStMerge(list){
+  var fam={}, T=pxStNew({ k:'*', name:'Σ', color:'#0F172A' });
+  (list||[]).forEach(function(st){ Object.keys(st||{}).forEach(function(k){
+    var s=st[k], G=fam[k]||(fam[k]=pxStNew(s));
+    [G,T].forEach(function(D){ D.n+=s.n; D.pax+=s.pax; D.rev+=s.rev; D.op+=s.op; D.wage+=s.wage; D.dep+=s.dep;
+      Object.keys(s.ln||{}).forEach(function(j){ D.ln[j]=(D.ln[j]||0)+s.ln[j]; }); });
+  }); });
+  return { fam:fam, T:T };
+}
+function pxSg(n){ n=Math.round(n||0); return (n<0?'−':'+')+pxN(Math.abs(n)); }
+function pxSgC(n){ return (Math.round(n||0)<0)?'#B91C1C':'#0A6B49'; }
+function pxPc(a, b){ return b?((a/b*100).toFixed(1)+'%'):'—'; }
+function pxStepTable(e, M, title, sub){
+  var L=Object.keys(M.fam).map(function(k){ return M.fam[k]; }).sort(function(a,b){ return b.rev-a.rev; });
+  if(!L.length) return '';
+  function cell(v, rev, cls){ return '<td class="'+cls+'"><span class="num n" style="color:'+pxSgC(v)+'">'+pxSg(v)+'</span>'
+    +'<small class="n">'+pxPc(v,rev)+'</small></td>'; }
+  function row(s, tot){
+    var a1=s.rev-s.op, a2=a1-s.wage, a3=a2-s.dep;
+    return '<tr class="'+(tot?'tot':'br')+'"><td class="l">'+(tot?('Σ '+e(s.name)):('<i class="stdot" style="background:'+e(s.color)+'"></i><b>'+e(s.name)+'</b>'))+'</td>'
+      +'<td class="c"><span class="num n">'+s.n+'</span></td><td class="c"><span class="num n">'+pxN(s.pax)+'</span></td>'
+      +'<td><span class="num n">'+pxN(s.rev)+'</span></td>'
+      +'<td><span class="num cost n">'+pxN(s.op)+'</span></td>'+cell(a1,s.rev,'st1')
+      +'<td><span class="num cost n">'+pxN(s.wage)+'</span></td>'+cell(a2,s.rev,'st2')
+      +'<td><span class="num cost n">'+pxN(s.dep)+'</span></td>'+cell(a3,s.rev,'st3')+'</tr>';
+  }
+  var T=Object.assign({}, M.T, { name:L.length+' programme'+(L.length===1?'':'s') });
+  return '<div class="eg mb"><div class="phd"><div><h2>'+title+'</h2><p>'+sub+'</p></div></div>'
+    +'<div class="twrap"><div class="tscroll"><table class="sum stp" style="min-width:980px"><thead><tr>'
+    +'<th class="l">Programme</th><th class="c">Trips</th><th class="c">Pax</th><th>Revenue</th>'
+    +'<th>1 · Operation cost</th><th class="st1">After operation</th>'
+    +'<th>2 · Wages</th><th class="st2">After wages</th>'
+    +'<th>3 · Depreciation</th><th class="st3">Net per trip</th></tr></thead><tbody>'
+    +L.map(function(s){ return row(s,false); }).join('')+row(T,true)+'</tbody></table></div></div></div>';
+}
+
+/* ══ §pxForecast (2026-11-14) · owner: "ควรมีอีกแถบเป็น Forecast ทั้งเดือนของเดือนนี้" ═══
+   ยอดจริงถึงเมื่อวาน + คาดการณ์วันที่เหลือ · แบ่งตามขั้นเดียวกับ §pxSteps แล้วต่อขั้นที่ 4
+   วิธีคาดการณ์ (รุ่นแรก · เจ้าของยังไม่ได้เลือกวิธีอื่น): ค่าเฉลี่ยต่อวันของวันที่เดินทางแล้วในเดือนนี้
+     × จำนวนวันที่เหลือ · ถ้าเดือนนี้มียอดจริงไม่ถึง 3 วัน ใช้ 14 วันล่าสุดแทน
+   ขั้นที่ 4 (ค่าใช้จ่ายส่วนกลางและรายได้อื่น) ไม่มีในระบบ · กรอกเองเดือนละครั้งจากงบจริง
+     เก็บที่ ctRead('px_central') = { 'YYYY-MM': { oi, pw, pr, bm, ut, pay, sm, opx } }
+     เดือนไหนยังไม่กรอก ใช้ยอดของเดือนล่าสุดที่กรอกไว้ · กรองท่าอยู่ = ไม่แสดงขั้นที่ 4 (เป็นยอดทั้งบริษัท) */
+var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต้นทุน',1],['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0],
+  ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0],['ut','ไฟ น้ำ ซักรีด แคนู',0],['pay','Payroll สำนักงาน',0],
+  ['sm','Sales & Marketing',0],['opx','Operating expenses (ไม่รวมซ่อมเรือ)',0]];
+function pxFcCentral(ym){
+  var all=null; try{ all=ctRead('px_central'); }catch(_){ all=null; }
+  if(!all || typeof all!=='object') all={};
+  if(all[ym]) return { v:all[ym], src:ym, own:true };
+  var ks=Object.keys(all).filter(function(k){ return k<ym; }).sort();
+  if(ks.length) return { v:all[ks[ks.length-1]], src:ks[ks.length-1], own:false };
+  return { v:null, src:'', own:false };
+}
+function pxFcSet(ym, k, raw){
+  var n=parseFloat(String(raw==null?'':raw).replace(/[,\s฿]/g,'')); if(!isFinite(n)) n=0;
+  var all=null; try{ all=ctRead('px_central'); }catch(_){ all=null; }
+  if(!all || typeof all!=='object') all={};
+  var cur=all[ym]; if(!cur){ cur=Object.assign({}, pxFcCentral(ym).v||{}); }
+  cur[k]=Math.round(n); all[ym]=cur;
+  ctWrite('px_central', all);
+  renderTripPL();
+}
+function pxFcEdit(){ _px.fcEd=!_px.fcEd; renderTripPL(); }
+function pxFcMonLbl(ym){ return (PX_MON[(+String(ym).slice(5,7))-1]||'')+' '+String(ym).slice(0,4); }
+function pxForecast(e){
+  var ym=_px.mon||String(_px.date||'').slice(0,7);
+  var y=+ym.slice(0,4), m=+ym.slice(5,7); if(!y||!m) return '<div class="empty">Pick a month</div>';
+  var last=new Date(y, m, 0).getDate();
+  var today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  var all=[], act=[], rem=[];
+  for(var d=1; d<=last; d++){ var s=ym+'-'+String(d).padStart(2,'0'); all.push(s); (s<today?act:rem).push(s); }
+  var yd=new Date(today+'T12:00:00'); yd.setDate(yd.getDate()-1);
+  var ydS=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(yd):yd.toISOString().slice(0,10);
+  var basis=(act.length>=3 || !rem.length)?act:pxBackDays(14, ydS);
+  var basisOwn=(basis===act);
+  function agg(days){ var A=days.map(function(x){ return pxDayAgg(x,_px.pier); });
+    var M=pxStMerge(A.map(function(a){ return a.st; })); M.days=days.length; return M; }
+  var A=agg(act), B=agg(basis);
+  var f=(rem.length && basis.length)?(rem.length/basis.length):0;
+  /* เดือนก่อน ทั้งเดือน · ตัวเลขระบบ */
+  var pd=new Date(y, m-2, 1), pym=pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+  var plast=new Date(pd.getFullYear(), pd.getMonth()+1, 0).getDate(), pdays=[];
+  for(var q=1; q<=plast; q++) pdays.push(pym+'-'+String(q).padStart(2,'0'));
+  var P=agg(pdays);
+  /* ตัวอ่านค่า · a = จริง · b = คาด · c = ทั้งเดือน · p = เดือนก่อน */
+  function V(get){ var a=get(A.T,A)||0, b=(get(B.T,B)||0)*f; return { a:a, b:b, c:a+b, p:get(P.T,P)||0 }; }
+  function Vln(k){ return V(function(T){ return T.ln[k]||0; }); }
+  var REV=V(function(T){ return T.rev; }), OP=V(function(T){ return T.op; }),
+      WG=V(function(T){ return T.wage; }), DP=V(function(T){ return T.dep; }), PAX=V(function(T){ return T.pax; });
+  function sub(X,Y){ return { a:X.a-Y.a, b:X.b-Y.b, c:X.c-Y.c, p:X.p-Y.p }; }
+  var S1=sub(REV,OP), S2=sub(S1,WG), S3=sub(S2,DP);
+  var mLbl=pxFcMonLbl(ym), pLbl=pxFcMonLbl(pym);
+  var dA=act.length?('1–'+act.length):'—', dB=rem.length?((act.length+1)+'–'+last):'—';
+  /* ขั้นที่ 4 */
+  var CEN=_px.pier?{ v:null, src:'', own:false }:pxFcCentral(ym), cv=CEN.v, cenNet=0, hasCen=!!cv;
+  if(cv){ PX_FC_CEN.forEach(function(c){ var v=+cv[c[0]]||0; cenNet+=c[2]?-v:v; }); }
+  var EB=S3.c-cenNet;
+  var HEAD=hasCen?EB:S3.c;
+
+  function mil(n){ return (Math.abs(n)/1e6).toFixed(2); }
+  var hero='<div class="fch"><div class="fch-l"><small>'+(hasCen?'EBITDA FORECAST':'FORECAST AFTER DEPRECIATION')+' · '+e(mLbl.toUpperCase())+'</small>'
+    +'<b class="n" style="color:'+pxSgC(HEAD)+'">'+(HEAD<0?'−':'+')+mil(HEAD)+' <u>ล้าน ฿</u></b>'
+    +'<p>'+(hasCen?('หลังหักค่าใช้จ่ายส่วนกลางสุทธิ '+pxN(cenNet)+' ฿'+(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src)))))
+        :(_px.pier?'กรองท่าอยู่ · ขั้นที่ 4 เป็นยอดทั้งบริษัท จึงไม่นำมาหัก':'ยังไม่ได้กรอกขั้นที่ 4 · ตัวเลขนี้ยังไม่ใช่ EBITDA'))+'</p></div>'
+    +'<div class="fch-r">'
+    +'<div><small>ACTUAL '+e(dA)+'</small><b class="n" style="color:'+pxSgC(S3.a)+'">'+pxSg(S3.a)+'</b><u>หลังค่าเสื่อม</u></div>'
+    +'<div><small>FORECAST '+e(dB)+'</small><b class="n" style="color:'+pxSgC(S3.b)+'">'+pxSg(S3.b)+'</b><u>หลังค่าเสื่อม</u></div>'
+    +'<div><small>'+e(pLbl.toUpperCase())+' · SYSTEM</small><b class="n" style="color:'+pxSgC(S3.p)+'">'+pxSg(S3.p)+'</b><u>หลังค่าเสื่อม ทั้งเดือน</u></div>'
+    +'</div></div>';
+
+  function kcard(col, lb, big, bigCol, l2, w, l3, l3Col, neg){
+    return '<div class="fck'+(neg?' neg':'')+'" style="border-top-color:'+col+'"><small>'+lb+'</small>'
+      +'<b class="n"'+(bigCol?(' style="color:'+bigCol+'"'):'')+'>'+big+' <u>ล้าน</u></b><p class="n">'+l2+'</p>'
+      +'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,Math.round(w)))+'%;background:'+col+'"></i></div>'
+      +'<em style="color:'+(l3Col||col)+'">'+l3+'</em></div>';
+  }
+  function stepCard(col, lb, S, cut, cutLb, P0){
+    var pc=REV.c?(S.c/REV.c*100):0, pp=P0.rev?(P0.v/P0.rev*100):0;
+    return kcard(col, lb, (S.c<0?'−':'+')+mil(S.c), pxSgC(S.c), 'หัก'+cutLb+' '+mil(cut)+' ล้าน', Math.abs(pc),
+      (S.c<0?'ติดลบ ':'เหลือ ')+Math.abs(pc).toFixed(0)+'% ของรายได้ · '+e(pLbl.slice(0,3))+' '+pp.toFixed(0)+'%');
+  }
+  var doneP=REV.c?(REV.a/REV.c*100):0;
+  var kpi='<div class="fckg">'
+    +kcard('#0F1B3D','รายได้ทัวร์คาดทั้งเดือน', mil(REV.c), '', 'เดินทางแล้ว '+mil(REV.a)+' ล้าน · '+doneP.toFixed(0)+'%', doneP,
+        (REV.c>=REV.p?'▲ สูงกว่า ':'▼ ต่ำกว่า ')+e(pLbl.slice(0,3))+' ('+mil(REV.p)+' ล้าน)', (REV.c>=REV.p?'#0A6B49':'#B91C1C'))
+    +stepCard('#1D4ED8','1 · หลัง Operation cost', S1, OP.c, ' Operation cost', { v:S1.p, rev:REV.p })
+    +stepCard('#B45309','2 · หลังค่าจ้าง', S2, WG.c, 'ค่าจ้าง', { v:S2.p, rev:REV.p })
+    +stepCard('#6D28D9','3 · หลังค่าเสื่อม', S3, DP.c, 'ค่าเสื่อม', { v:S3.p, rev:REV.p })
+    +(hasCen?kcard(EB<0?'#B91C1C':'#0A6B49','4 · EBITDA (หลังส่วนกลาง)', (EB<0?'−':'+')+mil(EB), pxSgC(EB),
+        'หักส่วนกลางสุทธิ '+mil(cenNet)+' ล้าน', REV.c?Math.abs(EB/REV.c*100):0,
+        (EB<0?'ติดลบ ':'เหลือ ')+(REV.c?Math.abs(EB/REV.c*100).toFixed(0):'0')+'% ของรายได้', pxSgC(EB), EB<0)
+      :'<div class="fck off" style="border-top-color:#94A3B8"><small>4 · EBITDA (หลังส่วนกลาง)</small><b>—</b>'
+        +'<p>'+(_px.pier?'ดูได้เมื่อเลือก All piers':'กรอกค่าใช้จ่ายส่วนกลางในตารางด้านล่าง')+'</p></div>')
+    +'</div>';
+
+  /* ลูกค้าต่อวัน */
+  var avgPax=basis.length?(B.T.pax/basis.length):0, mx=1, PD=all.map(function(s){
+    var a=pxDayAgg(s,_px.pier), past=(s<today), bk=a.pax||0, x=past?0:Math.max(0, Math.round(avgPax-bk));
+    mx=Math.max(mx, bk+x); return { s:s, past:past, bk:bk, x:x }; });
+  var bars=PD.map(function(o){ var W=pxDW(o.s);
+    return '<div class="c" title="'+e(W.txt+' · '+(o.past?('เดินทางจริง '+o.bk):('จองแล้ว '+o.bk+' · คาดเพิ่ม '+o.x))+' pax')+'">'
+      +(o.x?('<i class="x" style="height:'+(o.x/mx*100).toFixed(1)+'%"></i>'):'')
+      +'<i class="'+(o.past?'a':'b')+'" style="height:'+(o.bk/mx*100).toFixed(1)+'%"></i></div>'; }).join('');
+  var xax=PD.map(function(o){ var W=pxDW(o.s); return '<span class="'+(W.we?'we':'')+(o.s===today?' td':'')+'">'+W.d+'</span>'; }).join('');
+  var chart='<div class="eg mb"><div class="phd"><div><h2>Daily pax <span class="pill pu">'+e(mLbl)+'</span></h2>'
+    +'<p>เดินทางแล้ว · จองเข้ามาแล้ว · คาดว่าจะจองเพิ่ม (ให้ถึงค่าเฉลี่ย '+pxN(avgPax)+' คน/วัน)</p></div>'
+    +'<div class="fclg"><span><i style="background:#9CC0F5"></i>Actual</span><span><i style="background:#1D4ED8"></i>On the books</span>'
+    +'<span><i class="x"></i>Expected pickup</span></div></div>'
+    +'<div class="fcbars">'+bars+'</div><div class="fcx">'+xax+'</div></div>';
+
+  /* ตารางตามขั้น */
+  function num(v, cls){ return '<td class="'+(cls||'')+'"><span class="n">'+(Math.round(v)?pxN(v):'—')+'</span></td>'; }
+  function sgn(v, cls){ return '<td class="'+(cls||'')+'"><span class="n" style="color:'+pxSgC(v)+'">'+pxSg(v)+'</span></td>'; }
+  function grp(t, note, extra){ return '<tr class="g"><td colspan="5"><i></i><b>'+t+'</b><span>'+note+'</span>'+(extra||'')+'</td></tr>'; }
+  function line(lb, X, cls, dot){ return '<tr class="'+cls+'"><td class="l">'+(dot?('<i class="stdot" style="background:'+e(dot)+'"></i>'):'')+lb+'</td>'
+    +num(X.a)+num(X.b)+num(X.c,'mc')+num(X.p,'pv')+'</tr>'; }
+  function stepRow(lb, S){ return '<tr class="step"><td class="l">'+lb+'</td>'+sgn(S.a)+sgn(S.b)
+    +'<td class="mc"><span class="n" style="color:'+pxSgC(S.c)+'">'+pxSg(S.c)+'</span> <small>'+pxPc(S.c,REV.c)+'</small></td>'+sgn(S.p,'pv')+'</tr>'; }
+  var famK={}; [A,B,P].forEach(function(M){ Object.keys(M.fam).forEach(function(k){ famK[k]=M.fam[k]; }); });
+  var famRows=Object.keys(famK).map(function(k){ var X=V(function(T,M){ return (M.fam[k]||{}).rev||0; });
+    return { k:k, X:X, s:famK[k] }; }).sort(function(a,b){ return (b.X.c+b.X.p)-(a.X.c+a.X.p); })
+    .filter(function(r){ return Math.round(r.X.c)||Math.round(r.X.p); })
+    .map(function(r){ return line(e(r.s.name), r.X, 'rv', r.s.color); }).join('');
+  function lines(DEF){ return DEF.map(function(dn){ var X=Vln(dn[0]);
+    if(!Math.round(X.c) && !Math.round(X.p)) return ''; return line(e(dn[1]), X, 'cs'); }).join(''); }
+  var ed=!!_px.fcEd && !_px.pier;
+  var cenRows='';
+  if(!_px.pier){
+    cenRows=grp('4 · Central costs &amp; other income', 'ยอดรายเดือนจากงบจริง · ไม่ผันตามเที่ยว'
+        +(hasCen?(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src))+' (เดือนนี้ยังไม่ได้กรอก)')):' · ยังไม่ได้กรอก'),
+        '<button class="fced" onclick="pxFcEdit()">'+(ed?'เสร็จ':'กรอก / แก้ไข')+'</button>')
+      +PX_FC_CEN.map(function(c){ var v=cv?(+cv[c[0]]||0):0;
+        return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])+'</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+          +'<td class="mc">'+(ed?('<input class="fcin n" inputmode="numeric" value="'+(v||'')+'" placeholder="0" '
+              +'onchange="pxFcSet(\''+e(ym)+'\',\''+c[0]+'\',this.value)">')
+            :('<span class="n"'+(c[2]&&v?' style="color:#0A6B49"':'')+'>'+(v?((c[2]?'+':'')+pxN(v)):'—')+'</span>'))+'</td>'
+          +'<td class="pv"><span class="n">—</span></td></tr>'; }).join('')
+      +'<tr class="sm"><td class="l">Σ Central (สุทธิ)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td class="mc"><span class="n">'+(hasCen?pxN(cenNet):'—')+'</span></td><td class="pv"><span class="n">—</span></td></tr>'
+      +'<tr class="fin"><td class="l">= EBITDA forecast</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td><span class="n" style="color:'+(hasCen?(EB<0?'#FCA5A5':'#86EFAC'):'#fff')+'">'+(hasCen?pxSg(EB):'—')+'</span></td>'
+        +'<td><span class="n">—</span></td></tr>';
+  }
+  var table='<div class="eg"><div class="phd"><div><h2>Forecast by step <span class="pill pu">'+e(mLbl)+'</span></h2>'
+    +'<p>รายได้ → Operation cost → ค่าจ้าง → ค่าเสื่อม → ค่าใช้จ่ายส่วนกลาง · บรรทัดสุดท้ายเทียบกับ EBITDA ในงบจริงได้</p></div></div>'
+    +'<div class="twrap"><div class="tscroll"><table class="fct" style="min-width:760px"><thead><tr>'
+    +'<th class="l">ITEM</th><th>ACTUAL<small>'+e(dA)+' '+e(mLbl.slice(0,3))+'</small></th>'
+    +'<th>FORECAST<small>'+e(dB)+' '+e(mLbl.slice(0,3))+'</small></th>'
+    +'<th class="mc">MONTH FORECAST<small>จริง + คาดการณ์</small></th>'
+    +'<th>'+e(pLbl.slice(0,3).toUpperCase())+' · TRIP P&amp;L<small>เดือนก่อน ทั้งเดือน (ระบบ)</small></th></tr></thead><tbody>'
+    +grp('Revenue · by programme','รายได้ทัวร์ไม่รวม VAT')+famRows+line('Σ Revenue', REV, 'sm')
+    +grp('1 · Operation cost','ต้นทุนที่เกิดจริงต่อเที่ยว')+lines(PX_ST_OP)+line('Σ Operation cost', OP, 'sm cs')+stepRow('= After operation cost', S1)
+    +grp('2 · Wages','ไกด์ กัปตัน เด็กเรือ ตามอัตราที่วางไว้')+lines(PX_ST_WG)+line('Σ Wages', WG, 'sm cs')+stepRow('= After wages', S2)
+    +grp('3 · Depreciation','ตัวแทนค่าซ่อมบำรุงเรือ · เทียบกับ Boat Maintenance ในงบ')+line('ค่าเสื่อมเรือ', DP, 'cs')+stepRow('= After depreciation', S3)
+    +cenRows+'</tbody></table></div></div>'
+    +'<p class="fcn">วิธีคาดการณ์: ค่าเฉลี่ยต่อวันของ '+(basisOwn?('วันที่เดินทางแล้วในเดือนนี้ ('+basis.length+' วัน)'):('14 วันล่าสุด เพราะเดือนนี้ยังมียอดจริงไม่ถึง 3 วัน'))
+      +' × '+rem.length+' วันที่เหลือ · วันนี้นับเป็นวันคาดการณ์ · ยังไม่ได้แยกตามวันในสัปดาห์หรือฤดูกาล</p>'
+    +'<p class="fcn">ลูกค้าทั้งเดือนที่คาด '+pxN(PAX.c)+' คน (จริง '+pxN(PAX.a)+' · คาด '+pxN(PAX.b)+') · ขั้นที่ 4 ไม่รวมดอกเบี้ยและ Owner exp.</p></div>';
+  return hero+kpi+chart+table;
+}
+function pxFcCSS(){ var H='#trippl-host '; return ''
+ +H+'.stdot{display:inline-block;width:4px;height:13px;border-radius:2px;margin-right:8px;vertical-align:-2px}'
+ +H+'table.stp td small{display:block;font-size:10px;color:#64748B;font-weight:600}'
+ +H+'table.stp th.st1,'+H+'table.stp td.st1{background:#EFF5FE}'+H+'table.stp th.st2,'+H+'table.stp td.st2{background:#FFF7E8}'
+ +H+'table.stp th.st3,'+H+'table.stp td.st3{background:#EAFBF2}'
+ +H+'.fch{display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between;background:#fff;border:1px solid #E3E8F0;border-radius:14px;padding:16px 22px;margin-bottom:12px}'
+ +H+'.fch small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.8px;color:#5B6679}'
+ +H+'.fch-l b{display:block;font-size:42px;font-weight:800;letter-spacing:-1px;line-height:1.1;margin-top:4px}'
+ +H+'.fch-l b u{text-decoration:none;font-size:17px;font-weight:700;color:#0F1B3D;letter-spacing:0}'
+ +H+'.fch-l p{margin:6px 0 0;font-size:12px;color:#5B6679}'
+ +H+'.fch-r{display:flex;flex-wrap:wrap;gap:10px}'
+ +H+'.fch-r>div{border:1px solid #E3E8F0;border-radius:10px;padding:9px 14px;min-width:150px}'
+ +H+'.fch-r b{display:block;font-size:17px;font-weight:800;margin-top:3px}'
+ +H+'.fch-r u{text-decoration:none;font-size:10.5px;color:#5B6679}'
+ +H+'.fckg{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:12px}'
+ +H+'.fck{background:#fff;border:1px solid #E3E8F0;border-top:4px solid #0F1B3D;border-radius:12px;padding:12px 14px}'
+ +H+'.fck.neg{background:#FDECEC;border-color:#F3B9B9}'+H+'.fck.off{background:#F8FAFC}'
+ +H+'.fck small{display:block;font-size:11px;font-weight:800;color:#3D4A63}'
+ +H+'.fck b{display:block;font-size:28px;font-weight:800;letter-spacing:-.6px;margin:4px 0 2px;color:#0F1B3D}'
+ +H+'.fck b u{text-decoration:none;font-size:13px;font-weight:700}'
+ +H+'.fck p{margin:0;font-size:11px;color:#5B6679}'
+ +H+'.fck .bar{height:6px;border-radius:3px;background:#E3E8F0;margin:8px 0}'+H+'.fck .bar i{display:block;height:6px;border-radius:3px}'
+ +H+'.fck em{font-style:normal;font-size:11px;font-weight:700}'
+ +H+'.fclg{display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px;color:#5B6679}'
+ +H+'.fclg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}'
+ +H+'.fclg i.x,'+H+'.fcbars i.x{background:#DCE8FA;border:1px dashed #7EA6E8;box-sizing:border-box}'
+ +H+'.fcbars{display:flex;align-items:flex-end;gap:4px;height:132px;border-bottom:1px solid #E3E8F0;margin-top:10px}'
+ +H+'.fcbars .c{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end}'
+ +H+'.fcbars i{display:block}'+H+'.fcbars i.a{background:#9CC0F5;border-radius:2px 2px 0 0}'+H+'.fcbars i.b{background:#1D4ED8}'
+ +H+'.fcbars i.x{border-bottom:0;border-radius:2px 2px 0 0}'
+ +H+'.fcx{display:flex;gap:4px;margin-top:4px}'+H+'.fcx span{flex:1 1 0;min-width:0;text-align:center;font-size:9px;color:#5B6679}'
+ +H+'.fcx span.we{color:#BE123C}'+H+'.fcx span.td{font-weight:800;color:#92400E;background:#FEF3C7;border-radius:3px}'
+ +H+'table.fct{width:100%;border-collapse:collapse;font-size:11.5px}'
+ +H+'table.fct th{background:#F4F7FB;border-bottom:1px solid #E3E8F0;font-size:9px;font-weight:800;letter-spacing:.5px;color:#3D4A63;text-align:right;padding:7px 12px}'
+ +H+'table.fct th small{display:block;font-weight:500;letter-spacing:0;color:#5B6679;font-size:9px}'
+ +H+'table.fct th.l,'+H+'table.fct td.l{text-align:left}'+H+'table.fct th.mc{background:#EAF1FB}'
+ +H+'table.fct td{padding:6px 12px;border-bottom:1px solid #EEF1F6;text-align:right;font-weight:700;color:#0F1B3D}'
+ +H+'table.fct td.l{font-weight:600}'+H+'table.fct td.mc{background:#F5F8FD}'+H+'table.fct td.pv{color:#5B6679;font-weight:600}'
+ +H+'table.fct tr.cs td:not(.l):not(.pv){color:#B45309}'
+ +H+'table.fct tr.g td{background:#F4F7FB;text-align:left;font-weight:800;padding:6px 12px}'
+ +H+'table.fct tr.g td i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#0F1B3D;margin-right:8px}'
+ +H+'table.fct tr.g td span{font-weight:500;font-size:10px;color:#5B6679;margin-left:8px}'
+ +H+'table.fct tr.sm td{background:#EEF3FB;border-top:1.5px solid #1D4ED8;font-weight:800}'
+ +H+'table.fct tr.step td{background:#EAFBF2;border-top:1.5px solid #0A6B49;border-bottom:1.5px solid #BDE9D4;font-weight:800;padding:7px 12px}'
+ +H+'table.fct tr.step td.l{color:#0A6B49}'+H+'table.fct tr.step small{font-size:9.5px;font-weight:600;color:#3D4A63;margin-left:4px}'
+ +H+'table.fct tr.fin td{background:#0F1B3D;color:#fff;font-size:13px;font-weight:800;padding:9px 12px;border-bottom:0}'
+ +H+'.fced{float:right;border:1px solid #C7D2FE;background:#fff;color:#3730A3;border-radius:8px;padding:3px 10px;font:700 11px inherit;cursor:pointer}'
+ +H+'.fced:hover{background:#EEF2FF}'
+ +H+'.fcin{width:130px;border:1px solid #C7D2FE;border-radius:7px;padding:4px 8px;text-align:right;font:700 12px inherit;color:#0F1B3D;background:#fff}'
+ +H+'.fcn{margin:8px 0 0;font-size:10.5px;line-height:1.7;color:#5B6679}';
+}
+
 function pxTrdTxt(cur, prev){
   if(!prev) return '\u2014';
   var p=(cur-prev)/Math.abs(prev)*100;
@@ -38497,7 +38801,7 @@ function renderTripPL(){
   if(!_px.an) _px.an=47;
   var body='';
   try{
-    body=(_px.tab==='m')?pxMonth(e):((_px.tab==='a')?pxAnalysis(e):pxDaily(e));
+    body=(_px.tab==='f')?pxForecast(e):((_px.tab==='m')?pxMonth(e):((_px.tab==='a')?pxAnalysis(e):pxDaily(e)));   /* §pxForecast */
   }catch(err){
     try{ console.error('[P&L] render failed', err); }catch(_){}
     body='<div class="empty">Could not build this view — '+e(String(err&&err.message||err))+'</div>';
@@ -38509,7 +38813,7 @@ function renderTripPL(){
     var sc=host; while(sc && sc!==document.body && sc!==document.documentElement){ if(sc.scrollTop>0 && sc.scrollHeight>sc.clientHeight+2){ _kp.push([sc, sc.scrollTop]); break; } sc=sc.parentNode; }
     _kp.push(['win', window.pageYOffset||document.documentElement.scrollTop||0]);
   }catch(_){}
-  host.innerHTML='<style id="pl-style">'+pxCSS()+'</style>'+pxBar(e)+body;
+  host.innerHTML='<style id="pl-style">'+pxCSS()+pxFcCSS()+'</style>'+pxBar(e)+body;
   try{ _kp.forEach(function(k){
     if(k[0]==='px-dscroll'){ var d2=document.getElementById('px-dscroll'); if(d2) d2.scrollLeft=k[1]; }
     else if(k[0]==='win'){ if(k[1]) window.scrollTo(0,k[1]); }
