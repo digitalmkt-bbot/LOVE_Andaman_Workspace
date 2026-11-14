@@ -867,6 +867,60 @@
     try{ x.send(); }catch(e){ done(); }
   }
   setInterval(function(){ _laCheckVersion(1); }, 10000);
+  /* ══ §codeVer (2026-11-12) · "แบ่งรถแล้ว Refresh กลับมาเป็นก้อนเดิม" ══
+     เคส BK-26100528-EP54 · ตัวแก้ §altMan ขึ้นระบบ 15:53 แต่เครื่องที่เปิดหน้าค้างไว้ก่อนนั้น (RSVN06, RSVN01)
+     ยังรันโค้ดเก่า · ตัวซิงก์จุดรับเพิ่มของโค้ดเก่ายุบ split กลับเป็น [30,1] แล้วเซฟทับของคนอื่นทุกครั้งที่วาดหน้า
+     ระบบไม่เคยรู้เลยว่าตัวเองเป็นโค้ดเก่า · ตรงนี้ให้หน้าเว็บถามเอง
+     วิธี: ดึง allotment_v2.html ใหม่ (5 นาทีครั้ง · เฉพาะแท็บที่เปิดดูอยู่) แล้วเทียบ ?v= ของไฟล์ js กับที่ตัวเองโหลดมา
+     เทียบเฉพาะ ?v= ที่เป็น hash (8/32 ตัว) · ตัวที่เซิร์ฟเวอร์เติมให้เป็นเลขเวลา deploy ไม่นับ (เปลี่ยนทุก deploy แม้โค้ดเดิม)
+     ต่างกัน → window._laStale=true · ขึ้นแถบบอก · โหลดหน้าใหม่เองเมื่อว่างและไม่มีงานค้างเซฟ
+     ตัวซ่อมอัตโนมัติ (bookingV2HealAltSplits) ดู _laStale แล้วไม่เขียนทับใคร · ไม่ต้องแก้เซิร์ฟเวอร์ */
+  (function(){
+    if(window.__laEmbed) return;
+    var RX=/js\/([\w.-]+\.js)\?v=([0-9a-f]{32}|[0-9a-f]{8})(?=["'&])/g;
+    function sig(txt){ var m, o=[]; RX.lastIndex=0; while((m=RX.exec(txt))) o.push(m[1]+'='+m[2]); o.sort(); return o.join('|'); }
+    var mine=''; try{ mine=sig([].map.call(document.querySelectorAll('script[src]'),function(x){ return '"'+x.getAttribute('src')+'"'; }).join(' ')); }catch(e){}
+    if(!mine || mine.indexOf('08-app.js=')<0) return;      /* อ่านของตัวเองไม่ได้ = ไม่เดา */
+    var lastAt=0, busy=false, newSig='';
+    function bar(){
+      if(document.getElementById('la-codever')) return;
+      var d=document.createElement('div'); d.id='la-codever';
+      d.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99990;background:#1B2B5E;color:#fff;border-radius:12px;padding:9px 12px 9px 16px;font-weight:600;font-size:13px;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.28);display:flex;gap:12px;align-items:center;max-width:92vw';
+      d.innerHTML='<span>ระบบมีเวอร์ชันใหม่ · หน้านี้จะโหลดใหม่เองเมื่อว่าง</span><button type="button" style="background:#fff;color:#1B2B5E;border:0;border-radius:8px;padding:6px 12px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">โหลดเลย</button>';
+      d.querySelector('button').onclick=function(){ go(true); };
+      (document.body||document.documentElement).appendChild(d);
+    }
+    function go(force){
+      if(_dirty){ try{ _laFlush(); }catch(e){} if(_dirty) return; }   /* งานค้างเซฟต้องขึ้นก่อน */
+      if(!force && !document.hidden && _laBusy()) return;
+      try{ sessionStorage.setItem('la_codever_try', newSig); }catch(e){}
+      try{ _laSaveView(); }catch(e){}
+      try{ if(!location.search){ location.replace(location.pathname+'?t='+Date.now()); return; } }catch(e){}
+      location.reload();
+    }
+    function check(){
+      if(busy || window._laStale || document.hidden) return;
+      if(Date.now()-lastAt < 290000) return;
+      lastAt=Date.now(); busy=true;
+      var x=new XMLHttpRequest(); x.open('GET', bust(location.pathname), true); x.timeout=20000;
+      var done=function(){ busy=false; }; x.ontimeout=done; x.onerror=done;
+      x.onload=function(){ done();
+        if(x.status!==200) return;
+        var s=sig(x.responseText||'');
+        if(!s || s.indexOf('08-app.js=')<0) return;        /* ได้หน้า login/หน้าอื่นมา = ไม่ใช่คำตอบ */
+        if(s===mine) return;
+        newSig=s; window._laStale=true; bar();
+        /* โหลดใหม่แล้วยังได้ของเก่า (CDN ค้าง) → ไม่วนโหลดเอง · เหลือแถบกับปุ่มให้กด */
+        var tried=''; try{ tried=sessionStorage.getItem('la_codever_try')||''; }catch(e){}
+        if(tried===s) return;
+        setInterval(function(){ go(false); }, 5000);
+      };
+      try{ x.send(); }catch(e){ done(); }
+    }
+    setTimeout(check, 60000);
+    setInterval(check, 60000);
+    try{ document.addEventListener('visibilitychange', function(){ if(!document.hidden) check(); }); }catch(e){}
+  })();
   /* ══ §ckLive2 (2026-09-22) · "สองเครื่องทำพร้อมกัน · A กดเช็คอิน จอ B อัพเดทอีก 10 วิ" ══
      10 วิ คือคาบของ poll ข้างบน ซึ่งเป็น "ตัวสำรอง" ไม่ใช่ทางหลัก
      ทางหลักคือ SSE ที่ควรถึงใน ~1 วิ · ได้ 10 วิพอดีแปลว่า SSE ของเครื่องนั้นตายไปแล้ว

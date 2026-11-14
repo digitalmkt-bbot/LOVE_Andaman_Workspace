@@ -19,7 +19,7 @@ function bookingV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, all
   let retSel='';
   if(g){
     const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, zone):[];
-    const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
+    const _zPool=((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
     let ropts='<option value="">&#8617;</option>';

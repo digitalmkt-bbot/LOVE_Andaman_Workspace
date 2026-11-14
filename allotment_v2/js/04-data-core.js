@@ -13259,6 +13259,11 @@ function openRouteModal(id){
   document.getElementById('route-modal-title').textContent=r?'แก้ไขโปรแกรม':'เพิ่มโปรแกรม';
   document.getElementById('fm-route-name').value=r?r.name:'';
   document.getElementById('fm-route-islands').value=r?r.islands:'';
+  /* §routeCode · รหัสย่อ · ว่าง = ใช้รหัสที่ระบบตั้งให้ (โชว์เป็นตัวอย่างในช่อง) */
+  (function(){ var el=document.getElementById('fm-route-code'); if(!el) return;
+    var M=(typeof laRouteCodeMap==='function')?laRouteCodeMap():null;
+    el.value=(r&&M&&M.man[r.id])?(typeof laRouteCodeNorm==='function'?laRouteCodeNorm(M.man[r.id]):M.man[r.id]):'';
+    el.placeholder=(r&&M&&M.auto[r.id])?('ระบบตั้งให้: '+M.auto[r.id]):'ระบบตั้งให้จากชื่อ'; })();
   timeRows=r?[...r.times]:['08:00'];
   _famFillRouteSelect(r);   // §famField · ต้องมาก่อน pickLoc · ตั้งค่าให้ select ที่ยังไม่มี option ไม่มีผล
   pickLoc(r ? (laIsLandRoute(r) ? KIND_LAND : (r.pier||'tublamu')) : 'tublamu');   /* §routeKind */
@@ -13312,8 +13317,12 @@ function saveRoute(){
     const r=ROUTES.find(x=>x.id===editRouteId);
     if(r){r.name=name;r.islands=islands;r.times=times;r.pier=selLoc;r.kind=selKind;r.familyId=famId;r.dailyCap=dailyCap;}   /* §routeKind */
   } else {
-    ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,kind:selKind,familyId:famId,dailyCap:dailyCap,seasons:[]});
+    var _nid='r'+Date.now();
+    ROUTES.push({id:_nid,name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,kind:selKind,familyId:famId,dailyCap:dailyCap,seasons:[]});
   }
+  /* §routeCode · รหัสย่อที่ตั้งเอง */
+  try{ var _ce=document.getElementById('fm-route-code');
+    if(_ce && typeof laRouteCodeSave==='function'){ var _cw=laRouteCodeSave(editRouteId||_nid, _ce.value); if(_cw) alert(_cw); } }catch(_){ }
   closeModal('route-modal');renderSettings();save('config');
 }
 function delRoute(id){
