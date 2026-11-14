@@ -38606,9 +38606,16 @@ function pxStepTable(e, M, title, sub){
 var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต้นทุน',1],['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0],
   ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0],['ut','ไฟ น้ำ ซักรีด แคนู',0],['pay','Payroll สำนักงาน',0],
   ['sm','Sales & Marketing',0],['opx','Operating expenses (ไม่รวมซ่อมเรือ)',0]];
-function pxFcCentral(ym){
+/* §pxFcSeed (2026-11-14) · owner: "ใส่ให้หน่อยเลย · งบของ Nov เอาของเดือน Oct มาตั้งไว้ให้ก่อน ถ้าออกมาจริง user ค่อยแก้"
+   ยอดตั้งต้นจากงบจริง ต.ค. 2026 (P&L Love Island 2026 board) · เดือนถัดไปที่ยังไม่กรอกจะหยิบยอดนี้ไปใช้เอง
+   ค่าที่ user กรอกในหน้า (px_central) ทับยอดตั้งต้นเสมอ · ไม่มีการเขียนข้อมูลตอนโหลด */
+var PX_FC_SEED={ '2026-10':{ oi:1569071, pw:644497, pr:250794, bm:1437812, ut:68150, pay:1878925, sm:564355, opx:1287145 } };
+function pxFcSaved(){
   var all=null; try{ all=ctRead('px_central'); }catch(_){ all=null; }
-  if(!all || typeof all!=='object') all={};
+  return (all && typeof all==='object') ? all : {};
+}
+function pxFcCentral(ym){
+  var all=Object.assign({}, PX_FC_SEED, pxFcSaved());
   if(all[ym]) return { v:all[ym], src:ym, own:true };
   var ks=Object.keys(all).filter(function(k){ return k<ym; }).sort();
   if(ks.length) return { v:all[ks[ks.length-1]], src:ks[ks.length-1], own:false };
@@ -38616,8 +38623,7 @@ function pxFcCentral(ym){
 }
 function pxFcSet(ym, k, raw){
   var n=parseFloat(String(raw==null?'':raw).replace(/[,\s฿]/g,'')); if(!isFinite(n)) n=0;
-  var all=null; try{ all=ctRead('px_central'); }catch(_){ all=null; }
-  if(!all || typeof all!=='object') all={};
+  var all=pxFcSaved();
   var cur=all[ym]; if(!cur){ cur=Object.assign({}, pxFcCentral(ym).v||{}); }
   cur[k]=Math.round(n); all[ym]=cur;
   ctWrite('px_central', all);
