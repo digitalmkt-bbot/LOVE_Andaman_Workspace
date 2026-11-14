@@ -581,15 +581,28 @@
         if(qty > 0 && it.id) lines.push({ line_id: it.id, qty: qty });
       });
       var body = { warehouse: wh, date: date, note: nullable(note), lines: lines };
+      /* §memoUseNow (sync 11-13, lk-inbox d6e5ce9c) · a memo raised from a repair job: "เบิกใช้กับงาน MJ-xxx ทันที" (ticked by
+         default) asks the server to withdraw each received line to that job in the same call (issue_to_job). It answers
+         issued {job_no, lines, failed}; the toast is legacy's. */
+      var useEl = d('recv-use-job');
+      if(mo.maintId && useEl && useEl.checked) body.issue_to_job = true;
       return O.queue(function(){
         return O.post('/v1/fleet/memos/' + enc(memoId) + '/receive', body);
       }).then(function(res){
         upsertMemo(res);
+        var iss = res && res.issued;
         return refetchStockAndMemos().then(function(){
+          if(iss && O.fleetJobs && typeof O.fleetJobs.load === 'function') return O.fleetJobs.load();
+        }).then(function(){
           if(typeof _receiveMemoId !== 'undefined') _receiveMemoId = null;
           if(typeof window.closeModal === 'function') window.closeModal('fl-modal-receive');
           O.wrote('fleet-memo-receive');
+          if(iss) O.wrote('fleet-job-part-add');
           redrawStock();
+          if(iss && typeof window.flShowToast === 'function'){
+            window.flShowToast('รับของ ' + (mo.no || '') + ' · @ ' + (d('receive-location') ? d('receive-location').value : wh) + ' · เบิกลงงาน ' + (iss.job_no || '') + ' แล้ว ' + (iss.lines || 0) + ' รายการ'
+              + (iss.failed ? ' (ไม่สำเร็จ ' + iss.failed + ' · เบิกเองที่หน้างาน)' : ''));
+          }
           return res;
         });
       }).catch(function(e){ O.fail('Could not receive memo items', e); return null; });

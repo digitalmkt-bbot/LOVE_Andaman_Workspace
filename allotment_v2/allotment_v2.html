@@ -191,6 +191,10 @@
       <span class="po-dot"></span>
       ตั๋วอุทยาน
     </div>
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="pos-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ยอดขายร้านค้า
+    </div>
     <div class="nav-item po-grp" data-pogrp="tublamu" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Tub Lamu
@@ -215,6 +219,10 @@
     <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pok-tublamu" onclick="nav(this)">
       <span class="po-dot"></span>
       ตั๋วอุทยาน
+    </div>
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pos-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ยอดขายร้านค้า
     </div>
     <div class="nav-item po-grp" data-pogrp="ranong" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
@@ -990,6 +998,8 @@
     <div id="view-pok-panwa" class="view"><div id="pk-host-panwa" class="po-host"></div></div>
     <div id="view-pok-tublamu" class="view"><div id="pk-host-tublamu" class="po-host"></div></div>
     <div id="view-pok-ranong" class="view"><div id="pk-host-ranong" class="po-host"></div></div>
+    <div id="view-pos-panwa" class="view"><div id="psl-host-panwa"></div></div>
+    <div id="view-pos-tublamu" class="view"><div id="psl-host-tublamu"></div></div>
     <div id="view-pot-ranong" class="view"><div id="pt-host-ranong" class="po-host"></div></div>
     <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
     <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
@@ -1508,6 +1518,8 @@
       </div>
       <div class="form-row"><label class="form-label">ชื่อโปรแกรม</label><input type="text" id="fm-route-name" style="width:100%" placeholder="เช่น Similan Islands"></div>
       <div class="form-row"><label class="form-label">เกาะ / จุดหมาย</label><input type="text" id="fm-route-islands" style="width:100%" placeholder="เช่น เกาะ 5, 6, 7, 8, 9"></div>
+      <!-- §routeCode · รหัสย่อ 3 ตัวอักษร ที่ขึ้นในตารางรถ (Transfer Fleet › ตารางเดือน) -->
+      <div class="form-row"><label class="form-label">รหัสย่อ <span style="font-weight:400;color:#8a8a82">· ขึ้นในตารางรถ · 2–4 ตัวอักษร A–Z / 0–9 · เว้นว่าง = ระบบตั้งให้</span></label><input type="text" id="fm-route-code" maxlength="4" style="width:140px;text-transform:uppercase;font-family:'DM Mono',monospace;letter-spacing:.08em" placeholder="ระบบตั้งให้จากชื่อ" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div>
       <!-- §famField · กลุ่มโปรแกรม · เดิมเดาจากชื่อโปรแกรม ตอนนี้เก็บเป็นค่าจริง -->
       <div class="form-row"><label class="form-label">กลุ่มโปรแกรม (Family)</label><select id="fm-route-family" style="width:100%"></select></div>
       <!-- §otherPier · โควตาที่นั่งต่อวัน · ใช้เฉพาะโปรแกรมบก (เรือนับจากการจัดเรือใน Boat Operation) -->
@@ -3849,10 +3861,13 @@
 <script src="js/booking/bookingV2ExtraFillRest.js"></script>
 <script src="js/booking/bookingV2FocNeedNote.js"></script>
 <script src="js/booking/bookingV2SetFocType.js"></script>
+<script src="js/16-boat-history.js?v=c59cd0ed"></script>
 <script src="js/09-action-board.js?v=c2953402"></script>
 <script src="js/11-exec-board.js?v=819a1bc5"></script>
 <!-- §wx (lk-inbox b445e22d) · legacy weather log; before the ops adapters, as every legacy file -->
 <script src="js/14-tm-ranong.js?v=48c3e60cf46db51e755aab1be32e03ed"></script>
+<script src="js/15-pos-sales.js?v=5c228828"></script>
+<script src="js/16-engine-serial-fix.js?v=daf056f8"></script>
 <script src="js/13-guest-insights.js?v=ea78b067"></script>
 <script src="js/12-weather.js"></script>
 <!-- §opsApi · operation-backend for every screen that has an endpoint · wraps functions defined above, so it loads after them -->
@@ -4034,6 +4049,13 @@
 <script src="js/ops/99-ops-md-sales-load.js"></script>
 <script src="js/ops/99-ops-weather-log.js?v=ba4b35cf"></script>
 <script src="js/ops/99-ops-guest-insights.js"></script>
+<!-- sync 11-12 · §flAud boat audit from the server (after ops/61 and ops/22) · §posSales POS shop sales on the server (after ops/61) -->
+<script src="js/ops/99-ops-boat-audit.js"></script>
+<script src="js/ops/99-ops-pos-sales.js"></script>
+<!-- sync 11-13 · §memoUseNow2 memo parts to the job (after ops/24, ops/25) · §boatHist boat history from the server (after ops/44, ops/68) · §engFix one-off legacy repair, not offered here -->
+<script src="js/ops/99-ops-memo-withdraw.js"></script>
+<script src="js/ops/99-ops-boat-history.js"></script>
+<script src="js/ops/99-ops-engine-fix.js"></script>
 <script src="js/ops/96-ops-not-yet.js?v=2fa0b099"></script>
 <script src="js/ops/90-ops-boot.js?v=4179636d"></script>
 <script src="js/11-router.js?v=34bea09a"></script>

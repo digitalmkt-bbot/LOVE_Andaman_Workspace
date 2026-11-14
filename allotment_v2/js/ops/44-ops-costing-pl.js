@@ -67,7 +67,7 @@
       bid:t.boat_id, boat:{ id:t.boat_id, name:t.name, cap:t.capacity }, name:t.name || t.boat_id,
       rid:t.route_id || '', route:{ name:t.route_name || '', color:t.route_color || '', pier:t.pier || '' }, dep:t.departs || '',
       px:{ ad:n(px.ad), chd:n(px.chd), inf:n(px.inf), foc:n(px.foc), tot:n(px.total), th:n(px.th), fr:n(px.fr), bk:n(px.bookings), rev:n(px.revenue) },
-      ctx:{ eng:t.engines || '3EN' }, plan:t.plan ? { id:t.plan.id, name:t.plan.name, ovr:{}, grp:{} } : null,
+      ctx:{ eng:t.engines || '3EN', date:t.date }, plan:t.plan ? { id:t.plan.id, name:t.plan.name, ovr:{}, grp:{} } : null,
       rows:rows, cost:n(t.cost),
       up:{ rows:(up.rows || []).map(function(u){ return { vc:u.voucher, label:u.label, sell:n(u.sell), comp:n(u.company), comm:n(u.commission), seller:u.seller || '', got:!!u.collected, kind:u.kind === 'sale' ? 'ex' : 'upg' }; }),
            sell:n(up.sell), company:n(up.company), comm:n(up.commission) },
@@ -76,7 +76,11 @@
       noSail:!!t.no_sail, ran:!!t.ran, wouldCost:n(t.would_cost),
       revGross:n(t.revenue_gross), rev:n(t.revenue), profit:n(t.profit), st:t.status || 'est', nReal:n(t.actual_lines),
       closed:!!t.closed, frozen:t.closed ? { at:t.closed.at || '', by:t.closed.by || '', pax:t.closed.pax } : null,
-      be:t.break_even == null ? null : n(t.break_even), fuelPr:n(fp.price), checkRev:!!t.check_revenue, vans:t.vans || [], date:t.date
+      be:t.break_even == null ? null : n(t.break_even), fuelPr:n(fp.price), checkRev:!!t.check_revenue, vans:t.vans || [], date:t.date,
+      /* §bopSwap2 (sync 11-10, ported 11-11) · the server costs a rescue boat on fuel/captain/crew/rent only and says which
+         boat it went out for; the boat that broke says where its guests went (pxSwPill reads both) */
+      rescue:(t.rescue && t.rescue.for) ? { for:t.rescue.for } : null,
+      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null
     };
   }
   function emptyTrip(date, bid){

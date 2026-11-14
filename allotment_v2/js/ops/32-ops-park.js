@@ -94,7 +94,8 @@
     return {
       ph: !!p.ph, typed: !!p.typed, seq: p.seq, cat: p.cat, auto: p.auto, fixed: !!p.fixed,
       f: p.first || '', l: p.last || '', full: p.full || '',
-      nat2: nat, nat3: nat3(nat), natName: natName(nat), natFromLead: !!p.ph,
+      /* §pkThNat (sync 11-13, lk-inbox 48efac11) · a seat of a Thai ticket type is TH (the server says so), not borrowed from the lead */
+      nat2: nat, nat3: nat3(nat), natName: natName(nat), natFromLead: !!p.ph && !/TH$/.test(String(p.cat || '')),
       mism: !!p.mismatch, over: !!p.over,
       ix: p.slot, bkId: p.booking_id, vc: p.voucher || '', lead: p.lead || ''
     };

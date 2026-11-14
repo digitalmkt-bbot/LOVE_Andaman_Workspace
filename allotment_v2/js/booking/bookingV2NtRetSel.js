@@ -11,7 +11,7 @@ function bookingV2NtRetSel(bk, date, routeId){
   const ar=(bk.dropoffAreaId&&typeof bookingV2GetArea==='function')?bookingV2GetArea(bk.dropoffAreaId):null;
   const dz=(ar&&ar.zone)||null;
   const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, dz):[];
-  const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(dz, date):[];
+  const _zPool=((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(dz, date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
   const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];
   const rvid=_O.vanReturnId||'';
   let ropts='<option value="">&#8617; รถกลับ</option>';
