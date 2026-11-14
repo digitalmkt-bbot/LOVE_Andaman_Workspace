@@ -143,6 +143,23 @@
     finally{ window.laBlob = real; }
   });
 
+  /* §pslProd (lk-inbox 11-13) · the product registry lists every product of every uploaded POS file, from laBlob()'s pos_sales_* keys.
+     Here those months live in M: read every month of both piers once (the registry is shared), and show it the months read. */
+  var regLoading = null, regFailAt = 0;
+  wrap('pslRegData', function(orig){
+    if(!active()) return orig.apply(this, [].slice.call(arguments, 1));
+    var todo = PIERS.filter(function(p){ return !allLoaded[p]; });
+    if(todo.length && !regLoading && Date.now() - regFailAt > 15000){   // one read at a time, not again for 15 s after a failure
+      regLoading = Promise.all(todo.map(loadAll)).then(function(){ regLoading = null; redraw(); },
+        function(e){ regLoading = null; regFailAt = Date.now(); O.fail('POS sales did not load', e); });
+    }
+    var keys = Object.keys(M);
+    var real = window.laBlob;
+    window.laBlob = function(){ var o = {}; keys.forEach(function(k){ o[k] = 1; }); return o; };
+    try{ return orig.apply(this, [].slice.call(arguments, 1)); }
+    finally{ window.laBlob = real; }
+  });
+
   /* the boats that left the pier: the day plan of the days shown (outside the -30/+180 window it is read on demand) */
   function dayPlans(pier, mon){
     var D = O.deployments; if(!D || typeof D.ensureDays !== 'function') return;

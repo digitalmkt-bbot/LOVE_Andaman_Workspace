@@ -21,6 +21,8 @@
    pck_svc_rules          GET|PUT /v1/config/pck_svc_rules     (Pier check-in service rules)
    pck_guide_colors       GET|PUT /v1/config/pck_guide_colors  (Pier check-in guide colours)
    tm_boats               GET|PUT /v1/config/tm_boats          (Ranong immigration boats and crews; tmBoatsRead, tmBoatsWrite)
+   route_codes            GET|PUT /v1/config/route_codes       (§routeCode: hand-set programme codes; laRouteCodeMap / laRouteCodeSave)
+   pos_products           GET|PUT /v1/config/pos_products      (§pslProd: shop sales product registry; pslProdMap / pslProdSave)
    (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
@@ -126,6 +128,8 @@
     vck_line_extras: { title: 'Van check-in LINE extra lines', wait: 0 },
     vck_line_office: { title: 'Van check-in LINE office', wait: 0 },
     tm_boats: { title: 'Ranong immigration boats', wait: DEBOUNCE_MS },
+    route_codes: { title: 'Programme codes', wait: 0 },             // §routeCode: ctRead/ctWrite('route_codes') answer from the store
+    pos_products: { title: 'Shop product registry', wait: 0 },      // §pslProd: ctRead/ctWrite('pos_products'); the photo itself is ops/38's
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }

@@ -400,7 +400,10 @@
      edit (editRouteId). The form's facts go as typed (name, islands, times, pier, kind, family; "no group" is
      family_id null). The id, the colour and the place in the list of a new route are the server's. The modal
      closes only when the server has said yes; its refusal (ext_id, family, pier) is shown as it says it.
-     The daily quota (daily_cap) is not kept by the server (decided 2026-10-09), so it is not sent. */
+     The daily quota (daily_cap) is not kept by the server (decided 2026-10-09), so it is not sent.
+     §routeCode (lk-inbox 11-13): the form's short code (fm-route-code) goes through legacy's laRouteCodeSave once the route
+     is saved (its id is the server's for a new one); that writes ctWrite('route_codes'), which ops/61 sends to
+     PUT /v1/config/route_codes. A clash is legacy's own alert, and the route stays saved, as legacy does. */
   calWrap('saveRoute', function(orig){
     var name = (document.getElementById('fm-route-name').value || '').trim(); if(!name) return;
     var islands = (document.getElementById('fm-route-islands').value || '').trim();
@@ -410,9 +413,15 @@
     var body = { name: name, islands: islands || null, times: times, kind: isLand ? KIND_LAND : KIND_MARINE,
                  pier: isLand ? null : selLoc, family_id: famId || null };
     var rid = editRouteId || null;
-    return O.queue(function(){ return rid ? O.patch(RT(rid), body) : O.post('/v1/routes', body); }).then(function(){
+    var codeEl = document.getElementById('fm-route-code'), codeVal = codeEl ? codeEl.value : null;
+    var savedId = rid;
+    return O.queue(function(){ return rid ? O.patch(RT(rid), body) : O.post('/v1/routes', body); }).then(function(res){
+      var r = res && (res.route || res); if(!savedId && r && r.id) savedId = r.id;
       return load().catch(function(){});
     }).then(function(){
+      if(codeVal !== null && savedId && typeof window.laRouteCodeSave === 'function'){
+        try{ var cw = window.laRouteCodeSave(savedId, codeVal); if(cw) alert(cw); }catch(_){}
+      }
       O.wrote('route');
       if(typeof closeModal === 'function') closeModal('route-modal');
       redrawSettings();
