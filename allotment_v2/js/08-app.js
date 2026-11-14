@@ -15072,22 +15072,49 @@ function boatCapPersist(){
   try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); d.boat_capovr=BOAT_CAP_OVR; localStorage.setItem(lsKey,JSON.stringify(d)); }catch(_){}
 }
 function _boatCapKey(boatId,date){ return String(date||'')+'::'+String(boatId||''); }
-function boatCapBase(boatId){ const b=(typeof getBoat==='function')?getBoat(boatId):null; return b?(+b.cap||0):0; }
+/* ══ §capHist (2026-11-14) · ที่นั่งของเรือแบบมีช่วงวันที่ · boats[].capHist[] = {id, from, to?, cap, reason, note, by, at}
+   owner "ถ้าเราแก้ตรงที่เดิม กลัวจะมีผลกระทบกับที่ผ่านมา" · "มันต้องมีวันจบด้วยไหม และมี Note เพิ่ม"
+   ที่นั่งของวันหนึ่ง = ปรับเฉพาะวัน (BOAT_CAP_OVR) › ช่วงที่คลุมวันนั้น › boat.cap (ค่าตั้งต้น)
+   ช่วงที่คลุม: ช่วงชั่วคราว (มีวันจบ) ชนะช่วงถาวร · ถัดมา from ล่าสุด · ถัดมา at ล่าสุด
+   ฝั่ง server ใช้กติกาเดียวกัน (db/migrations 048 · v_boat_capovr_eff) ══ */
+function boatCapHistPick(H, date){
+  if(!Array.isArray(H) || !H.length || !date) return null;
+  const d=String(date).slice(0,10);
+  const hit=H.filter(h=>h && h.from && String(h.from)<=d && (!h.to || String(h.to)>=d) && (+h.cap>0));
+  if(!hit.length) return null;
+  hit.sort((a,b)=>{ const ta=a.to?0:1, tb=b.to?0:1; if(ta!==tb) return ta-tb;
+    if(a.from!==b.from) return a.from<b.from?1:-1; return String(b.at||'').localeCompare(String(a.at||'')); });
+  return hit[0];
+}
+function boatCapHistAt(boatId, date){ const b=(typeof getBoat==='function')?getBoat(boatId):null; return b?boatCapHistPick(b.capHist, date):null; }
+function boatCapBase(boatId, date){ const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return 0;
+  const h=date?boatCapHistPick(b.capHist, date):null; return h?(+h.cap||0):(+b.cap||0); }
 function boatCapLicense(boatId){ const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return 0; return (+b.licensePax||+b.cap||0); }
 // ข้อมูลเต็มของวันนั้น · {cap, base, license, overridden, reason, by, at, delta}
 function boatCapInfo(boatId, date){
-  const base=boatCapBase(boatId), lic=boatCapLicense(boatId);
+  const base=boatCapBase(boatId,date), lic=boatCapLicense(boatId);
+  const hist=boatCapHistAt(boatId,date);   /* §capHist */
   const o=BOAT_CAP_OVR[_boatCapKey(boatId,date)];
-  if(!o || o.cap==null || o.cap==='' || isNaN(+o.cap)) return {cap:base, base:base, license:lic, overridden:false, delta:0};
+  if(!o || o.cap==null || o.cap==='' || isNaN(+o.cap)) return {cap:base, base:base, license:lic, overridden:false, delta:0, hist:hist};
   let c=Math.max(0, Math.round(+o.cap));
   if(lic>0) c=Math.min(c, lic);            // เพดานแข็ง · ห้ามเกินที่นั่งจดทะเบียน
-  return {cap:c, base:base, license:lic, overridden:(c!==base), reason:o.reason||'', by:o.by||'', at:o.at||'', delta:c-base};
+  return {cap:c, base:base, license:lic, overridden:(c!==base), reason:o.reason||'', by:o.by||'', at:o.at||'', delta:c-base, hist:hist};
 }
 // ที่นั่งที่ใช้ได้จริงของเรือลำนั้นในวันนั้น · ทุกที่ที่เคยอ่าน boat.cap ตรงๆ ควรเรียกตัวนี้แทน
 function boatCapFor(boatId, date){ return boatCapInfo(boatId, date).cap; }
 // ป้ายเล็กๆ ไว้แปะข้างตัวเลข cap
 function boatCapBadge(boatId, date, size){
-  const i=boatCapInfo(boatId,date); if(!i.overridden) return '';
+  const i=boatCapInfo(boatId,date);
+  if(!i.overridden){
+    /* §capHist · ช่วงที่นั่งที่ต่างจากค่าตั้งต้น · ป้ายเส้นประ · ช่วงถาวรโชว์แค่ 30 วันแรก ไม่ให้ติดป้ายไปตลอด */
+    const h=i.hist, b=(typeof getBoat==='function')?getBoat(boatId):null, b0=b?(+b.cap||0):0;
+    if(!h || +h.cap===b0) return '';
+    if(!h.to){ const ms=new Date(String(date).slice(0,10)+'T00:00:00')-new Date(String(h.from)+'T00:00:00'); if(!(ms>=0 && ms<=30*864e5)) return ''; }
+    const e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s)), dl=(+h.cap)-b0, up=dl>0;
+    const tip='ที่นั่ง '+h.cap+' ('+(h.to?('ช่วง '+h.from+' – '+h.to):('ตั้งแต่ '+h.from))+')'+(h.reason?(' · '+h.reason):'')+(h.note?(' · Note: '+h.note):'')+(h.by?(' · '+h.by):'');
+    return '<span title="'+e(tip)+'" style="display:inline-block;font-size:'+(size==='sm'?'8.5':'9.5')+'px;font-weight:800;letter-spacing:.02em;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle;border:1px dashed '+(up?'#7FA9D6':'#D9A79C')+';'
+      +(up?'background:#F2F8FE;color:#0C447C':'background:#FDF4F2;color:#A32D2D')+'">'+(h.to?'ช่วง ':'ใหม่ ')+(up?'+':'')+dl+'</span>';
+  }
   const up=i.delta>0, e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s));
   const tip='cap วันนี้ '+i.cap+' (ปกติ '+i.base+')'+(i.reason?(' · '+i.reason):'')+(i.by?(' · '+i.by):'');
   return '<span title="'+e(tip)+'" style="display:inline-block;font-size:'+(size==='sm'?'8.5':'9.5')+'px;font-weight:800;letter-spacing:.02em;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle;'
@@ -15102,7 +15129,7 @@ function boatCapSet(boatId, date, cap, reason){
     if(lic>0 && c>lic) c=lic;
     /* §actPerm · เพิ่มที่นั่งเกิน cap ปกติ = ปลดด่านฉุกเฉิน · ทำได้เฉพาะคนที่ได้สิทธิ์ act-capunlock
        ลด cap (เรือมีปัญหา รับได้น้อยลง) หรือคงค่าที่คนอื่นปลดไว้แล้ว ยังทำได้ตามสิทธิ์ Operations เดิม */
-    if(!boatCapMayRaise() && c>boatCapBase(boatId) && c>boatCapFor(boatId,date)) return false;
+    if(!boatCapMayRaise() && c>boatCapBase(boatId,date) && c>boatCapFor(boatId,date)) return false;
     BOAT_CAP_OVR[k]={cap:c, reason:String(reason||''), by:((typeof ME!=='undefined'&&ME&&(ME.name||ME.username))||'—'), at:new Date().toISOString()};
   }
   boatCapPersist();
@@ -15160,7 +15187,7 @@ function _bcapSave(boatId,date){
   const el=document.getElementById('bcap-val'), r=document.getElementById('bcap-reason');
   const v=el?parseInt(el.value,10):null;
   if(v==null||isNaN(v)){ alert('ใส่จำนวนที่นั่งก่อน'); return; }
-  const base=boatCapBase(boatId);
+  const base=boatCapBase(boatId,date);
   if(v!==base && !(r&&r.value.trim())){ alert('ใส่เหตุผลด้วยครับ · จะได้รู้ทีหลังว่าทำไมวันนั้น cap ไม่เท่าปกติ'); if(r) r.focus(); return; }
   if(!boatCapMayRaise() && v>base && v>boatCapFor(boatId,date)){ alert('Not allowed: raising a boat above its normal capacity needs the special permission "unlock boat capacity". Ask an admin or a user who has it.'); return; }
   if(v===base) boatCapSet(boatId,date,null); else boatCapSet(boatId,date,v,r?r.value.trim():'');

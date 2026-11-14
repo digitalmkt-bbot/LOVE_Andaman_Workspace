@@ -179,7 +179,7 @@ function buildDays(data, dates) {
 }
 
 /** Everything buildDays needs, in as few queries as the range allows. */
-async function readDays(pool, { fqt, qic }, routes, from, to, excludeBookingId, excludeLockId) {
+async function readDays(pool, { fqt, qic, capOvrTable }, routes, from, to, excludeBookingId, excludeLockId) {
   const routeIds = routes.map(r => r.id);
   const tripDate = `${fqt('f_trip_date_iso')}(t.date, b.createdat)`;
   const pax = `COALESCE(t.pax_ad,0)     + COALESCE(t.pax_ad_fr,0)  + COALESCE(t.pax_ad_th,0)
@@ -221,7 +221,8 @@ async function readDays(pool, { fqt, qic }, routes, from, to, excludeBookingId, 
        ORDER BY trips_id, ${qic('key')}, row_pk DESC`,
       [from, to]),
     // left(key,10): the key is '<date>::<boatId>', so a plain key<=to drops same-day ranges.
-    pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt('boat_capovr')}
+    // §capHist · v_boat_capovr_eff = ปรับรายวัน + ช่วงที่นั่งของเรือ (server เลือกให้ตอนบูต · ไม่มี view ก็ boat_capovr)
+    pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt(capOvrTable || 'boat_capovr')}
                 WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [from, to]),
     pool.query(`SELECT routes_id, ${qic('type')} AS ty, ${qic('from')} AS f, ${qic('to')} AS t
                 FROM ${fqt('routes__seasons')} WHERE routes_id = ANY($1)`, [routeIds]),

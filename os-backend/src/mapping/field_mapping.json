@@ -414,6 +414,63 @@
       "db_type": "text"
     }
   },
+  "boats__caphist": {
+    "boats_id": {
+      "source": "(link) boats.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "idx": {
+      "source": "(order) position in capHist[]",
+      "kind": "synthetic",
+      "db_type": "bigint"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "id": {
+      "source": "capHist[].id",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "from": {
+      "source": "capHist[].from",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "to": {
+      "source": "capHist[].to",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "cap": {
+      "source": "capHist[].cap",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "reason": {
+      "source": "capHist[].reason",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "capHist[].note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "capHist[].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "capHist[].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
   "boats__repairhistory": {
     "boats_id": {
       "source": "(link) boats.id",

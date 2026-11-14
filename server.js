@@ -146,6 +146,9 @@ const OS_ASC  = [...OS_TABLES].sort((a, b) => _osDepth(a) - _osDepth(b));   // p
 const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // children first (delete)
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
+// §capHist (2026-11-14) · แหล่งที่นั่งรายวันของเรือ · boot เช็คแล้วสลับเป็น v_boat_capovr_eff (migration 048)
+//   = boat_capovr (ปรับเฉพาะวัน) + ช่วงที่นั่ง boats__caphist ในคีย์เดียวกัน '<date>::<boatId>'
+let CAPOVR_TABLE = 'boat_capovr';
 
 // ── save-safety guard (2026-07-10 · feat/validation-deprecate-blob) ──────────────────────────────
 // A stale / old whole-blob client can post data whose collections are empty or drastically shorter than
@@ -1266,9 +1269,18 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
         .map(t => t.routeid + NUL + t.date))];
       if (affPairs.length) {
         const affDates = [...new Set(affPairs.map(p => p.split(NUL)[1]))];
-        const { rows: capBoats } = await client.query(`SELECT id, cap FROM ${fqt('boats')}`);
-        const boatCap2 = {}, boatIds2 = [];
-        for (const b of capBoats) { boatCap2[b.id] = Number(b.cap) || 0; boatIds2.push(b.id); }
+        const { rows: capBoats } = await client.query(`SELECT id, cap, licensepax FROM ${fqt('boats')}`);
+        const boatCap2 = {}, boatLic2 = {}, boatIds2 = [];
+        for (const b of capBoats) { boatCap2[b.id] = Number(b.cap) || 0; boatLic2[b.id] = Number(b.licensepax) || 0; boatIds2.push(b.id); }
+        /* §capHist · ที่นั่งของวันนั้น (ปรับรายวัน + ช่วงที่นั่ง) · กติกาเดียวกับ capFor ใน /v1 availability
+           เดิมตาข่ายนี้อ่าน boats.cap อย่างเดียว · เรือที่ปรับที่นั่งขึ้นจะโดนธงเกินทั้งที่ยังไม่เกิน */
+        const capOvr2 = {};
+        try {
+          for (const r of (await client.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt(CAPOVR_TABLE)} WHERE left(${qic('key')},10) = ANY($1)`, [affDates])).rows)
+            if (r.cap != null && !isNaN(Number(r.cap))) capOvr2[r.k] = Number(r.cap);
+        } catch(_) {}
+        const capOn2 = (bid, dk) => { const base = boatCap2[bid] || 0, o = capOvr2[dk + '::' + bid];
+          if (o == null) return base; let c = Math.max(0, Math.round(o)); const lic = boatLic2[bid] || base; if (lic > 0) c = Math.min(c, lic); return c; };
         const tripByDate = {};
         for (const r of (await client.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} = ANY($1)`, [affDates])).rows) tripByDate[r.key] = r;
         const lockByKey = {};
@@ -1296,7 +1308,7 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
           const trow = tripByDate[dk] || {};
           let capacity = 0;
           for (const bid of boatIds2) {
-            if (trow[bid + '_route'] === rid && trow[bid + '_type'] !== 'charter') capacity += boatCap2[bid] || 0;
+            if (trow[bid + '_route'] === rid && trow[bid + '_type'] !== 'charter') capacity += capOn2(bid, dk);
           }
           if (capacity <= 0) continue;                          // no boats deployed yet → no constraint
           const fillLine = capacity - (lockByKey[pair] || 0);   // seats sellable to bookings after locks
@@ -1898,6 +1910,12 @@ async function initDb(){
     _step = 'migrations';
     try { await runMigrations(); }
     catch(e){ console.error('[mig] runner error (boot continues):', e.message); }
+    // §capHist · 048 สร้าง v_boat_capovr_eff (ปรับรายวัน + ช่วงที่นั่งของเรือ) · มีแล้วใช้ตัวนั้น ไม่มีก็อ่าน boat_capovr เหมือนเดิม
+    try {
+      const r = await pool.query('SELECT to_regclass($1) IS NOT NULL AS ok', [OS_SCHEMA + '.v_boat_capovr_eff']);
+      CAPOVR_TABLE = (r.rows[0] && r.rows[0].ok) ? 'v_boat_capovr_eff' : 'boat_capovr';
+      console.log('[capHist] seat override source = ' + CAPOVR_TABLE);
+    } catch(e){ console.error('[capHist] source check failed (stays boat_capovr):', e.message); }
     // §dbDrift · หลัง migration · ตารางอยู่ในสภาพสุดท้ายแล้วค่อยเทียบกับ model
     _step = 'db drift check';
     try { await dbDriftCheck(); }
@@ -3462,8 +3480,8 @@ const server = http.createServer((req, res) => {
       // reports "fully booked" (Aluminous2, 4 Aug 2026: cap 44 raised to 46, B2C refused at 44/44).
       // left(key,10): the key is '<date>::<boatId>', so a plain key<=dateTo drops same-day ranges
       // ('2026-08-04::b10' > '2026-08-04').
-      pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt('boat_capovr')}
-                  WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [dateFrom, dateTo]),
+      pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt(CAPOVR_TABLE)}
+                  WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [dateFrom, dateTo]),   /* §capHist */
       // §charterBooking · boats held by live charter bookings. Same rule as /v1/availability and the staff
       // app (baCharterBoatMap): a held boat is chartered even when its Boat-Op row still says 'normal'.
       // r5 / 1 Nov 2026: Romeo held by a charter, this endpoint sold its seats (71 vs the app's 37).
@@ -3556,7 +3574,7 @@ const server = http.createServer((req, res) => {
   // operation-backend's call on operation-backend's contract, so Love Kingdom moves host and nothing
   // else when bookings do. Not /api/v1: that is the REST surface, which can delete bookings.
   if (b2cV1.matches(u)) {
-    return b2cV1.handle(req, res, q, { pool, fqt, qic, J, dataBackend: DATA_BACKEND });
+    return b2cV1.handle(req, res, q, { pool, fqt, qic, J, dataBackend: DATA_BACKEND, capOvrTable: CAPOVR_TABLE });   /* §capHist */
   }
 
   // ───── B2C catalog API (no session — same X-Api-Key as availability above) ─────

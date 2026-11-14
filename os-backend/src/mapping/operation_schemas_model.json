@@ -384,6 +384,62 @@
     ],
     "rows": 93
   },
+  "boats__caphist": {
+    "columns": [
+      {
+        "name": "boats_id",
+        "type": "text"
+      },
+      {
+        "name": "idx",
+        "type": "bigint"
+      },
+      {
+        "name": "row_pk",
+        "type": "text"
+      },
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "from",
+        "type": "text"
+      },
+      {
+        "name": "to",
+        "type": "text"
+      },
+      {
+        "name": "cap",
+        "type": "bigint"
+      },
+      {
+        "name": "reason",
+        "type": "text"
+      },
+      {
+        "name": "note",
+        "type": "text"
+      },
+      {
+        "name": "by",
+        "type": "text"
+      },
+      {
+        "name": "at",
+        "type": "text"
+      }
+    ],
+    "primary_key": "row_pk",
+    "foreign_keys": [
+      {
+        "column": "boats_id",
+        "references": "boats.id"
+      }
+    ],
+    "rows": 0
+  },
   "boats__repairhistory": {
     "columns": [
       {
