@@ -87071,11 +87071,11 @@ function pc2PK(pier){
   });
   var lab=_pc2All?pcE(pc2MonthName(_pcYM)):pcE(pc2D(_pcDate));
   diff=Math.round(diff);
-  return pc2Kpi([{h:'คนเดินทาง · '+lab,v:pcN(pax),s:nB+' ลำ'},
+  return (_pc2All?'':pc2Kpi([{h:'คนเดินทาง · '+lab,v:pcN(pax),s:nB+' ลำ'},
                  {h:'ยอดคำนวณ',v:anyx?pcMoney(ex):'—',s:'ราคา × จำนวนคน + ค่าจอด'},
                  {h:'จ่ายจริงที่ด่าน',v:pcMoney(m),s:nK+' จาก '+nB+' ลำ · รวมค่าจอด'},
                  {h:'ต่าง',v:(diff>0?'+':(diff<0?'−':''))+pcMoney(Math.abs(diff)),s:nK?(diff===0?'ตรงกับที่คำนวณ':(diff>0?'จ่ายมากกว่าที่คำนวณ':'จ่ายน้อยกว่าที่คำนวณ')):'ยังไม่มีลำที่กรอก',cls:diff!==0?'warn':''},
-                 {h:'ค่าจอดเรือ',v:pcMoney(dk),s:'อยู่ในจ่ายจริงแล้ว · ลงสมุดแยกหมวด'}])
+                 {h:'ค่าจอดเรือ',v:pcMoney(dk),s:'อยู่ในจ่ายจริงแล้ว · ลงสมุดแยกหมวด'}]))   /* §pkMonthKpi · ทั้งเดือนดูยอดที่แถวรวมของตาราง */
     +'<div class="pc2-body">'+pc2DayList(pier,'pk')
       +'<div class="pc2-col"><div class="pc2-tool">'+pc2Seg()+'</div>'+(_pc2All?pc2PKMonth(pier):days.map(function(ds){ return pc2PKDay(pier,ds); }).join(''))   /* §pkMonth */
       +'<div class="pc2-legend"><span><i class="in"></i> คนหน้าท่ากรอก</span><span><i class="mm"></i> จำนวนไม่ตรงใบจอง</span>'
