@@ -20273,22 +20273,108 @@ function flRenderInsights(){
 }
 
 // Progress-timeline inner HTML (shared by full render + surgical refresh on withdraw/remove)
+/* §mjTl (2026-11-14) · owner "ปรับ Progress line ของ Maintenance หน่อย"
+   จัดกลุ่มตามวัน (ใหม่สุดก่อน) · บรรทัด "📦 เบิก …" ที่ติดกันในวันเดียวกัน คนเดียวกัน → การ์ดเดียว พับ/กางได้
+   การ์ดบอกจำนวนรายการ · คลัง · ยอดรวม · กี่รายการที่ราคา ฿0 · โน้ตที่คนพิมพ์เองตัวใหญ่กว่าบรรทัดระบบ */
+var _mjTlOpen={};
+function mjTlToggle(k,el){ _mjTlOpen[k]=!_mjTlOpen[k]; var c=el&&el.closest('.mjtl-wd'); if(c) c.classList.toggle('open',!!_mjTlOpen[k]); }
+function mjTlCss(){
+  if(document.getElementById('mjtl-css')) return;
+  var st=document.createElement('style'); st.id='mjtl-css';
+  st.textContent=[
+    '.mjtl{display:flex;flex-direction:column;gap:14px}',
+    '.mjtl-empty{font-size:11px;color:#999;text-align:center;padding:14px}',
+    '.mjtl-dh{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:#3A3F4B;margin-bottom:8px}',
+    '.mjtl-dh i{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:#EEF0F4;color:#5B6478}',
+    '.mjtl-dh i.we{background:#FDECEA;color:#B4231A}',
+    '.mjtl-dh small{font-weight:500;color:#9AA1AE;font-size:10px}',
+    '.mjtl-dh:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.07)}',
+    '.mjtl-list{position:relative;padding-left:18px;display:flex;flex-direction:column;gap:8px}',
+    '.mjtl-list:before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:rgba(0,0,0,.08);border-radius:2px}',
+    '.mjtl-it{position:relative}',
+    '.mjtl-it>.d{position:absolute;left:-18px;top:4px;width:9px;height:9px;border-radius:50%;background:#1D9E75;box-shadow:0 0 0 3px #FBFAF7}',
+    '.mjtl-it.sys>.d{background:#C3C8D2;width:7px;height:7px;left:-17px;top:5px}',
+    '.mjtl-it.new>.d{background:#E03B7E}',
+    '.mjtl-it.wd>.d{background:#B8860B}',
+    '.mjtl-tx{font-size:12px;font-weight:500;line-height:1.45;color:#1F2430;word-break:break-word}',
+    '.mjtl-it.sys .mjtl-tx{font-size:11px;font-weight:400;color:#5B6478}',
+    '.mjtl-by{font-size:9.5px;color:#9AA1AE;margin-top:2px;font-family:"DM Mono",monospace}',
+    '.mjtl-by b{font-family:inherit;font-weight:600;color:#6B7385}',
+    '.mjtl-wd{background:#fff;border:1px solid #ECE6D6;border-radius:10px;overflow:hidden}',
+    '.mjtl-wh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none;flex-wrap:wrap}',
+    '.mjtl-wh:hover{background:#FDFBF5}',
+    '.mjtl-wh .t{font-size:12px;font-weight:700;color:#1F2430}',
+    '.mjtl-wh .loc{font-size:10px;font-weight:600;color:#6B7385;background:#F2F3F6;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .zz{font-size:10px;font-weight:600;color:#8A5300;background:#FBEBD3;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .sum{margin-left:auto;font-size:12.5px;font-weight:800;color:#1F2430;font-variant-numeric:tabular-nums}',
+    '.mjtl-wh .cv{font-size:10px;color:#9AA1AE;transition:transform .15s}',
+    '.mjtl-wd.open .mjtl-wh .cv{transform:rotate(90deg)}',
+    '.mjtl-wb{display:none;border-top:1px solid #F1ECDF;padding:4px 0}',
+    '.mjtl-wd.open .mjtl-wb{display:block}',
+    '.mjtl-r{display:grid;grid-template-columns:20px 1fr auto 74px;gap:8px;align-items:baseline;padding:4px 10px;font-size:11px;color:#2A2F3A}',
+    '.mjtl-r:nth-child(even){background:#FBFAF7}',
+    '.mjtl-r .n{font-size:9.5px;color:#B0B6C2;text-align:right;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .q{color:#6B7385;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a.z{color:#C08A2E;font-weight:500;font-size:10px}',
+    '.mjtl-r .lt{font-size:9.5px;color:#B4231A}',
+    '.mjtl-wf{padding:5px 10px 3px;font-size:9.5px;color:#9AA1AE;font-family:"DM Mono",monospace}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
 function _flMaintTimelineInner(m){
-  const dim={ink3:'#999'};
-  const SVG_PINK={accent:'#E03B7E'};
+  mjTlCss();
   const log=m.progressLog||[];
-  return log.length?[...log].reverse().map((l,i,arr)=>{
-    const isLast=i===arr.length-1;
-    const isFirst=i===0;
-    return`<div style="display:flex;gap:10px;${isLast?'':'margin-bottom:10px'};position:relative">
-      ${!isLast?`<div style="position:absolute;left:3.5px;top:11px;bottom:-10px;width:1px;background:rgba(0,0,0,.08)"></div>`:''}
-      <div style="width:8px;height:8px;border-radius:50%;background:${isFirst?SVG_PINK.accent:'#1D9E75'};flex-shrink:0;margin-top:3px;z-index:1"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:500">${l.text||''}</div>
-        <div style="font-size:9px;color:${dim.ink3};margin-top:1px;font-family:'DM Mono',monospace">${l.date||''}${l.by?' · '+l.by:''}</div>
-      </div>
-    </div>`;
-  }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:14px">No progress logged</div>`;
+  if(!log.length) return '<div class="mjtl-empty">No progress logged</div>';
+  const E=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const N=v=>(+v||0).toLocaleString();
+  const RX=/^📦 เบิก (.+?) (\d+(?:\.\d+)?) (\S+)(?: · (.+?))? \(฿([\d,.]+)\)(.*)$/;
+  const isSys=by=>/^(ระบบ|system|equip)?$/i.test(String(by||'').trim());
+  /* ใหม่สุดก่อน · บรรทัดเบิกติดกัน (วัน + คนเดียวกัน) รวมเป็นการ์ดเดียว */
+  const items=[];
+  log.map((l,i)=>({l,i})).reverse().forEach(({l,i})=>{
+    const t=String(l.text||''), mm=t.match(RX), d=l.date||'', by=l.by||'';
+    if(mm){
+      const row={name:mm[1],qty:+mm[2],unit:mm[3],loc:String(mm[4]||'').replace(/^คลัง\s*/,''),amt:+String(mm[5]).replace(/,/g,'')||0,tag:String(mm[6]||'').replace(/^\s*·\s*/,'')};
+      const p=items[items.length-1];
+      if(p&&p.kind==='wd'&&p.date===d&&p.by===by){ p.rows.push(row); p.k=m.id+'|'+i; return; }
+      items.push({kind:'wd',date:d,by,rows:[row],k:m.id+'|'+i,raw:t,createdAt:l.createdAt});
+    } else items.push({kind:'note',date:d,by,text:t,createdAt:l.createdAt});
+  });
+  const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], TW=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const dHead=ds=>{ const x=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||''); if(!x) return '<span>ไม่ระบุวันที่</span>';
+    const w=new Date(+x[1],+x[2]-1,+x[3]).getDay();
+    return '<i class="'+((w===0||w===6)?'we':'')+'">'+TW[w]+'</i><span>'+(+x[3])+' '+TM[+x[2]-1]+' '+x[1]+'</span>'; };
+  const byLine=(it)=>{ const who=isSys(it.by)?'ระบบ':'<b>'+E(it.by)+'</b>';
+    const bd=(it.createdAt&&it.createdAt!==it.date)?' · บันทึกย้อนหลังเมื่อ '+E(it.createdAt):''; return '<div class="mjtl-by">'+who+bd+'</div>'; };
+  const days=[], DI={};
+  items.forEach(it=>{ if(DI[it.date]==null){ DI[it.date]=days.length; days.push({date:it.date,its:[]}); } days[DI[it.date]].its.push(it); });
+  let first=true;
+  return '<div class="mjtl">'+days.map(D=>{
+    const nW=D.its.reduce((s,it)=>s+(it.kind==='wd'?it.rows.length:0),0), nN=D.its.filter(it=>it.kind==='note').length;
+    const cnt=[nN?nN+' บันทึก':'', nW?'เบิก '+nW+' รายการ':''].filter(Boolean).join(' · ');
+    return '<div class="mjtl-day"><div class="mjtl-dh">'+dHead(D.date)+'<small>'+cnt+'</small></div><div class="mjtl-list">'+D.its.map(it=>{
+      const nw=first; first=false;
+      if(it.kind==='note' || it.rows.length<2){
+        const txt=it.kind==='note'?it.text:it.raw;
+        const sys=isSys(it.by)&&!(it.kind==='wd');
+        return '<div class="mjtl-it'+(sys?' sys':'')+(it.kind==='wd'?' wd':'')+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-tx">'+txt+'</div>'+byLine(it)+'</div>';
+      }
+      const rows=it.rows.slice().reverse();
+      const tot=rows.reduce((s,r)=>s+r.amt,0), nz=rows.filter(r=>!r.amt).length;
+      const locs=[...new Set(rows.map(r=>r.loc).filter(Boolean))];
+      const open=!!_mjTlOpen[it.k];
+      return '<div class="mjtl-it wd'+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-wd'+(open?' open':'')+'">'
+        +'<div class="mjtl-wh" onclick="mjTlToggle(\''+E(it.k)+'\',this)" title="กดเพื่อดู/ซ่อนรายการ"><span class="cv">▶</span><span class="t">📦 เบิกอะไหล่ '+rows.length+' รายการ</span>'
+        +locs.map(l=>'<span class="loc">'+E(l)+'</span>').join('')
+        +(nz?'<span class="zz" title="ราคาต่อชิ้นในคลังเป็น ฿0 ตอนเบิก · ถ้าของมากับ Memo ต้นทุนถูกคิดรวมที่ Memo แล้ว">ไม่มีราคาต่อชิ้น '+nz+'</span>':'')
+        +'<span class="sum">฿'+N(tot)+'</span></div>'
+        +'<div class="mjtl-wb">'+rows.map((r,j)=>'<div class="mjtl-r"><span class="n">'+(j+1)+'</span><span>'+E(r.name)
+            +(locs.length>1&&r.loc?' <span style="color:#9AA1AE">· '+E(r.loc)+'</span>':'')+(r.tag?' <span class="lt">'+E(r.tag)+'</span>':'')+'</span>'
+            +'<span class="q">'+N(r.qty)+' '+E(r.unit)+'</span><span class="a'+(r.amt?'':' z')+'">'+(r.amt?'฿'+N(r.amt):'฿0')+'</span></div>').join('')
+        +'</div></div>'+byLine(it)+'</div>';
+    }).join('')+'</div></div>';
+  }).join('')+'</div>';
 }
 // Parts-withdrawn list + subtotal inner HTML (shared by full render + surgical refresh)
 // §mjLateParts · job ที่เปิดโหมดแก้อะไหล่ย้อนหลังอยู่ (ทีละงาน · ปิดเองเมื่อสลับงาน)
