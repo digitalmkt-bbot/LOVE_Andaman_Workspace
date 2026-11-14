@@ -146,8 +146,8 @@ const OS_ASC  = [...OS_TABLES].sort((a, b) => _osDepth(a) - _osDepth(b));   // p
 const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // children first (delete)
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
-// §capHist (2026-11-14) · แหล่งที่นั่งรายวันของเรือ · boot เช็คแล้วสลับเป็น v_boat_capovr_eff (migration 048)
-//   = boat_capovr (ปรับเฉพาะวัน) + ช่วงที่นั่ง boats__caphist ในคีย์เดียวกัน '<date>::<boatId>'
+// §capHist (2026-11-14) · แหล่งที่นั่งรายวันของเรือ · boot เช็คแล้วสลับเป็น v_boat_capacity_effective (migration 048)
+//   = boat_capovr (ปรับเฉพาะวัน) + ช่วงที่นั่ง boats__capacity_history ในคีย์เดียวกัน '<date>::<boatId>'
 let CAPOVR_TABLE = 'boat_capovr';
 
 // ── save-safety guard (2026-07-10 · feat/validation-deprecate-blob) ──────────────────────────────
@@ -1910,10 +1910,10 @@ async function initDb(){
     _step = 'migrations';
     try { await runMigrations(); }
     catch(e){ console.error('[mig] runner error (boot continues):', e.message); }
-    // §capHist · 048 สร้าง v_boat_capovr_eff (ปรับรายวัน + ช่วงที่นั่งของเรือ) · มีแล้วใช้ตัวนั้น ไม่มีก็อ่าน boat_capovr เหมือนเดิม
+    // §capHist · 048 สร้าง v_boat_capacity_effective (ปรับรายวัน + ช่วงที่นั่งของเรือ) · มีแล้วใช้ตัวนั้น ไม่มีก็อ่าน boat_capovr เหมือนเดิม
     try {
-      const r = await pool.query('SELECT to_regclass($1) IS NOT NULL AS ok', [OS_SCHEMA + '.v_boat_capovr_eff']);
-      CAPOVR_TABLE = (r.rows[0] && r.rows[0].ok) ? 'v_boat_capovr_eff' : 'boat_capovr';
+      const r = await pool.query('SELECT to_regclass($1) IS NOT NULL AS ok', [OS_SCHEMA + '.v_boat_capacity_effective']);
+      CAPOVR_TABLE = (r.rows[0] && r.rows[0].ok) ? 'v_boat_capacity_effective' : 'boat_capovr';
       console.log('[capHist] seat override source = ' + CAPOVR_TABLE);
     } catch(e){ console.error('[capHist] source check failed (stays boat_capovr):', e.message); }
     // §dbDrift · หลัง migration · ตารางอยู่ในสภาพสุดท้ายแล้วค่อยเทียบกับ model

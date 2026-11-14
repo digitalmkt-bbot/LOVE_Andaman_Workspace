@@ -15076,7 +15076,7 @@ function _boatCapKey(boatId,date){ return String(date||'')+'::'+String(boatId||'
    owner "ถ้าเราแก้ตรงที่เดิม กลัวจะมีผลกระทบกับที่ผ่านมา" · "มันต้องมีวันจบด้วยไหม และมี Note เพิ่ม"
    ที่นั่งของวันหนึ่ง = ปรับเฉพาะวัน (BOAT_CAP_OVR) › ช่วงที่คลุมวันนั้น › boat.cap (ค่าตั้งต้น)
    ช่วงที่คลุม: ช่วงชั่วคราว (มีวันจบ) ชนะช่วงถาวร · ถัดมา from ล่าสุด · ถัดมา at ล่าสุด
-   ฝั่ง server ใช้กติกาเดียวกัน (db/migrations 048 · v_boat_capovr_eff) ══ */
+   ฝั่ง server ใช้กติกาเดียวกัน (db/migrations 048 · v_boat_capacity_effective) ══ */
 function boatCapHistPick(H, date){
   if(!Array.isArray(H) || !H.length || !date) return null;
   const d=String(date).slice(0,10);

@@ -221,7 +221,7 @@ async function readDays(pool, { fqt, qic, capOvrTable }, routes, from, to, exclu
        ORDER BY trips_id, ${qic('key')}, row_pk DESC`,
       [from, to]),
     // left(key,10): the key is '<date>::<boatId>', so a plain key<=to drops same-day ranges.
-    // §capHist · v_boat_capovr_eff = ปรับรายวัน + ช่วงที่นั่งของเรือ (server เลือกให้ตอนบูต · ไม่มี view ก็ boat_capovr)
+    // §capHist · v_boat_capacity_effective = ปรับรายวัน + ช่วงที่นั่งของเรือ (server เลือกให้ตอนบูต · ไม่มี view ก็ boat_capovr)
     pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt(capOvrTable || 'boat_capovr')}
                 WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [from, to]),
     pool.query(`SELECT routes_id, ${qic('type')} AS ty, ${qic('from')} AS f, ${qic('to')} AS t

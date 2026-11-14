@@ -414,7 +414,7 @@
       "db_type": "text"
     }
   },
-  "boats__caphist": {
+  "boats__capacity_history": {
     "boats_id": {
       "source": "(link) boats.id",
       "kind": "fk",

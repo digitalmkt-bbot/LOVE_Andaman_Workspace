@@ -384,7 +384,7 @@
     ],
     "rows": 93
   },
-  "boats__caphist": {
+  "boats__capacity_history": {
     "columns": [
       {
         "name": "boats_id",
