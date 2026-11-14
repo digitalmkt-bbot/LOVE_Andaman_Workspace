@@ -86972,6 +86972,9 @@ function pc2MDate(ds){ var w=-1; try{ w=new Date(ds+'T12:00:00').getDay(); }catc
   return '<span class="pc2-md'+((w===0||w===6)?' we':'')+'"><i>'+(['อา','จ','อ','พ','พฤ','ศ','ส'][w]||'')+'</i><b>'+pcE(pc2D(ds))+'</b></span>'; }
 function pc2PKMonth(pier){
   var days=pcDates(pier,_pcYM);
+  /* §pkMonth3 · ลำดับตามหน้า Programs */
+  var _RP={}; try{ var _rs=(typeof ROUTES!=='undefined'&&ROUTES||[]).slice(); if(typeof laBySort==='function') _rs.sort(laBySort); _rs.forEach(function(r,i){ if(r) _RP[r.id]=i; }); }catch(_){ }
+  var pos=function(rid){ return (_RP[rid]!=null)?_RP[rid]:99999; };
   var bl=function(i){ return i===0?'':(i===4?' tf':' cl'); };
   var Z=function(){ return PC_PK.map(function(){ return 0; }); };
   var mk=function(){ return { T:Z(), tot:0, K:Z(), anyk:false, kt:0, dk:0, ex:0, anyx:false, m:0, exP:0, anyP:false, miss:0, n:0 }; };
@@ -86993,7 +86996,7 @@ function pc2PKMonth(pier){
     var D=pcDay(pier,ds,false)||{pk:{}}, G=[], gi={};
     pcBoats(ds,pier).forEach(function(B){
       var k=B.rid||'_';
-      if(RI[k]==null){ RI[k]=RL.length; RL.push({rid:B.rid, key:k, route:B.route, A:mk(), nd:0}); }
+      if(RI[k]==null){ RI[k]=RL.length; RL.push({rid:B.rid, key:k, route:B.route, A:mk(), nd:0, ds:{}}); }
       if(_pc2MR && _pc2MR!==k) return;
       if(gi[k]==null){ gi[k]=G.length; G.push({rid:B.rid, key:k, route:B.route, A:mk()}); }
       add(G[gi[k]].A, pcPax(ds,B.bid,pier).n, (D.pk||{})[B.bid]||{}, pcParkRate(B.rid));
@@ -87017,10 +87020,11 @@ function pc2PKMonth(pier){
     var DA=mk(); X.G.forEach(function(g){ merge(DA,g.A); });
     if(!DA.tot && !DA.m && !DA.dk && !DA.anyk) return;      /* วันที่จัดเรือไว้แต่ยังไม่มีคนและยังไม่กรอกอะไร · ไม่ต้องขึ้นแถว */
     X.G=X.G.filter(function(g){ return g.A.tot || g.A.m || g.A.dk || g.A.anyk; });
-    X.G.forEach(function(g){ var r=RL[RI[g.key]]; merge(r.A,g.A); r.nd++; });
+    X.G.forEach(function(g){ var r=RL[RI[g.key]]; merge(r.A,g.A); r.nd++; r.ds[X.ds]=1; });
     merge(MT,DA); nDay++;
     var go=' onclick="pc2MGo(\''+X.ds+'\')" title="เปิดวันที่ '+pcE(pc2D(X.ds))+' เพื่อกรอก/แก้"';
     if(_pc2MSplit){
+      X.G.sort(function(a,b){ return pos(a.rid)-pos(b.rid); });
       X.G.forEach(function(g,ix){
         body+='<div class="pc2-tr pk mrow'+(ix?'':' mfirst')+'"'+go+'><span class="bn gl">'+(ix?'':pc2MDate(X.ds))
           +'<small class="sub">'+pc2Route(g.rid,g.route)+' · '+g.A.n+' ลำ</small></span>'+cells(g.A)+'</div>'; });
@@ -87031,16 +87035,29 @@ function pc2PKMonth(pier){
     }
   });
   var mName=pcE(pc2MonthName(_pcYM)), cur=_pc2MR?RL[RI[_pc2MR]]:null;
+  var RLo=RL.slice().sort(function(a,b){ return pos(a.rid)-pos(b.rid); });
   var chips='<button class="pc2-mf'+(_pc2MR?'':' on')+'" onclick="pc2MRoute(\'\')">ทุกโปรแกรม</button>'
-    +RL.map(function(r){ return '<button class="pc2-mf'+(_pc2MR===r.key?' on':'')+'" onclick="pc2MRoute(\''+pcE(r.key)+'\')">'+pc2Route(r.rid,r.route)+'</button>'; }).join('')
+    +RLo.map(function(r){ return '<button class="pc2-mf'+(_pc2MR===r.key?' on':'')+'" onclick="pc2MRoute(\''+pcE(r.key)+'\')">'+pc2Route(r.rid,r.route)+'</button>'; }).join('')
     ;
   var splitBtn=_pc2MR?'':('<button class="pc2-mf'+(_pc2MSplit?' on':'')+'" onclick="pc2MSplitTog()" title="แต่ละวันแตกเป็นหนึ่งแถวต่อโปรแกรม">'+(_pc2MSplit?'☑':'☐')+' แยกโปรแกรมในแต่ละวัน</button>');
   var byRoute='';
-  if(!_pc2MR && RL.length>1){
-    byRoute='<div class="pc2-tr pk mgh"><span class="span-all">รวม '+mName+' · แยกตามโปรแกรม <small>คลิกเพื่อดูเฉพาะโปรแกรมนั้น</small></span></div>'
-      +RL.filter(function(r){ return r.nd>0; }).map(function(r){
-        return '<div class="pc2-tr pk sub mrow" onclick="pc2MRoute(\''+pcE(r.key)+'\')" title="ดูเฉพาะโปรแกรมนี้"><span class="bn gl">'+pc2Route(r.rid,r.route)
-          +'<small class="sub">'+r.nd+' วัน · '+r.A.n+' เที่ยว</small></span>'+cells(r.A)+'</div>'; }).join('');
+  var RU=RLo.filter(function(r){ return r.nd>0; });
+  if(!_pc2MR && RU.length>1){
+    /* §pkMonth3 · จัดกลุ่มตาม family · ลำดับกลุ่ม = variant แรกของกลุ่มในหน้า Programs */
+    var FM=[], FI={};
+    RU.forEach(function(r){ var f=null; try{ f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.rid):null; }catch(_){ }
+      var fk=f?f.id:('_'+r.key);
+      if(FI[fk]==null){ FI[fk]=FM.length; FM.push({name:f?f.name:(r.route||r.rid||''), color:(f&&f.color)||pcRouteColor(r.rid)||'#C9D2E0', R:[], A:mk(), ds:{}}); }
+      var F=FM[FI[fk]]; F.R.push(r); merge(F.A,r.A); Object.keys(r.ds).forEach(function(d){ F.ds[d]=1; }); });
+    var vrow=function(r,ind){ return '<div class="pc2-tr pk sub mrow'+(ind?' mvar':'')+'" onclick="pc2MRoute(\''+pcE(r.key)+'\')" title="ดูเฉพาะโปรแกรมนี้"><span class="bn gl">'+pc2Route(r.rid,r.route)
+        +'<small class="sub">'+r.nd+' วัน · '+r.A.n+' เที่ยว</small></span>'+cells(r.A)+'</div>'; };
+    byRoute='<div class="pc2-tr pk mgh"><span class="span-all">รวม '+mName+' · แยกตามโปรแกรม <small>เรียงตามหน้า Programs · คลิกแถวเพื่อดูเฉพาะโปรแกรมนั้น</small></span></div>'
+      +FM.map(function(F){
+        if(F.R.length<2) return vrow(F.R[0], false);
+        return '<div class="pc2-tr pk mfam" style="--fc:'+pcE(F.color)+'"><span class="bn gl"><b>'+pcE(F.name)+'</b>'
+            +'<small class="sub">รวม '+F.R.length+' variant · '+Object.keys(F.ds).length+' วัน · '+F.A.n+' เที่ยว</small></span>'+cells(F.A)+'</div>'
+          +F.R.map(function(r){ return vrow(r, true); }).join('');
+      }).join('');
   }
   var hd='<div class="pc2-tr pk hd"><span class="hb gl rs3">วันที่'+(_pc2MSplit&&!_pc2MR?' · โปรแกรม':'')+'</span>'
       +'<span class="g span9 gl" style="--gc:#2E9C78;color:#0B5A43">ตามใบจอง <small>ระบบอ่านให้</small></span>'
@@ -87377,6 +87394,12 @@ function pc2CSS2(S){
   S+' .pc2-mcard .pc2-tr.pk.mgh{grid-template-columns:1fr;background:#F4F6FA;border-top:none}',
   S+' .pc2-mcard .pc2-tr.pk.mgh .span-all{padding:14px 12px 8px;font-size:13px;font-weight:800;color:'+N+';gap:8px}',
   S+' .pc2-mcard .pc2-tr.pk.mgh small{font-size:11.5px;font-weight:500;color:'+M+'}',
+  /* §pkMonth3 · แถวรวมของ family + variant เยื้อง */
+  S+' .pc2-mcard .pc2-tr.pk.mfam{background:#EEF2F8;border-top:1.5px solid #C9D2E0;box-shadow:inset 5px 0 0 var(--fc)}',
+  S+' .pc2-mcard .pc2-tr.pk.mfam>span{min-height:46px;font-weight:700}',
+  S+' .pc2-mcard .pc2-tr.pk.mfam .bn b{font-size:14.5px;font-weight:800}',
+  S+' .pc2-mcard .pc2-tr.pk.mvar .bn{padding-left:30px}',
+  S+' .pc2-mcard .pc2-tr.pk.mvar{background:#FFFFFF}',
   S+' .pc2-prt{margin-left:auto;white-space:nowrap}',
   S+' .pc2-rt{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%} '+S+' .pc2-rt i{flex:none;width:10px;height:10px;border-radius:3px} '+S+' .pc2-rt span{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   S+' .pc2-in{width:100%;box-sizing:border-box;height:32px;border-radius:7px;border:1px solid #E7D3A6;background:#fff;text-align:center;font-family:"DM Mono",monospace;font-size:14px;color:'+N+';outline:none}',
