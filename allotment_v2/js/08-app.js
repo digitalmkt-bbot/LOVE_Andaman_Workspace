@@ -35739,10 +35739,14 @@ function pxPlanFor(routeId){
 }
 /* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
+/* §pxFast (2026-11-14) · owner: "ดูการคลิกหน่อย ช้ามาก" (Trip P&L)
+   pxPax / pxUpsell / pxAgents / pxTransferPax / pxVanCost ไล่ SB_BOOKINGS ทั้งก้อน (12,400 ใบ) ทุกลำทุกวัน
+   แล้วทิ้งใบที่ไม่ได้เดินทางวันนั้นเป็นอย่างแรก · เปลี่ยนเป็น ckBksOn(date) ซึ่งจัดใบตามวันเดินทางไว้แล้ว (§pcFast)
+   ผลเท่าเดิมทุกตัว (เทียบ 10 วันบนข้อมูลจริง: ทริป รายได้ ต้นทุน คน เอเจนต์ ตรงกันหมด) · เร็วขึ้นราว 4 เท่า */
 function pxPax(date, bid){
   var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0, fam:0,famTH:0,famRev:0,famL:[],zeroL:[]};   /* §pxFam */
   var KIND=['ad','chd','inf','foc'];
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pxFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -35840,7 +35844,7 @@ function pxLongtail(date, bid){
    ผูกเข้าลำตามใบจองที่ขายให้ · ทุกรายการในระบบมีเลขใบจองครบ */
 function pxUpsell(date, bid){
   var rows=[], sell=0, comp=0, comm=0, mine={};
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pxFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -35874,7 +35878,7 @@ function pxMrg(D,S){ if(!D||!S) return; Object.keys(S).forEach(function(k){ D[k]
 function pxTopK(m){ var b='',v=-1; Object.keys(m||{}).forEach(function(k){ if(m[k]>v){ v=m[k]; b=k; } }); return b; }
 function pxAgents(date, bid){
   var M={}, ord=[];
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pxFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -35920,7 +35924,7 @@ function pxAgents(date, bid){
    และนับหัวแบบเดียวกับ pxPax (คนที่ขึ้นเรือจริง · ตัดใบยกเลิก/โมฆะ) · ลำที่จัดรถแล้วยังใช้ราคารถจริงเหมือนเดิม */
 function pxTransferPax(date, bid){
   var o={tr:0, nt:0};
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pxFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
@@ -35948,7 +35952,7 @@ function pxTransferPax(date, bid){
    · คันเดียวกัน เส้นทางเดียวกัน = รอบเดียวเสมอ (เรือออกเวลาเดียว วิ่งสองรอบไม่ทัน) แม้แยกกรุ๊ปไว้ */
 function pxVanCost(date, bid, routeId){
   var legs=[];
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+  ckBksOn(date).forEach(function(b){   /* §pxFast */
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
