@@ -38607,9 +38607,13 @@ function pxStepTable(e, M, title, sub){
    ขั้นที่ 4 (ค่าใช้จ่ายส่วนกลางและรายได้อื่น) ไม่มีในระบบ · กรอกเองเดือนละครั้งจากงบจริง
      เก็บที่ ctRead('px_central') = { 'YYYY-MM': { oi, pw, pr, bm, ut, pay, sm, opx } }
      เดือนไหนยังไม่กรอก ใช้ยอดของเดือนล่าสุดที่กรอกไว้ · กรองท่าอยู่ = ไม่แสดงขั้นที่ 4 (เป็นยอดทั้งบริษัท) */
-var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต้นทุน',1],['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0],
-  ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0],['ut','ไฟ น้ำ ซักรีด แคนู',0],['pay','Payroll สำนักงาน',0],
-  ['sm','Sales & Marketing',0],['opx','Operating expenses (ไม่รวมซ่อมเรือ)',0]];
+/* §pxFcFix (2026-11-14) · owner: "จัดเรียงใหม่ · อันไหนคาดว่าจะเป็นฟิค: ค่าจ้าง ค่าเช่า ค่าไฟน้ำ Payroll · ส่วนที่เหลือน่าจะควบคุมได้"
+   ช่องที่ 4 ของแต่ละรายการ: 'f' = คงที่ (Fixed) · 'c' = ควบคุมได้ (Controllable) · รายได้อื่นไม่มีกลุ่ม */
+var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต้นทุน',1,''],
+  ['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0,'f'],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0,'f'],
+  ['ut','ไฟ น้ำ ซักรีด แคนู',0,'f'],['pay','Payroll สำนักงาน',0,'f'],
+  ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0,'c'],['sm','Sales & Marketing',0,'c'],
+  ['opx','Operating expenses (ไม่รวมซ่อมเรือ)',0,'c']];
 /* §pxFcSeed (2026-11-14) · owner: "ใส่ให้หน่อยเลย · งบของ Nov เอาของเดือน Oct มาตั้งไว้ให้ก่อน ถ้าออกมาจริง user ค่อยแก้"
    ยอดตั้งต้นจากงบจริง ต.ค. 2026 (P&L Love Island 2026 board) · เดือนถัดไปที่ยังไม่กรอกจะหยิบยอดนี้ไปใช้เอง
    ค่าที่ user กรอกในหน้า (px_central) ทับยอดตั้งต้นเสมอ · ไม่มีการเขียนข้อมูลตอนโหลด */
@@ -38791,7 +38795,8 @@ function pxForecast(e){
     cenRows=grp('4 · Central costs', 'ยอดรายเดือนจากงบจริง · ไม่ผันตามเที่ยว'
         +(hasCen?(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src))+' (เดือนนี้ยังไม่ได้กรอก)')):' · ยังไม่ได้กรอก'),
         '<button class="fced" onclick="pxFcEdit()">'+(ed?'เสร็จ':'กรอก / แก้ไข')+'</button>')
-      +PX_FC_CEN.filter(function(c){ return !c[2]; }).map(cenRow).join('')
+      +cenGrp('f','Fixed · คงที่','เกิดทุกเดือนใกล้เคียงเดิม')
+      +cenGrp('c','Controllable · ควบคุมได้','ขยับได้ตามการตัดสินใจของเดือนนั้น')
       +'<tr class="sm cs"><td class="l">Σ Central costs</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
         +'<td class="mc"><span class="n">'+(hasCen?pxN(cenNet):'—')+'</span></td><td class="pv"><span class="n">—</span></td></tr>'
       +'<tr class="step"><td class="l">= Tour EBITDA (ธุรกิจหลัก)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
@@ -38802,6 +38807,12 @@ function pxForecast(e){
       +'<tr class="fin"><td class="l">= EBITDA forecast (รวมรายได้อื่น)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
         +'<td><span class="n" style="color:'+(hasCen?(EB<0?'#FCA5A5':'#86EFAC'):'#fff')+'">'+(hasCen?pxSg(EB):'—')+'</span></td>'
         +'<td><span class="n">—</span></td></tr>';
+    function cenGrp(g, t, note){ var L=PX_FC_CEN.filter(function(c){ return c[3]===g; }), sum=0;
+      L.forEach(function(c){ sum+=cv?(+cv[c[0]]||0):0; });
+      return '<tr class="sub"><td colspan="5">'+t+'<span>'+note+'</span></td></tr>'+L.map(cenRow).join('')
+        +'<tr class="subt"><td class="l">รวม '+t.split(' · ')[1]+'</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td class="mc"><span class="n">'+(hasCen?pxN(sum):'—')+'</span> <small>'+((hasCen&&cenNet)?pxPc(sum,cenNet):'')+'</small></td>'
+        +'<td class="pv"><span class="n">—</span></td></tr>'; }
     function cenRow(c){ var v=cv?(+cv[c[0]]||0):0;
         var sysBm=(c[0]==='bm' && bmSys);
         return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])
@@ -38893,6 +38904,11 @@ function pxFcCSS(){ var H='#trippl-host '; return ''
  +H+'.fced:hover{background:#EEF2FF}'
  +H+'.fcin{width:130px;border:1px solid #C7D2FE;border-radius:7px;padding:4px 8px;text-align:right;font:700 12px inherit;color:#0F1B3D;background:#fff}'
  +H+'.fcsys{display:block;font-size:10px;font-weight:500;color:#5B6679}'
+ +H+'table.fct tr.sub td{text-align:left;background:#fff;padding:8px 12px 3px;font-size:10px;font-weight:800;letter-spacing:.4px;color:#3D4A63;border-bottom:1px solid #E3E8F0}'
+ +H+'table.fct tr.sub td span{font-weight:500;letter-spacing:0;color:#5B6679;margin-left:8px}'
+ +H+'table.fct tr.subt td{background:#FAFBFD;font-weight:800;border-bottom:1px solid #E3E8F0}'
+ +H+'table.fct tr.subt td:not(.l):not(.pv){color:#B45309}'
+ +H+'table.fct tr.subt small{font-size:9.5px;font-weight:600;color:#5B6679;margin-left:4px}'
  +H+'table.fct tr.inf td{background:#FAFBFD;color:#5B6679;font-weight:600}'
  +H+'.fcn{margin:8px 0 0;font-size:10.5px;line-height:1.7;color:#5B6679}';
 }
