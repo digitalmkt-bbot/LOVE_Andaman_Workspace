@@ -38661,6 +38661,24 @@ function pxForecast(e){
   var HEAD=hasCen?EB:S3.c;
 
   function mil(n){ return (Math.abs(n)/1e6).toFixed(2); }
+  /* §pxFcLine (2026-11-14) · owner: "ทำไมยังไม่มีเส้นเหมือน Mockup" · เส้นช่วงในแถบบน
+     กรอกขั้นที่ 4 แล้ว: แถบ = EBITDA forecast → หลังค่าเสื่อม (ความกว้าง = ค่าใช้จ่ายส่วนกลางสุทธิ)
+     ยังไม่กรอก:        แถบ = ยอดจริงถึงเมื่อวาน → คาดทั้งเดือน (หลังค่าเสื่อม)
+     มีขีด 0 และขีดเดือนก่อน (ระบบ) ให้เทียบ · ทุกจุดเป็นตัวเลขที่ระบบมีจริง */
+  var fcLine=(function(){
+    var lo=hasCen?EB:S3.a, hi=S3.c, loLb=hasCen?'EBITDA forecast':('จริง '+dA), hiLb='หลังค่าเสื่อม ทั้งเดือน';
+    if(lo>hi){ var _t=lo; lo=hi; hi=_t; _t=loLb; loLb=hiLb; hiLb=_t; }
+    var mn=Math.min(0, lo, hi, S3.p), mxv=Math.max(0, lo, hi, S3.p), sp=(mxv-mn)||1;
+    function ps(v){ return (6+(v-mn)/sp*88).toFixed(2); }
+    function end(v, lb){ return '<i class="dot" style="left:'+ps(v)+'%"></i>'
+      +'<b class="n" style="left:'+ps(v)+'%;color:'+pxSgC(v)+'">'+pxSg(v)+'</b><span style="left:'+ps(v)+'%">'+e(lb)+'</span>'; }
+    return '<div class="fcl" role="img" aria-label="'+e(loLb+' '+pxSg(lo)+' · '+hiLb+' '+pxSg(hi)+' · '+pLbl+' '+pxSg(S3.p))+'">'
+      +'<i class="trk"></i><i class="rng" style="left:'+ps(lo)+'%;width:'+(ps(hi)-ps(lo)).toFixed(2)+'%"></i>'
+      +'<i class="zero" style="left:'+ps(0)+'%"></i><u style="left:'+ps(0)+'%">0</u>'
+      +end(lo, loLb)+end(hi, hiLb)
+      +'<i class="pm" style="left:'+ps(S3.p)+'%"></i><em class="n" style="left:'+ps(S3.p)+'%">'+e(pLbl.slice(0,3))+' ระบบ '+pxSg(S3.p)+'</em>'
+      +'</div>';
+  })();
   var hero='<div class="fch"><div class="fch-l"><small>'+(hasCen?'EBITDA FORECAST':'FORECAST AFTER DEPRECIATION')+' · '+e(mLbl.toUpperCase())+'</small>'
     +'<b class="n" style="color:'+pxSgC(HEAD)+'">'+(HEAD<0?'−':'+')+mil(HEAD)+' <u>ล้าน ฿</u></b>'
     +'<p>'+(hasCen?('หลังหักค่าใช้จ่ายส่วนกลางสุทธิ '+pxN(cenNet)+' ฿'+(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src)))))
@@ -38669,7 +38687,7 @@ function pxForecast(e){
     +'<div><small>ACTUAL '+e(dA)+'</small><b class="n" style="color:'+pxSgC(S3.a)+'">'+pxSg(S3.a)+'</b><u>หลังค่าเสื่อม</u></div>'
     +'<div><small>FORECAST '+e(dB)+'</small><b class="n" style="color:'+pxSgC(S3.b)+'">'+pxSg(S3.b)+'</b><u>หลังค่าเสื่อม</u></div>'
     +'<div><small>'+e(pLbl.toUpperCase())+' · SYSTEM</small><b class="n" style="color:'+pxSgC(S3.p)+'">'+pxSg(S3.p)+'</b><u>หลังค่าเสื่อม ทั้งเดือน</u></div>'
-    +'</div></div>';
+    +'</div>'+fcLine+'</div>';
 
   function kcard(col, lb, big, bigCol, l2, w, l3, l3Col, neg){
     return '<div class="fck'+(neg?' neg':'')+'" style="border-top-color:'+col+'"><small>'+lb+'</small>'
@@ -38775,6 +38793,17 @@ function pxFcCSS(){ var H='#trippl-host '; return ''
  +H+'.fch-r>div{border:1px solid #E3E8F0;border-radius:10px;padding:9px 14px;min-width:150px}'
  +H+'.fch-r b{display:block;font-size:17px;font-weight:800;margin-top:3px}'
  +H+'.fch-r u{text-decoration:none;font-size:10.5px;color:#5B6679}'
+ +H+'.fcl{position:relative;flex:1 1 100%;height:86px;margin-top:2px}'
+ +H+'.fcl i,'+H+'.fcl b,'+H+'.fcl span,'+H+'.fcl u,'+H+'.fcl em{position:absolute;font-style:normal;text-decoration:none;white-space:nowrap}'
+ +H+'.fcl .trk{left:0;right:0;top:28px;height:10px;border-radius:5px;background:#E3E8F0}'
+ +H+'.fcl .rng{top:28px;height:10px;border-radius:5px;background:#B45309}'
+ +H+'.fcl .zero{top:19px;width:2px;height:28px;background:#0F1B3D}'
+ +H+'.fcl u{top:50px;transform:translateX(-50%);font-size:10.5px;font-weight:700;color:#5B6679}'
+ +H+'.fcl .dot{top:25px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#fff;border:4px solid #B45309;box-sizing:border-box}'
+ +H+'.fcl b{top:0;transform:translateX(-50%);font-size:12.5px;font-weight:800}'
+ +H+'.fcl span{top:50px;transform:translateX(-50%);font-size:10.5px;color:#5B6679;background:#fff;padding:0 4px}'
+ +H+'.fcl .pm{top:22px;width:3px;height:22px;margin-left:-1px;border-radius:2px;background:#1D4ED8}'
+ +H+'.fcl em{top:68px;transform:translateX(-50%);font-size:10.5px;font-weight:700;color:#1D4ED8}'
  +H+'.fckg{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:12px}'
  +H+'.fck{background:#fff;border:1px solid #E3E8F0;border-top:4px solid #0F1B3D;border-radius:12px;padding:12px 14px}'
  +H+'.fck.neg{background:#FDECEC;border-color:#F3B9B9}'+H+'.fck.off{background:#F8FAFC}'
