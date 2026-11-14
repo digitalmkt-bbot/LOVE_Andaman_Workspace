@@ -38624,12 +38624,32 @@ function pxFcCentral(ym){
 function pxFcSet(ym, k, raw){
   var n=parseFloat(String(raw==null?'':raw).replace(/[,\s฿]/g,'')); if(!isFinite(n)) n=0;
   var all=pxFcSaved();
-  var cur=all[ym]; if(!cur){ cur=Object.assign({}, pxFcCentral(ym).v||{}); }
-  cur[k]=Math.round(n); all[ym]=cur;
+  var cur=all[ym]; if(!cur){ var _src=pxFcCentral(ym); cur=Object.assign({}, _src.v||{}); if(!_src.own) delete cur.bm; }   /* §pxFcMaint · ยอดซ่อมไม่ยกข้ามเดือน */
+  if(k==='bm' && String(raw==null?'':raw).trim()==='') delete cur.bm;   /* §pxFcMaint · ว่าง = ใช้ยอดจากระบบ */
+  else cur[k]=Math.round(n);
+  all[ym]=cur;
   ctWrite('px_central', all);
   renderTripPL();
 }
 function pxFcEdit(){ _px.fcEd=!_px.fcEd; renderTripPL(); }
+/* §pxFcMaint (2026-11-14) · owner: "Boat maintenance เรามีตัวเลขในระบบอยู่แล้ว เอามาช่วยประเมิน"
+   + "อิงเมโม่ที่เกิดในเดือนนั้น ๆ เป็นของเดือนนั้น ๆ เลย"
+   ยอดซ่อมของเดือน = Memo ฝั่ง Fleet ที่อนุมัติแล้ว (approved / received / paid) นับตามวันที่สร้าง Memo
+   เทียบงบจริง ก.ค.–ต.ค. 2026: Memo รวม 4.12 ล้าน · Boat Maintenance ในงบ 3.55 ล้าน (รายเดือนเหลื่อมกัน ยอดสะสมใกล้กัน)
+   วันที่เหลือของเดือนคาดด้วยค่าเฉลี่ยต่อวันของยอดถึงเมื่อวาน
+   บรรทัด "ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม" = ยอดซ่อมของเดือน − ค่าเสื่อมที่วางไว้ (ไม่ต่ำกว่า 0)
+   ใช้เมื่อเดือนนั้นยังไม่มีคนกรอกบรรทัดนี้เอง · กรอกทับได้ · ลบค่าที่กรอก = กลับมาใช้ยอดจากระบบ */
+function pxFcMaint(ym, today, nAct, nRem){
+  var CNT={ paid:1, received:1, approved:1 }, a=0, all=0;
+  ((typeof FL_MEMOS!=='undefined' && FL_MEMOS)||[]).forEach(function(mo){
+    if(!mo || !CNT[mo.status]) return;
+    var d=String(mo.createdDate||mo.date||'').slice(0,10); if(d.slice(0,7)!==ym) return;
+    var v=+mo.amount||0; all+=v; if(d<today) a+=v;
+  });
+  var b=(nAct>0 && nRem>0)?(a/nAct*nRem):0;
+  var c=Math.max(a+b, all);
+  return { a:a, b:c-a, c:c, p:0 };
+}
 function pxFcMonLbl(ym){ return (PX_MON[(+String(ym).slice(5,7))-1]||'')+' '+String(ym).slice(0,4); }
 function pxForecast(e){
   var ym=_px.mon||String(_px.date||'').slice(0,7);
@@ -38662,6 +38682,10 @@ function pxForecast(e){
   var dA=act.length?('1–'+act.length):'—', dB=rem.length?((act.length+1)+'–'+last):'—';
   /* ขั้นที่ 4 */
   var CEN=_px.pier?{ v:null, src:'', own:false }:pxFcCentral(ym), cv=CEN.v, cenNet=0, hasCen=!!cv;
+  /* §pxFcMaint */
+  var MT=pxFcMaint(ym, today, act.length, rem.length), PMT=pxFcMaint(pym, today, plast, 0), bmSys=false;
+  MT.p=PMT.c;
+  if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.max(0, Math.round(MT.c-DP.c)) }); bmSys=true; }
   if(cv){ PX_FC_CEN.forEach(function(c){ var v=+cv[c[0]]||0; cenNet+=c[2]?-v:v; }); }
   var EB=S3.c-cenNet;
   var HEAD=hasCen?EB:S3.c;
@@ -38757,8 +38781,11 @@ function pxForecast(e){
         +(hasCen?(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src))+' (เดือนนี้ยังไม่ได้กรอก)')):' · ยังไม่ได้กรอก'),
         '<button class="fced" onclick="pxFcEdit()">'+(ed?'เสร็จ':'กรอก / แก้ไข')+'</button>')
       +PX_FC_CEN.map(function(c){ var v=cv?(+cv[c[0]]||0):0;
-        return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])+'</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
-          +'<td class="mc">'+(ed?('<input class="fcin n" inputmode="numeric" value="'+(v||'')+'" placeholder="0" '
+        var sysBm=(c[0]==='bm' && bmSys);
+        return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])
+          +(sysBm?('<small class="fcsys n">จากระบบ · Memo ซ่อม '+pxN(MT.c)+' \u2212 ค่าเสื่อม '+pxN(DP.c)+(ed?' · กรอกเพื่อทับ':'')+'</small>'):'')
+          +'</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+          +'<td class="mc">'+(ed?('<input class="fcin n" inputmode="numeric" value="'+(sysBm?'':(v||''))+'" placeholder="'+(sysBm?pxN(v):'0')+'" '
               +'onchange="pxFcSet(\''+e(ym)+'\',\''+c[0]+'\',this.value)">')
             :('<span class="n"'+(c[2]&&v?' style="color:#0A6B49"':'')+'>'+(v?((c[2]?'+':'')+pxN(v)):'—')+'</span>'))+'</td>'
           +'<td class="pv"><span class="n">—</span></td></tr>'; }).join('')
@@ -38778,7 +38805,9 @@ function pxForecast(e){
     +grp('Revenue · by programme','รายได้ทัวร์ไม่รวม VAT')+famRows+line('Σ Revenue', REV, 'sm')
     +grp('1 · Operation cost','ต้นทุนที่เกิดจริงต่อเที่ยว')+lines(PX_ST_OP)+line('Σ Operation cost', OP, 'sm cs')+stepRow('= After operation cost', S1)
     +grp('2 · Wages','ไกด์ กัปตัน เด็กเรือ ตามอัตราที่วางไว้')+lines(PX_ST_WG)+line('Σ Wages', WG, 'sm cs')+stepRow('= After wages', S2)
-    +grp('3 · Depreciation','ตัวแทนค่าซ่อมบำรุงเรือ · เทียบกับ Boat Maintenance ในงบ')+line('ค่าเสื่อมเรือ', DP, 'cs')+stepRow('= After depreciation', S3)
+    +grp('3 · Depreciation','ตัวแทนค่าซ่อมบำรุงเรือ · เทียบกับ Boat Maintenance ในงบ')+line('ค่าเสื่อมเรือ', DP, 'cs')
+    +(_px.pier?'':line('Memo ซ่อมบำรุงที่อนุมัติ (ระบบ) <small class="fcsys" style="display:inline">· ไว้เทียบ ไม่รวมในยอด</small>', MT, 'inf'))   /* §pxFcMaint */
+    +stepRow('= After depreciation', S3)
     +cenRows+'</tbody></table></div></div>'
     +'<p class="fcn">วิธีคาดการณ์: ค่าเฉลี่ยต่อวันของ '+(basisOwn?('วันที่เดินทางแล้วในเดือนนี้ ('+basis.length+' วัน)'):('14 วันล่าสุด เพราะเดือนนี้ยังมียอดจริงไม่ถึง 3 วัน'))
       +' × '+rem.length+' วันที่เหลือ · วันนี้นับเป็นวันคาดการณ์ · ยังไม่ได้แยกตามวันในสัปดาห์หรือฤดูกาล</p>'
@@ -38845,6 +38874,8 @@ function pxFcCSS(){ var H='#trippl-host '; return ''
  +H+'.fced{float:right;border:1px solid #C7D2FE;background:#fff;color:#3730A3;border-radius:8px;padding:3px 10px;font:700 11px inherit;cursor:pointer}'
  +H+'.fced:hover{background:#EEF2FF}'
  +H+'.fcin{width:130px;border:1px solid #C7D2FE;border-radius:7px;padding:4px 8px;text-align:right;font:700 12px inherit;color:#0F1B3D;background:#fff}'
+ +H+'.fcsys{display:block;font-size:10px;font-weight:500;color:#5B6679}'
+ +H+'table.fct tr.inf td{background:#FAFBFD;color:#5B6679;font-weight:600}'
  +H+'.fcn{margin:8px 0 0;font-size:10.5px;line-height:1.7;color:#5B6679}';
 }
 
