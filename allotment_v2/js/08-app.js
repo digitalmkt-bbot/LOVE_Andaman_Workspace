@@ -38690,9 +38690,14 @@ function pxForecast(e){
   var MT=pxFcMaint(ym, today, act.length, rem.length), PMT=pxFcMaint(pym, today, plast, 0), bmSys=false;
   MT.p=PMT.c;
   if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.max(0, Math.round(MT.c-DP.c)) }); bmSys=true; }
-  if(cv){ PX_FC_CEN.forEach(function(c){ var v=+cv[c[0]]||0; cenNet+=c[2]?-v:v; }); }
-  var EB=S3.c-cenNet;
-  var HEAD=hasCen?EB:S3.c;
+  /* §pxFcCore (2026-11-14) · owner: "ควรแยกไหม เพราะเราอยากเห็นส่วนที่เป็นรายได้หลักก่อน"
+     ขั้นที่ 4 = ค่าใช้จ่ายส่วนกลางอย่างเดียว → EBITDA ทัวร์ (ธุรกิจหลัก) · ตัวเลขหลักของหน้า
+     ขั้นที่ 5 = รายได้อื่นสุทธิ (ไม่ใช่ทัวร์) → EBITDA รวม · ตัวที่เทียบกับงบจริงได้
+     cenNet จากนี้ = ค่าใช้จ่ายส่วนกลางล้วน ไม่หักรายได้อื่นแล้ว */
+  var oiV=0;
+  if(cv){ PX_FC_CEN.forEach(function(c){ var v=+cv[c[0]]||0; if(c[2]) oiV+=v; else cenNet+=v; }); }
+  var CORE=S3.c-cenNet, EB=CORE+oiV;
+  var HEAD=hasCen?CORE:S3.c;
 
   function mil(n){ return (Math.abs(n)/1e6).toFixed(2); }
   /* §pxFcLine (2026-11-14) · owner: "ทำไมยังไม่มีเส้นเหมือน Mockup" · เส้นช่วงในแถบบน
@@ -38700,7 +38705,7 @@ function pxForecast(e){
      ยังไม่กรอก:        แถบ = ยอดจริงถึงเมื่อวาน → คาดทั้งเดือน (หลังค่าเสื่อม)
      มีขีด 0 และขีดเดือนก่อน (ระบบ) ให้เทียบ · ทุกจุดเป็นตัวเลขที่ระบบมีจริง */
   var fcLine=(function(){
-    var lo=hasCen?EB:S3.a, hi=S3.c, loLb=hasCen?'EBITDA forecast':('จริง '+dA), hiLb='หลังค่าเสื่อม ทั้งเดือน';
+    var lo=hasCen?CORE:S3.a, hi=S3.c, loLb=hasCen?'EBITDA ทัวร์':('จริง '+dA), hiLb='หลังค่าเสื่อม ทั้งเดือน';
     if(lo>hi){ var _t=lo; lo=hi; hi=_t; _t=loLb; loLb=hiLb; hiLb=_t; }
     var mn=Math.min(0, lo, hi, S3.p), mxv=Math.max(0, lo, hi, S3.p), sp=(mxv-mn)||1;
     function ps(v){ return (6+(v-mn)/sp*88).toFixed(2); }
@@ -38713,9 +38718,10 @@ function pxForecast(e){
       +'<i class="pm" style="left:'+ps(S3.p)+'%"></i><em class="n" style="left:'+ps(S3.p)+'%">'+e(pLbl.slice(0,3))+' ระบบ '+pxSg(S3.p)+'</em>'
       +'</div>';
   })();
-  var hero='<div class="fch"><div class="fch-l"><small>'+(hasCen?'EBITDA FORECAST':'FORECAST AFTER DEPRECIATION')+' · '+e(mLbl.toUpperCase())+'</small>'
+  var hero='<div class="fch"><div class="fch-l"><small>'+(hasCen?'TOUR EBITDA FORECAST':'FORECAST AFTER DEPRECIATION')+' · '+e(mLbl.toUpperCase())+'</small>'
     +'<b class="n" style="color:'+pxSgC(HEAD)+'">'+(HEAD<0?'−':'+')+mil(HEAD)+' <u>ล้าน ฿</u></b>'
-    +'<p>'+(hasCen?('หลังหักค่าใช้จ่ายส่วนกลางสุทธิ '+pxN(cenNet)+' ฿'+(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src)))))
+    +'<p>'+(hasCen?('ธุรกิจหลัก · หลังหักค่าใช้จ่ายส่วนกลาง '+pxN(cenNet)+' ฿'+(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src))))
+          +'<br>รวมรายได้อื่น +'+pxN(oiV)+' → EBITDA รวม <b class="n" style="display:inline;font-size:12px;letter-spacing:0;color:'+pxSgC(EB)+'">'+pxSg(EB)+'</b>')
         :(_px.pier?'กรองท่าอยู่ · ขั้นที่ 4 เป็นยอดทั้งบริษัท จึงไม่นำมาหัก':'ยังไม่ได้กรอกขั้นที่ 4 · ตัวเลขนี้ยังไม่ใช่ EBITDA'))+'</p></div>'
     +fcLine   /* §pxFcRow · owner: "เอาเส้นไปอยู่แถวเดียวกัน" · ซ้าย = ตัวเลข · กลาง = เส้น · ขวา = กล่อง */
     +'<div class="fch-r">'
@@ -38742,10 +38748,10 @@ function pxForecast(e){
     +stepCard('#1D4ED8','1 · หลัง Operation cost', S1, OP.c, ' Operation cost', { v:S1.p, rev:REV.p })
     +stepCard('#B45309','2 · หลังค่าจ้าง', S2, WG.c, 'ค่าจ้าง', { v:S2.p, rev:REV.p })
     +stepCard('#6D28D9','3 · หลังค่าเสื่อม', S3, DP.c, 'ค่าเสื่อม', { v:S3.p, rev:REV.p })
-    +(hasCen?kcard(EB<0?'#B91C1C':'#0A6B49','4 · EBITDA (หลังส่วนกลาง)', (EB<0?'−':'+')+mil(EB), pxSgC(EB),
-        'หักส่วนกลางสุทธิ '+mil(cenNet)+' ล้าน', REV.c?Math.abs(EB/REV.c*100):0,
-        (EB<0?'ติดลบ ':'เหลือ ')+(REV.c?Math.abs(EB/REV.c*100).toFixed(0):'0')+'% ของรายได้', pxSgC(EB), EB<0)
-      :'<div class="fck off" style="border-top-color:#94A3B8"><small>4 · EBITDA (หลังส่วนกลาง)</small><b>—</b>'
+    +(hasCen?kcard(CORE<0?'#B91C1C':'#0A6B49','4 · EBITDA ทัวร์ (หลังส่วนกลาง)', (CORE<0?'−':'+')+mil(CORE), pxSgC(CORE),
+        'หักส่วนกลาง '+mil(cenNet)+' ล้าน', REV.c?Math.abs(CORE/REV.c*100):0,
+        'รวมรายได้อื่น +'+mil(oiV)+' → EBITDA รวม '+(EB<0?'−':'+')+mil(EB)+' ล้าน', pxSgC(EB), CORE<0)
+      :'<div class="fck off" style="border-top-color:#94A3B8"><small>4 · EBITDA ทัวร์ (หลังส่วนกลาง)</small><b>—</b>'
         +'<p>'+(_px.pier?'ดูได้เมื่อเลือก All piers':'กรอกค่าใช้จ่ายส่วนกลางในตารางด้านล่าง')+'</p></div>')
     +'</div>';
 
@@ -38782,10 +38788,21 @@ function pxForecast(e){
   var ed=!!_px.fcEd && !_px.pier;
   var cenRows='';
   if(!_px.pier){
-    cenRows=grp('4 · Central costs &amp; other income', 'ยอดรายเดือนจากงบจริง · ไม่ผันตามเที่ยว'
+    cenRows=grp('4 · Central costs', 'ยอดรายเดือนจากงบจริง · ไม่ผันตามเที่ยว'
         +(hasCen?(CEN.own?'':(' · ใช้ยอดของ '+e(pxFcMonLbl(CEN.src))+' (เดือนนี้ยังไม่ได้กรอก)')):' · ยังไม่ได้กรอก'),
         '<button class="fced" onclick="pxFcEdit()">'+(ed?'เสร็จ':'กรอก / แก้ไข')+'</button>')
-      +PX_FC_CEN.map(function(c){ var v=cv?(+cv[c[0]]||0):0;
+      +PX_FC_CEN.filter(function(c){ return !c[2]; }).map(cenRow).join('')
+      +'<tr class="sm cs"><td class="l">Σ Central costs</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td class="mc"><span class="n">'+(hasCen?pxN(cenNet):'—')+'</span></td><td class="pv"><span class="n">—</span></td></tr>'
+      +'<tr class="step"><td class="l">= Tour EBITDA (ธุรกิจหลัก)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td class="mc">'+(hasCen?('<span class="n" style="color:'+pxSgC(CORE)+'">'+pxSg(CORE)+'</span> <small>'+pxPc(CORE,REV.c)+'</small>'):'<span class="n">—</span>')+'</td>'
+        +'<td class="pv"><span class="n">—</span></td></tr>'
+      +grp('5 · Other income', 'รายได้ที่ไม่ใช่ทัวร์ หักต้นทุนของตัวเองแล้ว · ร้านของฝาก เช่าเรือ ฯลฯ · ยอดรายเดือนจากงบจริง')
+      +PX_FC_CEN.filter(function(c){ return !!c[2]; }).map(cenRow).join('')
+      +'<tr class="fin"><td class="l">= EBITDA forecast (รวมรายได้อื่น)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td><span class="n" style="color:'+(hasCen?(EB<0?'#FCA5A5':'#86EFAC'):'#fff')+'">'+(hasCen?pxSg(EB):'—')+'</span></td>'
+        +'<td><span class="n">—</span></td></tr>';
+    function cenRow(c){ var v=cv?(+cv[c[0]]||0):0;
         var sysBm=(c[0]==='bm' && bmSys);
         return '<tr class="'+(c[2]?'rv':'cs')+'"><td class="l">'+e(c[1])
           +(sysBm?('<small class="fcsys n">จากระบบ · Memo ซ่อม '+pxN(MT.c)+' \u2212 ค่าเสื่อม '+pxN(DP.c)+(ed?' · กรอกเพื่อทับ':'')+'</small>'):'')
@@ -38793,15 +38810,10 @@ function pxForecast(e){
           +'<td class="mc">'+(ed?('<input class="fcin n" inputmode="numeric" value="'+(sysBm?'':(v||''))+'" placeholder="'+(sysBm?pxN(v):'0')+'" '
               +'onchange="pxFcSet(\''+e(ym)+'\',\''+c[0]+'\',this.value)">')
             :('<span class="n"'+(c[2]&&v?' style="color:#0A6B49"':'')+'>'+(v?((c[2]?'+':'')+pxN(v)):'—')+'</span>'))+'</td>'
-          +'<td class="pv"><span class="n">—</span></td></tr>'; }).join('')
-      +'<tr class="sm"><td class="l">Σ Central (สุทธิ)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
-        +'<td class="mc"><span class="n">'+(hasCen?pxN(cenNet):'—')+'</span></td><td class="pv"><span class="n">—</span></td></tr>'
-      +'<tr class="fin"><td class="l">= EBITDA forecast</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
-        +'<td><span class="n" style="color:'+(hasCen?(EB<0?'#FCA5A5':'#86EFAC'):'#fff')+'">'+(hasCen?pxSg(EB):'—')+'</span></td>'
-        +'<td><span class="n">—</span></td></tr>';
+          +'<td class="pv"><span class="n">—</span></td></tr>'; }
   }
   var table='<div class="eg"><div class="phd"><div><h2>Forecast by step <span class="pill pu">'+e(mLbl)+'</span></h2>'
-    +'<p>รายได้ → Operation cost → ค่าจ้าง → ค่าเสื่อม → ค่าใช้จ่ายส่วนกลาง · บรรทัดสุดท้ายเทียบกับ EBITDA ในงบจริงได้</p></div></div>'
+    +'<p>รายได้ → Operation cost → ค่าจ้าง → ค่าเสื่อม → ค่าใช้จ่ายส่วนกลาง → รายได้อื่น · บรรทัดสุดท้ายเทียบกับ EBITDA ในงบจริงได้</p></div></div>'
     +'<div class="twrap"><div class="tscroll"><table class="fct" style="min-width:760px"><thead><tr>'
     +'<th class="l">ITEM</th><th>ACTUAL<small>'+e(dA)+' '+e(mLbl.slice(0,3))+'</small></th>'
     +'<th>FORECAST<small>'+e(dB)+' '+e(mLbl.slice(0,3))+'</small></th>'
