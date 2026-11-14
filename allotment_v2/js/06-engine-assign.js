@@ -160,6 +160,7 @@ function flOpenEditBoatModal(bid){
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='แก้ไขข้อมูลเรือ';
   window._editBoatId=bid;
+  if(typeof bmCapSummary==='function') bmCapSummary(b);   /* §bmRedesign · สรุปช่วงที่นั่ง + เตือนเกินใบอนุญาต */
   openModal('boat-modal');
 }
 

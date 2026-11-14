@@ -7761,6 +7761,8 @@ function openBoatModal(){
   fmRenderBoatOwn(0);
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='เพิ่มเรือใหม่';
+  window._editBoatId=null;
+  if(typeof bmCapSummary==='function') bmCapSummary(null);   /* §bmRedesign */
   // auto-total listeners
   ['fm-boat-licensepax','fm-boat-crew','fm-boat-fishcrew'].forEach(id=>{
     const el=document.getElementById(id);
@@ -7863,6 +7865,8 @@ function saveBoat(){
     // EDIT MODE
     const bid=window._editBoatId; window._editBoatId=null;
     const b=getBoat(bid); if(!b)return;
+    /* §capHist · ที่นั่งตั้งต้นมีผลทุกวันที่ไม่มีช่วงคลุม รวมวันที่ผ่านมา · ถามก่อน */
+    if((+fields.cap||0)!==(+b.cap||0) && !confirm('เปลี่ยนที่นั่งขายตั้งต้นจาก '+(+b.cap||0)+' เป็น '+fields.cap+'\n\nมีผลกับทุกวันที่ไม่มีช่วงที่นั่งคลุม รวมวันที่ผ่านมาแล้ว\nถ้าเปลี่ยนตั้งแต่วันหนึ่งเป็นต้นไป ให้ใช้ 💺 ที่นั่ง › เพิ่มช่วง แทน\n\nยืนยัน?')){ window._editBoatId=bid; return; }
     Object.assign(b,fields);
     const curSt=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · เทียบกับค่าในตาราง ไม่งั้นจะเขียนแถวซ้ำทุกครั้ง */
     const newSt=stMap[fmBoatSt];

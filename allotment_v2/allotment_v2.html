@@ -1342,134 +1342,174 @@
 </div>
 
 <!-- Boat Modal -->
+<!-- §bmRedesign (2026-11-14) · owner "ขอปรับดีไซน์หน้านี้ใหม่" (Company Asset › Edit เรือ)
+     จัดเป็นการ์ดตามหัวข้อ + แถบลัดด้านบน · id / onclick เดิมทั้งหมดคงไว้ (openBoatModal · flOpenEditBoatModal · saveBoat ใช้ต่อได้)
+     §capHist · ช่องที่นั่งตั้งต้น + สรุปช่วงที่นั่ง + ปุ่มเปิดหน้าต่างจัดการที่นั่ง · ใบอนุญาต = เพดานขาย (ไม่ใช่แค่อ้างอิงแล้ว) -->
+<style>
+  #boat-modal .modal{max-width:820px !important;border-radius:16px !important;overflow:hidden;background:#fff !important;box-shadow:0 24px 70px rgba(2,10,30,.45) !important}
+  #boat-modal .modal-hd{padding:18px 22px 12px !important;border-bottom:1px solid #EEECE6 !important;background:#fff !important}
+  #boat-modal .modal-title{font-size:19px !important;font-weight:800 !important;color:#0F1B3D}
+  #boat-modal .modal-body{background:#F6F5F1 !important;padding:0 18px 18px !important;display:flex;flex-direction:column;gap:12px;max-height:72vh;overflow:auto}
+  #boat-modal .bm-nav{position:sticky;top:0;z-index:2;display:flex;gap:6px;flex-wrap:wrap;padding:12px 2px 8px;background:#F6F5F1}
+  #boat-modal .bm-nav button{border:1px solid #DDDAD2;background:#fff;color:#3E4658;border-radius:16px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  #boat-modal .bm-nav button:hover{border-color:#0F1B3D;color:#0F1B3D}
+  #boat-modal .bm-card{background:#fff;border:1px solid #E7E4DC;border-radius:12px;padding:14px 16px 6px;scroll-margin-top:52px}
+  #boat-modal .bm-h{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  #boat-modal .bm-h i{font-style:normal;width:22px;height:22px;border-radius:7px;background:#0F1B3D;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace}
+  #boat-modal .bm-h b{font-size:13.5px;font-weight:800;color:#0F1B3D}
+  #boat-modal .bm-h small{font-size:11px;color:#8A8F9C;font-weight:500}
+  #boat-modal .bm-g{display:grid;gap:10px 12px;margin-bottom:8px}
+  #boat-modal .bm-g2{grid-template-columns:1fr 1fr} #boat-modal .bm-g3{grid-template-columns:repeat(3,1fr)} #boat-modal .bm-g4{grid-template-columns:repeat(4,1fr)}
+  #boat-modal .bm-g .form-row{margin:0 !important}
+  #boat-modal .form-label{font-size:11px !important;font-weight:600 !important;color:#5B6478 !important;margin-bottom:4px !important;display:block}
+  #boat-modal .bm-card input:not([type=hidden]),#boat-modal .bm-card select,#boat-modal .bm-card textarea{width:100% !important;box-sizing:border-box;border:1px solid #DDDAD2 !important;border-radius:9px !important;background:#FCFBF8 !important;padding:8px 10px !important;font-size:13px !important;font-family:inherit;color:#0F1B3D}
+  #boat-modal .bm-card input:focus,#boat-modal .bm-card select:focus,#boat-modal .bm-card textarea:focus{outline:none;border-color:#185FA5 !important;background:#fff !important;box-shadow:0 0 0 3px rgba(24,95,165,.12)}
+  #boat-modal .bm-card input[readonly]{background:#F1EFE9 !important;color:#6B7385}
+  #boat-modal .bm-mono{font-family:'DM Mono',monospace !important}
+  #boat-modal .bm-hint{font-size:10.5px;color:#8A8F9C;margin-top:4px;line-height:1.5}
+  #boat-modal .bm-seat{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:stretch;margin-bottom:10px}
+  #boat-modal .bm-seat-main{background:#EEF5FC;border:1px solid #CFE0EF;border-radius:10px;padding:10px 12px}
+  #boat-modal .bm-seat-main input{font-size:22px !important;font-weight:800 !important;font-family:'DM Mono',monospace !important;text-align:center;background:#fff !important}
+  #boat-modal #fm-boat-capsum{border:1px dashed #CFE0EF;border-radius:10px;padding:10px 12px;font-size:12px;color:#33405A;display:flex;flex-direction:column;gap:6px;justify-content:center}
+  #boat-modal #fm-boat-capsum button{align-self:flex-start;border:1px solid #CFE0EF;background:#fff;color:#185FA5;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  #boat-modal .bm-warn{font-size:11px;color:#8E2019;background:#FDECEA;border-radius:8px;padding:6px 10px;margin:-2px 0 10px;display:none}
+  #boat-modal .bm-sub{font-size:11px;font-weight:700;color:#5B6478;margin:6px 0 6px;letter-spacing:.02em}
+  #boat-modal .loc-pill{min-height:34px;padding:0 14px !important;display:inline-flex;align-items:center;border-radius:17px !important;font-size:12.5px !important;font-weight:600 !important;border:1px solid #CFCFC8 !important;color:#0F1B3D !important;background:#fff !important;cursor:pointer}
+  #boat-modal .loc-pill.on{background:#0F1B3D !important;color:#fff !important;border-color:#0F1B3D !important}
+  #boat-modal .fl-st-opt{padding:8px 6px !important;border-radius:9px !important}
+  #boat-modal .fl-st-opt > div{font-size:12px !important;font-weight:700 !important}
+  #boat-modal .modal-footer{background:#fff !important;border-top:1px solid #EEECE6 !important;padding:12px 22px !important}
+  @media (max-width:640px){ #boat-modal .bm-g3,#boat-modal .bm-g4{grid-template-columns:1fr 1fr} #boat-modal .bm-seat{grid-template-columns:1fr} }
+</style>
 <div class="modal-overlay" id="boat-modal">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:820px">
     <div class="modal-hd">
       <div class="modal-icon" style="background:var(--navy)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 17l3-10h12l3 10"/><path d="M2 20h20"/><path d="M12 7V3"/></svg></div>
-      <div><div class="modal-title" id="boat-modal-title">เพิ่มเรือใหม่</div><div class="modal-sub">ข้อมูลพื้นฐานตัวเรือ</div></div>
+      <div><div class="modal-title" id="boat-modal-title">เพิ่มเรือใหม่</div><div class="modal-sub">ข้อมูลพื้นฐานตัวเรือ · ทะเบียน · ที่นั่ง · เอกสาร</div></div>
       <button class="modal-close" onclick="closeModal('boat-modal')">×</button>
     </div>
     <div class="modal-body">
-
-      <div class="section-form-lbl">ข้อมูลพื้นฐาน</div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="fm-boat-name" placeholder="เช่น Aluminous1"></div>
-        <div class="form-row"><label class="form-label">ชื่อไทย <span style="font-size:9px;color:var(--ink-soft);font-weight:400">(ใช้ในใบสั่งงานมัคคุเทศก์)</span></label><input type="text" id="fm-boat-nameth" placeholder="เช่น เฮอร์มีทิส"></div>
-      </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">ยี่ห้อ</label><input type="text" id="fm-boat-brand" placeholder="เช่น Princess"></div>
-        <div class="form-row"><label class="form-label">รุ่น</label><input type="text" id="fm-boat-model" placeholder="เช่น Catamaran 64"></div>
-      </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">ประเภทเรือ <span style="color:var(--red)">*</span></label>
-          <select id="fm-boat-type"><option>Catamaran</option><option>Speedboat</option><option>Big Boat</option><option>Longtail</option></select>
-        </div>
-        <div class="form-row"><label class="form-label">ประเภทการใช้</label>
-          <select id="fm-boat-use"><option>บรรทุกคนโดยสาร (เร็ว)</option><option>บรรทุกคนโดยสาร</option><option>บรรทุกสินค้า</option><option>ประมง</option><option>ท่องเที่ยว</option></select>
-        </div>
-        <div class="form-row"><label class="form-label">จำนวนเครื่องยนต์ <span style="color:var(--red)">*</span></label>
-          <select id="fm-boat-engcount">
-            <option value="1">1 เครื่อง → Center</option>
-            <option value="2">2 เครื่อง → Port, Std</option>
-            <option value="3">3 เครื่อง → Port, Center, Std</option>
-            <option value="4" selected>4 เครื่อง → Port, C.Port, C.Std, Std</option>
-            <option value="5">5 เครื่อง → Port, C.Port, Center, C.Std, Std</option>
-          </select>
-          <div class="form-hint" style="font-size:10px;color:var(--ink-soft);margin-top:3px">ใช้กำหนด position ตอน assign เครื่องยนต์</div>
-        </div>
-      </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">ทะเบียนเรือ</label><input type="text" id="fm-boat-reg" placeholder="เช่น 6151/0073"></div>
-        <div class="form-row"><label class="form-label">สัญญาณเรียกขาน</label><input type="text" id="fm-boat-callsign" placeholder="เช่น HSB7796" style="font-family:'DM Mono',monospace"></div>
-      </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">หมายเลข IMO</label><input type="text" id="fm-boat-imo" placeholder="เช่น IMO1234567" style="font-family:'DM Mono',monospace"></div>
-        <div class="form-row"><label class="form-label">ปีที่ต่อเรือ</label><input type="number" id="fm-boat-year" placeholder="เช่น 2019"></div>
-      </div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">วัสดุตัวเรือ</label>
-          <select id="fm-boat-material"><option>อลูมิเนียม</option><option>ไฟเบอร์กลาส</option><option>เหล็กกล้า</option><option>ไม้</option></select>
-        </div>
-        <div class="form-row"><label class="form-label">จดทะเบียน ณ เมืองท่า</label><input type="text" id="fm-boat-port" placeholder="เช่น ภูเก็ต"></div>
+      <div class="bm-nav">
+        <button type="button" onclick="bmGo('bm-s1')">ข้อมูลเรือ</button><button type="button" onclick="bmGo('bm-s2')">ทะเบียน</button><button type="button" onclick="bmGo('bm-s3')">ขนาด</button><button type="button" onclick="bmGo('bm-s4')">ที่นั่ง</button><button type="button" onclick="bmGo('bm-s5')">ท่า · สถานะ</button><button type="button" onclick="bmGo('bm-s6')">เจ้าของ</button><button type="button" onclick="bmGo('bm-s7')">เอกสาร</button>
       </div>
 
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">ขนาดเรือ</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-        <div class="form-row"><label class="form-label">ดันกรอส (GT)</label><input type="number" id="fm-boat-gt" step="0.01" placeholder="เช่น 29.54"></div>
-        <div class="form-row"><label class="form-label">ดันเนต (NT)</label><input type="number" id="fm-boat-nt" step="0.01" placeholder="เช่น 20.09"></div>
-        <div class="form-row"><label class="form-label">น้ำหนักบรรทุก (เมตริกตัน)</label><input type="number" id="fm-boat-dwt" step="0.01" placeholder="เช่น 0.00"></div>
-        <div class="form-row"><label class="form-label">ความยาวตลอด (ม.)</label><input type="number" id="fm-boat-loa" step="0.01" placeholder="เช่น 17.80"></div>
-        <div class="form-row"><label class="form-label">ความกว้างกลางลำ (ม.)</label><input type="number" id="fm-boat-beam" step="0.01" placeholder="เช่น 4.60"></div>
-        <div class="form-row"><label class="form-label">ลึก (ม.)</label><input type="number" id="fm-boat-depth" step="0.01" placeholder="เช่น 1.50"></div>
-        <div class="form-row"><label class="form-label">กินน้ำลึก (ม.)</label><input type="number" id="fm-boat-draft" step="0.01" placeholder="เช่น 0.00"></div>
-        <div class="form-row"><label class="form-label">ความยาววัดตลอด (ม.)</label><input type="number" id="fm-boat-lbp" step="0.01" placeholder="เช่น 17.80"></div>
-        <div class="form-row"><label class="form-label">แรงม้าเบรก (รวม)</label><input type="number" id="fm-boat-bhp" step="0.01" placeholder="เช่น 242.45"></div>
-      </div>
-
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">ผู้โดยสารตามใบอนุญาต <span style="font-size:10px;color:var(--ink-soft);text-transform:none;font-weight:400;letter-spacing:0">(กรมเจ้าท่า — บันทึกไว้อ้างอิง)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-        <div class="form-row"><label class="form-label">ผู้โดยสาร (PAX)</label><input type="number" id="fm-boat-licensepax" placeholder="เช่น 75"></div>
-        <div class="form-row"><label class="form-label">คนประจำเรือ</label><input type="number" id="fm-boat-crew" placeholder="เช่น 5"></div>
-        <div class="form-row"><label class="form-label">แรงงานประมง</label><input type="number" id="fm-boat-fishcrew" placeholder="0"></div>
-        <div class="form-row"><label class="form-label">รวมทั้งสิ้น</label><input type="number" id="fm-boat-totalcap" placeholder="อัตโนมัติ" readonly style="background:var(--sand)"></div>
-      </div>
-
-      <div style="background:var(--ocean-50);border:1px solid var(--ocean-light);border-radius:var(--r-sm);padding:10px 12px;display:flex;align-items:center;gap:12px">
-        <div style="flex:1">
-          <div style="font-size:11px;font-weight:600;color:var(--navy)">Capacity ที่บริษัทกำหนด <span style="color:var(--red)">*</span></div>
-          <div style="font-size:10px;color:var(--ink-soft);margin-top:2px">ใช้สำหรับคำนวณ Allotment, Calendar, Boat Operation</div>
+      <div class="bm-card" id="bm-s1">
+        <div class="bm-h"><i>1</i><b>ข้อมูลเรือ</b></div>
+        <div class="bm-g bm-g2">
+          <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="fm-boat-name" placeholder="เช่น Aluminous1"></div>
+          <div class="form-row"><label class="form-label">ชื่อไทย <span style="font-weight:400;color:#8A8F9C">· ใช้ในใบสั่งงานมัคคุเทศก์</span></label><input type="text" id="fm-boat-nameth" placeholder="เช่น เฮอร์มีทิส"></div>
+          <div class="form-row"><label class="form-label">ยี่ห้อ</label><input type="text" id="fm-boat-brand" placeholder="เช่น Princess"></div>
+          <div class="form-row"><label class="form-label">รุ่น</label><input type="text" id="fm-boat-model" placeholder="เช่น Catamaran 64"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <input type="number" id="fm-boat-cap" value="40" style="width:70px;font-size:16px;font-weight:600;text-align:center;border-color:var(--ocean-light)">
-          <span style="font-size:12px;color:var(--navy);font-weight:500">คน</span>
+        <div class="bm-g bm-g3">
+          <div class="form-row"><label class="form-label">ประเภทเรือ <span style="color:var(--red)">*</span></label>
+            <select id="fm-boat-type"><option>Catamaran</option><option>Speedboat</option><option>Big Boat</option><option>Longtail</option></select></div>
+          <div class="form-row"><label class="form-label">ประเภทการใช้</label>
+            <select id="fm-boat-use"><option>บรรทุกคนโดยสาร (เร็ว)</option><option>บรรทุกคนโดยสาร</option><option>บรรทุกสินค้า</option><option>ประมง</option><option>ท่องเที่ยว</option></select></div>
+          <div class="form-row"><label class="form-label">วัสดุตัวเรือ</label>
+            <select id="fm-boat-material"><option>อลูมิเนียม</option><option>ไฟเบอร์กลาส</option><option>เหล็กกล้า</option><option>ไม้</option></select></div>
+        </div>
+        <div class="bm-g bm-g2">
+          <div class="form-row"><label class="form-label">จำนวนเครื่องยนต์ <span style="color:var(--red)">*</span></label>
+            <select id="fm-boat-engcount">
+              <option value="1">1 เครื่อง → Center</option>
+              <option value="2">2 เครื่อง → Port, Std</option>
+              <option value="3">3 เครื่อง → Port, Center, Std</option>
+              <option value="4" selected>4 เครื่อง → Port, C.Port, C.Std, Std</option>
+              <option value="5">5 เครื่อง → Port, C.Port, Center, C.Std, Std</option>
+            </select>
+            <div class="bm-hint">ใช้กำหนดตำแหน่งตอนติดเครื่องยนต์</div></div>
         </div>
       </div>
 
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">ท่าเรือ <span style="color:var(--red)">*</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap" id="fm-boat-pier-pills">
-        <div class="loc-pill on" onclick="fmSelPier('tublamu',this)">Tub Lamu Pier</div>
-        <div class="loc-pill" onclick="fmSelPier('panwa',this)">Visit Panwa</div>
-        <div class="loc-pill" onclick="fmSelPier('ranong',this)">Ranong Pier</div>
-      </div>
-      <input type="hidden" id="fm-boat-pier" value="tublamu">
-
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">สถานะเรือ</div>
-      <div style="display:flex;gap:6px" id="fm-boat-st-grid">
-        <div class="fl-st-opt" onclick="fmPickBoatSt(0)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--green);background:var(--green-light)"><div style="font-size:11px;font-weight:500;color:var(--green-dark)">Available</div></div>
-        <div class="fl-st-opt" onclick="fmPickBoatSt(1)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">Fixing</div></div>
-        <div class="fl-st-opt" onclick="fmPickBoatSt(2)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">Unavailable</div></div>
+      <div class="bm-card" id="bm-s2">
+        <div class="bm-h"><i>2</i><b>ทะเบียน</b><small>ตามใบทะเบียนเรือ</small></div>
+        <div class="bm-g bm-g3">
+          <div class="form-row"><label class="form-label">ทะเบียนเรือ</label><input type="text" id="fm-boat-reg" class="bm-mono" placeholder="เช่น 6151/0073"></div>
+          <div class="form-row"><label class="form-label">สัญญาณเรียกขาน</label><input type="text" id="fm-boat-callsign" class="bm-mono" placeholder="เช่น HSB7796"></div>
+          <div class="form-row"><label class="form-label">หมายเลข IMO</label><input type="text" id="fm-boat-imo" class="bm-mono" placeholder="เช่น IMO1234567"></div>
+          <div class="form-row"><label class="form-label">ปีที่ต่อเรือ</label><input type="number" id="fm-boat-year" placeholder="เช่น 2019"></div>
+          <div class="form-row"><label class="form-label">จดทะเบียน ณ เมืองท่า</label><input type="text" id="fm-boat-port" placeholder="เช่น ภูเก็ต"></div>
+        </div>
       </div>
 
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">ประเภททรัพย์สิน</div>
-      <div style="display:flex;gap:6px" id="fm-boat-own-grid">
-        <div class="fl-st-opt" onclick="fmPickBoatOwn(0)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid #185FA5;background:#E6F1FB"><div style="font-size:11px;font-weight:500;color:#185FA5">เรือบริษัท · Asset</div></div>
-        <div class="fl-st-opt" onclick="fmPickBoatOwn(1)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">เรือเช่า / เรือร่วม</div></div>
-      </div>
-      <div id="fm-boat-own-hint" style="font-size:10.5px;color:var(--ink-soft);line-height:1.6"></div>
-
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">เจ้าของเรือ / ผู้รับผิดชอบ</div>
-      <div class="form-2">
-        <div class="form-row"><label class="form-label">ชื่อบริษัท / เจ้าของ</label><input type="text" id="fm-boat-owner" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด"></div>
-        <div class="form-row"><label class="form-label">ท่าทำการ</label><input type="text" id="fm-boat-homeport" placeholder="เช่น ท่าเรือ ภูเก็ต"></div>
-      </div>
-      <div class="form-row"><label class="form-label">ที่อยู่</label><textarea id="fm-boat-owneraddr" rows="2" placeholder="ที่อยู่เจ้าของเรือ"></textarea></div>
-
-      <div style="height:1px;background:var(--border)"></div>
-      <div class="section-form-lbl">เอกสาร / ใบอนุญาต</div>
-      <div id="fm-boat-docs" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
-      <div style="display:grid;grid-template-columns:1fr 130px auto;gap:6px;align-items:flex-end">
-        <div class="form-row"><label class="form-label">ชื่อเอกสาร</label><input type="text" id="fm-doc-name" placeholder="เช่น ใบอนุญาตใช้เรือ" style="margin-top:3px"></div>
-        <div class="form-row"><label class="form-label">วันหมดอายุ</label><input type="date" id="fm-doc-exp" style="margin-top:3px"></div>
-        <button class="btn btn-ghost btn-sm" onclick="fmAddDoc()" style="flex-shrink:0;white-space:nowrap">+ เพิ่ม</button>
+      <div class="bm-card" id="bm-s3">
+        <div class="bm-h"><i>3</i><b>ขนาดเรือ</b></div>
+        <div class="bm-g bm-g3">
+          <div class="form-row"><label class="form-label">ตันกรอส (GT)</label><input type="number" id="fm-boat-gt" class="bm-mono" step="0.01" placeholder="29.54"></div>
+          <div class="form-row"><label class="form-label">ตันเนต (NT)</label><input type="number" id="fm-boat-nt" class="bm-mono" step="0.01" placeholder="20.09"></div>
+          <div class="form-row"><label class="form-label">น้ำหนักบรรทุก (เมตริกตัน)</label><input type="number" id="fm-boat-dwt" class="bm-mono" step="0.01" placeholder="0.00"></div>
+          <div class="form-row"><label class="form-label">ความยาวตลอด (ม.)</label><input type="number" id="fm-boat-loa" class="bm-mono" step="0.01" placeholder="17.80"></div>
+          <div class="form-row"><label class="form-label">ความกว้างกลางลำ (ม.)</label><input type="number" id="fm-boat-beam" class="bm-mono" step="0.01" placeholder="4.60"></div>
+          <div class="form-row"><label class="form-label">ลึก (ม.)</label><input type="number" id="fm-boat-depth" class="bm-mono" step="0.01" placeholder="1.50"></div>
+          <div class="form-row"><label class="form-label">กินน้ำลึก (ม.)</label><input type="number" id="fm-boat-draft" class="bm-mono" step="0.01" placeholder="0.00"></div>
+          <div class="form-row"><label class="form-label">ความยาววัดตลอด (ม.)</label><input type="number" id="fm-boat-lbp" class="bm-mono" step="0.01" placeholder="17.80"></div>
+          <div class="form-row"><label class="form-label">แรงม้าเบรก (รวม)</label><input type="number" id="fm-boat-bhp" class="bm-mono" step="0.01" placeholder="242.45"></div>
+        </div>
       </div>
 
-      <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea id="fm-boat-note" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+      <div class="bm-card" id="bm-s4">
+        <div class="bm-h"><i>4</i><b>ที่นั่ง · ผู้โดยสาร</b><small>ที่นั่งขาย ≤ ผู้โดยสารตามใบอนุญาต</small></div>
+        <div class="bm-seat">
+          <div class="bm-seat-main"><label class="form-label" style="color:#0C447C !important">ที่นั่งขายตั้งต้น <span style="color:var(--red)">*</span></label>
+            <input type="number" id="fm-boat-cap" value="40" oninput="bmSeatCheck()">
+            <div class="bm-hint">ใช้กับวันที่ไม่มีช่วงที่นั่งคลุม · ที่นั่งว่าง / Booking / Boat Operation</div></div>
+          <div id="fm-boat-capsum"><div>เรือใหม่ · บันทึกเรือก่อน แล้วค่อยตั้งช่วงที่นั่ง (ถ้ามี) ที่ Company Asset › 💺 ที่นั่ง</div></div>
+        </div>
+        <div class="bm-warn" id="fm-boat-capwarn"></div>
+        <div class="bm-sub">ผู้โดยสารตามใบอนุญาต (กรมเจ้าท่า) · ช่องผู้โดยสาร = เพดาน ระบบขายเกินนี้ไม่ได้</div>
+        <div class="bm-g bm-g4">
+          <div class="form-row"><label class="form-label">ผู้โดยสาร (PAX)</label><input type="number" id="fm-boat-licensepax" class="bm-mono" placeholder="เช่น 75"></div>
+          <div class="form-row"><label class="form-label">คนประจำเรือ</label><input type="number" id="fm-boat-crew" class="bm-mono" placeholder="เช่น 5"></div>
+          <div class="form-row"><label class="form-label">แรงงานประมง</label><input type="number" id="fm-boat-fishcrew" class="bm-mono" placeholder="0"></div>
+          <div class="form-row"><label class="form-label">รวมทั้งสิ้น</label><input type="number" id="fm-boat-totalcap" class="bm-mono" placeholder="อัตโนมัติ" readonly></div>
+        </div>
+      </div>
+
+      <div class="bm-card" id="bm-s5">
+        <div class="bm-h"><i>5</i><b>ท่าเรือ · สถานะ · ประเภททรัพย์สิน</b></div>
+        <div class="bm-sub">ท่าเรือ <span style="color:var(--red)">*</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="fm-boat-pier-pills">
+          <div class="loc-pill on" onclick="fmSelPier('tublamu',this)">Tub Lamu Pier</div>
+          <div class="loc-pill" onclick="fmSelPier('panwa',this)">Visit Panwa</div>
+          <div class="loc-pill" onclick="fmSelPier('ranong',this)">Ranong Pier</div>
+        </div>
+        <input type="hidden" id="fm-boat-pier" value="tublamu">
+        <div class="bm-g bm-g2">
+          <div><div class="bm-sub">สถานะเรือวันนี้</div>
+            <div style="display:flex;gap:6px" id="fm-boat-st-grid">
+              <div class="fl-st-opt" onclick="fmPickBoatSt(0)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--green);background:var(--green-light)"><div style="font-size:11px;font-weight:500;color:var(--green-dark)">Available</div></div>
+              <div class="fl-st-opt" onclick="fmPickBoatSt(1)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">Fixing</div></div>
+              <div class="fl-st-opt" onclick="fmPickBoatSt(2)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">Unavailable</div></div>
+            </div></div>
+          <div><div class="bm-sub">ประเภททรัพย์สิน</div>
+            <div style="display:flex;gap:6px" id="fm-boat-own-grid">
+              <div class="fl-st-opt" onclick="fmPickBoatOwn(0)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid #185FA5;background:#E6F1FB"><div style="font-size:11px;font-weight:500;color:#185FA5">เรือบริษัท · Asset</div></div>
+              <div class="fl-st-opt" onclick="fmPickBoatOwn(1)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">เรือเช่า / เรือร่วม</div></div>
+            </div>
+            <div id="fm-boat-own-hint" class="bm-hint"></div></div>
+        </div>
+      </div>
+
+      <div class="bm-card" id="bm-s6">
+        <div class="bm-h"><i>6</i><b>เจ้าของเรือ / ผู้รับผิดชอบ</b></div>
+        <div class="bm-g bm-g2">
+          <div class="form-row"><label class="form-label">ชื่อบริษัท / เจ้าของ</label><input type="text" id="fm-boat-owner" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด"></div>
+          <div class="form-row"><label class="form-label">ท่าทำการ</label><input type="text" id="fm-boat-homeport" placeholder="เช่น ท่าเรือ ภูเก็ต"></div>
+        </div>
+        <div class="bm-g"><div class="form-row"><label class="form-label">ที่อยู่</label><textarea id="fm-boat-owneraddr" rows="2" placeholder="ที่อยู่เจ้าของเรือ"></textarea></div></div>
+      </div>
+
+      <div class="bm-card" id="bm-s7">
+        <div class="bm-h"><i>7</i><b>เอกสาร / ใบอนุญาต</b><small>วันหมดอายุใช้เตือนในหน้า Documents</small></div>
+        <div id="fm-boat-docs" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+        <div class="bm-g" style="grid-template-columns:1fr 150px auto;align-items:end">
+          <div class="form-row"><label class="form-label">ชื่อเอกสาร</label><input type="text" id="fm-doc-name" placeholder="เช่น ใบอนุญาตใช้เรือ"></div>
+          <div class="form-row"><label class="form-label">วันหมดอายุ</label><input type="date" id="fm-doc-exp"></div>
+          <button class="btn btn-ghost btn-sm" onclick="fmAddDoc()" style="white-space:nowrap;height:36px">+ เพิ่ม</button>
+        </div>
+        <div class="bm-g"><div class="form-row"><label class="form-label">หมายเหตุ</label><textarea id="fm-boat-note" rows="2" placeholder="รายละเอียดเพิ่มเติม"></textarea></div></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('boat-modal')">ยกเลิก</button>
@@ -1537,7 +1577,7 @@
 <!-- Dropdown portal — fixed to body, floats above everything -->
 <div id="dd-portal"></div>
 
-<script src="js/04-data-core.js?v=b87975d8"></script>
+<script src="js/04-data-core.js?v=feef9ebb"></script>
 
 <!-- ══ FLEET MODALS ══ -->
 <div class="modal-overlay" id="fl-modal-equip">
@@ -1996,7 +2036,7 @@
   </div>
 </div>
 
-<script src="js/06-engine-assign.js?v=e693b2bd"></script>
+<script src="js/06-engine-assign.js?v=3709c6cb"></script>
 
 <!-- Approve Memo Modal -->
 <div class="modal-overlay" id="fl-modal-approve">
@@ -3128,7 +3168,7 @@
   </div>
 </div>
 
-<script src="js/07-charter.js?v=6081c6ab"></script>
+<script src="js/07-charter.js?v=f5200222"></script>
 <!-- Doc Inline Edit Popup -->
 <div class="doc-edit-popup" id="doc-edit-popup">
   <div class="dep-title" id="dep-title">แก้ไขเอกสาร</div>

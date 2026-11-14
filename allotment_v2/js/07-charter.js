@@ -344,3 +344,27 @@ function chCapApply(b){
   var lic=chCapLicVal(); if(lic>0) b.licensePax=lic;
   _chCapDraft=null;
 }
+
+/* ══ §bmRedesign (2026-11-14) · หน้าต่าง Edit เรือ (Company Asset) · แถบลัด + การ์ดที่นั่ง ══ */
+function bmGo(id){ var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+function bmSeatCheck(){
+  var w=document.getElementById('fm-boat-capwarn'); if(!w) return;
+  var cap=parseInt((document.getElementById('fm-boat-cap')||{}).value,10)||0, lic=parseInt((document.getElementById('fm-boat-licensepax')||{}).value,10)||0;
+  if(lic>0 && cap>lic){ w.style.display='block'; w.textContent='ที่นั่งขาย '+cap+' มากกว่าผู้โดยสารตามใบอนุญาต '+lic+' · ระบบจะขายได้แค่ '+lic+' ที่นั่ง'; }
+  else { w.style.display='none'; w.textContent=''; }
+}
+function bmCapSummary(b){
+  var host=document.getElementById('fm-boat-capsum'); if(!host) return;
+  var lp=document.getElementById('fm-boat-licensepax');
+  if(lp && !lp._bmHook){ lp._bmHook=1; lp.addEventListener('input',bmSeatCheck); }
+  if(!b){ host.innerHTML='<div>เรือใหม่ · บันทึกเรือก่อน แล้วค่อยตั้งช่วงที่นั่ง (ถ้ามี) ที่ Company Asset › 💺 ที่นั่ง</div>'; bmSeatCheck(); return; }
+  var today=chCapToday(), H=Array.isArray(b.capHist)?b.capHist:[];
+  var now=(typeof boatCapHistPick==='function')?boatCapHistPick(H,today):null;
+  var fut=H.filter(function(h){ return h&&h.from>today; }).sort(function(a,z){ return a.from<z.from?-1:1; })[0];
+  host.innerHTML='<div>💺 ขายวันนี้ <b style="font-family:\'DM Mono\',monospace;font-size:15px">'+(now?(+now.cap):(+b.cap||0))+'</b>'
+      +(now?(' <span style="color:#6B7385">ตามช่วง '+chCapE(now.reason||'')+'</span>'):' <span style="color:#6B7385">= ตั้งต้น</span>')+'</div>'
+    +'<div>'+(fut?('ถัดไป <b style="font-family:\'DM Mono\',monospace;color:#0C447C">'+(+fut.cap)+'</b> ตั้งแต่ '+chCapD(fut.from)+(fut.reason?(' · '+chCapE(fut.reason)):'')):'<span style="color:#8A8F9C">ยังไม่มีช่วงถัดไป</span>')
+      +' · ทั้งหมด '+H.length+' ช่วง</div>'
+    +'<button type="button" onclick="closeModal(\'boat-modal\');window._editBoatId=null;capMgrOpen(\''+chCapE(b.id)+'\')" title="สิ่งที่แก้ในหน้าต่างนี้แต่ยังไม่บันทึกจะไม่ถูกเก็บ">จัดการช่วงที่นั่ง ›</button>';
+  bmSeatCheck();
+}
