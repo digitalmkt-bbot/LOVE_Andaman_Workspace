@@ -38612,27 +38612,42 @@ function pxStepTable(e, M, title, sub){
 var PX_FC_CEN=[['oi','รายได้อื่น สุทธิจากต้นทุน',1,''],
   ['pw','ค่าจ้างท่าเรือ ครัว แม่บ้าน',0,'f'],['pr','ค่าเช่า / ค่าจอดท่าเรือ',0,'f'],
   ['ut','ไฟ น้ำ ซักรีด แคนู',0,'f'],['pay','Payroll สำนักงาน',0,'f'],
+  ['orf','ค่าเช่าและค่าบริการประจำ (สำนักงาน รถตู้ เว็บ โทรศัพท์ ไฟ สอบบัญชี)',0,'f'],
+  ['oin','ประกันและภาษี รถ / เรือ',0,'f'],
   ['bm','ค่าซ่อมเรือส่วนที่เกินค่าเสื่อม',0,'c'],['sm','Sales & Marketing',0,'c'],
-  ['opx','Operating expenses (ไม่รวมซ่อมเรือ)',0,'c']];
+  ['omt','ซ่อมบำรุงทั่วไป (ไม่ใช่เรือ)',0,'c'],['ovh','รถและน้ำมัน (น้ำมันรถรับลูกค้า สำนักงาน ซ่อมรถ)',0,'c'],
+  ['obk','ค่าธรรมเนียมธนาคารและบัตร',0,'c'],['oms','เบ็ดเตล็ด (วัสดุ บริจาค อื่น ๆ)',0,'c']];
+/* §pxFcOpx (2026-11-14) · owner: "Operating expenses แยกให้อีก" + ตกลงตามข้อเสนอ
+   Operating expenses ก้อนเดียว (opx) แตกเป็น 6 บรรทัด · 2 บรรทัดแรกเป็น Fixed · อีก 4 เป็น Controllable
+   ข้อมูลเก่าที่เคยกรอก opx ไว้ก้อนเดียว → แสดงที่ "เบ็ดเตล็ด" จนกว่าจะกรอกแยก (ยอดรวมไม่หาย)
+   Owner exp. (ow) = ขั้นที่ 6 ใต้ EBITDA ตามงบจริง · ไม่ยกยอดข้ามเดือน · เดือนที่ยังไม่กรอก = 0 */
+var PX_FC_OPX=['orf','oin','omt','ovh','obk','oms'];
+function pxFcNorm(v){
+  if(!v || v.opx==null) return v;
+  if(PX_FC_OPX.some(function(k){ return v[k]!=null; })) return v;
+  var o=Object.assign({}, v); o.oms=+v.opx||0; delete o.opx; return o;
+}
 /* §pxFcSeed (2026-11-14) · owner: "ใส่ให้หน่อยเลย · งบของ Nov เอาของเดือน Oct มาตั้งไว้ให้ก่อน ถ้าออกมาจริง user ค่อยแก้"
    ยอดตั้งต้นจากงบจริง ต.ค. 2026 (P&L Love Island 2026 board) · เดือนถัดไปที่ยังไม่กรอกจะหยิบยอดนี้ไปใช้เอง
    ค่าที่ user กรอกในหน้า (px_central) ทับยอดตั้งต้นเสมอ · ไม่มีการเขียนข้อมูลตอนโหลด */
-var PX_FC_SEED={ '2026-10':{ oi:1569071, pw:644497, pr:250794, bm:1437812, ut:68150, pay:1878925, sm:564355, opx:1287145 } };
+var PX_FC_SEED={ '2026-10':{ oi:1569071, pw:644497, pr:250794, bm:1437812, ut:68150, pay:1878925, sm:564355,
+  orf:279769, oin:231983, omt:340160, ovh:215622, obk:125480, oms:94131, ow:982782 } };   /* §pxFcOpx · 6 บรรทัดรวม 1,287,145 */
 function pxFcSaved(){
   var all=null; try{ all=ctRead('px_central'); }catch(_){ all=null; }
   return (all && typeof all==='object') ? all : {};
 }
 function pxFcCentral(ym){
   var all=Object.assign({}, PX_FC_SEED, pxFcSaved());
-  if(all[ym]) return { v:all[ym], src:ym, own:true };
+  if(all[ym]) return { v:pxFcNorm(all[ym]), src:ym, own:true };
   var ks=Object.keys(all).filter(function(k){ return k<ym; }).sort();
-  if(ks.length) return { v:all[ks[ks.length-1]], src:ks[ks.length-1], own:false };
+  if(ks.length) return { v:pxFcNorm(all[ks[ks.length-1]]), src:ks[ks.length-1], own:false };
   return { v:null, src:'', own:false };
 }
 function pxFcSet(ym, k, raw){
   var n=parseFloat(String(raw==null?'':raw).replace(/[,\s฿]/g,'')); if(!isFinite(n)) n=0;
   var all=pxFcSaved();
-  var cur=all[ym]; if(!cur){ var _src=pxFcCentral(ym); cur=Object.assign({}, _src.v||{}); if(!_src.own) delete cur.bm; }   /* §pxFcMaint · ยอดซ่อมไม่ยกข้ามเดือน */
+  var cur=all[ym]; if(!cur){ var _src=pxFcCentral(ym); cur=Object.assign({}, _src.v||{}); if(!_src.own){ delete cur.bm; delete cur.ow; } }
+  else cur=pxFcNorm(cur);   /* §pxFcMaint · ยอดซ่อมไม่ยกข้ามเดือน */
   if(k==='bm' && String(raw==null?'':raw).trim()==='') delete cur.bm;   /* §pxFcMaint · ว่าง = ใช้ยอดจากระบบ */
   else cur[k]=Math.round(n);
   all[ym]=cur;
@@ -38693,6 +38708,8 @@ function pxForecast(e){
   /* §pxFcMaint */
   var MT=pxFcMaint(ym, today, act.length, rem.length), PMT=pxFcMaint(pym, today, plast, 0), bmSys=false;
   MT.p=PMT.c;
+  if(cv && !CEN.own){ cv=Object.assign({}, cv); delete cv.ow; }   /* §pxFcOpx · Owner exp. ไม่ยกข้ามเดือน */
+  var owV=cv?(+cv.ow||0):0;
   if(cv && !(CEN.own && cv.bm!=null)){ cv=Object.assign({}, cv, { bm:Math.max(0, Math.round(MT.c-DP.c)) }); bmSys=true; }
   /* §pxFcCore (2026-11-14) · owner: "ควรแยกไหม เพราะเราอยากเห็นส่วนที่เป็นรายได้หลักก่อน"
      ขั้นที่ 4 = ค่าใช้จ่ายส่วนกลางอย่างเดียว → EBITDA ทัวร์ (ธุรกิจหลัก) · ตัวเลขหลักของหน้า
@@ -38806,7 +38823,12 @@ function pxForecast(e){
       +PX_FC_CEN.filter(function(c){ return !!c[2]; }).map(cenRow).join('')
       +'<tr class="fin"><td class="l">= EBITDA forecast (รวมรายได้อื่น)</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
         +'<td><span class="n" style="color:'+(hasCen?(EB<0?'#FCA5A5':'#86EFAC'):'#fff')+'">'+(hasCen?pxSg(EB):'—')+'</span></td>'
-        +'<td><span class="n">—</span></td></tr>';
+        +'<td><span class="n">—</span></td></tr>'
+      +grp('6 · Owner exp.', 'อยู่ใต้ EBITDA ในงบจริง · ไม่ยกยอดข้ามเดือน · กรอกเมื่อรู้ยอดจริง')
+      +cenRow(['ow','Owner exp.',0,''])
+      +'<tr class="step"><td class="l">= After owner exp.</td><td><span class="n">—</span></td><td><span class="n">—</span></td>'
+        +'<td class="mc">'+(hasCen?('<span class="n" style="color:'+pxSgC(EB-owV)+'">'+pxSg(EB-owV)+'</span>'):'<span class="n">—</span>')+'</td>'
+        +'<td class="pv"><span class="n">—</span></td></tr>';
     function cenGrp(g, t, note){ var L=PX_FC_CEN.filter(function(c){ return c[3]===g; }), sum=0;
       L.forEach(function(c){ sum+=cv?(+cv[c[0]]||0):0; });
       return '<tr class="sub"><td colspan="5">'+t+'<span>'+note+'</span></td></tr>'+L.map(cenRow).join('')
@@ -38839,7 +38861,7 @@ function pxForecast(e){
     +cenRows+'</tbody></table></div></div>'
     +'<p class="fcn">วิธีคาดการณ์: ค่าเฉลี่ยต่อวันของ '+(basisOwn?('วันที่เดินทางแล้วในเดือนนี้ ('+basis.length+' วัน)'):('14 วันล่าสุด เพราะเดือนนี้ยังมียอดจริงไม่ถึง 3 วัน'))
       +' × '+rem.length+' วันที่เหลือ · วันนี้นับเป็นวันคาดการณ์ · ยังไม่ได้แยกตามวันในสัปดาห์หรือฤดูกาล</p>'
-    +'<p class="fcn">ลูกค้าทั้งเดือนที่คาด '+pxN(PAX.c)+' คน (จริง '+pxN(PAX.a)+' · คาด '+pxN(PAX.b)+') · ขั้นที่ 4 ไม่รวมดอกเบี้ยและ Owner exp.</p></div>';
+    +'<p class="fcn">ลูกค้าทั้งเดือนที่คาด '+pxN(PAX.c)+' คน (จริง '+pxN(PAX.a)+' · คาด '+pxN(PAX.b)+') · ไม่รวมดอกเบี้ยและค่าเสื่อมทางบัญชี</p></div>';
   return hero+kpi+chart+table;
 }
 function pxFcCSS(){ var H='#trippl-host '; return ''
