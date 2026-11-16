@@ -118,6 +118,30 @@
       });
     });
   }
+  /* §pxForecast (sync 11-16, lk-inbox 434545bf..88b0a9d3): the Forecast tab reads every day of the month so far and of the month
+     before (actuals, the 14-day basis early in a month, the previous-month column, each with its steps), and the bookings of the
+     booking-pace window (§pxFcPace: 28 travel days back from yesterday, to the month's end). The forecast is drawn by legacy's
+     pxForecast from these: its method is a first version the owner has not settled, so it stays on screen. */
+  var paceRange = {};
+  function forecastNeeds(){
+    var P = window._px, pier = P.pier || '', ym = P.mon || String(P.date || '').slice(0, 7);
+    var out = monthNeeds();
+    var pdays = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(prevMonth(ym)) : [];
+    var pmiss = pdays.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
+    if(pmiss.length) out.push(function(){ return pool(pmiss, 5, function(d){ return loadDay(d, pier); }); });
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+    if(y && m && typeof window.bookingV2LoadFromOpsBackend === 'function'){
+      var t = new Date(O.today() + 'T12:00:00'); t.setDate(t.getDate() - 29);
+      var from = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      var to = ym + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+      if(to < from) to = O.today();
+      var rk = from + '|' + to;
+      if(!fresh(paceRange[rk])) out.push(function(){
+        return Promise.resolve(window.bookingV2LoadFromOpsBackend({ from: from, to: to })).then(function(){ paceRange[rk] = { at: Date.now() }; }, function(){ /* the pace line is drawn from what is loaded */ });
+      });
+    }
+    return out;
+  }
   function prevMonth(ym){
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 2, d = new Date(y, m, 1);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -175,6 +199,9 @@
       if(lt.be){ R.be += lt.be; R.beN++; }
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
       lt.rows.forEach(function(r){ a.groups[r.g] = (a.groups[r.g] || 0) + r.use; });
+      /* §pxSteps (sync 11-16, lk-inbox 434545bf): profit by step (operation cost / wages / depreciation), legacy's own split of the
+         server's cost lines (each row's id, group and use), as legacy pxDayAgg does with its own trips */
+      if(typeof window.pxStAdd === 'function') window.pxStAdd(a, lt);
     });
     return dayData ? serverAggregates(a, dayData) : a;
   }
@@ -255,6 +282,7 @@
     var P = window._px; if(!P) return [];
     var pier = P.pier || '';
     if(P.tab === 'm') return monthNeeds();
+    if(P.tab === 'f') return forecastNeeds();
     if(P.tab === 'a') return fresh(S.an[anKey(P.an || 47, pier)]) ? [] : [function(){ return loadAnalysis(P.an || 47, pier); }];
     return fresh(S.day[dayKey(P.date, pier)]) ? [] : [function(){ return loadDay(P.date, pier); }];
   }

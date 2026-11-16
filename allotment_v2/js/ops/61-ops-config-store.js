@@ -23,6 +23,7 @@
    tm_boats               GET|PUT /v1/config/tm_boats          (Ranong immigration boats and crews; tmBoatsRead, tmBoatsWrite)
    route_codes            GET|PUT /v1/config/route_codes       (§routeCode: hand-set programme codes; laRouteCodeMap / laRouteCodeSave)
    pos_products           GET|PUT /v1/config/pos_products      (§pslProd: shop sales product registry; pslProdMap / pslProdSave)
+   px_central             GET|PUT /v1/config/px_central        (§pxForecast: Trip P&L Forecast's monthly central costs; pxFcSaved / pxFcSet)
    (the whole store in one read: GET /v1/config)
 
    Reads are never merged here: the server answers the saved value already laid
@@ -130,6 +131,7 @@
     tm_boats: { title: 'Ranong immigration boats', wait: DEBOUNCE_MS },
     route_codes: { title: 'Programme codes', wait: 0 },             // §routeCode: ctRead/ctWrite('route_codes') answer from the store
     pos_products: { title: 'Shop product registry', wait: 0 },      // §pslProd: ctRead/ctWrite('pos_products'); the photo itself is ops/38's
+    px_central: { title: 'Trip P&L Forecast central costs', wait: DEBOUNCE_MS },   // §pxForecast (sync 11-16): ctRead/ctWrite('px_central'); a field is saved on change, several at once
   };
   var ents = {};                    // key -> { value, version, snap, seq, timer }
   function ent(key){ return ents[key] || (ents[key] = { value: null, version: null, snap: null, seq: 0, timer: null }); }

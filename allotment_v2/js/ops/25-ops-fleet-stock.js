@@ -457,7 +457,7 @@
       discount_amt: num(d.discount_amt != null ? d.discount_amt : d.discountAmt),
       lines: lines
     };
-    if(!isPatch) body.no = text(d.no);
+    if(!isPatch && text(d.no)) body.no = text(d.no);   // §docNo (sync 11-16): a create without a number gets the server's next free MO
     return body;
   }
 
@@ -971,10 +971,8 @@
       d.boatId = scope === 'general' ? null : ((job && job.boatId) || (proj && proj.boatId) || null);
       d.maintId = maintId;
       d.projectId = projectId || null;
-      // the next number, as legacy (highest MO-n + 1); the server refuses a number already used
-      var top = 0;
-      memos.forEach(function(m){ var n = parseInt(String(m && m.no || '').replace(/^MO-/, ''), 10) || 0; if(n > top) top = n; });
-      d.no = 'MO-' + String(top + 1).padStart(3, '0');
+      /* §docNo (sync 11-16, lk-inbox b0e0c5d5): no number sent, operation-backend issues the next free MO under a lock, so two
+         people creating at once never get the same one (MO-377 went out twice, 1.4 s apart). The saved memo carries it. */
     }
     var body = toMemoBody(d, !!ex);
     return O.queue(function(){
