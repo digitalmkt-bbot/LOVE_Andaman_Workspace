@@ -538,11 +538,32 @@ function boatJobBlock(boatId, ds, raw){
     if(_row && (_row.s||'available')==='available') _ovr=laRowPlanJobs(_row);   // §boatPlanAhead3
   }catch(_e0){}
   var _skip=function(no){ return !!(_ovr && no && _ovr.indexOf(no)>=0); };
+  var _mjPendCut=(function(){ try{ var d=new Date(String(TODAY_STR)+'T12:00:00'); d.setDate(d.getDate()-3);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }catch(_){ return ''; } })();   /* §mjPlanBlock */
   /* ใบซ่อม · เฉพาะใบที่ยังทำอยู่ และใบนั้นระบุเองว่าเรือวิ่งไม่ได้
      setFixing:false / boatStatus:'available' = งานที่ทำขนานกับการวิ่ง (เช่นสลับเครื่อง) ไม่กันเรือ */
   try{
     if(typeof FL_MAINT!=='undefined' && Array.isArray(FL_MAINT)){
       FL_MAINT.forEach(function(m){
+        /* §mjPlanBlock (2026-11-16) · owner: "ถ้าวางไว้แล้ว เรือก็ควรขึ้น Status ตามนั้นไหม"
+           ใบที่สร้างไว้ล่วงหน้า ยังไม่กด Start (pending) แต่มีวันเริ่ม และตั้งเรือเป็น Fixing / Unavailable
+           → กันเรือตั้งแต่วันเริ่ม ถึงวัน Due (ไม่มี Due = จนกว่าจะกด Start หรือปิดใบ)
+           ใบรอเริ่มที่เลยวันเริ่มมาเกิน 3 วันแล้วยังไม่มีใครกด Start = ค้าง ไม่กันเรือ
+           (MJ-174 รอเริ่มตั้งแต่ 18 ต.ค. · เรือวิ่งอยู่ ไม่ควรถูกกันย้อนหลัง)
+           กด Start แล้วใบเป็น inprogress · กติกาเดิมด้านล่างรับช่วงต่อ */
+        if(m && m.boatId===boatId && m.status==='pending'){
+          var _sd=String(m.startDate||'');
+          if(!_sd || _sd>ds) return;
+          if(m.dueDate && ds>String(m.dueDate)) return;
+          if(_sd<_mjPendCut) return;
+          if(m.setFixing===false) return;
+          var _pt=m.boatStatus||'fixing';
+          if(_pt==='available') return;
+          if(_skip(m.no)) return;
+          if(_boatRank(_pt)>_boatRank(out.s)) out.s=_pt;
+          out.jobs.push({no:m.no||'MJ', t:_pt, kind:'mj', r:m.boatStatusReason||'', plan:true});
+          return;
+        }
         if(!m || m.boatId!==boatId || m.status!=='inprogress') return;
         if(m.setFixing===false) return;
         var t=m.boatStatus||'fixing';

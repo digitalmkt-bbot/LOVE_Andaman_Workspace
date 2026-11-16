@@ -1565,6 +1565,21 @@
       "source": "photos",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "owner": {
+      "source": "owner",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "duedate": {
+      "source": "dueDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "parked": {
+      "source": "parked",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "fleet_maintenance__assets": {
