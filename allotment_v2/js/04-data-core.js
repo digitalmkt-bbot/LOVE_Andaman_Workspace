@@ -13748,57 +13748,63 @@ function bopDHtml(){
   var allR=ROUTES.filter(function(r){ return r && r.active!==false && !(typeof laIsLandRoute==='function' && laIsLandRoute(r)); });
   if(typeof laMyPier==='function' && laMyPier()) _bop2.pier=laMyPier();
   var piers=_bop2.pier==='all'?['tublamu','panwa','ranong']:[_bop2.pier];
-  var PN={ tublamu:['TL','Tub Lamu','#185FA5'], panwa:['VP','Visit Panwa','#6B21A8'], ranong:['RN','Ranong','#00646E'] };
+  /* §bopDnd2 (2026-11-16) · owner: "แยกท่าเรือให้เห็นชัดเจนขึ้น" → "เพิ่มระยะห่างของ Free boat" → "ทำให้สวยหน่อย" → mockup v3
+     ท่าเป็นกล่องของตัวเอง (แถบสีท่าขอบซ้าย · หัวไล่สีอ่อน · ป้าย ว่าง/ออก ต่อวัน)
+     Free at pier เป็นลานจอดเต็มความกว้าง แยกจากตารางโปรแกรม · แต่ละวันเป็นช่องจอดเส้นประ */
+  var PN={ tublamu:['TL','Tub Lamu','#185FA5','#EAF2FB'], panwa:['VP','Visit Panwa','#7C3AED','#F4EEFE'], ranong:['RN','Ranong','#00646E','#E2F3F3'] };
   var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];
-  /* สถานะเรือรายวัน (ทุกท่า) · ใช้ตัวเดียวกับแผงเรือของหน้านี้ */
   var FS={};
   days.forEach(function(d){ var keep=_bop2.pier; try{ _bop2.pier='all'; FS[d]=bop2FleetStatus(d); } finally{ _bop2.pier=keep; } });
-  var cols='grid-template-columns:230px repeat(7,minmax(128px,1fr))';
+  var freeOf=function(d, pk){ var ops=bopDOps(d);
+    return (BOATS||[]).filter(function(b){ return b && !b.retired && !ops[b.id] && getBoatCurrentPier(b,d)===pk && bopDStatusOk(b,d); })
+      .sort(function(a,b){ return bop2Cap(b,d)-bop2Cap(a,d); }); };
+  var cols='grid-template-columns:232px repeat(7,minmax(118px,1fr))';
   var h='<div id="bopd-root" ondragover="bopDOver(event)" ondrop="bopDDrop(event)">';
-  h+='<div class="bopd-bar"><button onclick="bopDShift(-7)">‹</button><b>'+bopDDayLbl(days[0])+' '+MON[new Date(days[0]+'T12:00:00').getMonth()]+' → '+bopDDayLbl(days[6])+' '+MON[new Date(days[6]+'T12:00:00').getMonth()]+'</b>'
-    +'<button onclick="bopDShift(7)">›</button><button onclick="bopDShift(0)">Today</button>'
-    +'<span class="hint"><b>ลากชื่อเรือ</b> · วางบนเรืออีกลำ = สลับ (ลูกค้าตามโปรแกรม) · เรือว่างวางทับ = เปลี่ยนแทน · วางช่องว่าง = จัดลงโปรแกรม · ลากไป Free at pier = ถอด · ลากได้ในวันเดียวกัน</span></div>';
-  h+='<div class="bopd-grid"><div class="hd" style="'+cols+'"><div class="lb">PIER · PROGRAM</div>';
+  h+='<div class="bopd-bar"><button onclick="bopDShift(-7)" title="7 วันก่อนหน้า">‹</button><b>'+bopDDayLbl(days[0])+' '+MON[new Date(days[0]+'T12:00:00').getMonth()]+' → '+bopDDayLbl(days[6])+' '+MON[new Date(days[6]+'T12:00:00').getMonth()]+'</b>'
+    +'<button onclick="bopDShift(7)" title="7 วันถัดไป">›</button><button onclick="bopDShift(0)">Today</button>'
+    +'<span class="hint"><b>ลากชื่อเรือ</b> · วางบนเรืออีกลำ = สลับ (ลูกค้าตามโปรแกรม) · เรือว่างวางทับ = เปลี่ยนแทน · วางช่องว่าง = จัดลงโปรแกรม · ลากกลับลานจอด = ถอด · ลากได้ในวันเดียวกัน</span></div>';
+  h+='<div class="bopd-scroll"><div class="bopd-in">';
+  h+='<div class="hd" style="'+cols+'"><div class="lb">PIER · PROGRAM</div>';
   days.forEach(function(d){ var t=new Date(d+'T12:00:00'), ops=bopDOps(d), nb=Object.keys(ops).length, px=0;
     Object.keys(ops).forEach(function(id){ px+=bopDPax(d,id); });
     h+='<div class="dh'+(d===TODAY_STR?' on':'')+(bop2IsPast(d)?' past':'')+'"><small>'+WD[t.getDay()]+'</small><b>'+t.getDate()+'</b><span>'+nb+' boats · '+px+' pax</span></div>'; });
   h+='</div>';
   piers.forEach(function(pk){
     var R=allR.filter(function(r){ return r.pier===pk; }); if(!R.length) return;
-    var P=PN[pk]||[pk,pk,'#64748B'];
-    h+='<div class="pr" style="'+cols+'"><div class="lb"><span class="pt" style="background:'+P[2]+'">'+P[0]+'</span>'+P[1]+'</div>';
+    var P=PN[pk]||[pk,pk,'#64748B','#F1F5F9'];
+    h+='<section class="pier" style="--pc:'+P[2]+';--ps:'+P[3]+'">';
+    h+='<div class="ph" style="'+cols+'"><div class="lb"><span class="ab">'+P[0]+'</span><b>'+P[1]+'</b><small>'+R.length+' programs</small></div>';
     days.forEach(function(d){
       var ops=bopDOps(d), out=0; Object.keys(ops).forEach(function(id){ var b=bopDBoat(id); if(b && getBoatCurrentPier(b,d)===pk) out++; });
-      var fr=(BOATS||[]).filter(function(b){ return b && !b.retired && !ops[b.id] && getBoatCurrentPier(b,d)===pk && bopDStatusOk(b,d); }).length;
-      h+='<div class="ps">'+fr+' free · '+out+' out</div>'; });
+      var fr=freeOf(d,pk).length;
+      h+='<div class="st"><span class="pl '+(fr?'ok':'zero')+'">'+fr+' ว่าง</span><span class="pl out">'+out+' ออก</span></div>'; });
     h+='</div>';
-    /* Free at pier */
-    h+='<div class="rw fr" style="'+cols+'"><div class="lb"><i class="dt" style="background:#0A6B49"></i>Free at pier</div>';
-    days.forEach(function(d){ var ops=bopDOps(d);
-      var L=(BOATS||[]).filter(function(b){ return b && !b.retired && !ops[b.id] && getBoatCurrentPier(b,d)===pk && bopDStatusOk(b,d); })
-        .sort(function(a,b){ return bop2Cap(b,d)-bop2Cap(a,d); });
-      h+='<div class="cl" data-bopd="free" data-d="'+d+'">'+(L.length?L.map(function(b){ return bopDChip(d,b.id,null,pk); }).join(''):'<span class="nf">No free boat</span>')+'</div>'; });
-    h+='</div>';
+    h+='<div class="dock" style="'+cols+'"><div class="lb"><span class="dk">⚓</span><div><b>Free at pier</b><small>ลากไปวางในโปรแกรม</small></div></div>';
+    days.forEach(function(d){ var L=freeOf(d,pk);
+      h+='<div class="slot'+(L.length?'':' empty')+'" data-bopd="free" data-d="'+d+'">'
+        +(L.length?L.map(function(b){ return bopDChip(d,b.id,null,pk); }).join(''):'<span class="nf">ไม่มีเรือว่าง</span>')+'</div>'; });
+    h+='</div><div class="prog">';
     R.forEach(function(r){
-      h+='<div class="rw" style="'+cols+'"><div class="lb" title="'+E(r.name)+'"><i class="dt" style="background:'+E(r.color||'#64748B')+'"></i>'+E(r.name)+'</div>';
+      h+='<div class="rw" style="'+cols+'"><div class="lb" title="'+E(r.name)+'"><i class="rb" style="background:'+E(r.color||'#64748B')+'"></i><span>'+E(r.name)+'</span></div>';
       days.forEach(function(d){
         var ds=(typeof getDayStatus==='function')?getDayStatus(r,d):null, closed=!!(ds && ds.type==='closed');
         var ops=bopDOps(d), ids=Object.keys(ops).filter(function(id){ return ops[id] && ops[id].route===r.id; });
-        h+='<div class="cl'+(closed?' cz':'')+'" data-bopd="route" data-d="'+d+'" data-route="'+E(r.id)+'"'+(closed?' data-closed="1"':'')+'>'
-          +ids.map(function(id){ return bopDChip(d,id,ops[id],pk); }).join('')+(closed&&!ids.length?'<span class="nf" style="color:#A8A29E">ปิด</span>':'')+'</div>';
+        h+='<div class="cl'+(closed&&!ids.length?' cz':'')+'" data-bopd="route" data-d="'+d+'" data-route="'+E(r.id)+'"'+(closed?' data-closed="1"':'')+'>'
+          +ids.map(function(id){ return bopDChip(d,id,ops[id],pk); }).join('')+'</div>';
       });
       h+='</div>';
     });
-    /* Out of service */
-    h+='<div class="rw oos" style="'+cols+'"><div class="lb"><i class="dt" style="background:#94A3B8"></i>Out of service</div>';
+    var anyU=false, uh='';
     days.forEach(function(d){
       var U=(FS[d].unavailable||[]).filter(function(x){ var p=getBoatCurrentPier(x.boat,d); return p===pk || (p==='shop' && (x.boat.pier||x.boat.homePier)===pk); });
-      h+='<div class="cl">'+U.map(function(x){ var job=(x.jobNos&&x.jobNos.length)?x.jobNos[0]:'';
+      if(U.length) anyU=true;
+      uh+='<div class="cl">'+U.map(function(x){ var job=(x.jobNos&&x.jobNos.length)?x.jobNos[0]:'';
         return '<span class="oo'+(job?' mj':'')+'" title="'+E(x.boat.name+' · '+(x.reason||''))+'">'+E(x.boat.name)+(job?' <i>'+E(job)+'</i>':'')+'</span>'; }).join('')+'</div>';
     });
-    h+='</div>';
+    if(anyU) h+='<div class="rw oos" style="'+cols+'"><div class="lb"><span class="wr">🔧</span><span>Out of service</span></div>'+uh+'</div>';
+    h+='</div></section>';
   });
-  h+='</div>';
+  h+='</div></div>';
   if(bopDPending()){
     h+='<div class="bopd-tray"><span class="n">'+_bopD.log.length+'</span><b>ยังไม่บันทึก</b><ul>'
       +_bopD.log.map(function(t){ return '<li>'+E(t)+'</li>'; }).join('')+'</ul>'
@@ -13808,39 +13814,60 @@ function bopDHtml(){
   return h;
 }
 function bopDCSS(){ var H='#bopd-root'; return '<style id="bopd-css">'
- +H+'{font-family:inherit;color:#0F1B3D}'
+ +H+'{font-family:inherit;color:#0F1B3D;-webkit-font-smoothing:antialiased}'
  +H+' .bopd-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}'
  +H+' .bopd-bar button{border:1px solid #E2E8F0;background:#fff;border-radius:999px;padding:4px 12px;font:600 12px inherit;cursor:pointer;color:#3E4658}'
- +H+' .bopd-bar b{font-size:13px}'+H+' .bopd-bar .hint{font-size:11px;color:#5B6679;flex:1 1 300px}'+H+' .bopd-bar .hint b{font-size:11px}'
- +H+' .bopd-grid{border:1px solid #E3E8F0;border-radius:12px;overflow-x:auto}'
- +H+' .hd,'+H+' .pr,'+H+' .rw{display:grid;min-width:1130px}'
- +H+' .lb{padding:7px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;min-width:0;line-height:1.25}'
- +H+' .hd .lb{font-size:9.5px;letter-spacing:.06em;color:#5B6679;font-weight:700}'
- +H+' .dh{text-align:center;padding:6px 3px;border-left:1px solid #EEF1F6}'+H+' .dh small{display:block;font-size:9.5px;color:#5B6679;font-weight:700}'
- +H+' .dh b{display:block;font-size:19px;line-height:1.15}'+H+' .dh span{font-size:10px;color:#5B6679}'
- +H+' .dh.on{background:#EEF4FF;box-shadow:inset 0 -3px 0 #1D4ED8}'+H+' .dh.on b,'+H+' .dh.on small{color:#1D4ED8}'+H+' .dh.past{opacity:.55}'
- +H+' .pr{background:#F4F7FB;border-top:1px solid #E3E8F0}'+H+' .pr .lb{font-weight:800;font-size:12.5px}'
- +H+' .pt{color:#fff;border-radius:5px;font-size:9.5px;padding:2px 5px}'
- +H+' .ps{text-align:center;font-size:10.5px;color:#5B6679;padding:7px 0;border-left:1px solid #EEF1F6}'
- +H+' .rw{border-top:1px solid #EEF1F6}'+H+' .rw.fr{background:#F1FBF6}'+H+' .rw.fr .lb{color:#0A6B49;font-weight:800}'
- +H+' .rw.oos{background:#F8FAFC}'+H+' .rw.oos .lb{color:#5B6679}'
- +H+' .cl{border-left:1px solid #EEF1F6;padding:3px;display:flex;flex-direction:column;gap:3px;min-height:34px}'
- +H+' .rw.fr .cl,'+H+' .rw.oos .cl{flex-direction:row;flex-wrap:wrap;align-content:flex-start}'
- +H+' .cl.cz{background:repeating-linear-gradient(45deg,#F5F5F4 0 4px,#fff 4px 8px)}'
+ +H+' .bopd-bar button:hover{border-color:#B7C7BD;color:#1C4A30}'
+ +H+' .bopd-bar b{font-size:13px}'+H+' .bopd-bar .hint{font-size:11px;color:#6B7689;flex:1 1 300px}'+H+' .bopd-bar .hint b{font-size:11px;color:#0F1B3D}'
+ +H+' .bopd-scroll{overflow-x:auto;padding-bottom:2px}'+H+' .bopd-in{min-width:1060px}'
+ +H+' .hd,'+H+' .ph,'+H+' .rw,'+H+' .dock{display:grid}'
+ +H+' .lb{min-width:0}'
+ +H+' .hd{position:sticky;top:0;z-index:4;background:#fff;border-bottom:1px solid #E6EAF0;padding-bottom:3px}'
+ +H+' .hd .lb{padding:8px 14px;font-size:9.5px;letter-spacing:.08em;color:#8792A6;font-weight:700;display:flex;align-items:flex-end}'
+ +H+' .dh{text-align:center;padding:5px 3px 7px;border-radius:12px 12px 0 0}'+H+' .dh small{display:block;font-size:9.5px;color:#8792A6;font-weight:700;letter-spacing:.06em}'
+ +H+' .dh b{display:block;font-size:20px;line-height:1.1;font-weight:800;margin:1px 0}'+H+' .dh span{font-size:10px;color:#6B7689}'
+ +H+' .dh.on{background:linear-gradient(#EEF4FF,#F7FAFF)}'+H+' .dh.on b,'+H+' .dh.on small{color:#1D4ED8}'
+ +H+' .dh.on::after{content:"";display:block;height:3px;border-radius:2px;background:#1D4ED8;margin:5px 28% -7px}'+H+' .dh.past{opacity:.5}'
+ +H+' .pier{margin-top:14px;border-radius:16px;background:#fff;border:1px solid #E6EAF0;overflow:hidden;box-shadow:inset 4px 0 0 var(--pc)}'
+ +H+' .ph{background:linear-gradient(90deg,var(--ps),#fff 70%);align-items:center}'
+ +H+' .ph .lb{padding:11px 12px 11px 18px;display:flex;align-items:center;gap:9px}'
+ +H+' .ph .ab{background:var(--pc);color:#fff;border-radius:8px;font-size:10.5px;font-weight:800;padding:4px 8px;letter-spacing:.04em;box-shadow:0 4px 10px -4px var(--pc);flex:none}'
+ +H+' .ph .lb b{font-size:15.5px;font-weight:800;color:var(--pc);letter-spacing:-.01em;white-space:nowrap}'+H+' .ph .lb small{font-size:10.5px;color:#8792A6;font-weight:600;white-space:nowrap}'
+ +H+' .st{display:flex;justify-content:center;gap:4px;padding:9px 0;flex-wrap:wrap}'
+ +H+' .pl{font-size:10px;font-weight:700;border-radius:999px;padding:2px 7px;line-height:1.5;white-space:nowrap}'
+ +H+' .pl.ok{background:#DDF5E8;color:#0A6B49}'+H+' .pl.zero{background:#FDECEC;color:#B91C1C}'+H+' .pl.out{background:#F1F4F8;color:#6B7689;font-weight:600}'
+ +H+' .dock{background:#F3FBF7;border-top:1px solid #D3EEE1;border-bottom:1px solid #D3EEE1;padding:9px 4px 9px 0;margin-bottom:12px;box-shadow:0 12px 0 #fff}'
+ +H+' .dock .lb{display:flex;align-items:center;gap:9px;padding:0 10px 0 16px}'
+ +H+' .dock .dk{width:28px;height:28px;border-radius:9px;background:#0A6B49;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 4px 10px -4px #0A6B49;flex:none}'
+ +H+' .dock .lb b{display:block;font-size:12.5px;color:#0A6B49;font-weight:800}'+H+' .dock .lb small{display:block;font-size:10px;color:#5E8F7A}'
+ +H+' .slot{margin:0 4px;border:1.5px dashed #A7DCC4;border-radius:11px;padding:6px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;min-height:44px;background:rgba(255,255,255,.55);transition:background .12s,border-color .12s}'
+ +H+' .slot.empty{border-color:#E3EDE8;background:transparent;align-items:center;justify-content:center}'
+ +H+' .slot .ch{border-color:#9FD9BD;box-shadow:0 2px 6px -2px rgba(10,107,73,.25);padding:5px 9px}'
+ +H+' .slot.over{border-color:#1D4ED8;background:#EEF4FF}'+H+' .slot.over.bad{border-color:#DC2626;background:#FDECEC}'
+ +H+' .prog{border-top:1px solid #E6EAF0}'
+ +H+' .rw{border-top:1px solid #F1F3F7}'+H+' .rw:first-child{border-top:0}'
+ +H+' .rw .lb{padding:7px 12px 7px 18px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:9px;color:#1F2A44;line-height:1.25}'
+ +H+' .rw .lb span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}'
+ +H+' .rb{width:4px;height:18px;border-radius:3px;flex:none}'
+ +H+' .rw.oos{background:#F8F9FB;border-top:1px solid #EEF1F6}'+H+' .rw.oos .lb{color:#8792A6}'+H+' .wr{font-size:12px}'
+ +H+' .cl{padding:4px;display:flex;flex-direction:column;gap:4px;min-height:38px;border-radius:9px;transition:background .12s}'
+ +H+' .rw.oos .cl{flex-direction:row;flex-wrap:wrap;align-content:flex-start}'
+ +H+' .cl.cz{background:repeating-linear-gradient(45deg,#F7F7F5 0 5px,#fff 5px 10px);margin:3px}'
  +H+' .cl.over{background:#EEF4FF;box-shadow:inset 0 0 0 2px #1D4ED8}'+H+' .cl.over.bad{background:#FDECEC;box-shadow:inset 0 0 0 2px #DC2626}'
- +H+' .dt{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}'
- +H+' .ch{position:relative;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid #DCE3EC;border-radius:7px;padding:4px 6px 8px 3px;font-size:11px;box-shadow:0 1px 2px rgba(15,27,61,.06);min-width:0}'
- +H+' .ch[draggable=true]{cursor:grab}'+H+' .ch.fr{padding:3px 6px 3px 3px}'+H+' .ch b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}'
- +H+' .ch .pc{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}'+H+' .ch .pc.fr{color:#0A6B49}'
- +H+' .ch .gr{color:#B6BECB;font-size:9px;letter-spacing:-2px;width:7px;flex:none}'
- +H+' .ch .br{position:absolute;left:14px;right:6px;bottom:3px;height:3px;border-radius:2px;background:#EEF1F6}'+H+' .ch .br b{display:block;height:3px;border-radius:2px}'
- +H+' .ch.fx{background:#F5F3FF;border-color:#DDD6FE}'+H+' .ch .lk{font-size:10px}'
+ +H+' .dt{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}'
+ +H+' .ch{position:relative;display:flex;align-items:center;gap:5px;background:#fff;border:1px solid #E1E6EE;border-radius:9px;padding:5px 7px 9px 4px;font-size:11.5px;box-shadow:0 1px 2px rgba(15,27,61,.05);min-width:0}'
+ +H+' .ch[draggable=true]{cursor:grab}'+H+' .ch[draggable=true]:hover{border-color:#B9C6D8;box-shadow:0 4px 10px -4px rgba(15,27,61,.25)}'
+ +H+' .ch.fr{padding:5px 9px 5px 4px}'+H+' .ch b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}'
+ +H+' .ch .pc{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}'+H+' .ch .pc.fr{color:#0A6B49}'
+ +H+' .ch .gr{color:#C3CAD5;font-size:9px;letter-spacing:-2px;width:7px;flex:none}'
+ +H+' .ch .br{position:absolute;left:14px;right:7px;bottom:4px;height:3px;border-radius:2px;background:#EEF1F6}'+H+' .ch .br b{display:block;height:3px;border-radius:2px}'
+ +H+' .ch.fx{background:#F7F5FF;border-color:#E2DBFB}'+H+' .ch .lk{font-size:10px}'
  +H+' .ch.pend{border:1.5px dashed #D97706;background:#FFF8EB}'
  +H+' .ch.src{opacity:.35}'+H+' .ch.over{outline:2.5px solid #1D4ED8;outline-offset:1px;background:#EEF4FF}'+H+' .ch.over.bad{outline-color:#DC2626;background:#FDECEC}'
- +H+' .nf{font-size:10.5px;color:#B91C1C;padding:3px}'
- +H+' .oo{font-size:10px;color:#64748B;border:1px solid #E2E8F0;border-radius:6px;padding:2px 6px;background:#fff;white-space:nowrap}'
- +H+' .oo.mj{background:repeating-linear-gradient(135deg,#F5DDB2 0 5px,#fff 5px 7px);border-color:#E0A040;color:#5C4310;font-weight:700}'+H+' .oo i{font-style:normal;color:#7A4300}'
- +H+' .bopd-tray{position:sticky;bottom:0;margin-top:10px;display:flex;align-items:center;gap:10px;background:#FFF8EB;border:1px solid #F6D9A8;border-radius:12px;padding:9px 12px;font-size:12px;z-index:3;box-shadow:0 -6px 16px -10px rgba(0,0,0,.25)}'
+ +H+' .nf{font-size:10.5px;color:#B6C4BD}'
+ +H+' .oo{font-size:10px;color:#6B7689;border:1px solid #E6EAF0;border-radius:7px;padding:2px 7px;background:#fff;white-space:nowrap}'
+ +H+' .oo.mj{background:repeating-linear-gradient(135deg,#F7E3BF 0 5px,#fff 5px 8px);border-color:#E6B566;color:#5C4310;font-weight:700}'+H+' .oo i{font-style:normal;color:#7A4300}'
+ +H+' .bopd-tray{position:sticky;bottom:0;margin-top:12px;display:flex;align-items:center;gap:10px;background:#FFF8EB;border:1px solid #F6D9A8;border-radius:12px;padding:9px 12px;font-size:12px;z-index:5;box-shadow:0 -6px 16px -10px rgba(0,0,0,.25)}'
  +H+' .bopd-tray .n{background:#D97706;color:#fff;border-radius:999px;padding:1px 8px;font-weight:800}'
  +H+' .bopd-tray ul{list-style:none;display:flex;gap:4px 14px;flex-wrap:wrap;flex:1;margin:0;padding:0;color:#3E4658}'
  +H+' .bopd-tray button{border-radius:9px;padding:7px 14px;font:700 12px inherit;border:1px solid #D5DAE3;background:#fff;cursor:pointer;white-space:nowrap}'
