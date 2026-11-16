@@ -6295,8 +6295,8 @@ function daAvailBlock(groups,pierOnly,ds){
     if(ds){   /* §daCharter */
       var fb=daFreeBoats(ds, pier);
       if(fb.length){
-        lines.push('🚤 Private charter available');
-        fb.forEach(function(b){ lines.push('   ✅ '+b.name+' · '+b.cap+' pax'); });
+        lines.push('⛵ Private charter available');
+        fb.forEach(function(b){ lines.push('   🚤 '+b.name); });   /* owner: ไม่ต้องใส่ PAX · ใช้อิโมจิเรือให้ต่างจากบรรทัดที่นั่ง */
         lines.push('');
       }
     }
@@ -6406,7 +6406,7 @@ function renderDA(){
     rows.forEach(function(g){ pf+=daFree(g); pc+=(g.allot||0); (g.boats||[]).forEach(function(b){ boats[b]=1; }); });
     list+='<div class="da2-pier"><i style="background:'+pm.dot+'"></i><b>'+pm.label+'</b><span class="sum">ว่าง <b>'+pf+'</b> / '+pc+' · '+rows.length+' โปรแกรม · '+Object.keys(boats).length+' ลำ</span><button class="da2-bt sm" onclick="daCopy(\'pier\',\''+pier+'\')">Copy ท่านี้</button></div>';
     var _fb=daFreeBoats(ds, pier);   /* §daCharter · เรือว่างเหมาลำ ใต้หัวท่า */
-    if(_fb.length) list+='<div class="da2-fb"><span>🚤 เรือว่าง เหมาลำได้</span>'+_fb.map(function(b){ return '<b>'+String(b.name).replace(/</g,'&lt;')+' <i>'+b.cap+'</i></b>'; }).join('')+'</div>';
+    if(_fb.length) list+='<div class="da2-fb"><span>⛵ เรือว่าง เหมาลำได้</span>'+_fb.map(function(b){ return '<b>🚤 '+String(b.name).replace(/</g,'&lt;')+'</b>'; }).join('')+'</div>';
     rows.forEach(function(g){
       var r=g.r, free=daFree(g), pct=g.allot>0?Math.round(g.booked/g.allot*100):0, tier=daTier(g), lk=g.locked||0;
       var sold=Math.max(0,(g.booked||0)-lk), soldPct=g.allot>0?Math.min(100,Math.round(sold/g.allot*100)):0, lkPct=g.allot>0?Math.min(100-soldPct,Math.round(lk/g.allot*100)):0;
