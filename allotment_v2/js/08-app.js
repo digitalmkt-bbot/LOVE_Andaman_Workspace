@@ -29776,7 +29776,13 @@ function tsMoneyOf(b, date){
     if(p.by && who.indexOf(p.by)<0) who.push(p.by); });
   // §tsInvPaid · บิลจ่ายครบแล้ว = ส่วน COT/ยอดค้างถูกเคลียร์ทางบัญชีไปแล้ว ไม่ต้องตามเก็บที่ท่า
   var IV=tsInvSettle(b);
-  var billed = IV.settled ? ((+M.cot||0)+(+M.balance||0)) : 0;
+  /* §tsCotSep (2026-11-16) · owner: "ตรวจอันนี้ ทำไมขึ้น 0 บาท" (Green Mango · INV-2611-0268 / 0269)
+     COT แบบ "Keep separate" = เงินที่เก็บจากลูกค้าเพิ่มจากบิล (เช่นค่าอุทยาน) · ใบแจ้งหนี้ไม่มียอดนี้อยู่ข้างใน
+     (บิล 4,400 = ราคาทัวร์ · COT 400 เก็บแยกที่ท่า) · บิลจ่ายครบจึงไม่ได้แปลว่า COT ถูกเคลียร์
+     เดิมหักทั้ง COT ออกเมื่อบิลจ่ายครบ → ช่อง "ต้องเก็บ" ขึ้น ฿0 ทั้งที่หน้าท่าต้องเก็บและเก็บมาแล้ว
+     แก้เฉพาะ handling 'separate' · แบบ 'deduct' คงกติกาเดิม */
+  var _cotSep = (M && M.handling==='separate');
+  var billed = IV.settled ? ((_cotSep ? 0 : (+M.cot||0))+(+M.balance||0)) : 0;
   var target = Math.max(0, (+M.cot||0)+(+M.balance||0)+(+M.upDue||0) - billed);
   return { M:M, pays:pays, by:by, who:who.join(' · '), inv:IV, billed:billed,
            target:target, paid:+M.pierPaid||0, due:Math.max(0, target-(+M.pierPaid||0)) };
