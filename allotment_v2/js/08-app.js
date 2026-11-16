@@ -21452,11 +21452,23 @@ function pckMoney(b, date){
   // fee ไม่เข้า got เพราะไม่ใช่รายได้เรา — เป็นเงินที่ส่งต่อธนาคาร (ดูคอมเมนต์ §pierPay)
   var pierPaid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0;
   var pierFee =(typeof pckFeeSum==='function') ?pckFeeSum(b,date) :0;
+  /* §cotBill (2026-11-16) · owner "แบบนี้ User จะงงไหม" (BK-26112683-BPJ5 · Walk-in · COT ฿4,000 · INV-2611-0319 Paid ฿4,000)
+     ใบ Walk-in / เงื่อนไข COT ที่ออฟฟิศออกบิลและรับเงินไปแล้ว · หน้าท่ายังขึ้น "เก็บที่ท่า ฿4,000" + ปุ่มเก็บเงิน = เสี่ยงเก็บซ้ำ
+     กติกา: เฉพาะเอเยนต์ที่เงื่อนไขเป็น COT (payType cot) + บิลของใบนี้ใบเดียว · เงินที่รับผ่านบิล (ไม่นับเงินหน้าท่าที่ลงบิลไว้)
+     หักออกจาก COT · เอเยนต์ Pro Forma / Invoice ไม่แตะ (บิลของเขาคือค่าที่นั่ง · COT เป็นเงินคนละก้อนที่ลูกค้าจ่ายหน้าท่า) */
+  var cotBill=0, cotBillNo='';
+  if(cot>0 && !(pierPaid>0) && ag && ag.payType==='cot' && typeof acctBookingInvoice==='function'){   /* หน้าท่าเก็บไปแล้ว = กติกาเดิม (ไม่แตะประวัติ) */
+    try{ var _iv=acctBookingInvoice(b.id);
+      if(_iv && _iv.status!=='void' && (_iv.bookingIds||[]).length===1){
+        var _ip=(typeof acctInvoicePaid==='function')?(+acctInvoicePaid(_iv)||0):0;
+        cotBill=Math.min(cot, Math.max(0, _ip-pierPaid)); cotBillNo=_iv.number||'';
+        cot=pckN(cot-cotBill); } }catch(_){ cotBill=0; }
+  }
   var gross=pckN(cot+upDue+bal+exDue);
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot,
            exGot:exGot, exDue:exDue, exCov:exCov, upgrades:ups, upDue:upDue, upGot:upGot, upCov:upCov,
-           balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
+           balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack, cotBill:cotBill, cotBillNo:cotBillNo,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'',
            /* §b2cPayOne (2026-10-03) · ป้ายการชำระต้องอ่านกติกาเดียวกับหน้า By trip (bkV2PayChip)
@@ -21498,6 +21510,7 @@ function pckMoneyCell(b, date, sheet){
     var _v;
     if(M.due>0) _v='<span class="pcs-pay due" title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'">เก็บที่ท่า <b>'+m(M.due)+'</b></span>';
     else if(M.pierPaid>0) _v='<span class="pcs-pay ok">&#10003; เก็บครบ <b>'+m(M.pierPaid)+'</b></span>';
+    else if(M.cotBill>0) _v='<span class="pcs-pay ok" title="'+e('COT ของใบนี้ชำระผ่านบิล '+(M.cotBillNo||'')+' แล้ว · ไม่ต้องเก็บที่ท่า')+'">&#10003; จ่ายผ่านบิลแล้ว <b>'+m(M.cotBill)+'</b></span>';   /* §cotBill */
     else if(pckCotUnset(M)) _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
     else if(M.ovnSettled) _v='<span class="pcs-pay ok">&#10003; ชำระแล้ววันขาไป</span>';
     /* §pckTrim · ช่องว่าง = ไม่มีอะไรต้องเก็บ · ป้าย "ไม่ต้องเก็บ" อยู่แทบทุกแถว
@@ -21510,6 +21523,8 @@ function pckMoneyCell(b, date, sheet){
        +'<div style="font-size:9px;color:#a08a5f;margin-top:2px;white-space:nowrap">'+e(parts.join(' · '))+'</div>';
   } else if(M.pierPaid>0){
     out+='<span style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>';
+  } else if(M.cotBill>0){   /* §cotBill */
+    out+='<span title="'+e('COT ของใบนี้ชำระผ่านบิล '+(M.cotBillNo||'')+' แล้ว · ไม่ต้องเก็บที่ท่า')+'" style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; จ่ายผ่านบิลแล้ว '+m(M.cotBill)+'</span>';
   } else if(pckCotUnset(M)){
     out+='<span style="font-size:10px;color:#a5a49d">COT · ยังไม่ระบุยอด</span>';
   } else if(M.ovnSettled){
