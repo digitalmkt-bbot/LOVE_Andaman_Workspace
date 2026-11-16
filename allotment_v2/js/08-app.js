@@ -38678,6 +38678,67 @@ function pxFcMaint(ym, today, nAct, nRem){
   return { a:a, b:c-a, c:c, p:0 };
 }
 function pxFcMonLbl(ym){ return (PX_MON[(+String(ym).slice(5,7))-1]||'')+' '+String(ym).slice(0,4); }
+/* §pxFcPace (2026-11-16) · owner: "ดูจากประวัติว่าปกติลูกค้าเข้ามาเพิ่มกี่คนในช่วงก่อนเดินทาง
+   แล้วใส่เป็นเส้นในกราฟว่าแต่ละวันน่าจะถึงหรือไม่ถึงเป้า"
+   ข้อมูลจริง ต.ค.–15 พ.ย. 2026: จองไว้ก่อน 2 วัน = 58% · 4 วัน = 35% · 7 วัน = 22% · 14 วัน = 16%
+   (ราว 42% ของลูกค้าจองวันก่อนเดินทาง)
+   วิธีคิด: ยอดสุดท้ายที่คาด = จองแล้ว (สร้างก่อนวันนี้) + ยอดที่ปกติเข้ามาเพิ่มหลังจุดนั้น
+     ยอดที่เข้ามาเพิ่ม = ค่าเฉลี่ยของ 28 วันเดินทางล่าสุด ที่ระยะห่างเท่ากัน
+   ใช้แบบบวก (ไม่ใช่คูณ) เพราะกรุ๊ปใหญ่ที่จองล่วงหน้าจะทำให้แบบคูณพุ่งเกินจริง
+   นับจากใบที่ยังไม่ยกเลิก ณ ตอนนี้ · ใบที่จะยกเลิกในอนาคตไม่ได้หัก → คาดสูงไปเล็กน้อย
+   ไม่นับวันนี้ (ใบที่สร้างวันนี้ยังเข้ามาไม่ครบ) */
+var PX_PACE_X={ cancelled:1, rejected:1, cancelled_weather:1 };
+function pxPaceDay(b){
+  var c=b.createdAt||b.bookedAt; if(!c) return '';
+  var t=String(c); if(t.length<=10) return t;
+  var d=new Date(t); if(isNaN(d)) return t.slice(0,10);
+  return (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10);
+}
+function pxPaceRows(D, pier){
+  var out=[];
+  ((typeof ckBksOn==='function')?ckBksOn(D):[]).forEach(function(b){
+    if(PX_PACE_X[b.status]) return;
+    var c=pxPaceDay(b); if(!c) return;
+    (b.trips||[]).forEach(function(t){
+      if(!t || t.date!==D) return;
+      if(pier){ var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt || (rt.pier||'')!==pier) return; }
+      var p=t.pax||{}, n=0; Object.keys(p).forEach(function(k){ if(!/^inf/.test(k)) n+=(+p[k]||0); });
+      if(n>0) out.push({ c:c, n:n });
+    });
+  });
+  return out;
+}
+function pxPaceDiff(a, b){ return Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5); }
+function pxPace(today, pier){
+  var key=today+'|'+(pier||'')+'|'+String(window.__savedAt||0);
+  if(_px._pace && _px._pace.k===key) return _px._pace.v;
+  var yd=new Date(today+'T12:00:00'); yd.setDate(yd.getDate()-1);
+  var ydS=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(yd):yd.toISOString().slice(0,10);
+  var H=pxBackDays(28, ydS), MAXN=30, add=[], cnt=0, fin=0, lo=[], hi=[];
+  for(var N=0; N<=MAXN; N++){ add[N]=[]; }
+  H.forEach(function(D){
+    var R=pxPaceRows(D, pier), F=0; R.forEach(function(r){ F+=r.n; });
+    if(!F) return; cnt++; fin+=F;
+    for(var N=1; N<=MAXN; N++){
+      var B=0; R.forEach(function(r){ if(pxPaceDiff(D, r.c)>=N) B+=r.n; });
+      add[N].push(F-B);
+    }
+  });
+  function avg(a){ return a.length?a.reduce(function(x,y){ return x+y; },0)/a.length:0; }
+  function q(a, f){ if(!a.length) return 0; var z=a.slice().sort(function(x,y){ return x-y; }); return z[Math.min(z.length-1, Math.floor(f*(z.length-1)+0.5))]; }
+  var m=[], l=[], h=[];
+  for(var N=1; N<=MAXN; N++){ m[N]=avg(add[N]); l[N]=q(add[N],0.25); h[N]=q(add[N],0.75); }
+  var v={ n:cnt, fin:cnt?fin/cnt:0, m:m, l:l, h:h,
+    /* ยอดที่คาดของวันเดินทาง D · ระยะ N = จำนวนวันจากเมื่อวานถึง D */
+    at:function(D){
+      var N=pxPaceDiff(D, ydS); if(N<1) return null;
+      var R=pxPaceRows(D, pier), B=0; R.forEach(function(r){ if(r.c<today) B+=r.n; });
+      if(N>MAXN) return { bk:B, p:Math.max(B, this.fin), lo:B, hi:Math.max(B, this.fin), N:N };
+      return { bk:B, p:B+m[N], lo:B+l[N], hi:B+h[N], N:N };
+    } };
+  _px._pace={ k:key, v:v };
+  return v;
+}
 function pxForecast(e){
   var ym=_px.mon||String(_px.date||'').slice(0,7);
   var y=+ym.slice(0,4), m=+ym.slice(5,7); if(!y||!m) return '<div class="empty">Pick a month</div>';
@@ -38794,10 +38855,50 @@ function pxForecast(e){
       +(o.x?('<i class="x" style="height:'+(o.x/mx*100).toFixed(1)+'%"></i>'):'')
       +'<i class="'+(o.past?'a':'b')+'" style="height:'+(o.bk/mx*100).toFixed(1)+'%"></i></div>'; }).join('');
   var xax=PD.map(function(o){ var W=pxDW(o.s); return '<span class="'+(W.we?'we':'')+(o.s===today?' td':'')+'">'+W.d+'</span>'; }).join('');
+  /* §pxFcPace · จุดคาดการณ์จากจังหวะการจอง · ใช้หน่วยเดียวกับแท่ง (ปรับด้วยอัตราส่วนของวันที่เดินทางแล้ว) */
+  var paceHtml='', paceLg='', paceMk={};
+  try{
+    var PC=pxPace(today, _px.pier), fut=PD.filter(function(o){ return !o.past; });
+    if(PC && PC.n>=7 && fut.length){
+      var kA=0, kB=0;
+      act.forEach(function(s){ kA+=(pxDayAgg(s,_px.pier).pax||0); pxPaceRows(s,_px.pier).forEach(function(r){ kB+=r.n; }); });
+      var k=(kA>0 && kB>0)?(kA/kB):1, tP=0, tT=0, nOk=0, nLo=0;
+      fut.forEach(function(o){
+        var r=PC.at(o.s); if(!r) return;
+        var pj=r.p*k, plo=r.lo*k, phi=r.hi*k;
+        var st=(pj>=avgPax)?'ok':((pj>=avgPax*0.9)?'mid':'low');
+        if(st==='ok') nOk++; else if(st==='low') nLo++;
+        tP+=pj; tT+=avgPax;
+        mx=Math.max(mx, phi, avgPax);
+        paceMk[o.s]={ v:pj, lo:plo, hi:phi, st:st, N:r.N };
+      });
+      var gap=tP-tT, gp=tT?(gap/tT*100):0, ppx=PAX.a?(S3.a/PAX.a):0;
+      var dA0=fut[0].s.slice(8)*1, dA1=fut[fut.length-1].s.slice(8)*1;
+      paceHtml='<div class="fcpace '+(gap>=0?'ok':(gp>=-10?'mid':'low'))+'">'
+        +'<b>ตามจังหวะการจองที่ผ่านมา</b> วันที่ '+dA0+'\u2013'+dA1+' คาดได้ราว <b class="n">'+pxN(tP)+'</b> คน'
+        +' · เป้า (เท่าค่าเฉลี่ย) '+pxN(tT)+' คน · '
+        +'<b class="n">'+(gap>=0?'เกิน ':'ขาด ')+pxN(Math.abs(gap))+' คน ('+(gap>=0?'+':'\u2212')+Math.abs(gp).toFixed(0)+'%)</b>'
+        +(ppx?(' · กระทบกำไรราว <b class="n">'+(gap>=0?'+':'\u2212')+pxN(Math.abs(gap*ppx))+' ฿</b> (คิดที่ '+pxN(ppx)+' ฿/คน)'):'')
+        +'<small>ถึงเป้า '+nOk+' วัน · ต่ำกว่าเป้าเกิน 10% '+nLo+' วัน · คิดจาก '+PC.n+' วันเดินทางล่าสุด · ใบที่จะยกเลิกในอนาคตยังไม่หัก จึงอาจสูงไปเล็กน้อย</small></div>';
+      paceLg='<span><i class="pj ok"></i>Projected (booking pace)</span><span><i class="tg"></i>Target '+pxN(avgPax)+'/day</span>';
+    }
+  }catch(_){ paceHtml=''; paceMk={}; }
+  if(paceLg){
+    bars=PD.map(function(o){ var W=pxDW(o.s), P=paceMk[o.s];
+      var tip=W.txt+' · '+(o.past?('เดินทางจริง '+o.bk):('จองแล้ว '+o.bk+(P?(' · คาดสุดท้าย ~'+pxN(P.v)+' (ช่วงปกติ '+pxN(P.lo)+'\u2013'+pxN(P.hi)+')'):(' · คาดเพิ่ม '+o.x))))+' pax';
+      return '<div class="c" title="'+e(tip)+'">'
+        +(P?('<i class="pr" style="bottom:'+(P.lo/mx*100).toFixed(1)+'%;height:'+(Math.max(0,P.hi-P.lo)/mx*100).toFixed(1)+'%"></i>'
+            +'<i class="pj '+P.st+'" style="bottom:'+(P.v/mx*100).toFixed(1)+'%"></i>'):'')
+        +(o.x?('<i class="x" style="height:'+(o.x/mx*100).toFixed(1)+'%"></i>'):'')
+        +'<i class="'+(o.past?'a':'b')+'" style="height:'+(o.bk/mx*100).toFixed(1)+'%"></i></div>'; }).join('')
+      +'<i class="tgl" style="bottom:'+(avgPax/mx*100).toFixed(1)+'%"></i>';
+  }
   var chart='<div class="eg mb"><div class="phd"><div><h2>Daily pax <span class="pill pu">'+e(mLbl)+'</span></h2>'
-    +'<p>เดินทางแล้ว · จองเข้ามาแล้ว · คาดว่าจะจองเพิ่ม (ให้ถึงค่าเฉลี่ย '+pxN(avgPax)+' คน/วัน)</p></div>'
+    +'<p>เดินทางแล้ว · จองเข้ามาแล้ว · คาดว่าจะจองเพิ่ม (ให้ถึงค่าเฉลี่ย '+pxN(avgPax)+' คน/วัน)'
+      +(paceLg?' · ขีดสีคือยอดสุดท้ายที่คาดจากจังหวะการจอง (เขียว ถึงเป้า · ส้ม ต่ำกว่าไม่เกิน 10% · แดง ต่ำกว่าเกิน 10%)':'')+'</p></div>'
     +'<div class="fclg"><span><i style="background:#9CC0F5"></i>Actual</span><span><i style="background:#1D4ED8"></i>On the books</span>'
-    +'<span><i class="x"></i>Expected pickup</span></div></div>'
+    +'<span><i class="x"></i>Expected pickup</span>'+paceLg+'</div></div>'
+    +paceHtml
     +'<div class="fcbars">'+bars+'</div><div class="fcx">'+xax+'</div></div>';
 
   /* ตารางตามขั้น */
@@ -38913,7 +39014,16 @@ function pxFcCSS(){ var H='#trippl-host '; return ''
  +H+'.fclg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}'
  +H+'.fclg i.x,'+H+'.fcbars i.x{background:#DCE8FA;border:1px dashed #7EA6E8;box-sizing:border-box}'
  +H+'.fcbars{display:flex;align-items:flex-end;gap:4px;height:132px;border-bottom:1px solid #E3E8F0;margin-top:10px}'
- +H+'.fcbars .c{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end}'
+ +H+'.fcbars .c{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative}'
+ +H+'.fcbars{position:relative}'
+ +H+'.fcbars i.pr{position:absolute;left:30%;right:30%;background:rgba(15,27,61,.10);border-radius:2px;z-index:1}'
+ +H+'.fcbars i.pj{position:absolute;left:-1px;right:-1px;height:3px;margin-bottom:-1.5px;border-radius:2px;z-index:2}'
+ +H+'.fcbars i.pj.ok,'+H+'.fclg i.pj.ok{background:#0A6B49}'+H+'.fcbars i.pj.mid{background:#D97706}'+H+'.fcbars i.pj.low{background:#B91C1C}'
+ +H+'.fcbars i.tgl{position:absolute;left:0;right:0;height:0;border-top:1.5px dashed #0F1B3D;opacity:.55;z-index:3;pointer-events:none}'
+ +H+'.fclg i.pj{height:3px;width:12px;vertical-align:3px}'+H+'.fclg i.tg{width:14px;height:0;border-top:1.5px dashed #0F1B3D;border-radius:0;vertical-align:3px}'
+ +H+'.fcpace{margin:10px 0 2px;padding:8px 12px;border-radius:9px;font-size:11.5px;line-height:1.6;border:1px solid #E3E8F0;background:#F8FAFC;color:#0F1B3D}'
+ +H+'.fcpace.ok{background:#EAFBF2;border-color:#BDE9D4}'+H+'.fcpace.mid{background:#FFF7E8;border-color:#F6D9A8}'+H+'.fcpace.low{background:#FDECEC;border-color:#F3B9B9}'
+ +H+'.fcpace small{display:block;font-size:10px;color:#5B6679}'
  +H+'.fcbars i{display:block}'+H+'.fcbars i.a{background:#9CC0F5;border-radius:2px 2px 0 0}'+H+'.fcbars i.b{background:#1D4ED8}'
  +H+'.fcbars i.x{border-bottom:0;border-radius:2px 2px 0 0}'
  +H+'.fcx{display:flex;gap:4px;margin-top:4px}'+H+'.fcx span{flex:1 1 0;min-width:0;text-align:center;font-size:9px;color:#5B6679}'
