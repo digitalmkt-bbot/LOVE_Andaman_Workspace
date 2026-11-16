@@ -42745,7 +42745,7 @@ function bkV2RowPayAction(bkId){
   const isPF=a&&a.payType==='proforma';
   let body;
   if(!bk.agentId){
-    body=`<div style="font-size:12px;color:var(--fd-ink-soft)">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>`;
+    body=`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>${bkV2PaySlipBtn(bkId)}`;
   } else if(!inv){
     // B2C carries its own settled amount from the webshop (payments + credits, synced server-side).
     // Show it here, otherwise this modal reads "no invoice yet" on a booking the customer already paid.
@@ -42760,13 +42760,48 @@ function bkV2RowPayAction(bkId){
       ${bal>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div><label style="font-size:10.5px;color:var(--fd-ink-soft);display:block;margin-bottom:4px">จำนวนเงิน</label><input id="bkv2-pay-amt" type="number" min="0" value="${Math.round(bal)}" style="width:100%;height:34px;font-size:13px;text-align:right;border:1px solid var(--fd-line);border-radius:8px;padding:2px 9px"></div>
         <div><label style="font-size:10.5px;color:var(--fd-ink-soft);display:block;margin-bottom:4px">วิธี</label><select id="bkv2-pay-method" style="width:100%;height:34px;font-size:12px;font-family:inherit;border:1px solid var(--fd-line);border-radius:8px;padding:2px 6px;background:#fff"><option value="transfer">โอน</option><option value="cash">เงินสด</option><option value="card">บัตร</option></select></div>
+      </div>
+      <div style="margin:-2px 0 12px;font-size:11.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="border:1px dashed #CFE0EF;background:#F6FAFE;color:#185FA5;border-radius:8px;padding:6px 11px;cursor:pointer;font-weight:600">&#128206; แนบสลิปการรับเงินนี้<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2PaySlipPick('${bkId}',this)"></label>
+        <span id="bkv2-pay-slips" style="color:var(--fd-ink-soft)">${bkV2PaySlipList(bkId)}</span>
       </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${bal>0?`<button onclick="bkV2PayDoRecord('${inv.id}','${bkId}')" style="background:#0F7A5A;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer">บันทึกรับเงิน</button>`:''}
         <button onclick="acctOpenDoc('${inv.id}','invoice')" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 14px;border-radius:9px;cursor:pointer">ดูเอกสาร</button>
+        ${bkV2PaySlipBtn(bkId)}
       </div>`;
   }
   acctModal(`<div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">การชำระเงิน · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">${a?a.name:'—'}${a?` · ${bkV2PayLabel(a.payType)}`:''}</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div><div style="padding:16px 20px">${body}</div>`);
+}
+/* ══ §paySlip (2026-11-16) · owner "เป็น COT แล้ว ลค จ่ายเงินแล้ว สามารถแนบสลิปจากตรงไหน" (BK-26112683-BPJ5)
+   หน้าต่าง "การชำระเงิน" (ช่อง PAY ใน By trip) เดิมมีแค่บันทึกรับเงิน (ตอนค้าง) กับดูเอกสาร · ไม่มีที่แนบสลิปเลย
+   · ปุ่ม 📎 สลิป (n) → หน้าจัดการสลิปของบุ๊กกิ้งตัวเดียวกับ Daily PFM (ดู · แนบ · วางภาพ · ลบ) ใช้ได้ทุกใบ ทุกสถานะ
+   · ตอนยังค้าง: แนบสลิปก่อนกดบันทึกรับเงิน → ผูกกับการรับเงินครั้งนั้น (payment.slips) ══ */
+var _bkV2PaySlips={};
+function bkV2PaySlipBtn(bkId){
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const n=((b&&b.paymentSlips)||[]).length;
+  return `<button onclick="bkV2PaySlipsOpen('${bkId}')" title="ดู / แนบ / ลบสลิปการชำระของใบนี้" style="background:${n?'#fff':'#F6FAFE'};border:1px solid ${n?'var(--fd-line)':'#CFE0EF'};color:${n?'var(--fd-ink)':'#185FA5'};font-family:inherit;font-size:12px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer">&#128206; สลิป${n?(' ('+n+')'):' · แนบ'}</button>`;
+}
+function bkV2PaySlipList(bkId){
+  const L=_bkV2PaySlips[bkId]||[]; if(!L.length) return 'ยังไม่ได้แนบ';
+  return L.map(function(x){ return '&#10003; '+String(x.name||'slip').replace(/[<>&"]/g,''); }).join(' · ');
+}
+function bkV2PaySlipPick(bkId, inp){
+  const fs=Array.from((inp&&inp.files)||[]); if(!fs.length) return;
+  if(typeof pckSlipUpload!=='function'){ alert('แนบสลิปไม่ได้ในหน้านี้'); return; }
+  const el=document.getElementById('bkv2-pay-slips'); if(el) el.textContent='กำลังอัปโหลด…';
+  fs.forEach(function(f){ pckSlipUpload(f, bkId, function(meta){
+    (_bkV2PaySlips[bkId]=_bkV2PaySlips[bkId]||[]).push(meta);
+    try{ acctPersistBookings(); }catch(_){ }
+    const e2=document.getElementById('bkv2-pay-slips'); if(e2) e2.innerHTML=bkV2PaySlipList(bkId); }); });
+  if(inp) inp.value='';
+}
+var _bkV2PaySlipBack='';
+function bkV2PaySlipsOpen(bkId){
+  if(typeof pfmViewSlips!=='function'){ alert('หน้าจัดการสลิปไม่พร้อม'); return; }
+  _bkV2PaySlipBack=bkId;
+  try{ if(typeof acctModalClose==='function') acctModalClose(); }catch(_){ }
+  pfmViewSlips(bkId);
 }
 function bkV2PayDoCreate(bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!bk.agentId) return;
@@ -42778,7 +42813,12 @@ function bkV2PayDoRecord(invId, bkId){
   const amt=+(document.getElementById('bkv2-pay-amt')||{}).value||0;
   const method=(document.getElementById('bkv2-pay-method')||{}).value||'transfer';
   if(amt<=0){ alert('ใส่จำนวนเงิน'); return; }
-  acctRecordPayment(invId, amt, method);
+  const _sl=(_bkV2PaySlips[bkId]||[]).slice();   /* §paySlip · สลิปที่แนบไว้ในหน้าต่างนี้ ผูกกับการรับเงินครั้งนี้ */
+  acctRecordPayment(invId, amt, method, _sl.length?{slips:_sl}:undefined);
+  if(_sl.length){ const _b=(SB_BOOKINGS||[]).find(x=>x.id===bkId);
+    if(_b) (_b.paymentSlips||[]).forEach(function(ps){ if(_sl.some(function(q){ return q.id===ps.id; })){ ps.amount=amt; ps.kind='payment'; } });
+    try{ acctPersistBookings(); }catch(_){ } }
+  delete _bkV2PaySlips[bkId];
   bkV2Render(); bkV2RowPayAction(bkId);
 }
 
@@ -65919,7 +65959,9 @@ function pfmViewSlips(bkId){
   document.body.appendChild(ov);
   pfmSlipsRender();
 }
-function pfmSlipsClose(){ _pfmSlipBk=null; const ov=document.getElementById('pfm-slipview'); if(ov) ov.remove(); if(typeof renderDailyPFM==='function') renderDailyPFM(); }
+function pfmSlipsClose(){ _pfmSlipBk=null; const ov=document.getElementById('pfm-slipview'); if(ov) ov.remove(); if(typeof renderDailyPFM==='function') renderDailyPFM();
+  /* §paySlip · เปิดมาจากหน้าต่างการชำระเงินของ By trip → กลับไปหน้าต่างนั้น (จำนวนสลิปอัปเดต) */
+  if(typeof _bkV2PaySlipBack!=='undefined' && _bkV2PaySlipBack){ const _k=_bkV2PaySlipBack; _bkV2PaySlipBack=''; try{ if(typeof bkV2Render==='function') bkV2Render(); bkV2RowPayAction(_k); }catch(_){ } } }
 function pfmSlipsRender(){
   const ov = document.getElementById('pfm-slipview'); if(!ov || !_pfmSlipBk) return;
   const b = (SB_BOOKINGS||[]).find(x => x.id===_pfmSlipBk); if(!b) return;
