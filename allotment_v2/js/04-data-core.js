@@ -7030,14 +7030,26 @@ function renderBoatDetailPink(){
       const logEntry=(b.log||[]).find(e=>e.from<=ds&&(!e.to||e.to>=ds));
       const logId=logEntry?logEntry.id:null;
       const charterOff=isCharter&&!logId;
-      const blank=charterOff||(isFuture&&!logId);
+      /* §bsCalJob (2026-11-16) · owner: "ต้องกด Start ด้วยไหม ตอนนี้ยังไม่ขึ้น" (MJ-361 · Aluminous1 · 18 พ.ย.)
+         ปฏิทินอ่านแค่แถวในตารางสถานะ · ใบงานที่กันเรือ (กำลังทำ หรือวางล่วงหน้า §mjPlanBlock) ไม่เคยขึ้นที่นี่
+         ทั้งที่ทั้งระบบนับว่าเรือไม่ว่าง · ช่องจึงบอกไม่ตรงกับกระดานจัดเรือ
+         ตอนนี้ · วันที่ใบงานกันเรือ ระบายสีตามใบงาน เป็นลายทาง + บอกเลขใบใน tooltip
+         คลิกช่องยังแก้แถวในตารางเหมือนเดิม (ช่องลายไม่ได้มาจากตาราง จึงแก้ที่ใบงาน) */
+      let _jb=null;
+      if(!charterOff){ try{ const _ef=(typeof boatEffStatus==='function')?boatEffStatus(b,ds):null; if(_ef&&_ef.jobBlockNos) _jb=_ef; }catch(_){} }
+      const blank=charterOff||(isFuture&&!logId&&!_jb);
       let pr=''; if(!charterOff){ try{ pr=getBoatCurrentPier(b,ds)||''; }catch(_){} }
       const tag=pr?`<span data-bspier="${pr}" style="font:700 9px/1 'DM Sans',sans-serif;letter-spacing:.02em;padding:1px 2px;border-radius:2px;background:#fff;color:${_bsPierInk[pr]||'#1F1F1F'}">${_bsPierShort[pr]||String(pr).slice(0,2).toUpperCase()}</span>`:_bsNoTag;
       let bg='#fff', fg='#8A8A82', ring='inset 0 0 0 1px #ECEBE6', stTxt='no status set', dark=false;
       if(!blank){
-        const stv=getStoredStatus(b,ds).s||'available';
+        const stv=(_jb&&_jb.s)||getStoredStatus(b,ds).s||'available';
         const f=_bsFill[stv]||_bsFill.available;
         bg=isFuture?f[2]:f[0]; fg=isFuture?f[3]:f[1]; ring='none'; stTxt=_bsStLbl[stv]||stv; dark=(stv==='unavailable'&&!isFuture);
+        if(_jb){   /* §bsCalJob · ลายทาง = มาจากใบงาน ไม่ใช่แถวในตาราง */
+          const _lt=isFuture?'#FFFFFF':'rgba(255,255,255,.55)';
+          bg=`repeating-linear-gradient(135deg,${bg} 0 5px,${_lt} 5px 7px)`;
+          stTxt+=' · จากใบงาน '+_jb.jobBlockNos+((_jb.jobBlock||[]).some(j=>j.plan)?' (วางไว้ล่วงหน้า ยังไม่กด Start)':'');
+        }
         if(stv==='fixing') nFix++; else if(stv==='unavailable') nUn++;
       }
       if(isToday) ring='inset 0 0 0 2px #0F1B3D'+(dark?', inset 0 0 0 3px #fff':'');
@@ -7195,6 +7207,7 @@ function renderBoatDetailPink(){
         ${_bsLg('background:#E0A040','Fixing')}
         ${_bsLg('background:#A1271F','Unavailable')}
         ${_bsLg('background:#F5DDB2','Lighter = after today')}
+        ${_bsLg('background:repeating-linear-gradient(135deg,#E0A040 0 4px,#fff 4px 6px)','Striped = from a job (MJ / PRJ)')}
         ${_bsLg('border:2px solid #0F1B3D','Today')}
       </div>
     </div>
