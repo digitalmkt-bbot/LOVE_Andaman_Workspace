@@ -8091,6 +8091,9 @@ function bop2GetDates(){
   for(let d=1; d<=last; d++) out.push(fmt(new Date(y, m, d, 12, 0, 0)));
   return out;
 }
+/* §bopTb · สัญลักษณ์พับ/กาง · จำไว้ในเครื่อง */
+function bop2LgOpen(){ if(_bop2.lg==null){ try{ _bop2.lg=(localStorage.getItem('la_bop_lg')==='1'); }catch(_){ _bop2.lg=false; } } return !!_bop2.lg; }
+function bop2LgTog(){ _bop2.lg=!bop2LgOpen(); try{ localStorage.setItem('la_bop_lg', _bop2.lg?'1':'0'); }catch(_){} renderOp(); }
 function bop2SetViewMode(mode){
   if(_bop2.dnd){   /* §bopDnd · ออกจากโหมดลาก */
     if(typeof bopDPending==='function' && bopDPending() && !confirm('มีการจัดเรือที่ยังไม่บันทึก · ออกแล้วทิ้งรายการเหล่านี้?')) return;
@@ -10989,31 +10992,45 @@ function bop2RenderShell(){
     <!-- Col 2 · ตาราง · ปุ่มกรองท่าย้ายเข้ามาอยู่ในการ์ดเดียวกัน
          เพราะมันกรองเฉพาะตาราง ของเดิมลอยอยู่นอกการ์ดเลยอ่านเหมือนกรองทั้งหน้า -->
     <div class="bo-card" style="padding:0 14px 10px">
-      <!-- §bopMock · หัวการ์ด เหมือนทุกการ์ดในหน้า Dashboard -->
-      <div style="display:flex;align-items:center;gap:8px;padding:11px 0 9px">
-        <span style="font-size:13.5px;font-weight:800;color:#12518F;letter-spacing:-.01em">ตารางจัดเรือ</span>
-        <!-- §bopMid · ช่วงเวลาที่ตารางนี้แสดงอยู่ · ของเดิมไม่มีเลย
-             คอลัมน์เป็น T W T F กับเลข 1-30 ไม่มีชื่อเดือนสักตัว -->
-        <span style="font-size:12px;font-weight:800;color:#0F6E56;letter-spacing:.06em;
-          background:#E4F2EB;padding:3px 10px;border-radius:8px;text-transform:uppercase;white-space:nowrap"
-          >${escapeHTML(gridPeriodLbl)}</span>
+      <!-- §bopTb (2026-11-16) · owner: "ปรับตรงนี้ให้กระชับหน่อย และจัดกรุ๊ปให้ใช้งานง่าย มันเริ่มรก"
+           เดิม 3 ชั้น (หัว · ปุ่ม 9 ตัวเรียงยาว · สัญลักษณ์ 2 บรรทัด) → แถวเดียว จัดเป็น 3 กลุ่ม
+             ท่า (segmented) · มุมมอง Week / Month / ลาก (segmented) · เครื่องมือ (Bulk · Cancelled · สัญลักษณ์)
+           สัญลักษณ์พับไว้เป็นค่าตั้งต้น กดเปิดได้ จำค่าไว้ในเครื่อง · ปุ่ม "ที่นั่งไม่พอ" เป็นปุ่มกดจึงย้ายมาอยู่แถวนี้ -->
+      <style>
+        #view-operation .bop-tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 0 10px}
+        #view-operation .bop-tt{font-size:13.5px;font-weight:800;color:#12518F;letter-spacing:-.01em;white-space:nowrap}
+        #view-operation .bop-mo{font-size:11.5px;font-weight:800;color:#0F6E56;letter-spacing:.06em;background:#E4F2EB;padding:3px 9px;border-radius:8px;text-transform:uppercase;white-space:nowrap}
+        #view-operation .bop-sg{display:inline-flex;align-items:center;background:#F1F4F2;border-radius:999px;padding:3px;gap:2px}
+        #view-operation .bop-sg span{padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#4B5563;cursor:pointer;white-space:nowrap;line-height:1.2}
+        #view-operation .bop-sg span:hover{color:#1C4A30}
+        #view-operation .bop-sg span.on{background:#1C4A30;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+        #view-operation .bop-tl{border:1px solid #E2E5E1;background:#fff;border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:600;color:#4B5563;cursor:pointer;white-space:nowrap}
+        #view-operation .bop-tl:hover{border-color:#B7C7BD;color:#1C4A30}
+        #view-operation .bop-tl.on{background:#F1F4F2}
+        #view-operation .bop-ovf{cursor:pointer}
+        #view-operation .bo-legend.bop-lg{margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#FAFAF8;border:1px solid #EFEDE8}
+      </style>
+      <div class="bop-tb">
+        <span class="bop-tt">ตารางจัดเรือ</span>
+        <span class="bop-mo">${_bop2.dnd ? '7 DAYS' : escapeHTML(gridPeriodLbl)}</span>
+        <span class="bop-sg">${((typeof laPierScoped==='function')&&laPierScoped()) ? `<span class="on">${_bop2.pier==='tublamu'?'Tub Lamu':_bop2.pier==='panwa'?'Visit Panwa':'Ranong'}</span>` : `
+          <span class="${_bop2.pier==='all'?'on':''}" onclick="bop2SetPier('all')">All piers</span>
+          <span class="${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
+          <span class="${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
+          ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}`}</span>
+        <span class="bop-sg">
+          <span class="${(!isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('week')">Week</span>
+          <span class="${(isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
+          <span class="${_bop2.dnd?'on':''}" onclick="${_bop2.dnd?'':'bopDToggle()'}" title="จัดเรือแบบลาก · 7 วัน · ลากชื่อเรือเพื่อจัดหรือสลับ">ลากจัดเรือ</span>
+        </span>
+        ${ovfView.length ? `<span class="bo-legend-chip bop-ovf" onclick="bop2OvfToggle()" title="กดเพื่อจางช่องอื่น ดูเฉพาะวันที่ที่นั่งไม่พอ" style="cursor:pointer;border-radius:8px;padding:2px 7px;${_bop2.ovfOnly?'background:#3730A3;color:#fff':'background:#EFF0FC;color:#3730A3'}"><span class="box" style="background:#EFF0FC;border:2px solid #3730A3"></span>ที่นั่งไม่พอ · ${_bop2.ovfOnly?'ดูทั้งหมด':('ดูเฉพาะ '+ovfView.length)}</span>` : ''}
         <span style="flex:1"></span>
-        <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">pax ที่จองแล้ว · สีตาม % ที่ขายได้</span>
+        <span class="bop-tl" onclick="bop2ShowBulkMenu(event)">+ Bulk</span>
+        ${typeof tcxHistOpen==='function'?'<span class="bop-tl" onclick="tcxHistOpen()" title="Cancelled trips · reasons and history">Cancelled trips</span>':''}
+        ${_bop2.dnd ? '' : `<span class="bop-tl ${bop2LgOpen()?'on':''}" onclick="bop2LgTog()">สัญลักษณ์ ${bop2LgOpen()?'▴':'▾'}</span>`}
       </div>
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px">
-        ${((typeof laPierScoped==='function')&&laPierScoped()) ? `<span class="bo-pier-pill on">${_bop2.pier==='tublamu'?'Tub Lamu':_bop2.pier==='panwa'?'Visit Panwa':'Ranong'}</span>` : `
-        <span class="bo-pier-pill ${_bop2.pier==='all'?'on':''}" onclick="bop2SetPier('all')">All piers</span>
-        <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
-        <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
-        ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}`}   <!-- §pierScope -->
-        <!-- §bopHdr · ปุ่มคุมตารางย้ายมาอยู่ใกล้ตารางตาม mockup -->
-        <span class="bo-pier-pill ${(!isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
-        <span class="bo-pier-pill ${(isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
-        <span class="bo-pier-pill ${_bop2.dnd?'on':''}" onclick="bopDToggle()" title="จัดเรือแบบลาก · 7 วัน · ลากชื่อเรือเพื่อจัดหรือสลับ">จัดเรือแบบลาก</span>
-        <span class="bo-pier-pill" onclick="bop2ShowBulkMenu(event)">+ Bulk actions</span>
-        ${typeof tcxHistOpen==='function'?'<span class="bo-pier-pill" onclick="tcxHistOpen()" title="Cancelled trips · reasons and history">Cancelled trips</span>':''}
-      </div>
-      <div class="bo-legend" style="margin:0 0 10px;padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.05)">
+      ${(!_bop2.dnd && bop2LgOpen()) ? `<div class="bo-legend bop-lg">
+        <span class="bo-legend-chip" style="font-weight:700;color:#6B7785">pax ที่จองแล้ว · สีตาม % ที่ขายได้</span>
         <!-- §bop3col · legend ชุดเดียวกับปฏิทิน Seats available ในหน้า Dashboard -->
         <span class="bo-legend-chip"><span class="box" style="background:#CFE9AC"></span>เต็ม</span>
         <span class="bo-legend-chip"><span class="box" style="background:#E8F5D8"></span>ขายดี</span>
@@ -11025,12 +11042,11 @@ function bop2RenderShell(){
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         ${typeof TCX_R!=='undefined'?Object.keys(TCX_R).map(k=>`<span class="bo-legend-chip"><span class="box" style="background:${TCX_R[k].bg};border:1px solid ${TCX_R[k].bd};color:${TCX_R[k].fg};display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">${TCX_R[k].ic}</span>CXL ${TCX_R[k].en.toLowerCase()}</span>`).join('')+'<span class="bo-legend-chip"><span class="box" style="background:#fff;border:1.5px dashed #C53A2E"></span>Below break-even (3 days)</span>':''}
-        ${ovfView.length ? `<span class="bo-legend-chip" onclick="bop2OvfToggle()" title="กดเพื่อจางช่องอื่น ดูเฉพาะวันที่ที่นั่งไม่พอ" style="cursor:pointer;border-radius:8px;padding:2px 7px;${_bop2.ovfOnly?'background:#3730A3;color:#fff':'background:#EFF0FC;color:#3730A3'}"><span class="box" style="background:#EFF0FC;border:2px solid #3730A3"></span>ที่นั่งไม่พอ · ${_bop2.ovfOnly?'ดูทั้งหมด':('ดูเฉพาะ '+ovfView.length)}</span>` : ''}
         <span class="bo-legend-chip"><span class="box" style="background:#3730A3;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:8px;line-height:1">&#128257;</span>เปลี่ยนเรือกลางทาง</span>
         <style>#view-operation .bop2-grid.ovf-only .bop2-cell-day[data-route]:not([data-ovf]){opacity:.25}</style>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
-      </div>
+      </div>` : ''}
       ${bop2OvfBanner(ovf30)}
       ${typeof tcxBelowBannerLazy==='function'?tcxBelowBannerLazy(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):(typeof tcxBelowBanner==='function'?tcxBelowBanner(tublamuRoutes.concat(panwaRoutes, ranongRoutes)):'')}
       <div style="overflow-x:auto">
