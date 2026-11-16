@@ -21483,18 +21483,55 @@ function pckMoney(b, date){
 }
 /* §b2cPayOne · "COT แต่ยังไม่มียอด" ขึ้นได้เฉพาะใบที่เงื่อนไขเป็น COT จริงและยังไม่ได้จ่ายครบ */
 function pckCotUnset(M){ return !!M && M.term==='cot' && M.paidState!=='paid'; }
+/* ══ §cotChip (2026-11-16) · owner "มันคงต้องให้เห็นเป็น COT นั่นแหละ แต่จะทำยังไงให้มั่นใจว่าไม่ต้องเก็บแล้ว" · ดูม็อกอัปแล้ว "ทำ"
+   ใบที่มี COT · ป้าย COT ป้ายเดียวบอกทั้งยอดและสิ่งที่หน้าท่าต้องทำ (แทน Paid + COT ฿ + บรรทัดสถานะที่แยกกัน)
+     เหลือง  COT ฿x · เก็บที่ท่า        = ยังต้องเก็บ (ปุ่มเก็บเงินอยู่ข้างล่างเหมือนเดิม)
+     เขียว   COT ฿x · ✓ เก็บแล้ว       = หน้าท่าเก็บไปแล้ว
+     เขียว   COT ฿x(ขีดฆ่า) · ✓ ไม่ต้องเก็บ = จ่ายผ่านบิลแล้ว (§cotBill)
+   กันล้นช่อง: แต่ละท่อนห้ามตัดกลางคำ แต่ขึ้นบรรทัดใหม่ทั้งท่อนได้ · บรรทัดล่างตัดท้ายเป็น … ข้อความเต็มอยู่ใน title ══ */
+function pckCotChip(b, M, e){
+  var orig=(+M.cot||0)+(+M.cotBill||0); if(!(orig>0) || M.ovnSettled) return null;
+  var m=function(n){ return '฿'+pckNum(n); };
+  var st, l2='', tip='';
+  if(M.cotBill>0 && !(M.cot>0) && !(M.due>0)){
+    st='bill'; var dt='';
+    try{ var _iv=acctBookingInvoice(b.id), _ps=(SB_PAYMENTS||[]).filter(function(p){ return _iv && p.invoiceId===_iv.id && (p.type||'payment')==='payment'; });
+      var _last=_ps.map(function(p){ return String(p.date||''); }).sort().pop()||'';
+      if(_last){ var d=_last.slice(0,10).split('-'); var TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; dt=(+d[2])+' '+TM[(+d[1])-1]; } }catch(_){ }
+    l2='บิล '+(M.cotBillNo||'')+(dt?(' · '+dt):'');
+    tip='COT '+m(orig)+' ของใบนี้ชำระผ่านบิล '+(M.cotBillNo||'')+(dt?(' เมื่อ '+dt):'')+' แล้ว · หน้าท่าไม่ต้องเก็บ';
+  } else if(M.due>0){
+    st='due'; l2=(M.cot<orig)?('หักจ่ายผ่านบิลแล้ว '+m(orig-M.cot)):''; tip='COT '+m(M.cot)+' · เก็บที่ท่า';
+  } else if(M.pierPaid>0){
+    st='got'; l2='เก็บที่ท่า '+m(M.pierPaid); tip='COT · หน้าท่าเก็บแล้ว '+m(M.pierPaid);
+  } else return null;
+  var C={ due:['#FBF0DD','#EAD9B0','#7A4A00','#7A4A00','#FBF0DD','เก็บที่ท่า'],
+          got:['#DCF4E8','#A6DEC4','#0B5A43','#0F6E56','#fff','&#10003; เก็บแล้ว'],
+          bill:['#DCF4E8','#A6DEC4','#0B5A43','#0F6E56','#fff','&#10003; ไม่ต้องเก็บ'] }[st];
+  var amt=(st==='due')?M.cot:orig;
+  return '<div class="pck-cotc" title="'+e(tip)+'" style="display:inline-flex;flex-direction:column;gap:1px;max-width:100%;box-sizing:border-box;background:'+C[0]+';border:1.5px solid '+C[1]+';color:'+C[2]+';border-radius:8px;padding:4px 8px;text-align:left">'
+    +'<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 5px;font-size:11.5px;font-weight:800;line-height:1.3">'
+      +'<span style="white-space:nowrap">COT <span style="font-variant-numeric:tabular-nums'+(st==='bill'?';text-decoration:line-through;text-decoration-thickness:1.5px;opacity:.7':'')+'">'+m(amt)+'</span></span>'
+      +'<span style="white-space:nowrap;background:'+C[3]+';color:'+C[4]+';border-radius:4px;padding:0 5px;font-size:10px">'+C[5]+'</span></span>'
+    +(l2?('<span style="font-size:9.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+e(l2)+'</span>'):'')
+    +'</div>';
+}
 function pckMoneyCell(b, date, sheet){
   var e=ckEsc, M=pckMoney(b,date);
   var m=function(n){ return '฿'+pckNum(n); };
   var out='';
+  var _cotC=pckCotChip(b, M, e);   /* §cotChip */
   // §payChips (2026-08-02) · เงื่อนไขการชำระเงินอ่านจากป้ายชุดเดียวกับหน้า By-trip
   //   Invoice / Pro Forma / COT / Paid — หน้าท่าเคยเห็นแค่ "ยอดที่ต้องเก็บ" ซึ่งไม่บอกว่าใบนี้เป็นเครดิต
   //   หรือจ่ายมาแล้ว คนหน้าท่าเลยต้องเปิดอีกหน้าไปเช็ค · ป้ายกดได้ ไปหน้าจัดการชำระเงินชุดเดียวกัน
   try{
     var _chips='';
+    if(_cotC){ out+='<div class="pck-paychips">'+_cotC+'</div>'; }   /* §cotChip · ป้าย COT ป้ายเดียวแทนป้ายชุดเดิม */
+    else {
     if(typeof bkV2PayChip==='function') _chips+=bkV2PayChip(b);
     if(!M.ovnSettled && typeof bkV2CotChip==='function'){ var _c=bkV2CotChip(b,''); if(_c&&_c.chip) _chips+=_c.chip; }
     if(_chips) out+='<div class="pck-paychips">'+_chips+'</div>';
+    }
   }catch(_){}
   var parts=[];
   if(M.due>0){
@@ -21508,7 +21545,8 @@ function pckMoneyCell(b, date, sheet){
      รายละเอียดที่เหลือ (ที่มาของยอด · ค่าธรรมเนียม · แบ่งจ่าย · รอสลิป · ปุ่มเก็บเงิน) ยังอยู่ครบข้างล่าง */
   if(sheet){
     var _v;
-    if(M.due>0) _v='<span class="pcs-pay due" title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'">เก็บที่ท่า <b>'+m(M.due)+'</b></span>';
+    if(_cotC && (!(M.due>0) || pckN(M.due)===pckN(M.cot))) _v='';   /* §cotChip · ป้าย COT บอกครบแล้ว */
+    else if(M.due>0) _v='<span class="pcs-pay due" title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'">เก็บที่ท่า <b>'+m(M.due)+'</b></span>';
     else if(M.pierPaid>0) _v='<span class="pcs-pay ok">&#10003; เก็บครบ <b>'+m(M.pierPaid)+'</b></span>';
     else if(M.cotBill>0) _v='<span class="pcs-pay ok" title="'+e('COT ของใบนี้ชำระผ่านบิล '+(M.cotBillNo||'')+' แล้ว · ไม่ต้องเก็บที่ท่า')+'">&#10003; จ่ายผ่านบิลแล้ว <b>'+m(M.cotBill)+'</b></span>';   /* §cotBill */
     else if(pckCotUnset(M)) _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
@@ -21516,8 +21554,9 @@ function pckMoneyCell(b, date, sheet){
     /* §pckTrim · ช่องว่าง = ไม่มีอะไรต้องเก็บ · ป้าย "ไม่ต้องเก็บ" อยู่แทบทุกแถว
        ของที่ขึ้นทุกแถวเท่ากันหมดไม่ได้บอกอะไร มีแต่ทำให้ป้ายที่ต้องรีบเห็นจมหาย */
     else _v='';
-    out=_v+out+(parts.length?('<div class="pcs-payp">'+e(parts.join(' · '))+'</div>'):'');
+    out=_v+out+((parts.length && !(_cotC && parts.length===1 && M.cot>0))?('<div class="pcs-payp">'+e(parts.join(' · '))+'</div>'):'');
   }
+  else if(_cotC && (!(M.due>0) || pckN(M.due)===pckN(M.cot))){ /* §cotChip · ป้าย COT บอกครบแล้ว */ }
   else if(M.due>0){
     out+='<div title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'" style="display:inline-block;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:7px;padding:3px 9px;font-weight:800;font-family:\'DM Mono\',monospace;font-size:12.5px;white-space:nowrap">'+m(M.due)+'</div>'
        +'<div style="font-size:9px;color:#a08a5f;margin-top:2px;white-space:nowrap">'+e(parts.join(' · '))+'</div>';
@@ -21683,6 +21722,9 @@ function pckLineNew(amt){
 function pckPayOpen(bkId, thenCk){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var M=pckMoney(b,_pckDate);
+  /* §cotChip · ใบที่ COT จ่ายผ่านบิลครบแล้ว · กันเก็บซ้ำ */
+  if(M.cotBill>0 && !(M.due>0) && !(M.pierPaid>0)
+     && !confirm('ใบนี้จ่ายผ่านบิลแล้ว\n\nCOT ฿'+pckNum(M.cotBill)+' ชำระผ่าน '+(M.cotBillNo||'บิล')+' แล้ว · หน้าท่าไม่ต้องเก็บอีก\nถ้าลูกค้าจ่ายเพิ่มจริง (เช่น ซื้อของเพิ่ม) ใช้ "+ ขายเพิ่ม" แทน\n\nยืนยันว่าเก็บเพิ่มจริง?')) return;
   _pckPay={ bkId:bkId, date:_pckDate, lines:[pckLineNew(M.due||0)], thenCk:!!thenCk };
   pckPayRender();
 }
