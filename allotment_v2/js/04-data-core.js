@@ -8092,6 +8092,11 @@ function bop2GetDates(){
   return out;
 }
 function bop2SetViewMode(mode){
+  if(_bop2.dnd){   /* §bopDnd · ออกจากโหมดลาก */
+    if(typeof bopDPending==='function' && bopDPending() && !confirm('มีการจัดเรือที่ยังไม่บันทึก · ออกแล้วทิ้งรายการเหล่านี้?')) return;
+    if(typeof bopDReset==='function') bopDReset(true);
+    _bop2.dnd=false;
+  }
   _bop2.viewMode = mode;
   // Reset anchor based on mode
   const ref = _bop2.selDate ? new Date(_bop2.selDate) : new Date(TODAY);
@@ -10680,6 +10685,7 @@ function renderOp(){
   const host = document.getElementById('bop2-host');
   if(!host) return;
   host.innerHTML = bop2RenderShell();
+  if(_bop2.dnd && typeof bopDMount==='function') try{ bopDMount(host); }catch(e){ console.error('[bopDnd] render', e); }   /* §bopDnd */
   try{ if(typeof wxAfterRender==='function') wxAfterRender(bop2GetDates()); }catch(e){ console.warn('[wx] after render', e.message); }   /* §wx */
 }
 
@@ -11001,8 +11007,9 @@ function bop2RenderShell(){
         <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
         ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}`}   <!-- §pierScope -->
         <!-- §bopHdr · ปุ่มคุมตารางย้ายมาอยู่ใกล้ตารางตาม mockup -->
-        <span class="bo-pier-pill ${!isMonth?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
-        <span class="bo-pier-pill ${isMonth?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
+        <span class="bo-pier-pill ${(!isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
+        <span class="bo-pier-pill ${(isMonth&&!_bop2.dnd)?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
+        <span class="bo-pier-pill ${_bop2.dnd?'on':''}" onclick="bopDToggle()" title="จัดเรือแบบลาก · 7 วัน · ลากชื่อเรือเพื่อจัดหรือสลับ">จัดเรือแบบลาก</span>
         <span class="bo-pier-pill" onclick="bop2ShowBulkMenu(event)">+ Bulk actions</span>
         ${typeof tcxHistOpen==='function'?'<span class="bo-pier-pill" onclick="tcxHistOpen()" title="Cancelled trips · reasons and history">Cancelled trips</span>':''}
       </div>
@@ -13458,3 +13465,379 @@ function laDocNo(kind){
   try{ console.log('[docNo] '+laDocFmt(kind,n)+' ('+src+')'); }catch(_){ }
   return laDocFmt(kind,n);
 }
+
+/* ══ §bopDnd (2026-11-16) · จัดเรือแบบลาก ในหน้า Boat Operation ══════════════════════
+   owner: "เพิ่มมุมมองให้คล้ายกับของ Fleet calendar สำหรับการ Deploy เรือ ให้ User ลากสลับได้" → mockup → "โอเค ทำ"
+   แถว = โปรแกรม · คอลัมน์ = 7 วัน · ชิปเรือมีที่นั่ง · แถวบน Free at pier · แถวล่าง Out of service
+   ลากได้ภายในวันเดียวกัน:
+     วางบนเรืออีกลำ (ที่จัดอยู่)   = สลับ · ลูกค้าตามโปรแกรม (ลูกค้าของลำ A ไปลำ B และกลับกัน)
+     ลากเรือว่างวางบนเรือที่จัดอยู่ = แทน · เรือว่างรับลูกค้าทั้งหมด · ลำเดิมกลับไปจอด
+     วางบนช่องว่างของโปรแกรม     = จัดเรือลงโปรแกรม (เรือที่มีลูกค้าอยู่ ย้ายด้วยวิธีนี้ไม่ได้ ต้องสลับ)
+     วางบนแถว Free at pier        = ถอดออก (เฉพาะเรือที่ยังไม่มีลูกค้า)
+   ไม่แตะข้อมูลจนกว่าจะกด "บันทึก" · ทำบนสำเนาของ TRIPS ของวันที่แตะ + แผนย้ายบุคกิ้ง
+   ตอนบันทึก ถ้าวันไหนมีคนอื่นแก้ TRIPS ไปแล้ว (เทียบกับตอนเริ่มลาก) ไม่บันทึก ให้ย้อนกลับแล้วลากใหม่
+   ย้ายบุคกิ้งด้วย bop2RpMoveBookings (ตัวเดียวกับ Replace boat) · ใบที่สัญญาลูกค้าไว้ (bkUpgPromise) ไม่ย้าย แจ้งรายชื่อ
+   ห้าม: วันที่ผ่านมาแล้ว · เหมาลำ / ล็อคทั้งลำ · บันทึกเปลี่ยนเรือกลางทาง · เรืออยู่อีกท่า · วันปิดโปรแกรม
+   ที่นั่งเกิน (เกิน cap + BA_CAP_TOL) = เตือนแล้วให้ยืนยัน (ไม่ห้าม) */
+var _bopD = { start:'', work:{}, base:{}, map:{}, log:[] };
+function bopDOn(){ return !!(typeof _bop2!=='undefined' && _bop2.dnd); }
+function bopDToggle(){
+  if(_bop2.dnd && bopDPending() && !confirm('มีการจัดเรือที่ยังไม่บันทึก '+_bopD.log.length+' รายการ · ออกจากโหมดลากแล้วทิ้งรายการเหล่านี้?')) return;
+  if(_bop2.dnd) bopDReset(true);
+  _bop2.dnd=!_bop2.dnd;
+  if(_bop2.dnd && !_bopD.start) _bopD.start=((_bop2.selDate||TODAY_STR)<TODAY_STR)?TODAY_STR:(_bop2.selDate||TODAY_STR);
+  renderOp();
+}
+function bopDPending(){ return _bopD.log.length>0; }
+function bopDReset(silent){ _bopD.work={}; _bopD.base={}; _bopD.map={}; _bopD.log=[]; if(!silent) renderOp(); }
+function bopDShift(n){
+  if(n===0){ _bopD.start=TODAY_STR; renderOp(); return; }
+  var d=new Date((_bopD.start||TODAY_STR)+'T12:00:00'); d.setDate(d.getDate()+n);
+  _bopD.start=fmt(d); renderOp();
+}
+function bopDDays(){
+  var s=_bopD.start||TODAY_STR, out=[], d=new Date(s+'T12:00:00');
+  for(var i=0;i<7;i++){ out.push(fmt(d)); d.setDate(d.getDate()+1); }
+  return out;
+}
+function bopDOps(d){ return _bopD.work[d] || (TRIPS[d]||{}); }
+function bopDEnsure(d){
+  if(_bopD.work[d]) return _bopD.work[d];
+  _bopD.base[d]=JSON.stringify(TRIPS[d]||{});
+  _bopD.work[d]=JSON.parse(_bopD.base[d]);
+  _bopD.map[d]={};
+  return _bopD.work[d];
+}
+/* ลูกค้าบนแต่ละลำ ตามข้อมูลจริง (ก่อนลาก) · ใช้ ckBksOn เร็วกว่าไล่บุคกิ้งทั้งก้อน */
+var _bopDPaxMemo={};
+function bopDOrigPax(d){
+  var k=d+'|'+String(window.__savedAt||0);
+  if(_bopDPaxMemo[k]) return _bopDPaxMemo[k];
+  var m={};
+  ((typeof ckBksOn==='function')?ckBksOn(d):(SB_BOOKINGS||[])).forEach(function(b){
+    if(!b || ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(b,d):[];
+    ids.forEach(function(id){ if(!id) return; var p=(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(b,d,id):0; if(p>0) m[id]=(m[id]||0)+p; });
+  });
+  return (_bopDPaxMemo[k]=m);
+}
+function bopDOwner(d, o){ var M=_bopD.map[d]; return (M && M[o]!=null) ? M[o] : o; }
+function bopDPax(d, bid){
+  var P=bopDOrigPax(d), n=0;
+  Object.keys(P).forEach(function(o){ if(bopDOwner(d,o)===bid) n+=P[o]; });
+  return n;
+}
+function bopDBoat(id){ return (BOATS||[]).find(function(x){ return x && x.id===id; }); }
+function bopDName(id){ var b=bopDBoat(id); return (b&&b.name)||id; }
+function bopDRouteName(id){ var r=(ROUTES||[]).find(function(x){ return x && x.id===id; }); return (r&&r.name)||id; }
+function bopDFixed(op){ return !op || opLocked(op) || !!op.swap || op.type==='rescue' || op.type==='charter'; }
+function bopDDayLbl(d){ var t=new Date(d+'T12:00:00'); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.getDay()]+' '+t.getDate(); }
+function bopDStatusOk(b, d){
+  try{
+    var s=boatEffStatus(b, d); if(!s || s.s!=='available' || s.noCharter) return false;
+    if(typeof bkOvnHoldOn==='function' && bkOvnHoldOn(b.id, d)) return false;
+    return true;
+  }catch(_){ return false; }
+}
+
+/* ── คิดผลของการวาง · ไม่แตะข้อมูล · คืน {ok, kind, text, warn, apply()} ── */
+function bopDPlan(src, tgt){
+  var d=src.d, out={ ok:false, text:'', warn:'' };
+  if(!tgt || tgt.d!==d){ out.text='ลากได้ภายในวันเดียวกันเท่านั้น'; return out; }
+  if(bop2IsPast(d)){ out.text='วันที่ผ่านมาแล้ว แก้ไม่ได้'; return out; }
+  var W=bopDOps(d), sOp=src.bid?W[src.bid]:null;
+  var S=bopDBoat(src.bid); if(!S){ return out; }
+  var cap=function(id){ return bop2Cap(bopDBoat(id), d); };
+  var tol=(typeof BA_CAP_TOL!=='undefined')?BA_CAP_TOL:2;
+  var capTxt=function(id, pax){ var c=cap(id); var over=(c>0 && pax>c+tol);
+    if(over) out.warn+=(out.warn?' · ':'')+bopDName(id)+' '+pax+'/'+c+' เกินที่นั่ง';
+    return pax+'/'+c+(over?' ✕':' ✓'); };
+  var pierChk=function(boat, rid){ var p=bop2PierIssue(boat, rid, d); return p?(boat.name+' อยู่ที่ '+bop2PierEn(p)+' วันนั้น'):''; };
+  if(tgt.kind==='chip'){
+    if(tgt.bid===src.bid){ return out; }
+    var tOp=W[tgt.bid], T=bopDBoat(tgt.bid); if(!T) return out;
+    if(sOp && bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
+    if(tOp && bopDFixed(tOp)){ out.text=T.name+' เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · สลับไม่ได้'; return out; }
+    var sp=bopDPax(d, src.bid), tp=bopDPax(d, tgt.bid);
+    if(sOp && tOp){
+      if(sOp.route===tOp.route){ out.text='ทั้งสองลำอยู่โปรแกรมเดียวกัน · ไม่มีอะไรเปลี่ยน'; return out; }
+      var e1=pierChk(S, tOp.route), e2=pierChk(T, sOp.route); if(e1||e2){ out.text=e1||e2; return out; }
+      out.ok=true; out.kind='swap';
+      out.text='<b>สลับเรือ · '+bopDDayLbl(d)+'</b><br>'+S.name+' → '+bopDRouteName(tOp.route)+' · รับ '+tp+' คน '+capTxt(src.bid,tp)
+        +'<br>'+T.name+' → '+bopDRouteName(sOp.route)+' · รับ '+sp+' คน '+capTxt(tgt.bid,sp)
+        +((sp||tp)?'<br><span class="w">ลูกค้า '+(sp+tp)+' คนย้ายลำตามโปรแกรม</span>':'');
+      out.log=bopDDayLbl(d)+' · '+S.name+' ⇄ '+T.name;
+      out.apply=function(){ var w=bopDEnsure(d), a=w[src.bid], b=w[tgt.bid], r=a.route, ty=a.type;
+        a.route=b.route; a.type=b.type; b.route=r; b.type=ty; bopDSwapOwners(d, src.bid, tgt.bid); };
+      return out;
+    }
+    if(!sOp && tOp){   /* เรือว่าง → แทนลำที่จัดอยู่ */
+      var e=pierChk(S, tOp.route); if(e){ out.text=e; return out; }
+      out.ok=true; out.kind='replace';
+      out.text='<b>เปลี่ยนเรือ · '+bopDDayLbl(d)+'</b><br>'+S.name+' → '+bopDRouteName(tOp.route)+' · รับ '+tp+' คน '+capTxt(src.bid,tp)
+        +'<br>'+T.name+' → Free at pier'+(tp?'<br><span class="w">ลูกค้า '+tp+' คนย้ายไป '+S.name+'</span>':'');
+      out.log=bopDDayLbl(d)+' · '+S.name+' แทน '+T.name+' · '+bopDRouteName(tOp.route);
+      out.apply=function(){ var w=bopDEnsure(d); w[src.bid]=Object.assign({}, w[tgt.bid]); delete w[tgt.bid]; bopDMoveOwners(d, tgt.bid, src.bid); };
+      return out;
+    }
+    if(sOp && !tOp){   /* เรือที่จัดอยู่ → วางบนเรือว่าง = เรือว่างแทน */
+      var e3=pierChk(T, sOp.route); if(e3){ out.text=e3; return out; }
+      out.ok=true; out.kind='replace';
+      out.text='<b>เปลี่ยนเรือ · '+bopDDayLbl(d)+'</b><br>'+T.name+' → '+bopDRouteName(sOp.route)+' · รับ '+sp+' คน '+capTxt(tgt.bid,sp)
+        +'<br>'+S.name+' → Free at pier'+(sp?'<br><span class="w">ลูกค้า '+sp+' คนย้ายไป '+T.name+'</span>':'');
+      out.log=bopDDayLbl(d)+' · '+T.name+' แทน '+S.name+' · '+bopDRouteName(sOp.route);
+      out.apply=function(){ var w=bopDEnsure(d); w[tgt.bid]=Object.assign({}, w[src.bid]); delete w[src.bid]; bopDMoveOwners(d, src.bid, tgt.bid); };
+      return out;
+    }
+    out.text='ทั้งสองลำว่างอยู่ · ไม่มีอะไรเปลี่ยน'; return out;
+  }
+  if(tgt.kind==='route'){
+    if(tgt.closed){ out.text='โปรแกรมปิดวันนี้'; return out; }
+    if(sOp && bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
+    if(sOp && sOp.route===tgt.route) return out;
+    var e4=pierChk(S, tgt.route); if(e4){ out.text=e4; return out; }
+    var p0=bopDPax(d, src.bid);
+    if(sOp && p0>0){ out.text=S.name+' มีลูกค้า '+p0+' คนอยู่ · ย้ายโปรแกรมแบบนี้ไม่ได้ · ลากไปวางบนเรืออีกลำเพื่อสลับแทน'; return out; }
+    out.ok=true; out.kind=sOp?'move':'assign';
+    out.text='<b>'+(sOp?'ย้ายเรือ':'จัดเรือ')+' · '+bopDDayLbl(d)+'</b><br>'+S.name+' → '+bopDRouteName(tgt.route)+' (ที่นั่ง '+cap(src.bid)+')';
+    out.log=bopDDayLbl(d)+' · '+S.name+' → '+bopDRouteName(tgt.route);
+    out.apply=function(){ var w=bopDEnsure(d); if(w[src.bid]) w[src.bid].route=tgt.route; else w[src.bid]={ route:tgt.route, type:'normal', booked:0 }; };
+    return out;
+  }
+  if(tgt.kind==='free'){
+    if(!sOp) return out;
+    if(bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ถอดไม่ได้'; return out; }
+    var p1=bopDPax(d, src.bid);
+    if(p1>0){ out.text=S.name+' มีลูกค้า '+p1+' คน · ถอดออกไม่ได้ · ลากเรือว่างมาวางทับเพื่อเปลี่ยนแทน'; return out; }
+    out.ok=true; out.kind='unassign';
+    out.text='<b>ถอดเรือ · '+bopDDayLbl(d)+'</b><br>'+S.name+' ออกจาก '+bopDRouteName(sOp.route)+' → Free at pier';
+    out.log=bopDDayLbl(d)+' · ถอด '+S.name+' ออกจาก '+bopDRouteName(sOp.route);
+    out.apply=function(){ var w=bopDEnsure(d); delete w[src.bid]; };
+    return out;
+  }
+  return out;
+}
+/* เจ้าของลูกค้า (ลำที่บุคกิ้งจะไปอยู่) · map[orig] = ลำปัจจุบัน */
+function bopDSwapOwners(d, a, b){
+  var M=_bopD.map[d]||(_bopD.map[d]={}), P=bopDOrigPax(d);
+  Object.keys(P).forEach(function(o){ var c=bopDOwner(d,o); if(c===a) M[o]=b; else if(c===b) M[o]=a; });
+}
+function bopDMoveOwners(d, from, to){
+  var M=_bopD.map[d]||(_bopD.map[d]={}), P=bopDOrigPax(d);
+  Object.keys(P).forEach(function(o){ if(bopDOwner(d,o)===from) M[o]=to; });
+}
+
+/* ── ลาก ── */
+var _bopDDrag=null;
+function bopDTgt(el){
+  var c=el && el.closest ? el.closest('[data-bopd]') : null; if(!c) return null;
+  var k=c.getAttribute('data-bopd');
+  return { kind:k, d:c.getAttribute('data-d'), bid:c.getAttribute('data-bid')||'', route:c.getAttribute('data-route')||'',
+           closed:c.getAttribute('data-closed')==='1', el:c };
+}
+function bopDDragStart(ev, d, bid){
+  _bopDDrag={ d:d, bid:bid };
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', bid); }catch(_){}
+  setTimeout(function(){ var e=ev.target; if(e && e.classList) e.classList.add('src'); }, 0);
+}
+function bopDDragEnd(ev){
+  _bopDDrag=null; bopDTip(null);
+  document.querySelectorAll('#bopd-root .over, #bopd-root .src').forEach(function(x){ x.classList.remove('over'); x.classList.remove('bad'); x.classList.remove('src'); });
+}
+function bopDOver(ev){
+  if(!_bopDDrag) return;
+  var t=bopDTgt(ev.target); if(!t) { bopDTip(null); return; }
+  var P=bopDPlan(_bopDDrag, t);
+  document.querySelectorAll('#bopd-root .over').forEach(function(x){ if(x!==t.el){ x.classList.remove('over'); x.classList.remove('bad'); } });
+  if(!P.ok && !P.text){ bopDTip(null); return; }
+  ev.preventDefault();
+  try{ ev.dataTransfer.dropEffect=P.ok?'move':'none'; }catch(_){}
+  t.el.classList.add('over'); t.el.classList.toggle('bad', !P.ok || !!P.warn);
+  bopDTip(P, ev.clientX, ev.clientY);
+}
+function bopDDrop(ev){
+  if(!_bopDDrag) return;
+  ev.preventDefault();
+  var t=bopDTgt(ev.target), src=_bopDDrag;
+  bopDDragEnd(ev);
+  if(!t) return;
+  var P=bopDPlan(src, t);
+  if(!P.ok){ if(P.text) alert(String(P.text).replace(/<br>/g,'\n').replace(/<[^>]+>/g,'')); return; }
+  if(P.warn && !confirm('⚠ '+P.warn+'\n\nยังจะจัดแบบนี้ไหม? (บันทึกจริงตอนกด "บันทึก")')) return;
+  P.apply();
+  _bopD.log.push(P.log+(P.warn?' · ⚠ เกินที่นั่ง':''));
+  renderOp();
+}
+function bopDTip(P, x, y){
+  var el=document.getElementById('bopd-tip');
+  if(!P){ if(el) el.style.display='none'; return; }
+  if(!el){ el=document.createElement('div'); el.id='bopd-tip'; document.body.appendChild(el); }
+  el.className=P.ok?(P.warn?'warn':''):'bad';
+  el.innerHTML=(P.ok?P.text:('<b>วางไม่ได้</b><br>'+P.text))+(P.warn?'<br><span class="w">⚠ '+P.warn+' · จะถามยืนยันก่อน</span>':'')
+    +(P.ok?'<small>ปล่อยเมาส์เพื่อจัด · ยังไม่บันทึกจนกว่าจะกดบันทึก</small>':'');
+  el.style.display='block';
+  var w=300, L=Math.min(window.innerWidth-w-12, (x||0)+18), T=Math.min(window.innerHeight-140, (y||0)+14);
+  el.style.left=L+'px'; el.style.top=T+'px';
+}
+
+/* ── บันทึก ── */
+function bopDSave(){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var days=Object.keys(_bopD.work); if(!days.length){ bopDReset(); return; }
+  var stale=days.filter(function(d){ return JSON.stringify(TRIPS[d]||{})!==_bopD.base[d]; });
+  if(stale.length){ alert('มีคนแก้การจัดเรือของ '+stale.map(bopDDayLbl).join(', ')+' ไปแล้วระหว่างที่คุณลากอยู่\nกด "ย้อนกลับ" แล้วลากใหม่บนข้อมูลล่าสุด'); return; }
+  var past=days.filter(bop2IsPast); if(past.length){ alert('วันที่ผ่านมาแล้วแก้ไม่ได้: '+past.join(', ')); return; }
+  if(!confirm('บันทึกการจัดเรือ '+_bopD.log.length+' รายการ?\n\n'+_bopD.log.join('\n'))) return;
+  var nb=0; window._bop2Kept=[];
+  days.forEach(function(d){
+    var W=_bopD.work[d];
+    if(Object.keys(W).length) TRIPS[d]=W; else delete TRIPS[d];
+    var M=_bopD.map[d]||{}, mv=Object.keys(M).filter(function(o){ return M[o]!==o; });
+    mv.forEach(function(o){ bop2RpMoveBookings(d, o, '__bopd_'+o); });
+    mv.forEach(function(o){ nb+=bop2RpMoveBookings(d, '__bopd_'+o, M[o]); });
+  });
+  save('operations');
+  if(nb && typeof acctPersistBookings==='function') acctPersistBookings();
+  var kept=(window._bop2Kept||[]).slice(), n=_bopD.log.length;
+  bopDReset(true); _bopDPaxMemo={};
+  renderOp();
+  if(typeof flShowToast==='function') flShowToast('บันทึกการจัดเรือ '+n+' รายการ'+(nb?(' · ย้ายบุคกิ้ง '+nb+' ใบ'):''));
+  if(kept.length) alert('ไม่ได้ย้าย '+kept.length+' บุคกิ้งที่สัญญาเรือไว้กับลูกค้า: '+kept.join(', ')+'\nจัดเรือให้เองทีละใบ แล้วแจ้งลูกค้า');
+}
+
+/* ── วาด ── */
+function bopDChip(d, bid, op, pierKey){
+  var b=bopDBoat(bid); if(!b) return '';
+  var E=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var past=bop2IsPast(d), fixed=op?bopDFixed(op):false;
+  var pax=op?bopDPax(d,bid):0, cap=bop2Cap(b,d), r=cap?pax/cap:0;
+  var col=(typeof bop2BoatColor==='function')?bop2BoatColor(bid):'#64748B';
+  var bc=!pax?'#CBD5E1':(r<.5?'#0891B2':(r<.9?'#D97706':(r<=1?'#EA580C':'#DC2626')));
+  var orig=(TRIPS[d]||{})[bid], changed=_bopD.work[d] && (JSON.stringify(orig||null)!==JSON.stringify(op||null) || (op && bopDPax(d,bid)!==(bopDOrigPax(d)[bid]||0)));
+  var drag=!past && !fixed;
+  var tip=b.name+' · '+(op?(bopDRouteName(op.route)+' · '+pax+'/'+cap+' คน'):('ว่าง · '+cap+' ที่นั่ง'))
+    +(fixed?(' · '+(op.charterBookingId?'เหมาลำ':op.boatLockId?'ล็อคทั้งลำ':'บันทึกเปลี่ยนเรือ')+' · ลากไม่ได้'):'')+(past?' · วันผ่านมาแล้ว':'');
+  return '<div class="ch'+(op?'':' fr')+(fixed?' fx':'')+(changed?' pend':'')+'" data-bopd="chip" data-d="'+d+'" data-bid="'+E(bid)+'"'
+    +(drag?(' draggable="true" ondragstart="bopDDragStart(event,\''+d+'\',\''+E(bid)+'\')" ondragend="bopDDragEnd(event)"'):'')
+    +' title="'+E(tip)+'">'
+    +(drag?'<span class="gr">⋮⋮</span>':'')+'<i class="dt" style="background:'+col+'"></i><b>'+E(b.name)+'</b>'
+    +(op?('<span class="pc" style="color:'+(r>1?'#DC2626':'#B45309')+'">'+pax+'/'+cap+'</span><i class="br"><b style="width:'+Math.min(100,Math.round(r*100))+'%;background:'+bc+'"></b></i>')
+        :('<span class="pc fr">'+cap+'</span>'))
+    +(fixed?'<span class="lk">'+(op.charterBookingId?'⚓':op.swap||op.type==='rescue'?'🔁':'🔒')+'</span>':'')
+    +'</div>';
+}
+function bopDHtml(){
+  var E=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var days=bopDDays();
+  var allR=ROUTES.filter(function(r){ return r && r.active!==false && !(typeof laIsLandRoute==='function' && laIsLandRoute(r)); });
+  if(typeof laMyPier==='function' && laMyPier()) _bop2.pier=laMyPier();
+  var piers=_bop2.pier==='all'?['tublamu','panwa','ranong']:[_bop2.pier];
+  var PN={ tublamu:['TL','Tub Lamu','#185FA5'], panwa:['VP','Visit Panwa','#6B21A8'], ranong:['RN','Ranong','#00646E'] };
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  /* สถานะเรือรายวัน (ทุกท่า) · ใช้ตัวเดียวกับแผงเรือของหน้านี้ */
+  var FS={};
+  days.forEach(function(d){ var keep=_bop2.pier; try{ _bop2.pier='all'; FS[d]=bop2FleetStatus(d); } finally{ _bop2.pier=keep; } });
+  var cols='grid-template-columns:230px repeat(7,minmax(128px,1fr))';
+  var h='<div id="bopd-root" ondragover="bopDOver(event)" ondrop="bopDDrop(event)">';
+  h+='<div class="bopd-bar"><button onclick="bopDShift(-7)">‹</button><b>'+bopDDayLbl(days[0])+' '+MON[new Date(days[0]+'T12:00:00').getMonth()]+' → '+bopDDayLbl(days[6])+' '+MON[new Date(days[6]+'T12:00:00').getMonth()]+'</b>'
+    +'<button onclick="bopDShift(7)">›</button><button onclick="bopDShift(0)">Today</button>'
+    +'<span class="hint"><b>ลากชื่อเรือ</b> · วางบนเรืออีกลำ = สลับ (ลูกค้าตามโปรแกรม) · เรือว่างวางทับ = เปลี่ยนแทน · วางช่องว่าง = จัดลงโปรแกรม · ลากไป Free at pier = ถอด · ลากได้ในวันเดียวกัน</span></div>';
+  h+='<div class="bopd-grid"><div class="hd" style="'+cols+'"><div class="lb">PIER · PROGRAM</div>';
+  days.forEach(function(d){ var t=new Date(d+'T12:00:00'), ops=bopDOps(d), nb=Object.keys(ops).length, px=0;
+    Object.keys(ops).forEach(function(id){ px+=bopDPax(d,id); });
+    h+='<div class="dh'+(d===TODAY_STR?' on':'')+(bop2IsPast(d)?' past':'')+'"><small>'+WD[t.getDay()]+'</small><b>'+t.getDate()+'</b><span>'+nb+' boats · '+px+' pax</span></div>'; });
+  h+='</div>';
+  piers.forEach(function(pk){
+    var R=allR.filter(function(r){ return r.pier===pk; }); if(!R.length) return;
+    var P=PN[pk]||[pk,pk,'#64748B'];
+    h+='<div class="pr" style="'+cols+'"><div class="lb"><span class="pt" style="background:'+P[2]+'">'+P[0]+'</span>'+P[1]+'</div>';
+    days.forEach(function(d){
+      var ops=bopDOps(d), out=0; Object.keys(ops).forEach(function(id){ var b=bopDBoat(id); if(b && getBoatCurrentPier(b,d)===pk) out++; });
+      var fr=(BOATS||[]).filter(function(b){ return b && !b.retired && !ops[b.id] && getBoatCurrentPier(b,d)===pk && bopDStatusOk(b,d); }).length;
+      h+='<div class="ps">'+fr+' free · '+out+' out</div>'; });
+    h+='</div>';
+    /* Free at pier */
+    h+='<div class="rw fr" style="'+cols+'"><div class="lb"><i class="dt" style="background:#0A6B49"></i>Free at pier</div>';
+    days.forEach(function(d){ var ops=bopDOps(d);
+      var L=(BOATS||[]).filter(function(b){ return b && !b.retired && !ops[b.id] && getBoatCurrentPier(b,d)===pk && bopDStatusOk(b,d); })
+        .sort(function(a,b){ return bop2Cap(b,d)-bop2Cap(a,d); });
+      h+='<div class="cl" data-bopd="free" data-d="'+d+'">'+(L.length?L.map(function(b){ return bopDChip(d,b.id,null,pk); }).join(''):'<span class="nf">No free boat</span>')+'</div>'; });
+    h+='</div>';
+    R.forEach(function(r){
+      h+='<div class="rw" style="'+cols+'"><div class="lb" title="'+E(r.name)+'"><i class="dt" style="background:'+E(r.color||'#64748B')+'"></i>'+E(r.name)+'</div>';
+      days.forEach(function(d){
+        var ds=(typeof getDayStatus==='function')?getDayStatus(r,d):null, closed=!!(ds && ds.type==='closed');
+        var ops=bopDOps(d), ids=Object.keys(ops).filter(function(id){ return ops[id] && ops[id].route===r.id; });
+        h+='<div class="cl'+(closed?' cz':'')+'" data-bopd="route" data-d="'+d+'" data-route="'+E(r.id)+'"'+(closed?' data-closed="1"':'')+'>'
+          +ids.map(function(id){ return bopDChip(d,id,ops[id],pk); }).join('')+(closed&&!ids.length?'<span class="nf" style="color:#A8A29E">ปิด</span>':'')+'</div>';
+      });
+      h+='</div>';
+    });
+    /* Out of service */
+    h+='<div class="rw oos" style="'+cols+'"><div class="lb"><i class="dt" style="background:#94A3B8"></i>Out of service</div>';
+    days.forEach(function(d){
+      var U=(FS[d].unavailable||[]).filter(function(x){ var p=getBoatCurrentPier(x.boat,d); return p===pk || (p==='shop' && (x.boat.pier||x.boat.homePier)===pk); });
+      h+='<div class="cl">'+U.map(function(x){ var job=(x.jobNos&&x.jobNos.length)?x.jobNos[0]:'';
+        return '<span class="oo'+(job?' mj':'')+'" title="'+E(x.boat.name+' · '+(x.reason||''))+'">'+E(x.boat.name)+(job?' <i>'+E(job)+'</i>':'')+'</span>'; }).join('')+'</div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  if(bopDPending()){
+    h+='<div class="bopd-tray"><span class="n">'+_bopD.log.length+'</span><b>ยังไม่บันทึก</b><ul>'
+      +_bopD.log.map(function(t){ return '<li>'+E(t)+'</li>'; }).join('')+'</ul>'
+      +'<button onclick="bopDReset()">ย้อนกลับทั้งหมด</button><button class="pri" onclick="bopDSave()">บันทึก '+_bopD.log.length+' รายการ</button></div>';
+  }
+  h+='</div>';
+  return h;
+}
+function bopDCSS(){ var H='#bopd-root'; return '<style id="bopd-css">'
+ +H+'{font-family:inherit;color:#0F1B3D}'
+ +H+' .bopd-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}'
+ +H+' .bopd-bar button{border:1px solid #E2E8F0;background:#fff;border-radius:999px;padding:4px 12px;font:600 12px inherit;cursor:pointer;color:#3E4658}'
+ +H+' .bopd-bar b{font-size:13px}'+H+' .bopd-bar .hint{font-size:11px;color:#5B6679;flex:1 1 300px}'+H+' .bopd-bar .hint b{font-size:11px}'
+ +H+' .bopd-grid{border:1px solid #E3E8F0;border-radius:12px;overflow-x:auto}'
+ +H+' .hd,'+H+' .pr,'+H+' .rw{display:grid;min-width:1130px}'
+ +H+' .lb{padding:7px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;min-width:0;line-height:1.25}'
+ +H+' .hd .lb{font-size:9.5px;letter-spacing:.06em;color:#5B6679;font-weight:700}'
+ +H+' .dh{text-align:center;padding:6px 3px;border-left:1px solid #EEF1F6}'+H+' .dh small{display:block;font-size:9.5px;color:#5B6679;font-weight:700}'
+ +H+' .dh b{display:block;font-size:19px;line-height:1.15}'+H+' .dh span{font-size:10px;color:#5B6679}'
+ +H+' .dh.on{background:#EEF4FF;box-shadow:inset 0 -3px 0 #1D4ED8}'+H+' .dh.on b,'+H+' .dh.on small{color:#1D4ED8}'+H+' .dh.past{opacity:.55}'
+ +H+' .pr{background:#F4F7FB;border-top:1px solid #E3E8F0}'+H+' .pr .lb{font-weight:800;font-size:12.5px}'
+ +H+' .pt{color:#fff;border-radius:5px;font-size:9.5px;padding:2px 5px}'
+ +H+' .ps{text-align:center;font-size:10.5px;color:#5B6679;padding:7px 0;border-left:1px solid #EEF1F6}'
+ +H+' .rw{border-top:1px solid #EEF1F6}'+H+' .rw.fr{background:#F1FBF6}'+H+' .rw.fr .lb{color:#0A6B49;font-weight:800}'
+ +H+' .rw.oos{background:#F8FAFC}'+H+' .rw.oos .lb{color:#5B6679}'
+ +H+' .cl{border-left:1px solid #EEF1F6;padding:3px;display:flex;flex-direction:column;gap:3px;min-height:34px}'
+ +H+' .rw.fr .cl,'+H+' .rw.oos .cl{flex-direction:row;flex-wrap:wrap;align-content:flex-start}'
+ +H+' .cl.cz{background:repeating-linear-gradient(45deg,#F5F5F4 0 4px,#fff 4px 8px)}'
+ +H+' .cl.over{background:#EEF4FF;box-shadow:inset 0 0 0 2px #1D4ED8}'+H+' .cl.over.bad{background:#FDECEC;box-shadow:inset 0 0 0 2px #DC2626}'
+ +H+' .dt{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}'
+ +H+' .ch{position:relative;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid #DCE3EC;border-radius:7px;padding:4px 6px 8px 3px;font-size:11px;box-shadow:0 1px 2px rgba(15,27,61,.06);min-width:0}'
+ +H+' .ch[draggable=true]{cursor:grab}'+H+' .ch.fr{padding:3px 6px 3px 3px}'+H+' .ch b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}'
+ +H+' .ch .pc{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}'+H+' .ch .pc.fr{color:#0A6B49}'
+ +H+' .ch .gr{color:#B6BECB;font-size:9px;letter-spacing:-2px;width:7px;flex:none}'
+ +H+' .ch .br{position:absolute;left:14px;right:6px;bottom:3px;height:3px;border-radius:2px;background:#EEF1F6}'+H+' .ch .br b{display:block;height:3px;border-radius:2px}'
+ +H+' .ch.fx{background:#F5F3FF;border-color:#DDD6FE}'+H+' .ch .lk{font-size:10px}'
+ +H+' .ch.pend{border:1.5px dashed #D97706;background:#FFF8EB}'
+ +H+' .ch.src{opacity:.35}'+H+' .ch.over{outline:2.5px solid #1D4ED8;outline-offset:1px;background:#EEF4FF}'+H+' .ch.over.bad{outline-color:#DC2626;background:#FDECEC}'
+ +H+' .nf{font-size:10.5px;color:#B91C1C;padding:3px}'
+ +H+' .oo{font-size:10px;color:#64748B;border:1px solid #E2E8F0;border-radius:6px;padding:2px 6px;background:#fff;white-space:nowrap}'
+ +H+' .oo.mj{background:repeating-linear-gradient(135deg,#F5DDB2 0 5px,#fff 5px 7px);border-color:#E0A040;color:#5C4310;font-weight:700}'+H+' .oo i{font-style:normal;color:#7A4300}'
+ +H+' .bopd-tray{position:sticky;bottom:0;margin-top:10px;display:flex;align-items:center;gap:10px;background:#FFF8EB;border:1px solid #F6D9A8;border-radius:12px;padding:9px 12px;font-size:12px;z-index:3;box-shadow:0 -6px 16px -10px rgba(0,0,0,.25)}'
+ +H+' .bopd-tray .n{background:#D97706;color:#fff;border-radius:999px;padding:1px 8px;font-weight:800}'
+ +H+' .bopd-tray ul{list-style:none;display:flex;gap:4px 14px;flex-wrap:wrap;flex:1;margin:0;padding:0;color:#3E4658}'
+ +H+' .bopd-tray button{border-radius:9px;padding:7px 14px;font:700 12px inherit;border:1px solid #D5DAE3;background:#fff;cursor:pointer;white-space:nowrap}'
+ +H+' .bopd-tray button.pri{background:#1C4A30;color:#fff;border-color:#1C4A30}'
+ +'#bopd-tip{position:fixed;z-index:9999;display:none;width:300px;background:#0F1B3D;color:#fff;border-radius:10px;padding:9px 11px;font-size:11.5px;line-height:1.55;pointer-events:none;box-shadow:0 14px 30px -8px rgba(0,0,0,.45)}'
+ +'#bopd-tip b{color:#86EFAC}#bopd-tip.bad b{color:#FCA5A5}#bopd-tip .w{color:#FCD34D}#bopd-tip small{display:block;color:#AAB4C8;font-size:10px;margin-top:3px}'
+ +'</style>'; }
+function bopDMount(host){
+  if(!host) return;
+  var g=host.querySelector('.bop2-grid'); if(!g) return;
+  var wrap=g.parentElement;
+  wrap.innerHTML=bopDCSS()+bopDHtml();
+  wrap.style.overflowX='visible';
+  var lg=host.querySelector('.bo-legend'); if(lg) lg.style.display='none';
+}
+window.addEventListener('beforeunload', function(e){ try{ if(bopDOn() && bopDPending()){ e.preventDefault(); e.returnValue=''; } }catch(_){} });
