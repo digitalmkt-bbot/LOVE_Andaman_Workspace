@@ -13796,7 +13796,11 @@ function bopDHtml(){
     });
     var anyU=false, uh='';
     days.forEach(function(d){
-      var U=(FS[d].unavailable||[]).filter(function(x){ var p=getBoatCurrentPier(x.boat,d); return p===pk || (p==='shop' && (x.boat.pier||x.boat.homePier)===pk); });
+      /* §bopDnd3 (2026-11-16) · owner: "เรือเช่า อันที่ไม่ active ไม่ต้องขึ้นก็ได้" · เรือเช่าวันที่ไม่ได้เช่า ไม่ใช่เรือเสีย ไม่ต้องโชว์ */
+      var U=(FS[d].unavailable||[]).filter(function(x){
+        if(x.reason==='ไม่ได้เช่าวันนี้') return false;
+        try{ if(boatEffStatus(x.boat,d).noCharter) return false; }catch(_){}
+        var p=getBoatCurrentPier(x.boat,d); return p===pk || (p==='shop' && (x.boat.pier||x.boat.homePier)===pk); });
       if(U.length) anyU=true;
       uh+='<div class="cl">'+U.map(function(x){ var job=(x.jobNos&&x.jobNos.length)?x.jobNos[0]:'';
         return '<span class="oo'+(job?' mj':'')+'" title="'+E(x.boat.name+' · '+(x.reason||''))+'">'+E(x.boat.name)+(job?' <i>'+E(job)+'</i>':'')+'</span>'; }).join('')+'</div>';
