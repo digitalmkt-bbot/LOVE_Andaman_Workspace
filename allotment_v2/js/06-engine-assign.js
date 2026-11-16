@@ -161,6 +161,7 @@ function flOpenEditBoatModal(bid){
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='แก้ไขข้อมูลเรือ';
   window._editBoatId=bid;
+  if(typeof bmCapSummary==='function') bmCapSummary(b);   /* §bmRedesign · สรุปช่วงที่นั่ง + เตือนเกินใบอนุญาต */
   openModal('boat-modal');
 }
 
@@ -880,7 +881,7 @@ function _swapDocStep1(it, b, cat){
   const sevBg = sevObj.severity === 'high' ? '#FDECEA' : sevObj.severity === 'medium' ? '#FFF5EB' : '#E1F5EE';
   const sevFg = sevObj.severity === 'high' ? '#A32D2D' : sevObj.severity === 'medium' ? '#854F0B' : '#0F6E56';
   // Auto-generate next IDs (preview only · saved on confirm)
-  const nextIncId = `INC-${String((FL_INCIDENTS||[]).length + 1).padStart(3,'0')}`;
+  const nextIncId = (typeof laDocNoPeek==='function') ? laDocNoPeek('INC') : `INC-${String((FL_INCIDENTS||[]).length + 1).padStart(3,'0')}`;   /* §docNo · ตัวอย่างเท่านั้น */
   return `
     <div style="font-size:9.5px;font-weight:700;color:#A8773B;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Step 1 · Reason for replacement</div>
 
@@ -1025,9 +1026,11 @@ function _swapDocStep2(it, b, cat){
 function _swapDocStep3(it, b, cat){
   const fmtN = (n) => (n||0).toLocaleString();
   const reasonObj = SWAP_REASONS.find(r => r.id === _swapDoc.reason) || SWAP_REASONS[0];
-  const nextInc = `INC-${String((FL_INCIDENTS||[]).length + 1).padStart(3,'0')}`;
-  const nextMo  = `MO-${String((FL_MEMOS||[]).length + 1).padStart(3,'0')}`;
-  const nextMj  = `MJ-${String((FL_MAINT||[]).length + 1).padStart(3,'0')}`;
+  /* §docNo · ตัวอย่างเลขก่อนกดยืนยัน (เลขจริงออกตอนสร้าง) */
+  const _pk = (k,arr) => (typeof laDocNoPeek==='function') ? laDocNoPeek(k) : `${k}-${String((arr||[]).length + 1).padStart(3,'0')}`;
+  const nextInc = _pk('INC', FL_INCIDENTS);
+  const nextMo  = _pk('MO', FL_MEMOS);
+  const nextMj  = _pk('MJ', FL_MAINT);
   // Get selected inventory item (if applicable)
   const invItem = _swapDoc.source === 'inventory' && _swapDoc.newInventoryId
     ? (FL_INVENTORY||[]).find(x => x.id === _swapDoc.newInventoryId)
@@ -1128,7 +1131,8 @@ function swapDocExecute(){
   }
 
   // Next IDs (3-digit padded)
-  const nextNo = (arr, prefix) => `${prefix}-${String((arr||[]).length + 1).padStart(3,'0')}`;
+  /* §docNo · เดิม length+1 (ชนได้ถ้ามีใบถูกลบ) · ตอนนี้ขอเลขจากเซิร์ฟเวอร์ */
+  const nextNo = (arr, prefix) => (typeof laDocNo==='function') ? laDocNo(prefix) : `${prefix}-${String((arr||[]).length + 1).padStart(3,'0')}`;
   const incNo = nextNo(FL_INCIDENTS, 'INC');
   const mjNo  = nextNo(FL_MAINT,     'MJ');
   const moNo  = _swapDoc.source === 'buy' ? nextNo(FL_MEMOS, 'MO') : null;

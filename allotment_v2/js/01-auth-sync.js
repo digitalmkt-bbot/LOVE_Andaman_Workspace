@@ -867,6 +867,60 @@
     try{ x.send(); }catch(e){ done(); }
   }
   setInterval(function(){ _laCheckVersion(1); }, 10000);
+  /* ══ §codeVer (2026-11-12) · "แบ่งรถแล้ว Refresh กลับมาเป็นก้อนเดิม" ══
+     เคส BK-26100528-EP54 · ตัวแก้ §altMan ขึ้นระบบ 15:53 แต่เครื่องที่เปิดหน้าค้างไว้ก่อนนั้น (RSVN06, RSVN01)
+     ยังรันโค้ดเก่า · ตัวซิงก์จุดรับเพิ่มของโค้ดเก่ายุบ split กลับเป็น [30,1] แล้วเซฟทับของคนอื่นทุกครั้งที่วาดหน้า
+     ระบบไม่เคยรู้เลยว่าตัวเองเป็นโค้ดเก่า · ตรงนี้ให้หน้าเว็บถามเอง
+     วิธี: ดึง allotment_v2.html ใหม่ (5 นาทีครั้ง · เฉพาะแท็บที่เปิดดูอยู่) แล้วเทียบ ?v= ของไฟล์ js กับที่ตัวเองโหลดมา
+     เทียบเฉพาะ ?v= ที่เป็น hash (8/32 ตัว) · ตัวที่เซิร์ฟเวอร์เติมให้เป็นเลขเวลา deploy ไม่นับ (เปลี่ยนทุก deploy แม้โค้ดเดิม)
+     ต่างกัน → window._laStale=true · ขึ้นแถบบอก · โหลดหน้าใหม่เองเมื่อว่างและไม่มีงานค้างเซฟ
+     ตัวซ่อมอัตโนมัติ (bookingV2HealAltSplits) ดู _laStale แล้วไม่เขียนทับใคร · ไม่ต้องแก้เซิร์ฟเวอร์ */
+  (function(){
+    if(window.__laEmbed) return;
+    var RX=/js\/([\w.-]+\.js)\?v=([0-9a-f]{32}|[0-9a-f]{8})(?=["'&])/g;
+    function sig(txt){ var m, o=[]; RX.lastIndex=0; while((m=RX.exec(txt))) o.push(m[1]+'='+m[2]); o.sort(); return o.join('|'); }
+    var mine=''; try{ mine=sig([].map.call(document.querySelectorAll('script[src]'),function(x){ return '"'+x.getAttribute('src')+'"'; }).join(' ')); }catch(e){}
+    if(!mine || mine.indexOf('08-app.js=')<0) return;      /* อ่านของตัวเองไม่ได้ = ไม่เดา */
+    var lastAt=0, busy=false, newSig='';
+    function bar(){
+      if(document.getElementById('la-codever')) return;
+      var d=document.createElement('div'); d.id='la-codever';
+      d.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99990;background:#1B2B5E;color:#fff;border-radius:12px;padding:9px 12px 9px 16px;font-weight:600;font-size:13px;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.28);display:flex;gap:12px;align-items:center;max-width:92vw';
+      d.innerHTML='<span>ระบบมีเวอร์ชันใหม่ · หน้านี้จะโหลดใหม่เองเมื่อว่าง</span><button type="button" style="background:#fff;color:#1B2B5E;border:0;border-radius:8px;padding:6px 12px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">โหลดเลย</button>';
+      d.querySelector('button').onclick=function(){ go(true); };
+      (document.body||document.documentElement).appendChild(d);
+    }
+    function go(force){
+      if(_dirty){ try{ _laFlush(); }catch(e){} if(_dirty) return; }   /* งานค้างเซฟต้องขึ้นก่อน */
+      if(!force && !document.hidden && _laBusy()) return;
+      try{ sessionStorage.setItem('la_codever_try', newSig); }catch(e){}
+      try{ _laSaveView(); }catch(e){}
+      try{ if(!location.search){ location.replace(location.pathname+'?t='+Date.now()); return; } }catch(e){}
+      location.reload();
+    }
+    function check(){
+      if(busy || window._laStale || document.hidden) return;
+      if(Date.now()-lastAt < 290000) return;
+      lastAt=Date.now(); busy=true;
+      var x=new XMLHttpRequest(); x.open('GET', bust(location.pathname), true); x.timeout=20000;
+      var done=function(){ busy=false; }; x.ontimeout=done; x.onerror=done;
+      x.onload=function(){ done();
+        if(x.status!==200) return;
+        var s=sig(x.responseText||'');
+        if(!s || s.indexOf('08-app.js=')<0) return;        /* ได้หน้า login/หน้าอื่นมา = ไม่ใช่คำตอบ */
+        if(s===mine) return;
+        newSig=s; window._laStale=true; bar();
+        /* โหลดใหม่แล้วยังได้ของเก่า (CDN ค้าง) → ไม่วนโหลดเอง · เหลือแถบกับปุ่มให้กด */
+        var tried=''; try{ tried=sessionStorage.getItem('la_codever_try')||''; }catch(e){}
+        if(tried===s) return;
+        setInterval(function(){ go(false); }, 5000);
+      };
+      try{ x.send(); }catch(e){ done(); }
+    }
+    setTimeout(check, 60000);
+    setInterval(check, 60000);
+    try{ document.addEventListener('visibilitychange', function(){ if(!document.hidden) check(); }); }catch(e){}
+  })();
   /* ══ §ckLive2 (2026-09-22) · "สองเครื่องทำพร้อมกัน · A กดเช็คอิน จอ B อัพเดทอีก 10 วิ" ══
      10 วิ คือคาบของ poll ข้างบน ซึ่งเป็น "ตัวสำรอง" ไม่ใช่ทางหลัก
      ทางหลักคือ SSE ที่ควรถึงใน ~1 วิ · ได้ 10 วิพอดีแปลว่า SSE ของเครื่องนั้นตายไปแล้ว
@@ -1276,7 +1330,7 @@
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',execboard:'overview',actionboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',landcheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales','rate-admin':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-work':'fleet','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',execboard:'overview',actionboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',landcheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales','rate-admin':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-work':'fleet','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier','pos-panwa':'pier','pos-tublamu':'pier',
     'fl-deployment':'fleet','rep-ops':'operations','rep-fleet':'fleet',
     settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
@@ -1289,8 +1343,8 @@
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'rate-admin',t:'Rate Expiry',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},{v:'vanbill',t:'วางบิลรถร่วม',a:'accounting'},{v:'commissions',t:'Commission payouts',a:'accounting'},{v:'prpo',t:'PR/PO Dashboard',a:'accounting'},
     {v:'fl-work',t:'Fleet Work',a:'fleet'},{v:'fl-deployment',t:'Fleet Deployment',a:'fleet'},{v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
-    {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
-    {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},
+    {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},{v:'pos-panwa',t:'Phuket · ยอดขายร้านค้า',a:'pier'},
+    {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},{v:'pos-tublamu',t:'Tub Lamu · ยอดขายร้านค้า',a:'pier'},
     {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-ranong',t:'Ranong · ตารางการทำงาน',a:'pier'},{v:'pol-ranong',t:'Ranong · ใบอนุญาต',a:'pier'},{v:'pop-ranong',t:'Ranong · เงินสดย่อย',a:'pier'},{v:'pok-ranong',t:'Ranong · ตั๋วอุทยาน',a:'pier'},{v:'pot-ranong',t:'Ranong · เอกสาร ตม.',a:'pier'},
     {v:'rep-ops',t:'Operations Report',a:'operations'},{v:'rep-fleet',t:'Fleet Report',a:'fleet'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
@@ -1383,6 +1437,8 @@
     ['panwa','tublamu','ranong'].forEach(function(k){ if(!set['pop-'+k] && set['po-'+k]) set['pop-'+k]=1; });
     /* §pkTk2 · ตั๋วอุทยานเพิ่มใหม่ · ยกให้คนที่ถือหน้าเบิก-คืนของท่านั้นอยู่แล้วเหมือนกัน */
     ['panwa','tublamu','ranong'].forEach(function(k){ if(!set['pok-'+k] && set['po-'+k]) set['pok-'+k]=1; });
+    /* §posSales · ยอดขายร้านค้า (POS) เพิ่มใหม่ 2026-11-11 · ยกให้คนที่ถือหน้าเบิก-คืนของท่านั้นอยู่แล้ว */
+    ['panwa','tublamu'].forEach(function(k){ if(!set['pos-'+k] && set['po-'+k]) set['pos-'+k]=1; });
     /* §tmDoc · เอกสาร ตม. ระนอง · ยกให้คนที่ถือหน้าเบิก-คืนของท่าระนองเหมือนกัน */
     if(!set['pot-ranong'] && set['po-ranong']) set['pot-ranong']=1;
     return set;

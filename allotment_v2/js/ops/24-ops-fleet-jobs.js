@@ -499,7 +499,8 @@
 
     var isQuickFix = !!(d('fl-inc-quickfix') && d('fl-inc-quickfix').checked);
     var cause = d('fl-inc-cause') ? d('fl-inc-cause').value : '';
-    var no = computeNextNo('INC', listIncidents());
+    /* §docNo (sync 11-16): no number sent, operation-backend issues the next free INC under a lock (legacy laDocNo); the toast shows its answer */
+    var no = '';
     var createBody = toIncidentCreateBody({
       no: no, boatId: boatId, date: date, time: time, title: title, detail: detail, remark: remark,
       priority: priority, damagedAssets: damagedAssets, quickFix: isQuickFix, cause: cause
@@ -516,6 +517,13 @@
         return res;
       });
     }).catch(function(e){ O.fail('Could not create incident', e); return null; });
+  });
+
+  /* §docNo (sync 11-16): legacy's laDocNo asks lk-inbox's POST /api/v1/_docno with a synchronous request; here that is a 404 on every
+     call. The creators above send no number and operation-backend issues it, so a legacy caller left over gets the local guess
+     (laDocNoPeek: the highest + 1 not taken), which the server still checks. */
+  if(typeof window.laDocNo === 'function') wrap('laDocNo', function(orig, kind){
+    return typeof window.laDocNoPeek === 'function' ? window.laDocNoPeek(String(kind || '').toUpperCase()) : orig(kind);
   });
 
   wrap('flDeleteIncident', function(orig, id){
@@ -620,15 +628,12 @@
 
     if(inc && inc.damagedAssets && inc.damagedAssets.length > 1){
       if(chosenMode === 'split'){
-        body.per_asset = true;
-        body.nos = inc.damagedAssets.map(function(_, idx){ return 'MJ-' + String(maxNo + idx + 1).padStart(3, '0'); });
+        body.per_asset = true;   // §docNo (sync 11-16): no nos, the server issues one MJ per asset
       } else {
-        body.per_asset = false;
-        body.no = 'MJ-' + String(maxNo + 1).padStart(3, '0');
+        body.per_asset = false;   // §docNo: no number, the server issues it
       }
     } else {
-      body.no = 'MJ-' + String(maxNo + 1).padStart(3, '0');
-      if(!incId && assets.length) body.assets = assets;
+      if(!incId && assets.length) body.assets = assets;   // §docNo: no number, the server issues it
     }
 
     return O.queue(function(){
@@ -1157,10 +1162,9 @@
       var n = parseInt(String((item && item.no) || '').replace(/^MJ-/, ''), 10) || 0;
       return Math.max(mx, n);
     }, 0);
-    var nos = [];
-    for(var i = 0; i < fresh; i++) nos.push('MJ-' + String(maxNo + i + 1).padStart(3, '0'));
+    /* §docNo (sync 11-16): no nos, operation-backend issues one MJ per new job (fresh of them) under a lock */
     return O.queue(function(){
-      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/split', { by: 'boat_engines', nos: nos });
+      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/split', { by: 'boat_engines' });
     }).then(function(res){
       return refetchAll(m.boatId).then(function(){
         O.wrote('fleet-job-split');
@@ -1522,9 +1526,9 @@
       var n = parseInt(String((item && item.no) || '').replace(/^MJ-/, ''), 10) || 0;
       return Math.max(mx, n);
     }, 0);
-    var nos = engines.slice(1).map(function(_, i){ return 'MJ-' + String(maxNo + i + 1).padStart(3, '0'); });
+    /* §docNo (sync 11-16): no nos, operation-backend issues one MJ per new job under a lock */
     return O.queue(function(){
-      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/split', { by: 'job_engines', nos: nos });
+      return O.post('/v1/fleet/jobs/' + enc(jobId) + '/split', { by: 'job_engines' });
     }).then(function(res){
       return refetchAll(m.boatId).then(function(){
         O.wrote('fleet-job-split');

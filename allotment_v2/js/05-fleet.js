@@ -5093,9 +5093,9 @@ function flLoad(){
     let _moMax = FL_MEMOS.reduce(function(mx,x){
       var v = parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; }, 0);
     // §noFree · ยืนยันว่าเลขที่จะออกยังว่างจริง ไม่ใช่แค่มากกว่าเลขสูงสุด
-    let no;
-    do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
-    while(FL_MEMOS.some(function(x){ return x.no===no; }));
+    let no = (typeof laDocNo==='function') ? laDocNo('MO') : null;   /* §docNo · เลขจากเซิร์ฟเวอร์ */
+    if(!no){ do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
+    while(FL_MEMOS.some(function(x){ return x.no===no; })); }
     const memo = {
       id: LA_UID('m') + '_' + jobNo,
       no,
@@ -7094,6 +7094,15 @@ function invSyncLegacy(item){
   item.location = item.primaryLocation;
 }
 
+/* §invWh · แยกจำนวนตามคลัง (ชื่อคลังสะกดหลายแบบ → จับด้วยคำ tub / panwa) · คลังอื่นคืนเป็นรายการ */
+function invWhSplit(item){
+  const r={tub:0,panwa:0,other:[]}; if(!item) return r;
+  const ss=(item.stocks&&item.stocks.length)?item.stocks:(item.location?[{location:item.location,qty:item.qty||0}]:[]);
+  ss.forEach(x=>{ const q=+x.qty||0, k=String(x.location||'').toLowerCase().replace(/\s+/g,'');
+    if(/tub/.test(k)) r.tub+=q; else if(/panwa|visit/.test(k)) r.panwa+=q;
+    else if(q) r.other.push({loc:String(x.location||'?').replace(/^คลัง\s*/,''),qty:q}); });
+  return r;
+}
 // Get qty at a specific location
 function invQtyAt(item, location){
   if(!item || !item.stocks) return 0;
@@ -9747,7 +9756,14 @@ function _flRenderDRInner(){
     const _isCh = b.ownership==='charter';
     /* §drExtra · เรือเช่าที่วิ่งวันนั้นต้องมีแถวให้กรอกเสมอ แม้ยอดลูกค้าจะยังเป็น 0
        เพราะเหตุผลที่มันอยู่ในตารางคือ "เราเบิกของลงเรือลำนี้" ไม่ใช่ยอดขาย */
-    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b)) && !posI;   /* §drPos · วันที่ตีเรือต้องมีช่องให้ใส่น้ำมัน */
+    /* §drRescue (2026-11-10) · owner "เปลี่ยนเรือระหว่างทาง · ต้องมีเรื่องน้ำมันเพิ่มด้วยไหมของ Achilles"
+       เรือกู้ (TRIPS[d][เรือ].type='rescue' จาก §bopSwap) ไม่มีใบจองของตัวเอง (ใบจองยังผูกกับเรือที่เสีย)
+       pax จึงเป็น 0 แล้วแถวยุบเป็น "ไม่ออก" ทั้งที่เรือวิ่งจริง · เปิดช่องน้ำมัน/ชั่วโมงเครื่องให้กรอก
+       น้ำมันที่กรอกลง .fuel ปกติ → Trip P&L ใช้เป็นต้นทุนเรือกู้แทนค่าประมาณจากสูตร */
+    const rsc = (dayOp && dayOp.type==='rescue') ? dayOp : null;
+    const rscFor = rsc ? ((typeof getBoat==='function' && getBoat(rsc.rescueFor)) || {name:rsc.rescueFor}) : null;
+    const rscPax = rsc ? (+(((TRIPS[ds]||{})[rsc.rescueFor]||{}).swap||{}).pax || 0) : 0;
+    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b)) && !posI && !rsc;   /* §drPos · วันที่ตีเรือต้องมีช่องให้ใส่น้ำมัน */
     const posOnly = !!posI && pax===0;
 
     // ── Entry cards (Style A · fixed height · PAX/Fuel fixed-width so they line up across rows · engines fill the rest) ──
@@ -9802,7 +9818,8 @@ function _flRenderDRInner(){
         <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}${_isCh?'<span class="fs-ch">เช่า</span>':''}
           <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
     const _posChip = posI ? `<div class="fs-pos${locked?'':' on'}"${locked?'':` onclick="flPosOpen('${ds}','','${b.id}')"`} title="${posI.auto?'จากใบย้ายท่าใน Boat Status · ':''}${_e(posI.note||'')}"><b>&#8644; ตีเรือ</b> ${flPosLbl(posI)}${(!posOnly)?`<input class="fs-in" type="number" step="1" min="0" value="${posI.fuel!=null?posI.fuel:''}" placeholder="L" ${_DIS} onclick="event.stopPropagation()" onchange="flPosFuel('${ds}','${b.id}',this.value)" title="น้ำมันที่ใช้ตีเรือ (แยกจากเที่ยวลูกค้า)">`:''}</div>` : '';
-    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
+    const _rscChip = rsc ? `<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:#E0F2FE;border:0.5px solid #7DD3FC;border-radius:6px;width:fit-content;margin-top:3px;font-size:10px;color:#075985;font-weight:700" title="เรือกู้ · บันทึกใน Boat Operation › เปลี่ยนกลางทาง · กรอกน้ำมันที่ใช้จริงของลำนี้">&#128735; เรือกู้ของ ${_e(rscFor.name||'')}${rscPax?(' · รับลูกค้า '+rscPax+' คน'):''}</div>` : '';
+    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${posOnly?'':tripsHtml}${_rscChip}${_posChip}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
     const IN='class="fs-in"';   /* §drNum · ช่องตัวเลขเป็น text+decimal เพื่อโชว์ , · ค่าดิบผ่าน _fsRaw */
     /* §drIssIdle (2026-09-12) · "แอดเพิ่ม เป็นชื่อเรือ กลายเป็นว่า
@@ -9841,7 +9858,7 @@ function _flRenderDRInner(){
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${_fsNum(pax||0)}</td>
       ${posOnly
         ? `<td class="fs-n fs-f fs-posf"><input ${IN} type="text" inputmode="decimal" value="${posI.fuel!=null?_fsNum(posI.fuel):''}" ${_DIS} onchange="flPosFuel('${ds}','${b.id}',_fsRaw(this))" title="น้ำมันที่ใช้ตีเรือ"><em>ตีเรือ</em></td>`
-        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>`}
+        : `<td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="text" inputmode="decimal" value="${fuel!=null?_fsNum(fuel):''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',_fsRaw(this))">${fuelLpp?`<em>${fuelLpp}/px</em>`:(rsc?((locked&&fuel==null)?'<em style="color:#B45309;font-weight:700" title="ท่านี้บันทึกแล้ว ช่องถูกล็อก · กด Edit ที่หัวการ์ดท่า แล้วกรอกลิตรที่ช่องนี้">เรือกู้ · กด Edit เพื่อกรอก</em>':'<em style="color:#075985">เรือกู้</em>'):'')   /* §drRescue2 · ท่าล็อกแล้วช่องว่างมองไม่เห็นว่ากรอกตรงไหน */}</td>`}
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="text" inputmode="decimal" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',_fsRaw(this))">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
       ${_engTd}${_wTd}${_issTd}</tr>`;
   };
@@ -11765,6 +11782,7 @@ function flRenderBoatDetailPink(){
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${b.retired?`<button onclick="flUnretireBoat('${b.id}')" style="background:#1D9E75;color:white;border:none;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">↩ Restore</button>`:''}
+        ${(typeof bhBtn==='function')?bhBtn(b.id):''}
         <button onclick="flEquipOpen('${b.id}')" style="background:#fff;color:#0F6E56;border:1px solid #cfe0d8;border-radius:20px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">&#8596; ถอด/สลับ</button>
         <button onclick="flOpenEditBoatModal('${b.id}')" style="background:${dim.ink};color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
       </div>
@@ -14464,7 +14482,7 @@ function flSaveMemo(){
   const _moMaxNo = FL_MEMOS.length
     ? Math.max(0, ...FL_MEMOS.map(m => parseInt(String(m.no||'').replace(/^MO-/,'')) || 0))
     : 0;
-  const no='MO-'+String(_moMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MO'):('MO-'+String(_moMaxNo+1).padStart(3,'0'));   /* §docNo */
   const memo={
     id:LA_UID('m'),no,title:subject,
     to:document.getElementById('memo-to').value,
@@ -17904,7 +17922,7 @@ function flRenderMaint(){
           ${costPill}
         </div>
         <div style="font-size:12px;font-weight:${isSel?600:500};color:${dim.ink};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.title||'—'}</div>
-        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>
+        <div style="font-size:10px;color:${isSel?SVG_PINK.text:dim.ink3};margin-top:2px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtShortD(m.startDate)}${m.location?' · '+m.location:''}</div>${flAssetChips(m,'mj')}
       </div>
       <div style="display:flex;flex-direction:column;align-items:end;gap:4px;flex-shrink:0">
         <span style="background:${ss.bg};color:${ss.color};padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600">${ss.label}</span>
@@ -18026,7 +18044,7 @@ function flRenderMaint(){
     return `<div class="fj-row${isSel?' on':''}${done&&!isSel?' dim':''}" onclick="flSelMaint('${m.id}')"><div class="bar" style="background:${TY_BAR[m.type]||'#9AA3B8'}"></div>
       <div style="min-width:0"><div class="no">${fjE(m.no||'—')}<span class="fj-pill" style="background:${tp[0]};color:${tp[1]}">${tp[2]}</span>${b?`<span class="fj-boat" style="background:${bc?bc.text:'#5B6170'}">${fjE(b.name)}</span>`:''}${m.pinned&&!done?'<span title="Pinned" style="font-size:11px">📌</span>':''}</div>
         <div class="ttl">${fjE(m.title||'—')}${ph}</div>
-        <div class="mt">${fjE(meta.join(' · '))}</div></div>
+        <div class="mt">${fjE(meta.join(' · '))}</div>${flAssetChips(m,'mj')}</div>
       <div class="rt"><span class="fj-pill" style="background:${sp[0]};color:${sp[1]}">${sp[2]}</span><span class="num" style="color:${jobCost>0?'#0F1B3D':'#9AA3AE'}">${jobCost>0?'฿'+fmtKR(jobCost):'&mdash;'}</span>${fjTrk(stage,done)}</div></div>`;
   };
   const grp=(t,d,n)=>`<div class="fj-grp"><b>${t}</b><span>${d}</span>${n!=null?`<span class="mono" style="margin-left:auto;color:#3E4658">${n}</span>`:''}</div>`;
@@ -20297,22 +20315,108 @@ function flRenderInsights(){
 }
 
 // Progress-timeline inner HTML (shared by full render + surgical refresh on withdraw/remove)
+/* §mjTl (2026-11-14) · owner "ปรับ Progress line ของ Maintenance หน่อย"
+   จัดกลุ่มตามวัน (ใหม่สุดก่อน) · บรรทัด "📦 เบิก …" ที่ติดกันในวันเดียวกัน คนเดียวกัน → การ์ดเดียว พับ/กางได้
+   การ์ดบอกจำนวนรายการ · คลัง · ยอดรวม · กี่รายการที่ราคา ฿0 · โน้ตที่คนพิมพ์เองตัวใหญ่กว่าบรรทัดระบบ */
+var _mjTlOpen={};
+function mjTlToggle(k,el){ _mjTlOpen[k]=!_mjTlOpen[k]; var c=el&&el.closest('.mjtl-wd'); if(c) c.classList.toggle('open',!!_mjTlOpen[k]); }
+function mjTlCss(){
+  if(document.getElementById('mjtl-css')) return;
+  var st=document.createElement('style'); st.id='mjtl-css';
+  st.textContent=[
+    '.mjtl{display:flex;flex-direction:column;gap:14px}',
+    '.mjtl-empty{font-size:11px;color:#999;text-align:center;padding:14px}',
+    '.mjtl-dh{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:#3A3F4B;margin-bottom:8px}',
+    '.mjtl-dh i{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:#EEF0F4;color:#5B6478}',
+    '.mjtl-dh i.we{background:#FDECEA;color:#B4231A}',
+    '.mjtl-dh small{font-weight:500;color:#9AA1AE;font-size:10px}',
+    '.mjtl-dh:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.07)}',
+    '.mjtl-list{position:relative;padding-left:18px;display:flex;flex-direction:column;gap:8px}',
+    '.mjtl-list:before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:rgba(0,0,0,.08);border-radius:2px}',
+    '.mjtl-it{position:relative}',
+    '.mjtl-it>.d{position:absolute;left:-18px;top:4px;width:9px;height:9px;border-radius:50%;background:#1D9E75;box-shadow:0 0 0 3px #FBFAF7}',
+    '.mjtl-it.sys>.d{background:#C3C8D2;width:7px;height:7px;left:-17px;top:5px}',
+    '.mjtl-it.new>.d{background:#E03B7E}',
+    '.mjtl-it.wd>.d{background:#B8860B}',
+    '.mjtl-tx{font-size:12px;font-weight:500;line-height:1.45;color:#1F2430;word-break:break-word}',
+    '.mjtl-it.sys .mjtl-tx{font-size:11px;font-weight:400;color:#5B6478}',
+    '.mjtl-by{font-size:9.5px;color:#9AA1AE;margin-top:2px;font-family:"DM Mono",monospace}',
+    '.mjtl-by b{font-family:inherit;font-weight:600;color:#6B7385}',
+    '.mjtl-wd{background:#fff;border:1px solid #ECE6D6;border-radius:10px;overflow:hidden}',
+    '.mjtl-wh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none;flex-wrap:wrap}',
+    '.mjtl-wh:hover{background:#FDFBF5}',
+    '.mjtl-wh .t{font-size:12px;font-weight:700;color:#1F2430}',
+    '.mjtl-wh .loc{font-size:10px;font-weight:600;color:#6B7385;background:#F2F3F6;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .zz{font-size:10px;font-weight:600;color:#8A5300;background:#FBEBD3;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .sum{margin-left:auto;font-size:12.5px;font-weight:800;color:#1F2430;font-variant-numeric:tabular-nums}',
+    '.mjtl-wh .cv{font-size:10px;color:#9AA1AE;transition:transform .15s}',
+    '.mjtl-wd.open .mjtl-wh .cv{transform:rotate(90deg)}',
+    '.mjtl-wb{display:none;border-top:1px solid #F1ECDF;padding:4px 0}',
+    '.mjtl-wd.open .mjtl-wb{display:block}',
+    '.mjtl-r{display:grid;grid-template-columns:20px 1fr auto 74px;gap:8px;align-items:baseline;padding:4px 10px;font-size:11px;color:#2A2F3A}',
+    '.mjtl-r:nth-child(even){background:#FBFAF7}',
+    '.mjtl-r .n{font-size:9.5px;color:#B0B6C2;text-align:right;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .q{color:#6B7385;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a.z{color:#C08A2E;font-weight:500;font-size:10px}',
+    '.mjtl-r .lt{font-size:9.5px;color:#B4231A}',
+    '.mjtl-wf{padding:5px 10px 3px;font-size:9.5px;color:#9AA1AE;font-family:"DM Mono",monospace}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
 function _flMaintTimelineInner(m){
-  const dim={ink3:'#999'};
-  const SVG_PINK={accent:'#E03B7E'};
+  mjTlCss();
   const log=m.progressLog||[];
-  return log.length?[...log].reverse().map((l,i,arr)=>{
-    const isLast=i===arr.length-1;
-    const isFirst=i===0;
-    return`<div style="display:flex;gap:10px;${isLast?'':'margin-bottom:10px'};position:relative">
-      ${!isLast?`<div style="position:absolute;left:3.5px;top:11px;bottom:-10px;width:1px;background:rgba(0,0,0,.08)"></div>`:''}
-      <div style="width:8px;height:8px;border-radius:50%;background:${isFirst?SVG_PINK.accent:'#1D9E75'};flex-shrink:0;margin-top:3px;z-index:1"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:500">${l.text||''}</div>
-        <div style="font-size:9px;color:${dim.ink3};margin-top:1px;font-family:'DM Mono',monospace">${l.date||''}${l.by?' · '+l.by:''}</div>
-      </div>
-    </div>`;
-  }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:14px">No progress logged</div>`;
+  if(!log.length) return '<div class="mjtl-empty">No progress logged</div>';
+  const E=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const N=v=>(+v||0).toLocaleString();
+  const RX=/^📦 เบิก (.+?) (\d+(?:\.\d+)?) (\S+)(?: · (.+?))? \(฿([\d,.]+)\)(.*)$/;
+  const isSys=by=>/^(ระบบ|system|equip)?$/i.test(String(by||'').trim());
+  /* ใหม่สุดก่อน · บรรทัดเบิกติดกัน (วัน + คนเดียวกัน) รวมเป็นการ์ดเดียว */
+  const items=[];
+  log.map((l,i)=>({l,i})).reverse().forEach(({l,i})=>{
+    const t=String(l.text||''), mm=t.match(RX), d=l.date||'', by=l.by||'';
+    if(mm){
+      const row={name:mm[1],qty:+mm[2],unit:mm[3],loc:String(mm[4]||'').replace(/^คลัง\s*/,''),amt:+String(mm[5]).replace(/,/g,'')||0,tag:String(mm[6]||'').replace(/^\s*·\s*/,'')};
+      const p=items[items.length-1];
+      if(p&&p.kind==='wd'&&p.date===d&&p.by===by){ p.rows.push(row); p.k=m.id+'|'+i; return; }
+      items.push({kind:'wd',date:d,by,rows:[row],k:m.id+'|'+i,raw:t,createdAt:l.createdAt});
+    } else items.push({kind:'note',date:d,by,text:t,createdAt:l.createdAt});
+  });
+  const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], TW=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const dHead=ds=>{ const x=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||''); if(!x) return '<span>ไม่ระบุวันที่</span>';
+    const w=new Date(+x[1],+x[2]-1,+x[3]).getDay();
+    return '<i class="'+((w===0||w===6)?'we':'')+'">'+TW[w]+'</i><span>'+(+x[3])+' '+TM[+x[2]-1]+' '+x[1]+'</span>'; };
+  const byLine=(it)=>{ const who=isSys(it.by)?'ระบบ':'<b>'+E(it.by)+'</b>';
+    const bd=(it.createdAt&&it.createdAt!==it.date)?' · บันทึกย้อนหลังเมื่อ '+E(it.createdAt):''; return '<div class="mjtl-by">'+who+bd+'</div>'; };
+  const days=[], DI={};
+  items.forEach(it=>{ if(DI[it.date]==null){ DI[it.date]=days.length; days.push({date:it.date,its:[]}); } days[DI[it.date]].its.push(it); });
+  let first=true;
+  return '<div class="mjtl">'+days.map(D=>{
+    const nW=D.its.reduce((s,it)=>s+(it.kind==='wd'?it.rows.length:0),0), nN=D.its.filter(it=>it.kind==='note').length;
+    const cnt=[nN?nN+' บันทึก':'', nW?'เบิก '+nW+' รายการ':''].filter(Boolean).join(' · ');
+    return '<div class="mjtl-day"><div class="mjtl-dh">'+dHead(D.date)+'<small>'+cnt+'</small></div><div class="mjtl-list">'+D.its.map(it=>{
+      const nw=first; first=false;
+      if(it.kind==='note' || it.rows.length<2){
+        const txt=it.kind==='note'?it.text:it.raw;
+        const sys=isSys(it.by)&&!(it.kind==='wd');
+        return '<div class="mjtl-it'+(sys?' sys':'')+(it.kind==='wd'?' wd':'')+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-tx">'+txt+'</div>'+byLine(it)+'</div>';
+      }
+      const rows=it.rows.slice().reverse();
+      const tot=rows.reduce((s,r)=>s+r.amt,0), nz=rows.filter(r=>!r.amt).length;
+      const locs=[...new Set(rows.map(r=>r.loc).filter(Boolean))];
+      const open=!!_mjTlOpen[it.k];
+      return '<div class="mjtl-it wd'+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-wd'+(open?' open':'')+'">'
+        +'<div class="mjtl-wh" onclick="mjTlToggle(\''+E(it.k)+'\',this)" title="กดเพื่อดู/ซ่อนรายการ"><span class="cv">▶</span><span class="t">📦 เบิกอะไหล่ '+rows.length+' รายการ</span>'
+        +locs.map(l=>'<span class="loc">'+E(l)+'</span>').join('')
+        +(nz?'<span class="zz" title="ราคาต่อชิ้นในคลังเป็น ฿0 ตอนเบิก · ถ้าของมากับ Memo ต้นทุนถูกคิดรวมที่ Memo แล้ว">ไม่มีราคาต่อชิ้น '+nz+'</span>':'')
+        +'<span class="sum">฿'+N(tot)+'</span></div>'
+        +'<div class="mjtl-wb">'+rows.map((r,j)=>'<div class="mjtl-r"><span class="n">'+(j+1)+'</span><span>'+E(r.name)
+            +(locs.length>1&&r.loc?' <span style="color:#9AA1AE">· '+E(r.loc)+'</span>':'')+(r.tag?' <span class="lt">'+E(r.tag)+'</span>':'')+'</span>'
+            +'<span class="q">'+N(r.qty)+' '+E(r.unit)+'</span><span class="a'+(r.amt?'':' z')+'">'+(r.amt?'฿'+N(r.amt):'฿0')+'</span></div>').join('')
+        +'</div></div>'+byLine(it)+'</div>';
+    }).join('')+'</div></div>';
+  }).join('')+'</div>';
 }
 // Parts-withdrawn list + subtotal inner HTML (shared by full render + surgical refresh)
 // §mjLateParts · job ที่เปิดโหมดแก้อะไหล่ย้อนหลังอยู่ (ทีละงาน · ปิดเองเมื่อสลับงาน)
@@ -20371,6 +20475,49 @@ function _flMaintPartsInner(m){
 // Surgically refresh ONLY the parts list + subtotal + timeline + count badge — WITHOUT
 // re-rendering the whole detail mount. This keeps the +Withdraw button (and the part picker)
 // alive, so the page never jumps to the top after a withdraw / return.
+/* ══ §memoUseNow2 (2026-11-12) · owner "งานที่ Memo รอเบิกของ แต่ยังไม่ได้ขอทีละอัน ตัวใหม่จะขึ้นให้เลยไหม"
+   ของจาก Memo ของงานนี้ที่รับเข้าคลังไปแล้ว แต่ยังไม่ได้เบิกลงงาน → ปุ่มเดียวเบิกให้ครบ
+   เหลือ = รับแล้ว − ที่เบิกลงงานนี้ไปแล้ว (นับตามรายการอะไหล่เดียวกัน) · เบิกได้ไม่เกินของที่มีในคลังที่รับเข้า */
+function flMaintMemoPending(m){
+  var out=[]; if(!m) return out;
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){
+    if(!mo || mo.maintId!==m.id || mo.status==='cancelled') return;
+    (mo.items||[]).forEach(function(it){
+      if(typeof _memoIsPart==='function' && !_memoIsPart(it,mo)) return;
+      var r=+it.recvQty||0;
+      if(!r && (mo.status==='received'||mo.status==='paid') && !((mo.receipts||[]).length)) r=+it.qty||0;   /* ใบเก่าก่อนมี recvQty */
+      if(!(r>0) || !it.invId) return;
+      var inv=FL_INVENTORY.find(function(x){ return x.id===it.invId; }); if(!inv) return;
+      var used=(m.parts||[]).filter(function(p){ return p.invId===it.invId; }).reduce(function(a,p){ return a+(+p.qty||0); },0);
+      var prev=out.filter(function(o){ return o.inv.id===inv.id; }).reduce(function(a,o){ return a+o.want; },0);
+      var left=r-Math.max(0,used-prev); if(left<=0) return;
+      invSyncLegacy(inv);
+      var loc=mo.receivedLocation||(((mo.receipts||[]).slice(-1)[0]||{}).location)||'';
+      if(!loc || !(invQtyAt(inv,loc)>0)){ var st=(inv.stocks||[]).filter(function(x){ return (x.qty||0)>0; })[0]; loc=st?st.location:loc; }
+      var av=loc?invQtyAt(inv,loc):0;
+      out.push({mo:mo, it:it, inv:inv, loc:loc, want:left, qty:Math.min(left,av)});
+    });
+  });
+  return out;
+}
+function flMaintMemoBtnHtml(m){
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length) return '';
+  var nos={}; L.forEach(function(x){ nos[x.mo.no]=1; });
+  return '<button onclick="flMaintWithdrawFromMemos(\''+m.id+'\')" style="display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;background:#E9F7F1;color:#0B5A43;border:1px solid #B7E0CF;border-radius:10px;padding:9px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left">'
+    +'<span style="font-size:14px">&#128230;</span><span style="flex:1">เบิกของจาก Memo ที่รับเข้าคลังแล้ว · '+L.length+' รายการ<span style="display:block;font-weight:500;font-size:10px;color:#3E6B5C">'+Object.keys(nos).join(' · ')+' · กดครั้งเดียวเบิกลงงานนี้ครบ</span></span><span>&rsaquo;</span></button>';
+}
+function flMaintWithdrawFromMemos(jobId){
+  var m=FL_MAINT.find(function(x){ return x.id===jobId; }); if(!m) return;
+  var L=flMaintMemoPending(m).filter(function(x){ return x.qty>0; }); if(!L.length){ flShowToast('ไม่มีของจาก Memo ที่รอเบิกแล้ว'); return; }
+  var txt=L.slice(0,12).map(function(x){ return '  · '+x.inv.name+' × '+x.qty+' '+(x.inv.unit||'')+' · '+x.loc+(x.qty<x.want?(' (ขาด '+(x.want-x.qty)+' · ของในคลังไม่พอ)'):''); }).join('\n')+(L.length>12?('\n  · และอีก '+(L.length-12)+' รายการ'):'');
+  if(!confirm('เบิกของจาก Memo ลงงาน '+(m.no||'')+' ทั้งหมด '+L.length+' รายการ?\n\n'+txt)) return;
+  var ok=0, bad=0;
+  L.forEach(function(x){ if(!flMaintWithdraw(jobId,x.inv.id,x.loc,x.qty)) ok++; else bad++; });
+  flSave();
+  flMaintRefreshParts(jobId);
+  var host=document.getElementById('maint-memo-wd-'+jobId); if(host) host.innerHTML=flMaintMemoBtnHtml(m);
+  flShowToast('เบิกลงงาน '+(m.no||'')+' แล้ว '+ok+' รายการ'+(bad?(' · ไม่สำเร็จ '+bad):''));
+}
 function flMaintRefreshParts(jobId){
   const m=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(x=>x.id===jobId);
   if(!m) return;
@@ -20608,7 +20755,7 @@ function flRenderMaintDetailPink(){
     _wdSeen[label]=true; window._maintInvLabelMap[label]=x.id;
     return `<option value="${label.replace(/"/g,'&quot;')}"></option>`;
   }).join('');
-  const withdrawForm=flMaintCanEditParts(m)?`<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+  const withdrawForm=flMaintCanEditParts(m)?`<div id="maint-memo-wd-${m.id}">${flMaintMemoBtnHtml(m)}</div><div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
       <input list="maint-inv-list-${m.id}" id="maint-inv-sel-${m.id}" onchange="flMaintFillLoc('${m.id}')" autocomplete="off" placeholder="พิมพ์ชื่ออะไหล่ / Part No..." style="flex:1 1 160px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0"/>
       <datalist id="maint-inv-list-${m.id}">${invOpts}</datalist>
       <select id="maint-inv-loc-${m.id}" style="flex:1 1 130px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0">
@@ -20812,7 +20959,7 @@ function flEngSplitIntoJobs(jobId){
       return;
     }
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -20865,7 +21012,7 @@ function flSplitExistingJob(jobId){
   engAssets.slice(1).forEach((a,idx)=>{
     const suffix=suffixOf(a);
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -21495,6 +21642,16 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         reason:finalReason
       });
     }
+    /* §swRelease · ซ่อมเสร็จ (ผลพร้อมใช้) และไม่มีใบอื่นกันเรือ → ปลดแถว "ซ่อม" ที่บันทึกเปลี่ยนกลางทางตั้งไว้ */
+    if(out.boatStatus==='available' && !_planRow && !((_blk.jobs||[]).length) && typeof bop2SwRelease==='function'){
+      const _swR=bop2SwRelease(b, TODAY_STR);
+      if(_swR.n){
+        const _last=b.log[b.log.length-1];
+        if(!skipBoatLog && _last && _last.from===TODAY_STR && _last.to && _swR.removedFrom.indexOf(bop2SwNext(_last.to))>=0) _last.to=null;
+        if(!m.progressLog) m.progressLog=[];
+        m.progressLog.push({date:TODAY_STR, text:'คืนสถานะเรือ · ปลดสถานะ "ซ่อม" จากบันทึกเปลี่ยนเรือกลางทาง '+_swR.n+' แถว'});
+      }
+    }
     if(!b.repairHistory) b.repairHistory=[];
     b.repairHistory.push({
       date:TODAY_STR,jobNo:m.no,title:m.title,detail:m.detail||'',
@@ -22082,7 +22239,7 @@ function flSaveCreateJob(){
 
         inc.damagedAssets.forEach((a,idx)=>{
           _mjBaseNo++;
-          const jobNo='MJ-'+String(_mjBaseNo).padStart(3,'0');
+          const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjBaseNo).padStart(3,'0'));   /* §docNo */
           const subtitle=`${typeLabel[a.type]||'Asset'} ${labelFor(a)}`;
           const aid=a.type==='engine'?'engId':a.type==='gearbox'?'gbId':a.type==='propeller'?'propId':null;
           const jobAsset={type:a.type,label:a.label||labelFor(a),detail:a.note||a.detail||'',status:'fixing'};
@@ -22119,7 +22276,7 @@ function flSaveCreateJob(){
   const _mjMaxNo = FL_MAINT.length
     ? Math.max(0, ...FL_MAINT.map(m => parseInt(String(m.no||'').replace(/^MJ-/,'')) || 0))
     : 0;
-  const no='MJ-'+String(_mjMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjMaxNo+1).padStart(3,'0'));   /* §docNo */
   // Copy damaged assets from incident if linked (single unit case)
   let initialAssets=[];
   if(incId){
@@ -23472,7 +23629,7 @@ function flSaveIncident(){
   const _incMaxNo = FL_INCIDENTS.length
     ? Math.max(0, ...FL_INCIDENTS.map(i => parseInt(String(i.no||'').replace(/^INC-/,'')) || 0))
     : 0;
-  const no='INC-'+String(_incMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('INC'):('INC-'+String(_incMaxNo+1).padStart(3,'0'));   /* §docNo */
 
   // Build remark — prepend Root cause if specified
   const remarkParts = [];
@@ -23728,14 +23885,21 @@ function flRenderInventory(){
         return item.location || '—';
       })();
       const _txt=isSel?SVG_PINK.text:dim.ink, _sub=isSel?SVG_PINK.text:dim.ink2, _bb='border-bottom:0.5px solid rgba(0,0,0,.04)';
-      return '<tr onclick="invSelItem(\''+item.id+'\')" style="cursor:pointer;'+(isSel?'background:'+SVG_PINK.soft+';':'')+'">'+cbCell+'<td style="padding:5px 12px;'+(isSel?'border-left:3px solid '+SVG_PINK.accent:'')+';'+_bb+';font-size:11px;font-family:\'DM Mono\',monospace;color:'+_sub+'">'+(item.partNo||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:12px;color:'+_txt+'">'+(item.name||'—')+'</td><td style="padding:5px 12px;'+_bb+'"><span style="background:'+CAT_COLOR[cat]+'22;color:'+CAT_COLOR[cat]+';padding:1px 8px;border-radius:7px;font-size:10px">'+(CAT_LBL[cat]||cat)+'</span></td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+(item.supplier||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+_loc+'</td><td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap"><span style="font-size:13px;color:'+qtyColor+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+'</span><span style="font-size:10px;color:'+dim.ink3+'"> '+(item.unit||'ชิ้น')+'</span>'+(isLow?' <span style="font-size:10px;color:#A32D2D">⚠ below min '+(item.minQty||0)+'</span>':'')+'</td><td style="padding:5px 12px;text-align:right;font-family:\'DM Mono\',monospace;font-size:12px;'+_bb+'">฿'+(item.cost||0).toLocaleString()+'</td><td style="padding:5px 12px;text-align:center;'+_bb+'"><div style="display:flex;gap:4px;justify-content:center" onclick="event.stopPropagation()"><button onclick="flOpenReceiveOne(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer">+ Receive</button><button onclick="event.stopPropagation();flOpenTransfer(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666" title="ย้ายระหว่างคลัง">↔ Transfer</button><button onclick="event.stopPropagation();flOpenInvEdit(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666">Edit</button>'+(showOrder?'<button onclick="flOrderItem&&flOrderItem(\''+item.id+'\')" style="background:#A32D2D;color:white;border:none;border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:500;cursor:pointer">Order</button>':'')+'</div></td></tr>';
+      /* §invWh · จำนวนแยกคลัง */
+      const _W=invWhSplit(item);
+      const _whTd=function(v,key){ const on=(_invLoc===key), dimc=(_invLoc!=='all'&&!on);
+        return '<td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap;'+(on?'background:rgba(24,95,165,.05);':'')+(dimc?'opacity:.45;':'')+'">'
+          +(v?'<span style="font-size:13px;font-weight:600;color:'+_txt+';font-family:\'DM Mono\',monospace">'+v+'</span>':'<span style="font-size:12px;color:#D0D4DB">–</span>')+'</td>'; };
+      const _whCells=_whTd(_W.tub,'tub')+_whTd(_W.panwa,'panwa');
+      const _whOther=_W.other.length?('<div style="font-size:9.5px;color:'+dim.ink3+';margin-top:1px">'+_W.other.map(o=>'+ '+o.loc+' '+o.qty).join(' · ')+'</div>'):((!item.stocks||!item.stocks.length)&&!item.location?'<div style="font-size:9.5px;color:#999;font-style:italic">registered · no stock</div>':'');
+      return '<tr onclick="invSelItem(\''+item.id+'\')" style="cursor:pointer;'+(isSel?'background:'+SVG_PINK.soft+';':'')+'">'+cbCell+'<td style="padding:5px 12px;'+(isSel?'border-left:3px solid '+SVG_PINK.accent:'')+';'+_bb+';font-size:11px;font-family:\'DM Mono\',monospace;color:'+_sub+'">'+(item.partNo||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:12px;color:'+_txt+'">'+(item.name||'—')+'</td><td style="padding:5px 12px;'+_bb+'"><span style="background:'+CAT_COLOR[cat]+'22;color:'+CAT_COLOR[cat]+';padding:1px 8px;border-radius:7px;font-size:10px">'+(CAT_LBL[cat]||cat)+'</span></td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+(item.supplier||'—')+'</td>'+_whCells+'<td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap"><span style="font-size:13px;color:'+qtyColor+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+'</span><span style="font-size:10px;color:'+dim.ink3+'"> '+(item.unit||'ชิ้น')+'</span>'+(isLow?' <span style="font-size:10px;color:#A32D2D">⚠ below min '+(item.minQty||0)+'</span>':'')+_whOther+'</td><td style="padding:5px 12px;text-align:right;font-family:\'DM Mono\',monospace;font-size:12px;'+_bb+'">฿'+(item.cost||0).toLocaleString()+'</td><td style="padding:5px 12px;text-align:center;'+_bb+'"><div style="display:flex;gap:4px;justify-content:center" onclick="event.stopPropagation()"><button onclick="flOpenReceiveOne(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer">+ Receive</button><button onclick="event.stopPropagation();flOpenTransfer(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666" title="ย้ายระหว่างคลัง">↔ Transfer</button><button onclick="event.stopPropagation();flOpenInvEdit(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666">Edit</button>'+(showOrder?'<button onclick="flOrderItem&&flOrderItem(\''+item.id+'\')" style="background:#A32D2D;color:white;border:none;border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:500;cursor:pointer">Order</button>':'')+'</div></td></tr>';
     };
 
     // Build grouped table body
     let groupedRows='';
     const presentGroups=groupOrder.filter(g=>groups[g]&&groups[g].length>0);
     if(items.length===0){
-      groupedRows='<tr><td colspan="9" style="padding:30px;text-align:center;color:'+dim.ink3+';font-size:11px">No items match filter</td></tr>';
+      groupedRows='<tr><td colspan="10" style="padding:30px;text-align:center;color:'+dim.ink3+';font-size:11px">No items match filter</td></tr>';
     } else {
       presentGroups.forEach(grp=>{
         const grpItems=groups[grp];
@@ -23745,7 +23909,7 @@ function flRenderInventory(){
         const color=groupColor[grp]||'#666';
         const chevron=collapsed?'▶':'▼';
         // Group header row
-        groupedRows+='<tr onclick="invToggleGroup(\''+grp.replace(/'/g,"\\'")+'\')" style="cursor:pointer;background:'+color+'08;border-top:2px solid '+color+'33"><td colspan="9" style="padding:9px 14px"><div style="display:flex;align-items:center;gap:10px"><span style="color:'+color+';font-size:10px;width:10px">'+chevron+'</span><span style="font-size:12px;font-weight:700;color:'+color+';letter-spacing:.01em">'+grp+'</span><span style="background:'+color+'1a;color:'+color+';padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;font-family:\'DM Mono\',monospace">'+cnt+'</span><span style="margin-left:auto;font-size:10px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">รวม ฿'+sumCost.toLocaleString()+'/หน่วย</span></div></td></tr>';
+        groupedRows+='<tr onclick="invToggleGroup(\''+grp.replace(/'/g,"\\'")+'\')" style="cursor:pointer;background:'+color+'08;border-top:2px solid '+color+'33"><td colspan="10" style="padding:9px 14px"><div style="display:flex;align-items:center;gap:10px"><span style="color:'+color+';font-size:10px;width:10px">'+chevron+'</span><span style="font-size:12px;font-weight:700;color:'+color+';letter-spacing:.01em">'+grp+'</span><span style="background:'+color+'1a;color:'+color+';padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;font-family:\'DM Mono\',monospace">'+cnt+'</span><span style="margin-left:auto;font-size:10px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">รวม ฿'+sumCost.toLocaleString()+'/หน่วย</span></div></td></tr>';
         if(!collapsed){
           groupedRows+=grpItems.slice().sort(function(a,b){return (b.qty||0)-(a.qty||0);}).map(buildRow).join('');
         }
@@ -23761,7 +23925,7 @@ function flRenderInventory(){
     const headerCbBorder = (allVisibleSelected||someVisibleSelected) ? SVG_PINK.accent : 'rgba(0,0,0,.18)';
     const headerCbCell = '<th style="padding:6px 8px 6px 12px;width:30px;text-align:center;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7" onclick="invSelectAllVisible('+JSON.stringify(visibleIds).replace(/"/g,'&quot;')+')"><div style="width:16px;height:16px;border-radius:4px;border:1.5px solid '+headerCbBorder+';background:'+headerCbBg+';display:inline-flex;align-items:center;justify-content:center;cursor:pointer;vertical-align:middle">'+(headerCbState?'<span style="color:white;font-size:11px;font-weight:700;line-height:1">'+headerCbState+'</span>':'')+'</div></th>';
 
-    const tablePanel='<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr style="background:#FBFAF7">'+headerCbCell+'<th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Part No</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Item</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Category</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Supplier</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Location</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Qty</th><th style="padding:7px 12px;text-align:right;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Cost</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Action</th></tr></thead><tbody>'+groupedRows+'</tbody></table></div>';
+    const tablePanel='<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr style="background:#FBFAF7">'+headerCbCell+'<th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Part No</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Item</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Category</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Supplier</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Tub Lamu</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Visit Panwa</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Total</th><th style="padding:7px 12px;text-align:right;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Cost</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Action</th></tr></thead><tbody>'+groupedRows+'</tbody></table></div>';
 
     // Floating action bar (only when something is selected)
     let floatBar = '';
@@ -24295,6 +24459,11 @@ function flSaveReceive(){
       const note=document.getElementById('receive-note').value;
       const memoLocation = document.getElementById('receive-location')?.value || 'คลัง Tub Lamu';
       let updatedCount=0, createdCount=0;
+      /* §memoUseNow (2026-11-12) · owner "กด Memo แล้วอะไหล่เข้าคลัง แล้วค่อยไปเบิก มันหลายขั้นตอน"
+         ใบ memo ที่ผูกกับงานซ่อม · ติ๊ก "เบิกใช้กับงานนี้ทันที" (ค่าเริ่มต้น = ติ๊ก) = รับเข้าคลังแล้วเบิกลงงานในคลิกเดียว
+         ยังลงประวัติคลังครบทั้งรับและเบิก (flMaintWithdraw ตัวเดียวกับปุ่ม + Withdraw) · ต้นทุนงานไม่นับซ้ำ (flMaintCalcCost ข้ามของที่จ่ายผ่าน memo) */
+      const _useJob=!!(mo.maintId && document.getElementById('recv-use-job')?.checked && FL_MAINT.find(x=>x.id===mo.maintId));
+      let _issued=0, _issueFail=0;
       /* §memoPart · โมดัลวาดเฉพาะบรรทัด parts · index ของ input จึงนับตาม
          allItems ไม่ใช่ตาม mo.items · ของเดิมวนด้วย mo.items แล้วอ่าน recv-qty-i
          ใบไหนมีบรรทัดค่าแรงคั่นอยู่ จำนวนจะเลื่อนไปผิดบรรทัด */
@@ -24359,6 +24528,10 @@ function flSaveReceive(){
           it.invId=newInv.id;
           createdCount++;
         }
+        if(_useJob){   /* §memoUseNow */
+          const _iv=FL_INVENTORY.find(x=>x.id===it.invId);
+          if(_iv && !flMaintWithdraw(mo.maintId,_iv.id,memoLocation,qty)) _issued++; else _issueFail++;
+        }
       });
       /* §memoPart · เก็บว่ารอบนี้รับอะไรมาบ้าง · ใครรับ วันไหน เข้าคลังไหน
          ไม่งั้นรับสองรอบแล้วย้อนดูไม่ได้ว่ารอบไหนได้อะไร */
@@ -24380,6 +24553,7 @@ function flSaveReceive(){
       if(updatedCount&&createdCount) toastMsg+=` · อัพเดท ${updatedCount} · สร้างใหม่ ${createdCount}`;
       else if(updatedCount) toastMsg+=` · อัพเดท ${updatedCount}`;
       else if(createdCount) toastMsg+=` · สร้างใหม่ ${createdCount}`;
+      if(_useJob){ const _mj=FL_MAINT.find(x=>x.id===mo.maintId); toastMsg+=` · เบิกลงงาน ${(_mj&&_mj.no)||''} แล้ว ${_issued} รายการ`+(_issueFail?` (ไม่สำเร็จ ${_issueFail} · เบิกเองที่หน้างาน)`:''); }
       flShowToast(toastMsg);
     }
     _receiveMemoId=null;
@@ -25395,6 +25569,10 @@ function flOpenReceiveMemo(moId){
         <span style="color:var(--ink-soft);font-size:10px;min-width:24px">${it.unit||'ชิ้น'}</span>
       </div>`;
     }).join('')}
+    ${(()=>{ const _mj=mo.maintId?FL_MAINT.find(x=>x.id===mo.maintId):null; if(!_mj) return '';   /* §memoUseNow */
+      return `<label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 10px;background:#E9F7F1;border:1px solid #B7E0CF;border-radius:8px;cursor:pointer;font-size:11.5px;color:#0B5A43;line-height:1.4">
+        <input type="checkbox" id="recv-use-job" checked style="margin-top:2px;flex:none">
+        <span><b>เบิกใช้กับงาน ${_mj.no||''} ทันที</b><br><span style="font-size:10px;color:#3E6B5C">รับเข้าคลังแล้วตัดเบิกลงงานนี้ให้เลย ไม่ต้องไปกดเบิกที่หน้างานอีกรอบ · เอาติ๊กออกถ้าจะเก็บเข้าคลังไว้ก่อน</span></span></label>`; })()}
     <div style="font-size:9px;color:var(--ink-soft);margin-top:8px;padding:6px 8px;background:#FBFAF7;border-radius:6px">
       <span style="font-weight:600">หมายเหตุ:</span> ใส่ 0 ในบรรทัดที่ของยังไม่มา · ใบจะยังไม่ปิด กดรับของอีกครั้งได้ตอนของมาเพิ่ม
       · รายการ <span style="background:#FAEEDA;color:#854F0B;padding:0 4px;border-radius:3px;font-weight:600">+ ใหม่</span> จะถูกสร้างเป็น inventory item อัตโนมัติ (category: อื่นๆ — แก้ภายหลังได้)
@@ -28505,6 +28683,44 @@ function flpCSS(){
   document.head.appendChild(s);
 }
 try{ flpCSS(); }catch(_){}
+/* ══ §flAsset (2026-11-11) · owner "อยากเห็นว่าปัญหาเกิดกับชิ้นส่วนไหน · แม้แต่ใน Maintenance ก็ไม่เห็น"
+   ข้อมูลมีอยู่แล้ว · ใบงาน MJ เก็บ m.assets[] (engine/gearbox/propeller/hull/safety · label "SN · ตำแหน่ง")
+   ใบแจ้ง INC เก็บ x.damagedAssets[] · แค่หน้ารวมกับหน้า Maintenance ไม่เคยพิมพ์ออกมา
+   ตัวช่วยกลาง · ใบงานไม่มีชิ้นส่วน → ใช้ของใบแจ้งที่ผูกกัน (incidentId) และกลับกัน */
+var FL_ASSET_T={engine:['เครื่อง','#1E5FA8','#E6F0FB'], gearbox:['เกียร์','#7A4AB8','#F1EAFB'], propeller:['ใบจักร','#0F7A6B','#E2F4F0'],
+  hull:['ตัวเรือ','#8A5A12','#FBF0DE'], safety:['อุปกรณ์ปลอดภัย','#A3301E','#FCE9E5'], electrical:['ไฟฟ้า','#8A6D00','#FBF4D6']};
+function flAssetsOf(rec, kind){
+  if(!rec) return [];
+  var L=[];
+  try{
+    if(kind==='inc'){ L=Array.isArray(rec.damagedAssets)?rec.damagedAssets:[];
+      if(!L.length && rec.maintId){ var m=(FL_MAINT||[]).find(function(x){ return x&&x.id===rec.maintId; }); if(m&&Array.isArray(m.assets)) L=m.assets; } }
+    else { L=Array.isArray(rec.assets)?rec.assets:[];
+      if(!L.length && rec.incidentId){ var i=(FL_INCIDENTS||[]).find(function(x){ return x&&x.id===rec.incidentId; }); if(i&&Array.isArray(i.damagedAssets)) L=i.damagedAssets; } }
+  }catch(_){ L=[]; }
+  var seen={};
+  return L.filter(function(a){ if(!a) return false; var k=(a.type||'')+'|'+(a.label||a.id||''); if(seen[k]) return false; seen[k]=1; return !!(a.label||a.id); });
+}
+function flAssetChips(rec, kind, max){
+  var L=flAssetsOf(rec, kind); if(!L.length) return '';
+  var e=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  max=max||4;
+  var h=L.slice(0,max).map(function(a){
+    var T=FL_ASSET_T[a.type]||[a.type||'ชิ้นส่วน','#3E4658','#EEF0F3'];
+    var parts=String(a.label||a.id||'').split(' · ').map(function(x){ return x.trim(); }).filter(Boolean);
+    var main, sub='';
+    if((a.type==='engine'||a.type==='gearbox'||a.type==='propeller') && parts.length>=2){ main=T[0]+' '+parts[parts.length-1]; sub=parts.slice(0,-1).join(' · '); }
+    else { main=(a.type==='hull'||!FL_ASSET_T[a.type])?parts.join(' · '):(T[0]+' · '+parts.join(' · ')); }
+    var sw=a.swapped?(' → '+e(a.swappedTo||'สลับแล้ว')):'';
+    return '<span class="fl-asc" style="background:'+T[2]+';color:'+T[1]+'" title="'+e(T[0]+' · '+(a.label||a.id||''))+(a.detail?(' · '+e(a.detail)):'')+'">'
+      +'<b>'+e(main)+'</b>'+(sub?('<i>'+e(sub)+'</i>'):'')+sw+'</span>';
+  }).join('');
+  if(L.length>max) h+='<span class="fl-asc" style="background:#EEF0F3;color:#3E4658"><b>+'+(L.length-max)+'</b></span>';
+  if(!document.getElementById('fl-asc-css')){ var st=document.createElement('style'); st.id='fl-asc-css';
+    st.textContent='.fl-ascs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.fl-asc{display:inline-flex;align-items:baseline;gap:5px;max-width:100%;font-size:10.5px;line-height:1.5;padding:1px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl-asc b{font-weight:700}.fl-asc i{font-style:normal;opacity:.75;font-family:"DM Mono",ui-monospace,monospace;font-size:10px}';
+    document.head.appendChild(st); }
+  return '<span class="fl-ascs">'+h+'</span>';
+}
 function flpChip(kind,rec,warnEmpty){
   var n=flpCount(kind,rec);
   if(!n && !warnEmpty) return '';
@@ -29559,7 +29775,7 @@ function flRenderWork(){
     var rowH=function(it){ var own=it.owner?E(it.owner):((it.kind==='mj'&&!it.park)?flwT('No owner'):'—');
       return '<div class="flw-row flw-cols'+(it.key===FLW.item?' on':'')+'" data-k="'+E(it.key)+'" onclick="flwPickItem(this.dataset.k)" title="'+flwT('Double-click to open the job')+'">'
         +'<span class="mono" style="font-size:12.5px;font-weight:500">'+E(it.no)+'</span>'
-        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i></span>'
+        +'<span style="min-width:0"><b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3'+(it.done?';color:#3E4658':'')+'">'+E(it.title)+flpChip(it.kind, it.ref, !!it.done)+'</b><i class="flw-el" style="display:block;font-style:normal;font-size:11.5px;color:'+(it.done?'#8A8F9B':'#5B6170')+'">'+E(it.sub)+'</i>'+flAssetChips(it.ref, it.kind==='inc'?'inc':'mj')+'</span>'
         +'<span>'+(it.done?'<span class="flw-pill" style="background:#E4F3EC;color:#0F6E56">'+flwT('Done')+'</span>':it.park?'<span class="flw-pill" style="background:#F1F0EC;color:#3E4658">'+flwT('Parked')+'</span>':pill(it.stage))+'<span class="flw-trk">'+S.map(function(s,i){ return '<i style="background:'+(it.park?'#ECEBE6':i<it.stage?'#9AA3B8':i===it.stage?s.c:'#ECEBE6')+'"></i>'; }).join('')+'</span></span>'
         +'<span class="flw-el x o" style="font-size:12.5px;color:'+(it.owner||it.kind!=='mj'||it.park?'#0F1B3D':'#8E2019')+'">'+own+'</span>'
         +'<span class="mono x" style="text-align:right;font-size:12.5px;color:'+(it.park||it.done?'#5B6170':it.silent>60?'#8E2019':it.silent>30?'#7A4300':'#3E4658')+'">'+(it.done?'&mdash;':flwTp('{0} d',it.silent))+'</span>'
@@ -30534,7 +30750,11 @@ function faRenderParts(kind){
   var bigN=kind==='prop'?P.filter(function(r){ return r.st==='active'; }).length:P.filter(function(r){ return r.st==='ready'; }).length;
   faShell({ big:bigN, bigT:(kind==='eng'?'Engines ready':kind==='gb'?'Gearboxes ready':'Propellers active'), bigS:'of '+P.length+' · '+Object.keys(brands).map(function(k){ return brands[k]+' '+k; }).join(' · '),
     badges:{docs:faDocAlertCount()}, stages:stages,
-    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):''), add:K.add });
+    chips:(fx?('<span class="fa-chip amb"><b>'+fx+'</b>fixing</span>'):'')+(bad?('<span class="fa-chip red"><b>'+bad+'</b>ต้องเช็กข้อมูล</span>'):'')
+      /* §engFix · คู่เครื่องที่เลขถูกแก้ชื่อแทนการถอด/สลับ · กดเพื่อดูและแก้ทีละคู่ */
+      +((kind==='eng' && typeof flEngFixPending==='function' && flEngFixPending().length)?('<span class="fa-chip red" style="cursor:pointer" onclick="flEngFixOpen()" title="แก้เลขกลับเป็นเลขเดิม แล้วบันทึกเป็นการถอด/สลับ"><b>'+flEngFixPending().length+'</b>คู่ เลขถูกแก้ชื่อ · กดเพื่อแก้</span>'):'')
+      /* §engBase · ลูกที่ชั่วโมงตั้งต้นเป็น 0 ทั้งที่มีมิเตอร์ · กดเพื่อตั้งตามมิเตอร์ */
+      +((kind==='eng' && typeof flEngBaseList==='function' && flEngBaseList().length)?('<span class="fa-chip amb" style="cursor:pointer" onclick="flEngBaseOpen()" title="ตั้งชั่วโมงตั้งต้นให้เท่ามิเตอร์ครั้งแรก"><b>'+flEngBaseList().length+'</b>ลูก ชั่วโมงตั้งต้น 0 · ตั้งตามมิเตอร์</span>'):''), add:K.add });
   var keep=document.getElementById('fl-'+kind+'-listpanel'), kt=keep?keep.scrollTop:0;
   wrap.innerHTML='<div class="fa-3">'+bl+mid+det+'</div>';
   var lp=document.getElementById('fl-'+kind+'-listpanel'); if(lp) lp.scrollTop=kt;
@@ -30812,6 +31032,8 @@ function faBoatDetail(o){
   var head='<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;flex-wrap:wrap">'+faAv(b,44)
     +'<div style="flex:1;min-width:240px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:21px;font-weight:800">'+faE(b.name)+'</b><span style="padding:2px 8px;border-radius:6px;background:'+S[1]+';color:'+S[2]+';font-size:11.5px;font-weight:600">'+S[0]+'</span><span style="font-size:12px;color:#5B6170">อยู่ที่ '+faE(String(pierTxt).replace(' · อยู่อู่',''))+'</span></div>'
     +'<div style="font-size:12.5px;color:#5B6170">'+faE([b.type,b.material].filter(Boolean).join(' · '))+(br?(' · <b style="color:'+faBrandC(br)+'">'+faE(br)+'</b> '+faE(mdl)+' × '+o.engs.length):'')+(b.reg?(' · ทะเบียน '+faE(b.reg)):'')+(b.callsign?(' · '+faE(b.callsign)):'')+'</div></div>'
+    +'<button type="button" class="fa-btn" onclick="if(typeof bhOpen===\'function\')bhOpen(\''+b.id+'\')" title="ทริป · รายได้ · ต้นทุน · ค่าซ่อมแยก ตัวเรือ/เครื่องยนต์/เกียร์/ใบจักร · เหตุการณ์ ของเรือลำนี้">&#128202; ประวัติ &amp; ค่าใช้จ่าย</button>'   /* §boatHist2 */
+    +'<button type="button" class="fa-btn" onclick="if(typeof capMgrOpen===\'function\')capMgrOpen(\''+b.id+'\')" title="ที่นั่งตามช่วงวันที่ · ที่นั่งตามทะเบียน">💺 ที่นั่ง</button>'   /* §capHist2 */
     +'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+b.id+'\')">⇄ ถอด/สลับ</button><button type="button" class="fa-btn pri" onclick="flOpenEditBoatModal(\''+b.id+'\')">Edit</button></div>';
   var A=[];
   var bad=o.docs.filter(function(x){ return x.st==='exp'||x.st==='na'||x.st==='warn30'; }).sort(function(a,z){ return (a.days==null?-9999:a.days)-(z.days==null?-9999:z.days); });
@@ -30825,7 +31047,12 @@ function faBoatDetail(o){
   var fx=o.engs.filter(function(e){ return e.status==='fixing'; }).length;
   var tiles='<div style="display:flex;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">'
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Engines</div><b style="color:'+(br?faBrandC(br):'#0F1B3D')+'">'+o.engs.length+'</b><i>'+faE((br+' '+mdl).trim()||'ยังไม่มีเครื่อง')+(fx?(' · '+fx+' fixing'):'')+'</i></div>'
-    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Capacity</div><b>'+(b.cap||'—')+'</b><i>PAX บริษัท'+(b.licensePax?(' · ใบอนุญาต '+b.licensePax+(b.crew?(' + ลูกเรือ '+b.crew):'')):'')+'</i></div>'
+    +(function(){ /* §capHist2 · ที่นั่งวันนี้ตามช่วง + ช่วงถัดไป · คลิกเปิดหน้าต่างจัดการที่นั่ง */
+        var H=Array.isArray(b.capHist)?b.capHist:[], t=TODAY_STR, now=(typeof boatCapHistPick==='function')?boatCapHistPick(H,t):null;
+        var fut=H.filter(function(h){ return h&&h.from>t; }).sort(function(a,z){ return a.from<z.from?-1:1; })[0];
+        return '<div class="fa-tile" style="flex:1;cursor:pointer" onclick="if(typeof capMgrOpen===\'function\')capMgrOpen(\''+b.id+'\')" title="จัดการที่นั่งตามช่วงวันที่"><div class="fa-kick">Capacity <span style="color:#185FA5;text-transform:none;letter-spacing:0">· จัดการ ›</span></div><b>'+(now?(+now.cap):(b.cap||'—'))+'</b><i>PAX บริษัท'
+          +(now?(' · ตามช่วง'):'')+(fut?(' · ถัดไป '+(+fut.cap)+' ตั้งแต่ '+faFmtD(fut.from,1)):'')
+          +(b.licensePax?(' · ใบอนุญาต '+b.licensePax+(b.crew?(' + ลูกเรือ '+b.crew):'')):'')+'</i></div>'; })()
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">GT · LOA</div><b>'+(b.gt||'—')+'</b><i>ตันกรอส'+(b.loa?(' · ยาว '+b.loa+' m'):'')+'</i></div>'
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Documents</div><b style="color:'+(o.dExp||o.dW30?'#A32D2D':'#0F1B3D')+'">'+o.docs.length+'</b><i>หมด '+o.dExp+' · ≤30 วัน '+o.dW30+' · ≤90 วัน '+o.dW90+'</i></div></div>';
   var engs=o.engs.slice().sort(function(a,z){ return flPosRank(a.pos)-flPosRank(z.pos); });

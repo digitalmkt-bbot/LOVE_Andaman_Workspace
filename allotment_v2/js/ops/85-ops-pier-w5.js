@@ -99,8 +99,23 @@
       }
       res.push(B);
     });
-    return res;
+    return rescueAfterSource(date, res);
   });
+  /* §pjSwapOrd (lk-inbox 4c27ad27, sync 11-10) · a rescue boat's card sits right after the boat it went out for, on screen and
+     on the printed sheet, as legacy's pjAllBoats puts it. The pair is the Boat Operation record (TRIPS[d][rescue].rescueFor,
+     which ops/20 fills from the server's rescue_for); the server's order stands for every other boat. */
+  function rescueAfterSource(date, list){
+    try{
+      var day = (typeof TRIPS !== 'undefined' && TRIPS[date]) || {};
+      list.filter(function(B){ var o = day[B.bid]; return o && o.type === 'rescue' && o.rescueFor; }).forEach(function(R){
+        var src = day[R.bid].rescueFor, i = list.indexOf(R); if(i < 0) return;
+        list.splice(i, 1);
+        var j = -1; list.forEach(function(x, k){ if(x.bid === src) j = k; });
+        list.splice(j >= 0 ? j + 1 : i, 0, R);
+      });
+    }catch(_){}
+    return list;
+  }
 
   /* ── pjGdLead: who leads the guide order ────────────────────────────── */
   var lead = {}, leadLoading = {};

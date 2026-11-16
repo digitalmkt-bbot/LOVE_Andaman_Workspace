@@ -457,7 +457,7 @@
       discount_amt: num(d.discount_amt != null ? d.discount_amt : d.discountAmt),
       lines: lines
     };
-    if(!isPatch) body.no = text(d.no);
+    if(!isPatch && text(d.no)) body.no = text(d.no);   // §docNo (sync 11-16): a create without a number gets the server's next free MO
     return body;
   }
 
@@ -581,15 +581,28 @@
         if(qty > 0 && it.id) lines.push({ line_id: it.id, qty: qty });
       });
       var body = { warehouse: wh, date: date, note: nullable(note), lines: lines };
+      /* §memoUseNow (sync 11-13, lk-inbox d6e5ce9c) · a memo raised from a repair job: "เบิกใช้กับงาน MJ-xxx ทันที" (ticked by
+         default) asks the server to withdraw each received line to that job in the same call (issue_to_job). It answers
+         issued {job_no, lines, failed}; the toast is legacy's. */
+      var useEl = d('recv-use-job');
+      if(mo.maintId && useEl && useEl.checked) body.issue_to_job = true;
       return O.queue(function(){
         return O.post('/v1/fleet/memos/' + enc(memoId) + '/receive', body);
       }).then(function(res){
         upsertMemo(res);
+        var iss = res && res.issued;
         return refetchStockAndMemos().then(function(){
+          if(iss && O.fleetJobs && typeof O.fleetJobs.load === 'function') return O.fleetJobs.load();
+        }).then(function(){
           if(typeof _receiveMemoId !== 'undefined') _receiveMemoId = null;
           if(typeof window.closeModal === 'function') window.closeModal('fl-modal-receive');
           O.wrote('fleet-memo-receive');
+          if(iss) O.wrote('fleet-job-part-add');
           redrawStock();
+          if(iss && typeof window.flShowToast === 'function'){
+            window.flShowToast('รับของ ' + (mo.no || '') + ' · @ ' + (d('receive-location') ? d('receive-location').value : wh) + ' · เบิกลงงาน ' + (iss.job_no || '') + ' แล้ว ' + (iss.lines || 0) + ' รายการ'
+              + (iss.failed ? ' (ไม่สำเร็จ ' + iss.failed + ' · เบิกเองที่หน้างาน)' : ''));
+          }
           return res;
         });
       }).catch(function(e){ O.fail('Could not receive memo items', e); return null; });
@@ -958,10 +971,8 @@
       d.boatId = scope === 'general' ? null : ((job && job.boatId) || (proj && proj.boatId) || null);
       d.maintId = maintId;
       d.projectId = projectId || null;
-      // the next number, as legacy (highest MO-n + 1); the server refuses a number already used
-      var top = 0;
-      memos.forEach(function(m){ var n = parseInt(String(m && m.no || '').replace(/^MO-/, ''), 10) || 0; if(n > top) top = n; });
-      d.no = 'MO-' + String(top + 1).padStart(3, '0');
+      /* §docNo (sync 11-16, lk-inbox b0e0c5d5): no number sent, operation-backend issues the next free MO under a lock, so two
+         people creating at once never get the same one (MO-377 went out twice, 1.4 s apart). The saved memo carries it. */
     }
     var body = toMemoBody(d, !!ex);
     return O.queue(function(){
