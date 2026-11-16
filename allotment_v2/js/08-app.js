@@ -15102,6 +15102,9 @@ function boatCapInfo(boatId, date){
 }
 // ที่นั่งที่ใช้ได้จริงของเรือลำนั้นในวันนั้น · ทุกที่ที่เคยอ่าน boat.cap ตรงๆ ควรเรียกตัวนี้แทน
 function boatCapFor(boatId, date){ return boatCapInfo(boatId, date).cap; }
+/* §capOn (2026-11-16) · owner "ในใบงานเรือ อะไรพวกนี้ล่ะ" · ตัวช่วยสั้นสำหรับจุดที่มีวันที่แต่เคยอ่าน boat.cap ตรง ๆ
+   (By trip · ใบงานเรือ · Daily Report · จัดเรืออัตโนมัติ) · ไม่มีวันที่ / หาเรือไม่เจอ = ค่าตั้งต้นเหมือนเดิม */
+function laCapOn(boat, date){ if(!boat) return 0; var c=(date && boat.id && typeof boatCapFor==='function')?(+boatCapFor(boat.id, date)||0):0; return c>0?c:(+boat.cap||+boat.capacity||0); }
 // ป้ายเล็กๆ ไว้แปะข้างตัวเลข cap
 function boatCapBadge(boatId, date, size){
   const i=boatCapInfo(boatId,date);
@@ -29952,7 +29955,7 @@ function drData(date){
       var B=(typeof getBoat==='function'?getBoat(r.boat):null)||{};
       if(!D.boats[r.boat]){ D.boats[r.boat]={id:r.boat,name:B.name||r.boat,type:B.type||'',
         homePier:B.pier||'', pier:'', piers:{},
-        cap:(+B.cap||+B.capacity||0),pax:0,n:0,routes:{},dep:''}; D.bOrder.push(r.boat); }
+        cap:laCapOn(B,date),pax:0,n:0,routes:{},dep:''}; D.bOrder.push(r.boat); }
       var bo=D.boats[r.boat]; bo.pax+=px.tot; bo.n++; bo.routes[rid]=(bo.routes[rid]||0)+px.tot;
       // §drBoatPier · ท่าที่ต้องไปขึ้นเรือ = ท่าของเส้นทางที่เรือลำนี้รับวันนั้น
       //   ไม่ใช่ท่าประจำของเรือ · เรือย้ายท่าไปวิ่งโปรแกรมอีกฝั่งได้
@@ -33330,8 +33333,8 @@ function baAutoAssign(date, routeId){
     const _pu=(typeof bkUpgPromise==='function')?bkUpgPromise(b,date):null;   /* §upgPromise · ใบที่สัญญาไว้ลงลำที่สัญญาเสมอ */
     if(_pu && _pu.boatId && boats.some(x=>x.boatId===_pu.boatId)){ bkOpsFor(b, date).boatId=_pu.boatId; load[_pu.boatId]=(load[_pu.boatId]||0)+pax; return; }
     // pick first boat with room (<=cap), else the least-loaded boat that still stays within cap+TOL · else leave unassigned
-    let pick=boats.find(x=>load[x.boatId]+pax<=(x.boat.cap||0))
-          || boats.slice().sort((a,c)=>load[a.boatId]-load[c.boatId]).find(x=>load[x.boatId]+pax<=(x.boat.cap||0)+TOL);
+    let pick=boats.find(x=>load[x.boatId]+pax<=laCapOn(x.boat,date))
+          || boats.slice().sort((a,c)=>load[a.boatId]-load[c.boatId]).find(x=>load[x.boatId]+pax<=laCapOn(x.boat,date)+TOL);
     if(pick){ bkOpsFor(b, date).boatId=pick.boatId; load[pick.boatId]+=pax; }
   });
   acctPersistBookings(); if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
@@ -34077,11 +34080,11 @@ function renderBoatAssign(){
     const boats=baBoatsForRoute(date,rid);
     const rows=baSeatBookingsForRoute(date,rid);
     const totPax=rows.reduce((s,x)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(x.t.pax||{}):0),0);
-    const totCap=boats.reduce((s,x)=>s+(x.boat.cap||0),0);
+    const totCap=boats.reduce((s,x)=>s+laCapOn(x.boat,date),0);
     const nUnassigned=rows.filter(x=>!(bkOpsRead(x.b,date).boatId)).length;   // per-day boat
     totBk+=rows.length; totAssigned+=rows.length-nUnassigned;
     // boat capacity cards
-    const boatCards=boats.length?boats.map(x=>{ const ld=baAssignedPax(date,x.boatId); const pct=x.boat.cap?Math.min(100,Math.round(ld/x.boat.cap*100)):0; return `<div style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:9px;padding:8px 11px;min-width:150px"><div style="font-size:12px;font-weight:700;color:#1B2A55">${esc(x.boat.name||x.boatId)}</div><div style="font-size:10px;color:#8a8a82;font-family:'DM Mono',monospace">${ld}/${x.boat.cap||0} pax</div><div style="height:5px;background:#eee;border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pct}%;background:${ld>(x.boat.cap||0)?'#A32D2D':'#0F6E56'}"></div></div></div>`; }).join(''):`<div style="font-size:11px;color:#A32D2D">⚠ ยังไม่ assign เรือใน Boat Operation</div>`;
+    const boatCards=boats.length?boats.map(x=>{ const ld=baAssignedPax(date,x.boatId); const _cp=laCapOn(x.boat,date); const pct=_cp?Math.min(100,Math.round(ld/_cp*100)):0; return `<div style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:9px;padding:8px 11px;min-width:150px"><div style="font-size:12px;font-weight:700;color:#1B2A55">${esc(x.boat.name||x.boatId)}</div><div style="font-size:10px;color:#8a8a82;font-family:'DM Mono',monospace">${ld}/${_cp} pax</div><div style="height:5px;background:#eee;border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pct}%;background:${ld>_cp?'#A32D2D':'#0F6E56'}"></div></div></div>`; }).join(''):`<div style="font-size:11px;color:#A32D2D">⚠ ยังไม่ assign เรือใน Boat Operation</div>`;
     const tdc='padding:6px 10px;font-size:12px;border-bottom:0.5px solid rgba(0,0,0,.05);vertical-align:middle';
     const bkRows=rows.sort((a,c)=>String(a.b.voucherRef||a.b.id).localeCompare(String(c.b.voucherRef||c.b.id))).map(({b,t})=>{
       const a=sbGetAgent(b.agentId); const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
@@ -60096,7 +60099,7 @@ function bkV2RenderTab2(){
         });
         _famPax+=vPax; _famBoatN+=_bOrder.length;
         const dep2=route2?.times?.[0]||'';
-        const rows=_bOrder.map(bid=>{ const o=ag[bid]; const cap=(o.boat&&o.boat.cap)||0; const over=(cap-o.tot)<0; const bnm=(o.boat&&o.boat.name)||bid;
+        const rows=_bOrder.map(bid=>{ const o=ag[bid]; const cap=laCapOn(o.boat,date); const over=(cap-o.tot)<0; const bnm=(o.boat&&o.boat.name)||bid;
           const langCh=Object.keys(o.lang).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
           const foodCh=[]; if(o.veg||o.vegan)foodCh.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.veg+o.vegan} veg</span>`); if(o.halal)foodCh.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg)foodCh.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`);
           const addCh=[]; if(o.ltJoin)addCh.push(`<span class="t2-dchip" style="background:#E6F1FB;color:#1565A8">Longtail Join ${o.ltJoin} คน</span>`); if(o.ltChtr)addCh.push(`<span class="t2-dchip" style="background:#EFEAFB;color:#5B289A">Longtail เหมา ${o.ltChtr} ลำ</span>`); if(o.pt)addCh.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">Transfer ${o.pt} คน</span>`);
@@ -60175,7 +60178,7 @@ function bkV2RenderTab2(){
       const ag=(bk.agentId?(((typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).find(a=>a.id===bk.agentId)||{}).name||''):'')||bk.agentName||bk.channel||'';
       const lead=bk.leadPax||''; const ltime=(r.t&&r.t.pickupTime)||bk.pickupTime||'';
       const push=(bid,px,nOf)=>{ const bo=bid?((BOATS||[]).find(b=>b.id===bid)||{}):{};
-        _chtrItems.push({bn:bo.name||(bid||''), cap:+bo.cap||0, px:px, ag, lead, ltime, bid, nOf:nOf||''}); };
+        _chtrItems.push({bn:bo.name||(bid||''), cap:laCapOn(bo,date), px:px, ag, lead, ltime, bid, nOf:nOf||''}); };
       const sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null;
       if(sp) sp.forEach((x,i)=>push(x.boatId||'', bkPaxSum(bkSplitPax(x)), (i+1)+'/'+sp.length));
       else push(r.charterBoatId||bkOpsRead(bk,date).boatId||'', (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(r.pax||{}):0, '');
@@ -60191,7 +60194,7 @@ function bkV2RenderTab2(){
       const ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(r.bk,date):[];
       (ids.length?ids:[r.charterBoatId]).forEach(id=>{ if(id) _chtrBoatSet.add(id); });
     });
-    const _seatCap=_openBoats.filter(x=>!_chtrBoatSet.has(x.boatId)).reduce((s,x)=>s+((x.boat&&(x.boat.cap||x.boat.licensePax))||0),0);
+    const _seatCap=_openBoats.filter(x=>!_chtrBoatSet.has(x.boatId)).reduce((s,x)=>s+((x.boat&&(laCapOn(x.boat,date)||x.boat.licensePax))||0),0);
     const _lockedSeats=(_al&&_al.lockedSeats)||0;
     const _seatLeft=_openBoats.length?Math.max(0, _seatCap - _seatPax - _lockedSeats):null;
     const _bdStr=(a,c,i,f)=>`(${a}+${c}+${i}+${f}FOC)`;
@@ -60821,7 +60824,7 @@ function bkV2RenderTab2(){
         const bpax=mem.reduce((s,a)=>s+a.head,0);
         if(!bid){ return `<tr><td colspan="${COLN}" style="background:#FFF7E6;box-shadow:inset 4px 0 0 #E6A23C;padding:6px 12px"><span style="font-weight:700;font-size:12px;color:#9A6B00">&#9888; ยังไม่จัดเรือ</span> <span style="font-size:11px;color:#9A6B00">${mem.length} ราย · ${bpax} pax — เลือกเรือในคอลัมน์ Boat</span></td></tr>`; }
         const c=bkV2BoatAvatarColor(bid);
-        const bo=(typeof BOATS!=='undefined'?BOATS.find(b=>b.id===bid):null)||{}; const bn=bo.name||bid; const cap=+bo.cap||0;
+        const bo=(typeof BOATS!=='undefined'?BOATS.find(b=>b.id===bid):null)||{}; const bn=bo.name||bid; const cap=laCapOn(bo,date);
         // cap check uses the boat's TRUE day-total (across all pickup zones), not just this zone's rows
         const dayPax=(typeof baAssignedPax==='function')?baAssignedPax(date,bid):bpax;
         const over=cap&&dayPax>cap; const xZone=dayPax!==bpax;
@@ -61281,7 +61284,7 @@ function bkV2RenderTab2(){
         const kpis=(o)=>`<div style="display:flex;border-top:1px solid #f0eee7;padding-top:4px">${kc(o.ad,'AD').replace('border-left:1px solid #efeee8','border-left:none')}${kc(o.chd,'CHD')}${kc(o.inf,'INF')}${kc(o.foc,'FOC',true)}</div>`;
         // Option B card · compact · fixed equal width · 2 rows (header + KPI row)
         const CARD='background:#fff;border:1px solid #e6e4dd;border-radius:9px;padding:7px 9px;display:flex;flex-direction:column;gap:5px;width:200px;box-sizing:border-box';
-        const chips=baBoats.map((x,ix)=>{ const g=agg[x.boatId]; const cap=x.boat.cap||0; const rem=cap-g.tot; const over=rem<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
+        const chips=baBoats.map((x,ix)=>{ const g=agg[x.boatId]; const cap=laCapOn(x.boat,date); const rem=cap-g.tot; const over=rem<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
           return `<div style="${CARD}${over?';border-color:#E6C9C3':''}">
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:26px;height:26px;border-radius:50%;background:${col[0]};color:${col[1]};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex:none;font-family:'DM Mono',monospace">${initials(x.boat.name||x.boatId)}</div>
@@ -61309,7 +61312,7 @@ function bkV2RenderTab2(){
         //   expand  = grid of per-boat guide + special-meal chips  ·  footer = trip-level prep summary
         const _stack = baBoats.slice(0,3).map((x,ix)=>{ const col=boatColor[x.boatId]||['#E6F1FB','#185FA5']; return `<span class="t2-bstk" style="background:${col[1]};${ix?'margin-left:-7px':''}">${initials(x.boat.name||x.boatId)}</span>`; }).join('');
         if(baBoats.length) headBoats = `<span class="t2-boatcount"><span style="display:inline-flex">${_stack}</span>${baBoats.length} เรือ</span>`;
-        const _miniChips = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=x.boat.cap||0; const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
+        const _miniChips = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=laCapOn(x.boat,date); const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
           return `<span class="t2-mchip${over?' t2-mchip-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]}">${initials(x.boat.name||x.boatId)}</span>${esc(x.boat.name||x.boatId)} <b${over?' style="color:#A32D2D"':''}>${g.tot}/${cap}</b></span>`; }).join('');
         const _miniUn = uTot>0 ? `<span class="t2-mchip t2-mchip-un"><span class="t2-mav" style="background:#9A5B00">&#9888;</span>ยังไม่ assign <b>${uTot}</b></span>` : '';
         const _langOf=(o)=>Object.keys(o.lang||{}).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
@@ -61335,7 +61338,7 @@ function bkV2RenderTab2(){
         const _selPax=_selRows.reduce((s,r)=>s+(P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc')),0);
         const _bboats=(typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[];
         let _bopts='<option value="">— เลือกเรือที่จะลง —</option>';
-        _bboats.forEach(x=>{ const cap=x.boat.cap||0; const load=(typeof baAssignedPax==='function')?baAssignedPax(date,x.boatId):0; const room=cap-load; _bopts+=`<option value="${x.boatId}">${(x.boat.name||x.boatId).replace(/</g,'')} · ${load}/${cap}${room>0?(' · ว่าง '+room):(room<0?(' · เกิน '+(-room)):' · เต็ม')}</option>`; });
+        _bboats.forEach(x=>{ const cap=laCapOn(x.boat,date); const load=(typeof baAssignedPax==='function')?baAssignedPax(date,x.boatId):0; const room=cap-load; _bopts+=`<option value="${x.boatId}">${(x.boat.name||x.boatId).replace(/</g,'')} · ${load}/${cap}${room>0?(' · ว่าง '+room):(room<0?(' · เกิน '+(-room)):' · เต็ม')}</option>`; });
         boatSelStrip=`<div class="bkv2-boatselbar" style="display:flex;align-items:center;gap:10px;padding:8px 16px 8px 21px;background:#EAF3FB;border-top:1px solid #CFE0F2;overflow-x:auto;flex-wrap:nowrap">
           <span style="display:inline-flex;align-items:baseline;gap:8px;flex:none"><span class="bkv2-selcount" style="background:#185FA5;color:#fff;font-family:'DM Mono',monospace;font-size:22px;font-weight:700;line-height:1;border-radius:10px;padding:6px 14px;box-shadow:0 2px 6px rgba(24,95,165,.3)">${_selPax}</span><span style="color:#0C447C;font-size:13px;font-weight:700">pax</span><span style="color:#5a7290;font-size:11px;font-family:'DM Mono',monospace">· ${_selRows.length} ราย</span></span>
           <span style="color:#0C447C;font-size:12px;font-weight:700;flex:none">&#128676; จัดลงเรือ:</span>
@@ -84917,7 +84920,7 @@ function pjPrint(){
       var rt=B.route||{}, dep=String(B.dep||'');
       var P=null; try{ P=pjPrep(_poDate,B.bid,_poPier); }catch(_){}
       P=P||{lang:{},halal:0,veg:0,vegan:0,allerg:0,lt:0};
-      var pax=(PX[i]&&PX[i].all)||0, cap=(+(B.boat.cap)||0);
+      var pax=(PX[i]&&PX[i].all)||0, cap=laCapOn(B.boat,_poDate);   /* §capOn */
       var _SWI=pjSwInfo(_poDate,B.bid);   /* §pjSwapPr · เรือกู้ = เวลาออกไปรับ · ยอดขากลับ ไม่มีความจุขาย */
       if(_SWI && _SWI.rsc){ pax=+((_SWI.ev||{}).pax)||0; cap=0; dep=String((_SWI.ev||{}).t0||(_SWI.ev||{}).t1||dep); }
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
