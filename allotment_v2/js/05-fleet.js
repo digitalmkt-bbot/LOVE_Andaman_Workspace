@@ -5093,9 +5093,9 @@ function flLoad(){
     let _moMax = FL_MEMOS.reduce(function(mx,x){
       var v = parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; }, 0);
     // §noFree · ยืนยันว่าเลขที่จะออกยังว่างจริง ไม่ใช่แค่มากกว่าเลขสูงสุด
-    let no;
-    do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
-    while(FL_MEMOS.some(function(x){ return x.no===no; }));
+    let no = (typeof laDocNo==='function') ? laDocNo('MO') : null;   /* §docNo · เลขจากเซิร์ฟเวอร์ */
+    if(!no){ do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
+    while(FL_MEMOS.some(function(x){ return x.no===no; })); }
     const memo = {
       id: LA_UID('m') + '_' + jobNo,
       no,
@@ -7094,6 +7094,15 @@ function invSyncLegacy(item){
   item.location = item.primaryLocation;
 }
 
+/* §invWh · แยกจำนวนตามคลัง (ชื่อคลังสะกดหลายแบบ → จับด้วยคำ tub / panwa) · คลังอื่นคืนเป็นรายการ */
+function invWhSplit(item){
+  const r={tub:0,panwa:0,other:[]}; if(!item) return r;
+  const ss=(item.stocks&&item.stocks.length)?item.stocks:(item.location?[{location:item.location,qty:item.qty||0}]:[]);
+  ss.forEach(x=>{ const q=+x.qty||0, k=String(x.location||'').toLowerCase().replace(/\s+/g,'');
+    if(/tub/.test(k)) r.tub+=q; else if(/panwa|visit/.test(k)) r.panwa+=q;
+    else if(q) r.other.push({loc:String(x.location||'?').replace(/^คลัง\s*/,''),qty:q}); });
+  return r;
+}
 // Get qty at a specific location
 function invQtyAt(item, location){
   if(!item || !item.stocks) return 0;
@@ -14473,7 +14482,7 @@ function flSaveMemo(){
   const _moMaxNo = FL_MEMOS.length
     ? Math.max(0, ...FL_MEMOS.map(m => parseInt(String(m.no||'').replace(/^MO-/,'')) || 0))
     : 0;
-  const no='MO-'+String(_moMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MO'):('MO-'+String(_moMaxNo+1).padStart(3,'0'));   /* §docNo */
   const memo={
     id:LA_UID('m'),no,title:subject,
     to:document.getElementById('memo-to').value,
@@ -20306,22 +20315,108 @@ function flRenderInsights(){
 }
 
 // Progress-timeline inner HTML (shared by full render + surgical refresh on withdraw/remove)
+/* §mjTl (2026-11-14) · owner "ปรับ Progress line ของ Maintenance หน่อย"
+   จัดกลุ่มตามวัน (ใหม่สุดก่อน) · บรรทัด "📦 เบิก …" ที่ติดกันในวันเดียวกัน คนเดียวกัน → การ์ดเดียว พับ/กางได้
+   การ์ดบอกจำนวนรายการ · คลัง · ยอดรวม · กี่รายการที่ราคา ฿0 · โน้ตที่คนพิมพ์เองตัวใหญ่กว่าบรรทัดระบบ */
+var _mjTlOpen={};
+function mjTlToggle(k,el){ _mjTlOpen[k]=!_mjTlOpen[k]; var c=el&&el.closest('.mjtl-wd'); if(c) c.classList.toggle('open',!!_mjTlOpen[k]); }
+function mjTlCss(){
+  if(document.getElementById('mjtl-css')) return;
+  var st=document.createElement('style'); st.id='mjtl-css';
+  st.textContent=[
+    '.mjtl{display:flex;flex-direction:column;gap:14px}',
+    '.mjtl-empty{font-size:11px;color:#999;text-align:center;padding:14px}',
+    '.mjtl-dh{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:#3A3F4B;margin-bottom:8px}',
+    '.mjtl-dh i{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:#EEF0F4;color:#5B6478}',
+    '.mjtl-dh i.we{background:#FDECEA;color:#B4231A}',
+    '.mjtl-dh small{font-weight:500;color:#9AA1AE;font-size:10px}',
+    '.mjtl-dh:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.07)}',
+    '.mjtl-list{position:relative;padding-left:18px;display:flex;flex-direction:column;gap:8px}',
+    '.mjtl-list:before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:rgba(0,0,0,.08);border-radius:2px}',
+    '.mjtl-it{position:relative}',
+    '.mjtl-it>.d{position:absolute;left:-18px;top:4px;width:9px;height:9px;border-radius:50%;background:#1D9E75;box-shadow:0 0 0 3px #FBFAF7}',
+    '.mjtl-it.sys>.d{background:#C3C8D2;width:7px;height:7px;left:-17px;top:5px}',
+    '.mjtl-it.new>.d{background:#E03B7E}',
+    '.mjtl-it.wd>.d{background:#B8860B}',
+    '.mjtl-tx{font-size:12px;font-weight:500;line-height:1.45;color:#1F2430;word-break:break-word}',
+    '.mjtl-it.sys .mjtl-tx{font-size:11px;font-weight:400;color:#5B6478}',
+    '.mjtl-by{font-size:9.5px;color:#9AA1AE;margin-top:2px;font-family:"DM Mono",monospace}',
+    '.mjtl-by b{font-family:inherit;font-weight:600;color:#6B7385}',
+    '.mjtl-wd{background:#fff;border:1px solid #ECE6D6;border-radius:10px;overflow:hidden}',
+    '.mjtl-wh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none;flex-wrap:wrap}',
+    '.mjtl-wh:hover{background:#FDFBF5}',
+    '.mjtl-wh .t{font-size:12px;font-weight:700;color:#1F2430}',
+    '.mjtl-wh .loc{font-size:10px;font-weight:600;color:#6B7385;background:#F2F3F6;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .zz{font-size:10px;font-weight:600;color:#8A5300;background:#FBEBD3;border-radius:6px;padding:1px 7px}',
+    '.mjtl-wh .sum{margin-left:auto;font-size:12.5px;font-weight:800;color:#1F2430;font-variant-numeric:tabular-nums}',
+    '.mjtl-wh .cv{font-size:10px;color:#9AA1AE;transition:transform .15s}',
+    '.mjtl-wd.open .mjtl-wh .cv{transform:rotate(90deg)}',
+    '.mjtl-wb{display:none;border-top:1px solid #F1ECDF;padding:4px 0}',
+    '.mjtl-wd.open .mjtl-wb{display:block}',
+    '.mjtl-r{display:grid;grid-template-columns:20px 1fr auto 74px;gap:8px;align-items:baseline;padding:4px 10px;font-size:11px;color:#2A2F3A}',
+    '.mjtl-r:nth-child(even){background:#FBFAF7}',
+    '.mjtl-r .n{font-size:9.5px;color:#B0B6C2;text-align:right;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .q{color:#6B7385;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}',
+    '.mjtl-r .a.z{color:#C08A2E;font-weight:500;font-size:10px}',
+    '.mjtl-r .lt{font-size:9.5px;color:#B4231A}',
+    '.mjtl-wf{padding:5px 10px 3px;font-size:9.5px;color:#9AA1AE;font-family:"DM Mono",monospace}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
 function _flMaintTimelineInner(m){
-  const dim={ink3:'#999'};
-  const SVG_PINK={accent:'#E03B7E'};
+  mjTlCss();
   const log=m.progressLog||[];
-  return log.length?[...log].reverse().map((l,i,arr)=>{
-    const isLast=i===arr.length-1;
-    const isFirst=i===0;
-    return`<div style="display:flex;gap:10px;${isLast?'':'margin-bottom:10px'};position:relative">
-      ${!isLast?`<div style="position:absolute;left:3.5px;top:11px;bottom:-10px;width:1px;background:rgba(0,0,0,.08)"></div>`:''}
-      <div style="width:8px;height:8px;border-radius:50%;background:${isFirst?SVG_PINK.accent:'#1D9E75'};flex-shrink:0;margin-top:3px;z-index:1"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:500">${l.text||''}</div>
-        <div style="font-size:9px;color:${dim.ink3};margin-top:1px;font-family:'DM Mono',monospace">${l.date||''}${l.by?' · '+l.by:''}</div>
-      </div>
-    </div>`;
-  }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:14px">No progress logged</div>`;
+  if(!log.length) return '<div class="mjtl-empty">No progress logged</div>';
+  const E=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const N=v=>(+v||0).toLocaleString();
+  const RX=/^📦 เบิก (.+?) (\d+(?:\.\d+)?) (\S+)(?: · (.+?))? \(฿([\d,.]+)\)(.*)$/;
+  const isSys=by=>/^(ระบบ|system|equip)?$/i.test(String(by||'').trim());
+  /* ใหม่สุดก่อน · บรรทัดเบิกติดกัน (วัน + คนเดียวกัน) รวมเป็นการ์ดเดียว */
+  const items=[];
+  log.map((l,i)=>({l,i})).reverse().forEach(({l,i})=>{
+    const t=String(l.text||''), mm=t.match(RX), d=l.date||'', by=l.by||'';
+    if(mm){
+      const row={name:mm[1],qty:+mm[2],unit:mm[3],loc:String(mm[4]||'').replace(/^คลัง\s*/,''),amt:+String(mm[5]).replace(/,/g,'')||0,tag:String(mm[6]||'').replace(/^\s*·\s*/,'')};
+      const p=items[items.length-1];
+      if(p&&p.kind==='wd'&&p.date===d&&p.by===by){ p.rows.push(row); p.k=m.id+'|'+i; return; }
+      items.push({kind:'wd',date:d,by,rows:[row],k:m.id+'|'+i,raw:t,createdAt:l.createdAt});
+    } else items.push({kind:'note',date:d,by,text:t,createdAt:l.createdAt});
+  });
+  const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'], TW=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const dHead=ds=>{ const x=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||''); if(!x) return '<span>ไม่ระบุวันที่</span>';
+    const w=new Date(+x[1],+x[2]-1,+x[3]).getDay();
+    return '<i class="'+((w===0||w===6)?'we':'')+'">'+TW[w]+'</i><span>'+(+x[3])+' '+TM[+x[2]-1]+' '+x[1]+'</span>'; };
+  const byLine=(it)=>{ const who=isSys(it.by)?'ระบบ':'<b>'+E(it.by)+'</b>';
+    const bd=(it.createdAt&&it.createdAt!==it.date)?' · บันทึกย้อนหลังเมื่อ '+E(it.createdAt):''; return '<div class="mjtl-by">'+who+bd+'</div>'; };
+  const days=[], DI={};
+  items.forEach(it=>{ if(DI[it.date]==null){ DI[it.date]=days.length; days.push({date:it.date,its:[]}); } days[DI[it.date]].its.push(it); });
+  let first=true;
+  return '<div class="mjtl">'+days.map(D=>{
+    const nW=D.its.reduce((s,it)=>s+(it.kind==='wd'?it.rows.length:0),0), nN=D.its.filter(it=>it.kind==='note').length;
+    const cnt=[nN?nN+' บันทึก':'', nW?'เบิก '+nW+' รายการ':''].filter(Boolean).join(' · ');
+    return '<div class="mjtl-day"><div class="mjtl-dh">'+dHead(D.date)+'<small>'+cnt+'</small></div><div class="mjtl-list">'+D.its.map(it=>{
+      const nw=first; first=false;
+      if(it.kind==='note' || it.rows.length<2){
+        const txt=it.kind==='note'?it.text:it.raw;
+        const sys=isSys(it.by)&&!(it.kind==='wd');
+        return '<div class="mjtl-it'+(sys?' sys':'')+(it.kind==='wd'?' wd':'')+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-tx">'+txt+'</div>'+byLine(it)+'</div>';
+      }
+      const rows=it.rows.slice().reverse();
+      const tot=rows.reduce((s,r)=>s+r.amt,0), nz=rows.filter(r=>!r.amt).length;
+      const locs=[...new Set(rows.map(r=>r.loc).filter(Boolean))];
+      const open=!!_mjTlOpen[it.k];
+      return '<div class="mjtl-it wd'+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-wd'+(open?' open':'')+'">'
+        +'<div class="mjtl-wh" onclick="mjTlToggle(\''+E(it.k)+'\',this)" title="กดเพื่อดู/ซ่อนรายการ"><span class="cv">▶</span><span class="t">📦 เบิกอะไหล่ '+rows.length+' รายการ</span>'
+        +locs.map(l=>'<span class="loc">'+E(l)+'</span>').join('')
+        +(nz?'<span class="zz" title="ราคาต่อชิ้นในคลังเป็น ฿0 ตอนเบิก · ถ้าของมากับ Memo ต้นทุนถูกคิดรวมที่ Memo แล้ว">ไม่มีราคาต่อชิ้น '+nz+'</span>':'')
+        +'<span class="sum">฿'+N(tot)+'</span></div>'
+        +'<div class="mjtl-wb">'+rows.map((r,j)=>'<div class="mjtl-r"><span class="n">'+(j+1)+'</span><span>'+E(r.name)
+            +(locs.length>1&&r.loc?' <span style="color:#9AA1AE">· '+E(r.loc)+'</span>':'')+(r.tag?' <span class="lt">'+E(r.tag)+'</span>':'')+'</span>'
+            +'<span class="q">'+N(r.qty)+' '+E(r.unit)+'</span><span class="a'+(r.amt?'':' z')+'">'+(r.amt?'฿'+N(r.amt):'฿0')+'</span></div>').join('')
+        +'</div></div>'+byLine(it)+'</div>';
+    }).join('')+'</div></div>';
+  }).join('')+'</div>';
 }
 // Parts-withdrawn list + subtotal inner HTML (shared by full render + surgical refresh)
 // §mjLateParts · job ที่เปิดโหมดแก้อะไหล่ย้อนหลังอยู่ (ทีละงาน · ปิดเองเมื่อสลับงาน)
@@ -20864,7 +20959,7 @@ function flEngSplitIntoJobs(jobId){
       return;
     }
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -20917,7 +21012,7 @@ function flSplitExistingJob(jobId){
   engAssets.slice(1).forEach((a,idx)=>{
     const suffix=suffixOf(a);
     _no++;
-    const jobNo='MJ-'+String(_no).padStart(3,'0');
+    const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_no).padStart(3,'0'));   /* §docNo */
     const nj={
       id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
@@ -22144,7 +22239,7 @@ function flSaveCreateJob(){
 
         inc.damagedAssets.forEach((a,idx)=>{
           _mjBaseNo++;
-          const jobNo='MJ-'+String(_mjBaseNo).padStart(3,'0');
+          const jobNo=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjBaseNo).padStart(3,'0'));   /* §docNo */
           const subtitle=`${typeLabel[a.type]||'Asset'} ${labelFor(a)}`;
           const aid=a.type==='engine'?'engId':a.type==='gearbox'?'gbId':a.type==='propeller'?'propId':null;
           const jobAsset={type:a.type,label:a.label||labelFor(a),detail:a.note||a.detail||'',status:'fixing'};
@@ -22181,7 +22276,7 @@ function flSaveCreateJob(){
   const _mjMaxNo = FL_MAINT.length
     ? Math.max(0, ...FL_MAINT.map(m => parseInt(String(m.no||'').replace(/^MJ-/,'')) || 0))
     : 0;
-  const no='MJ-'+String(_mjMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('MJ'):('MJ-'+String(_mjMaxNo+1).padStart(3,'0'));   /* §docNo */
   // Copy damaged assets from incident if linked (single unit case)
   let initialAssets=[];
   if(incId){
@@ -23534,7 +23629,7 @@ function flSaveIncident(){
   const _incMaxNo = FL_INCIDENTS.length
     ? Math.max(0, ...FL_INCIDENTS.map(i => parseInt(String(i.no||'').replace(/^INC-/,'')) || 0))
     : 0;
-  const no='INC-'+String(_incMaxNo+1).padStart(3,'0');
+  const no=(typeof laDocNo==='function')?laDocNo('INC'):('INC-'+String(_incMaxNo+1).padStart(3,'0'));   /* §docNo */
 
   // Build remark — prepend Root cause if specified
   const remarkParts = [];
@@ -23790,14 +23885,21 @@ function flRenderInventory(){
         return item.location || '—';
       })();
       const _txt=isSel?SVG_PINK.text:dim.ink, _sub=isSel?SVG_PINK.text:dim.ink2, _bb='border-bottom:0.5px solid rgba(0,0,0,.04)';
-      return '<tr onclick="invSelItem(\''+item.id+'\')" style="cursor:pointer;'+(isSel?'background:'+SVG_PINK.soft+';':'')+'">'+cbCell+'<td style="padding:5px 12px;'+(isSel?'border-left:3px solid '+SVG_PINK.accent:'')+';'+_bb+';font-size:11px;font-family:\'DM Mono\',monospace;color:'+_sub+'">'+(item.partNo||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:12px;color:'+_txt+'">'+(item.name||'—')+'</td><td style="padding:5px 12px;'+_bb+'"><span style="background:'+CAT_COLOR[cat]+'22;color:'+CAT_COLOR[cat]+';padding:1px 8px;border-radius:7px;font-size:10px">'+(CAT_LBL[cat]||cat)+'</span></td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+(item.supplier||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+_loc+'</td><td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap"><span style="font-size:13px;color:'+qtyColor+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+'</span><span style="font-size:10px;color:'+dim.ink3+'"> '+(item.unit||'ชิ้น')+'</span>'+(isLow?' <span style="font-size:10px;color:#A32D2D">⚠ below min '+(item.minQty||0)+'</span>':'')+'</td><td style="padding:5px 12px;text-align:right;font-family:\'DM Mono\',monospace;font-size:12px;'+_bb+'">฿'+(item.cost||0).toLocaleString()+'</td><td style="padding:5px 12px;text-align:center;'+_bb+'"><div style="display:flex;gap:4px;justify-content:center" onclick="event.stopPropagation()"><button onclick="flOpenReceiveOne(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer">+ Receive</button><button onclick="event.stopPropagation();flOpenTransfer(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666" title="ย้ายระหว่างคลัง">↔ Transfer</button><button onclick="event.stopPropagation();flOpenInvEdit(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666">Edit</button>'+(showOrder?'<button onclick="flOrderItem&&flOrderItem(\''+item.id+'\')" style="background:#A32D2D;color:white;border:none;border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:500;cursor:pointer">Order</button>':'')+'</div></td></tr>';
+      /* §invWh · จำนวนแยกคลัง */
+      const _W=invWhSplit(item);
+      const _whTd=function(v,key){ const on=(_invLoc===key), dimc=(_invLoc!=='all'&&!on);
+        return '<td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap;'+(on?'background:rgba(24,95,165,.05);':'')+(dimc?'opacity:.45;':'')+'">'
+          +(v?'<span style="font-size:13px;font-weight:600;color:'+_txt+';font-family:\'DM Mono\',monospace">'+v+'</span>':'<span style="font-size:12px;color:#D0D4DB">–</span>')+'</td>'; };
+      const _whCells=_whTd(_W.tub,'tub')+_whTd(_W.panwa,'panwa');
+      const _whOther=_W.other.length?('<div style="font-size:9.5px;color:'+dim.ink3+';margin-top:1px">'+_W.other.map(o=>'+ '+o.loc+' '+o.qty).join(' · ')+'</div>'):((!item.stocks||!item.stocks.length)&&!item.location?'<div style="font-size:9.5px;color:#999;font-style:italic">registered · no stock</div>':'');
+      return '<tr onclick="invSelItem(\''+item.id+'\')" style="cursor:pointer;'+(isSel?'background:'+SVG_PINK.soft+';':'')+'">'+cbCell+'<td style="padding:5px 12px;'+(isSel?'border-left:3px solid '+SVG_PINK.accent:'')+';'+_bb+';font-size:11px;font-family:\'DM Mono\',monospace;color:'+_sub+'">'+(item.partNo||'—')+'</td><td style="padding:5px 12px;'+_bb+';font-size:12px;color:'+_txt+'">'+(item.name||'—')+'</td><td style="padding:5px 12px;'+_bb+'"><span style="background:'+CAT_COLOR[cat]+'22;color:'+CAT_COLOR[cat]+';padding:1px 8px;border-radius:7px;font-size:10px">'+(CAT_LBL[cat]||cat)+'</span></td><td style="padding:5px 12px;'+_bb+';font-size:11px;color:'+_sub+'">'+(item.supplier||'—')+'</td>'+_whCells+'<td style="padding:5px 12px;text-align:center;'+_bb+';white-space:nowrap"><span style="font-size:13px;color:'+qtyColor+';font-family:\'DM Mono\',monospace">'+(item.qty||0)+'</span><span style="font-size:10px;color:'+dim.ink3+'"> '+(item.unit||'ชิ้น')+'</span>'+(isLow?' <span style="font-size:10px;color:#A32D2D">⚠ below min '+(item.minQty||0)+'</span>':'')+_whOther+'</td><td style="padding:5px 12px;text-align:right;font-family:\'DM Mono\',monospace;font-size:12px;'+_bb+'">฿'+(item.cost||0).toLocaleString()+'</td><td style="padding:5px 12px;text-align:center;'+_bb+'"><div style="display:flex;gap:4px;justify-content:center" onclick="event.stopPropagation()"><button onclick="flOpenReceiveOne(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer">+ Receive</button><button onclick="event.stopPropagation();flOpenTransfer(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666" title="ย้ายระหว่างคลัง">↔ Transfer</button><button onclick="event.stopPropagation();flOpenInvEdit(\''+item.id+'\')" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:400;cursor:pointer;color:#666">Edit</button>'+(showOrder?'<button onclick="flOrderItem&&flOrderItem(\''+item.id+'\')" style="background:#A32D2D;color:white;border:none;border-radius:7px;padding:2px 9px;white-space:nowrap;font-size:10px;font-weight:500;cursor:pointer">Order</button>':'')+'</div></td></tr>';
     };
 
     // Build grouped table body
     let groupedRows='';
     const presentGroups=groupOrder.filter(g=>groups[g]&&groups[g].length>0);
     if(items.length===0){
-      groupedRows='<tr><td colspan="9" style="padding:30px;text-align:center;color:'+dim.ink3+';font-size:11px">No items match filter</td></tr>';
+      groupedRows='<tr><td colspan="10" style="padding:30px;text-align:center;color:'+dim.ink3+';font-size:11px">No items match filter</td></tr>';
     } else {
       presentGroups.forEach(grp=>{
         const grpItems=groups[grp];
@@ -23807,7 +23909,7 @@ function flRenderInventory(){
         const color=groupColor[grp]||'#666';
         const chevron=collapsed?'▶':'▼';
         // Group header row
-        groupedRows+='<tr onclick="invToggleGroup(\''+grp.replace(/'/g,"\\'")+'\')" style="cursor:pointer;background:'+color+'08;border-top:2px solid '+color+'33"><td colspan="9" style="padding:9px 14px"><div style="display:flex;align-items:center;gap:10px"><span style="color:'+color+';font-size:10px;width:10px">'+chevron+'</span><span style="font-size:12px;font-weight:700;color:'+color+';letter-spacing:.01em">'+grp+'</span><span style="background:'+color+'1a;color:'+color+';padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;font-family:\'DM Mono\',monospace">'+cnt+'</span><span style="margin-left:auto;font-size:10px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">รวม ฿'+sumCost.toLocaleString()+'/หน่วย</span></div></td></tr>';
+        groupedRows+='<tr onclick="invToggleGroup(\''+grp.replace(/'/g,"\\'")+'\')" style="cursor:pointer;background:'+color+'08;border-top:2px solid '+color+'33"><td colspan="10" style="padding:9px 14px"><div style="display:flex;align-items:center;gap:10px"><span style="color:'+color+';font-size:10px;width:10px">'+chevron+'</span><span style="font-size:12px;font-weight:700;color:'+color+';letter-spacing:.01em">'+grp+'</span><span style="background:'+color+'1a;color:'+color+';padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;font-family:\'DM Mono\',monospace">'+cnt+'</span><span style="margin-left:auto;font-size:10px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">รวม ฿'+sumCost.toLocaleString()+'/หน่วย</span></div></td></tr>';
         if(!collapsed){
           groupedRows+=grpItems.slice().sort(function(a,b){return (b.qty||0)-(a.qty||0);}).map(buildRow).join('');
         }
@@ -23823,7 +23925,7 @@ function flRenderInventory(){
     const headerCbBorder = (allVisibleSelected||someVisibleSelected) ? SVG_PINK.accent : 'rgba(0,0,0,.18)';
     const headerCbCell = '<th style="padding:6px 8px 6px 12px;width:30px;text-align:center;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7" onclick="invSelectAllVisible('+JSON.stringify(visibleIds).replace(/"/g,'&quot;')+')"><div style="width:16px;height:16px;border-radius:4px;border:1.5px solid '+headerCbBorder+';background:'+headerCbBg+';display:inline-flex;align-items:center;justify-content:center;cursor:pointer;vertical-align:middle">'+(headerCbState?'<span style="color:white;font-size:11px;font-weight:700;line-height:1">'+headerCbState+'</span>':'')+'</div></th>';
 
-    const tablePanel='<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr style="background:#FBFAF7">'+headerCbCell+'<th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Part No</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Item</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Category</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Supplier</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Location</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Qty</th><th style="padding:7px 12px;text-align:right;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Cost</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Action</th></tr></thead><tbody>'+groupedRows+'</tbody></table></div>';
+    const tablePanel='<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr style="background:#FBFAF7">'+headerCbCell+'<th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Part No</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Item</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Category</th><th style="padding:7px 12px;text-align:left;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Supplier</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Tub Lamu</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Visit Panwa</th><th style="padding:7px 12px;text-align:center;white-space:nowrap;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Total</th><th style="padding:7px 12px;text-align:right;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Cost</th><th style="padding:7px 12px;text-align:center;font-weight:500;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid rgba(0,0,0,.06)">Action</th></tr></thead><tbody>'+groupedRows+'</tbody></table></div>';
 
     // Floating action bar (only when something is selected)
     let floatBar = '';
@@ -30931,6 +31033,7 @@ function faBoatDetail(o){
     +'<div style="flex:1;min-width:240px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:21px;font-weight:800">'+faE(b.name)+'</b><span style="padding:2px 8px;border-radius:6px;background:'+S[1]+';color:'+S[2]+';font-size:11.5px;font-weight:600">'+S[0]+'</span><span style="font-size:12px;color:#5B6170">อยู่ที่ '+faE(String(pierTxt).replace(' · อยู่อู่',''))+'</span></div>'
     +'<div style="font-size:12.5px;color:#5B6170">'+faE([b.type,b.material].filter(Boolean).join(' · '))+(br?(' · <b style="color:'+faBrandC(br)+'">'+faE(br)+'</b> '+faE(mdl)+' × '+o.engs.length):'')+(b.reg?(' · ทะเบียน '+faE(b.reg)):'')+(b.callsign?(' · '+faE(b.callsign)):'')+'</div></div>'
     +'<button type="button" class="fa-btn" onclick="if(typeof bhOpen===\'function\')bhOpen(\''+b.id+'\')" title="ทริป · รายได้ · ต้นทุน · ค่าซ่อมแยก ตัวเรือ/เครื่องยนต์/เกียร์/ใบจักร · เหตุการณ์ ของเรือลำนี้">&#128202; ประวัติ &amp; ค่าใช้จ่าย</button>'   /* §boatHist2 */
+    +'<button type="button" class="fa-btn" onclick="if(typeof capMgrOpen===\'function\')capMgrOpen(\''+b.id+'\')" title="ที่นั่งตามช่วงวันที่ · ที่นั่งตามทะเบียน">💺 ที่นั่ง</button>'   /* §capHist2 */
     +'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+b.id+'\')">⇄ ถอด/สลับ</button><button type="button" class="fa-btn pri" onclick="flOpenEditBoatModal(\''+b.id+'\')">Edit</button></div>';
   var A=[];
   var bad=o.docs.filter(function(x){ return x.st==='exp'||x.st==='na'||x.st==='warn30'; }).sort(function(a,z){ return (a.days==null?-9999:a.days)-(z.days==null?-9999:z.days); });
@@ -30944,7 +31047,12 @@ function faBoatDetail(o){
   var fx=o.engs.filter(function(e){ return e.status==='fixing'; }).length;
   var tiles='<div style="display:flex;border-top:1px solid #ECEBE6;border-bottom:1px solid #ECEBE6;flex-wrap:wrap">'
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Engines</div><b style="color:'+(br?faBrandC(br):'#0F1B3D')+'">'+o.engs.length+'</b><i>'+faE((br+' '+mdl).trim()||'ยังไม่มีเครื่อง')+(fx?(' · '+fx+' fixing'):'')+'</i></div>'
-    +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Capacity</div><b>'+(b.cap||'—')+'</b><i>PAX บริษัท'+(b.licensePax?(' · ใบอนุญาต '+b.licensePax+(b.crew?(' + ลูกเรือ '+b.crew):'')):'')+'</i></div>'
+    +(function(){ /* §capHist2 · ที่นั่งวันนี้ตามช่วง + ช่วงถัดไป · คลิกเปิดหน้าต่างจัดการที่นั่ง */
+        var H=Array.isArray(b.capHist)?b.capHist:[], t=TODAY_STR, now=(typeof boatCapHistPick==='function')?boatCapHistPick(H,t):null;
+        var fut=H.filter(function(h){ return h&&h.from>t; }).sort(function(a,z){ return a.from<z.from?-1:1; })[0];
+        return '<div class="fa-tile" style="flex:1;cursor:pointer" onclick="if(typeof capMgrOpen===\'function\')capMgrOpen(\''+b.id+'\')" title="จัดการที่นั่งตามช่วงวันที่"><div class="fa-kick">Capacity <span style="color:#185FA5;text-transform:none;letter-spacing:0">· จัดการ ›</span></div><b>'+(now?(+now.cap):(b.cap||'—'))+'</b><i>PAX บริษัท'
+          +(now?(' · ตามช่วง'):'')+(fut?(' · ถัดไป '+(+fut.cap)+' ตั้งแต่ '+faFmtD(fut.from,1)):'')
+          +(b.licensePax?(' · ใบอนุญาต '+b.licensePax+(b.crew?(' + ลูกเรือ '+b.crew):'')):'')+'</i></div>'; })()
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">GT · LOA</div><b>'+(b.gt||'—')+'</b><i>ตันกรอส'+(b.loa?(' · ยาว '+b.loa+' m'):'')+'</i></div>'
     +'<div class="fa-tile" style="flex:1"><div class="fa-kick">Documents</div><b style="color:'+(o.dExp||o.dW30?'#A32D2D':'#0F1B3D')+'">'+o.docs.length+'</b><i>หมด '+o.dExp+' · ≤30 วัน '+o.dW30+' · ≤90 วัน '+o.dW90+'</i></div></div>';
   var engs=o.engs.slice().sort(function(a,z){ return flPosRank(a.pos)-flPosRank(z.pos); });

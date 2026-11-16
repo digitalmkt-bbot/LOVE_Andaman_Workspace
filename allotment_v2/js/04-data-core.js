@@ -7869,6 +7869,8 @@ function openBoatModal(){
   fmRenderBoatOwn(0);
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='เพิ่มเรือใหม่';
+  window._editBoatId=null;
+  if(typeof bmCapSummary==='function') bmCapSummary(null);   /* §bmRedesign */
   // auto-total listeners
   ['fm-boat-licensepax','fm-boat-crew','fm-boat-fishcrew'].forEach(id=>{
     const el=document.getElementById(id);
@@ -7971,6 +7973,8 @@ function saveBoat(){
     // EDIT MODE
     const bid=window._editBoatId; window._editBoatId=null;
     const b=getBoat(bid); if(!b)return;
+    /* §capHist · ที่นั่งตั้งต้นมีผลทุกวันที่ไม่มีช่วงคลุม รวมวันที่ผ่านมา · ถามก่อน */
+    if((+fields.cap||0)!==(+b.cap||0) && !confirm('เปลี่ยนที่นั่งขายตั้งต้นจาก '+(+b.cap||0)+' เป็น '+fields.cap+'\n\nมีผลกับทุกวันที่ไม่มีช่วงที่นั่งคลุม รวมวันที่ผ่านมาแล้ว\nถ้าเปลี่ยนตั้งแต่วันหนึ่งเป็นต้นไป ให้ใช้ 💺 ที่นั่ง › เพิ่มช่วง แทน\n\nยืนยัน?')){ window._editBoatId=bid; return; }
     Object.assign(b,fields);
     const curSt=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · เทียบกับค่าในตาราง ไม่งั้นจะเขียนแถวซ้ำทุกครั้ง */
     const newSt=stMap[fmBoatSt];
@@ -8207,6 +8211,9 @@ function bop2SelectCell(routeId, date){
   const sel = document.querySelector('.bop2-cell-day[data-route="'+routeId+'"][data-date="'+date+'"]');
   if(sel) bop2OpenCellPopover(routeId, date, sel);
 }
+/* §bopCap (2026-11-16) · owner "ในหน้า Boat operation ด้วย" · ป้ายที่นั่งในหน้า Boat Operation อ่าน b.cap ตรง ๆ
+   ใช้ที่นั่งของวันนั้น (ปรับเฉพาะวัน › ช่วงที่นั่ง › ค่าตั้งต้น) ตัวเดียวกับหน้าจอง / Fleet Calendar */
+function bop2Cap(b, ds){ if(!b) return 0; var c=(typeof boatCapFor==='function' && ds)?boatCapFor(b.id, ds):0; return c>0?c:(+b.cap||0); }
 function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   bop2CloseCellPopover();
   if(!anchorEl) return;
@@ -8308,7 +8315,7 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
         + 'onmouseover="this.style.background=\'#E1F5EE\';this.style.borderColor=\'#9FE1CB\'" '
         + 'onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#eee\'">'
         + '<span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:'+c+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'+esc(a.boat.name)+'</span>'
-        + '<span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft);flex-shrink:0">'+pierLbl+' · '+a.boat.cap+'</span>'
+        + '<span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft);flex-shrink:0">'+pierLbl+' · '+bop2Cap(a.boat, dateStr)+'</span>'
         + '</button>';
     }).join('');
   }
@@ -8987,6 +8994,9 @@ function fcCell(b, ds, load, memo){
   var pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b, ds):(b.pier||'other');
   var st=(typeof getCurStatus==='function')?getCurStatus(b, ds):{s:'available'};
   var c={pier:pier, s:st.s};
+  /* §fcCap (2026-11-16) · owner "ตัวเลข Cap ของ Alu2 ต้องเปลี่ยนไหม" · Aluminous2 57/44 ทั้งที่ตั้งช่วงที่นั่ง 57 ตั้งแต่ 15 พ.ย.
+     ปฏิทินเรืออ่าน b.cap ตรง ๆ · ใช้ที่นั่งของวันนั้น (ปรับเฉพาะวัน › ช่วงที่นั่ง › ค่าตั้งต้น) ตัวเดียวกับหน้าจอง */
+  c.cap=(typeof boatCapFor==='function')?boatCapFor(b.id, ds):(+b.cap||0);
   if(st.s!=='available'){ c.k='off'; return memo[key]=c; }
   var op=(typeof TRIPS!=='undefined' && TRIPS[ds]) ? TRIPS[ds][b.id] : null;
   if(op && op.route){
@@ -9024,11 +9034,12 @@ function fcAbbr(name){
 function fcFill(p){ return p>100?'#DC2626':p>=90?'#EA580C':p>=50?'#D97706':p>0?'#0891B2':'#CBD5E1'; }
 function fcInk(p){ return p>100?'#B91C1C':p>=90?'#C2410C':p>=50?'#92400E':p>0?'#0E7490':'#9CA3AF'; }
 function fcPct(pax,cap){ return cap?Math.round((pax||0)/cap*100):0; }
-function fcIsOver(b,c){ return !!(c && c.k==='run' && (b.cap||0)>0 && (c.pax||0)>(b.cap||0)); }
+function fcCap(b,c){ return (c && c.cap!=null) ? (+c.cap||0) : (+((b&&b.cap)||0)); }   /* §fcCap */
+function fcIsOver(b,c){ var k=fcCap(b,c); return !!(c && c.k==='run' && k>0 && (c.pax||0)>k); }
 function fcChip(b,c,mode){
   var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
   var col=(typeof getBoatColor==='function')?getBoatColor(b.id):{bg:'#F1F5F1',text:'#6B7785'};
-  var cap=b.cap||0, dot='<i style="background:'+col.text+'"></i>';
+  var cap=fcCap(b,c), dot='<i style="background:'+col.text+'"></i>';
   if(mode==='free') return '<span class="fc-bc out" title="'+e(b.name)+' · free at pier · '+cap+' seats">'
     +'<span class="nm">'+dot+e(b.name)+'</span><b>'+cap+'</b></span>';
   var pax=c.pax||0, pct=fcPct(pax,cap), held=c.chr&&!pax, over=pax>cap&&cap>0;
@@ -9243,16 +9254,16 @@ function fcMobileHtml(){
       h+='<section class="fm-card"><div class="fm-ph"><span class="pb" style="background:'+p[3]+'">'+p[1]+'</span>'+e(p[2])
         +'<span class="r"><span class="f'+(free.length?'':' z')+'">'+free.length+' free</span> · '+run.length+' out</span></div>';
       h+='<div class="fm-free'+(free.length?'':' z')+'"><div class="t">Free at pier'+(free.length?'':' · none')+'</div>'
-        +(free.length?('<div class="l">'+free.map(function(o){ return '<span class="fm-av">'+e(o.b.name)+' <small>'+(o.b.cap||0)+' seats</small></span>'; }).join('')+'</div>')
+        +(free.length?('<div class="l">'+free.map(function(o){ return '<span class="fm-av">'+e(o.b.name)+' <small>'+fcCap(o.b,o.c)+' seats</small></span>'; }).join('')+'</div>')
                      :'<div class="s">Every boat here is assigned or unavailable on this day</div>')+'</div>';
       var byR={}, order=[];
       run.forEach(function(o){ var k=o.c.chr?'__chr':o.c.rid; if(!byR[k]){ byR[k]=[]; order.push(k); } byR[k].push(o); });
       order.sort(function(a,b){ if(a==='__chr'||b==='__chr') return a===b?0:(a==='__chr'?1:-1);
         return (typeof laRouteOrdCmp==='function')?laRouteOrdCmp(a,b):0; });
-      order.forEach(function(k){ var arr=byR[k], c0=arr[0].c, ov=arr.reduce(function(s2,o){ return s2+Math.max(0,(o.c.pax||0)-(o.b.cap||0)); },0);
+      order.forEach(function(k){ var arr=byR[k], c0=arr[0].c, ov=arr.reduce(function(s2,o){ return s2+Math.max(0,(o.c.pax||0)-fcCap(o.b,o.c)); },0);
         h+='<div class="fm-pg'+(ov?' ov':'')+'"><div class="t"><i style="background:'+(k==='__chr'?'#7C3AED':c0.color)+'"></i>'
           +(k==='__chr'?'Charter':e(c0.routeFull))+(ov?('<span class="tag">+'+ov+' over</span>'):'')+'</div>'
-          +arr.map(function(o){ var cap=o.b.cap||0, pax=o.c.pax||0, held=o.c.chr&&!pax, pct=fcPct(pax,cap);
+          +arr.map(function(o){ var cap=fcCap(o.b,o.c), pax=o.c.pax||0, held=o.c.chr&&!pax, pct=fcPct(pax,cap);
             return '<div class="fm-b"><span class="nm">'+e(o.b.name)+'</span><span class="bar"><i style="width:'
               +(held?100:Math.max(pax?6:100,Math.min(100,pct)))+'%;background:'+(held?'#7C3AED':(o.c.chr?'#7C3AED':fcFill(pct)))+'"></i></span>'
               +'<span class="n" style="color:'+(held||o.c.chr?'#6D28D9':fcInk(pct))+'">'+(held?'Held':(pax+'<small>/'+cap+'</small>'))+'</span></div>'; }).join('')
@@ -9267,7 +9278,7 @@ function fcMobileHtml(){
     var cell=function(b,c){
       if(c.k==='free') return '<div class="fm-gc" style="background:#DCFCE7;border-color:#4ADE80;color:#065F46" title="Free at pier">FREE</div>';
       if(c.k==='off') return '<div class="fm-gc" style="background:#F3F4F6;border:1px dashed #9CA3AF;color:#6B7280" title="Unavailable">SHOP</div>';
-      var cap=b.cap||0, pax=c.pax||0, held=c.chr&&!pax, pct=fcPct(pax,cap);
+      var cap=fcCap(b,c), pax=c.pax||0, held=c.chr&&!pax, pct=fcPct(pax,cap);
       var bg='#F8FAFC', bd='#E5E7EB', fg='#6B7280';
       if(c.chr){ bg='#F5F3FF'; bd='#C4B5FD'; fg='#6D28D9'; }
       else if(pax>cap&&cap){ bg='#FEE2E2'; bd='#FCA5A5'; fg='#B91C1C'; }
@@ -9434,7 +9445,7 @@ function bop2FleetStatus(dateStr){
       const route = ROUTES.find(r => r.id === op.route);
       const seats = getSeatsConsumed(op.route, dateStr);
       const isCharter = !!op.charterBookingId || op.type === 'charter';
-      out.assigned.push({ boat:b, route, type: op.type, charterBookingId: op.charterBookingId, seats, capacity: b.cap, isCharter });
+      out.assigned.push({ boat:b, route, type: op.type, charterBookingId: op.charterBookingId, seats, capacity: bop2Cap(b, dateStr), isCharter });
     } else {
       /* §ovnHold · เรือที่ถูกเหมาไปค้างเกาะและยังไม่กลับ · วันระหว่างทางไม่มี trip
          ถ้าไม่กันตรงนี้ ลำนั้นขึ้นในรายการ "ว่าง" ให้จ่ายงานอื่นทับได้
@@ -10090,7 +10101,7 @@ function bop2AssignBoatOptsFor(pier, ds){
     let suffix = '';
     if(st === 'fixing') suffix = ' · 🔧 fixing';
     else if(st === 'unavailable') suffix = ' · N/A';
-    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+b.cap+' pax · '+bop2PierAbbr(pier)+suffix+'</option>';
+    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+bop2Cap(b, ds)+' pax · '+bop2PierAbbr(pier)+suffix+'</option>';
   }).join('');
 }
 function bop2UpdateAssignBoatOpts(){
@@ -10459,7 +10470,7 @@ function bop2ReplaceForm(){
   const bad=inCell.find(bid=>{ const b=(BOATS||[]).find(x=>x.id===bid); return b && typeof getCurStatus==='function' && getCurStatus(b, sel).s!=='available'; });
   pre=bad || inCell[0] || '';
   const boats=(BOATS||[]).filter(b=>b && !b.retired).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
-  const opt=(b, on)=>'<option value="'+esc(b.id)+'"'+(on?' selected':'')+'>'+esc(b.name)+' · '+bop2PierAbbr(b.pier)+(b.cap?(' · '+b.cap+' pax'):'')+'</option>';
+  const opt=(b, on)=>'<option value="'+esc(b.id)+'"'+(on?' selected':'')+'>'+esc(b.name)+' · '+bop2PierAbbr(b.pier)+(bop2Cap(b, sel)?(' · '+bop2Cap(b, sel)+' pax'):'')+'</option>';
   const L='display:block;font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em';
   const I='display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit';
   return `
@@ -11228,7 +11239,7 @@ function bop2RenderShell(){
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">
         ${_fleet.available.length === 0 ? '<span style="font-size:10px;color:#6B7785;font-style:italic">All boats deployed</span>' : _fleet.available.map(a => {
           const c = bop2BoatColor(a.boat.id);
-          return `<span style="padding:3px 9px;background:#F1F5F1;border-radius:12px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:${c}"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${escapeHTML(a.boat.name)} · ${a.boat.cap}</span>`;
+          return `<span style="padding:3px 9px;background:#F1F5F1;border-radius:12px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:${c}"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${escapeHTML(a.boat.name)} · ${bop2Cap(a.boat, _selDate)}</span>`;
         }).join('')}
       </div>
     </div>
@@ -13517,3 +13528,32 @@ initOpListeners();
 // in Chrome, causing ReferenceError. DOMContentLoaded is fired only after ALL inline scripts run.
 function _safeRenderDash(){ try{ renderDash(); }catch(e){ console.error('renderDash failed:',e); } }
 (window.laDomReady||function(f){f()})(_safeRenderDash);   // §domReady · after DOMContentLoaded, i.e. after every (deferred) script: FL_MAINT etc. exist
+
+/* ══ §docNo (2026-11-14) · เลขเอกสาร MO / MJ / INC ออกที่เซิร์ฟเวอร์
+   owner "ตรวจหน่อย และเกิดขึ้นได้อย่างไร" (MO-377 ซ้ำ 2 ใบ · กมลณัฐ กับ Ruk กดสร้างห่างกัน 1.4 วินาที)
+   เดิมแต่ละเครื่องคิดเลขเอง = เลขสูงสุดที่เครื่องนั้นเห็น + 1 · กดพร้อมกันได้เลขเดียวกัน
+   ตอนนี้: ถาม POST /api/v1/_docno (เซิร์ฟเวอร์ล็อกแล้วจองเลขถัดไป) · แบบ synchronous ให้ตัวสร้างเดิมทุกตัวใช้ได้โดยไม่ต้องรื้อเป็น async
+   ต่อเซิร์ฟเวอร์ไม่ได้ (ออฟไลน์ / ไม่มีสิทธิ์) → ใช้เลขที่เครื่องคิดเอง (เลขสูงสุด + 1 ที่ยังว่าง) เหมือนเดิม ══ */
+var _laDocNoUsed={};
+function laDocArr(kind){ return kind==='MO'?(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]):kind==='MJ'?(typeof FL_MAINT!=='undefined'?FL_MAINT:[]):(typeof FL_INCIDENTS!=='undefined'?FL_INCIDENTS:[]); }
+function laDocFmt(kind,n){ return kind+'-'+String(n).padStart(3,'0'); }
+function laDocTaken(kind,n){ var no=laDocFmt(kind,n); return (_laDocNoUsed[kind]||{})[n] || laDocArr(kind).some(function(x){ return x && x.no===no; }); }
+/* เลขที่เครื่องคิดเอง · ใช้แสดงตัวอย่างก่อนกดสร้าง และเป็นตัวสำรองตอนต่อเซิร์ฟเวอร์ไม่ได้ */
+function laDocNoLocal(kind){
+  var mx=laDocArr(kind).reduce(function(m,x){ var v=parseInt(String((x&&x.no)||'').replace(/\D/g,''),10); return (v>m)?v:m; },0);
+  var n=mx; do{ n++; }while(laDocTaken(kind,n)); return n;
+}
+function laDocNoPeek(kind){ return laDocFmt(kind, laDocNoLocal(kind)); }
+function laDocNo(kind){
+  kind=String(kind||'').toUpperCase();
+  var loc=laDocNoLocal(kind), n=loc, src='local';
+  try{
+    var x=new XMLHttpRequest(); x.open('POST','/api/v1/_docno',false); x.setRequestHeader('Content-Type','application/json');
+    x.send(JSON.stringify({kind:kind, min:loc}));
+    if(x.status===200){ var r=JSON.parse(x.responseText||'{}'); if(r && +r.n>0){ n=+r.n; src='server'; } }
+  }catch(_){ }
+  while(laDocTaken(kind,n)) n++;          // กันไว้อีกชั้น · เลขที่เครื่องนี้มีอยู่แล้วหรือออกไปแล้วในรอบนี้
+  (_laDocNoUsed[kind]=_laDocNoUsed[kind]||{})[n]=1;
+  try{ console.log('[docNo] '+laDocFmt(kind,n)+' ('+src+')'); }catch(_){ }
+  return laDocFmt(kind,n);
+}
