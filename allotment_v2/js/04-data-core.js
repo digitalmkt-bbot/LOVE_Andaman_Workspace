@@ -8103,6 +8103,9 @@ function bop2SelectCell(routeId, date){
   const sel = document.querySelector('.bop2-cell-day[data-route="'+routeId+'"][data-date="'+date+'"]');
   if(sel) bop2OpenCellPopover(routeId, date, sel);
 }
+/* §bopCap (2026-11-16) · owner "ในหน้า Boat operation ด้วย" · ป้ายที่นั่งในหน้า Boat Operation อ่าน b.cap ตรง ๆ
+   ใช้ที่นั่งของวันนั้น (ปรับเฉพาะวัน › ช่วงที่นั่ง › ค่าตั้งต้น) ตัวเดียวกับหน้าจอง / Fleet Calendar */
+function bop2Cap(b, ds){ if(!b) return 0; var c=(typeof boatCapFor==='function' && ds)?boatCapFor(b.id, ds):0; return c>0?c:(+b.cap||0); }
 function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   bop2CloseCellPopover();
   if(!anchorEl) return;
@@ -8204,7 +8207,7 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
         + 'onmouseover="this.style.background=\'#E1F5EE\';this.style.borderColor=\'#9FE1CB\'" '
         + 'onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#eee\'">'
         + '<span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:'+c+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'+esc(a.boat.name)+'</span>'
-        + '<span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft);flex-shrink:0">'+pierLbl+' · '+a.boat.cap+'</span>'
+        + '<span style="font-family:Manrope,sans-serif;font-size:10px;color:var(--ink-soft);flex-shrink:0">'+pierLbl+' · '+bop2Cap(a.boat, dateStr)+'</span>'
         + '</button>';
     }).join('');
   }
@@ -9334,7 +9337,7 @@ function bop2FleetStatus(dateStr){
       const route = ROUTES.find(r => r.id === op.route);
       const seats = getSeatsConsumed(op.route, dateStr);
       const isCharter = !!op.charterBookingId || op.type === 'charter';
-      out.assigned.push({ boat:b, route, type: op.type, charterBookingId: op.charterBookingId, seats, capacity: b.cap, isCharter });
+      out.assigned.push({ boat:b, route, type: op.type, charterBookingId: op.charterBookingId, seats, capacity: bop2Cap(b, dateStr), isCharter });
     } else {
       /* §ovnHold · เรือที่ถูกเหมาไปค้างเกาะและยังไม่กลับ · วันระหว่างทางไม่มี trip
          ถ้าไม่กันตรงนี้ ลำนั้นขึ้นในรายการ "ว่าง" ให้จ่ายงานอื่นทับได้
@@ -9990,7 +9993,7 @@ function bop2AssignBoatOptsFor(pier, ds){
     let suffix = '';
     if(st === 'fixing') suffix = ' · 🔧 fixing';
     else if(st === 'unavailable') suffix = ' · N/A';
-    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+b.cap+' pax · '+bop2PierAbbr(pier)+suffix+'</option>';
+    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+bop2Cap(b, ds)+' pax · '+bop2PierAbbr(pier)+suffix+'</option>';
   }).join('');
 }
 function bop2UpdateAssignBoatOpts(){
@@ -10359,7 +10362,7 @@ function bop2ReplaceForm(){
   const bad=inCell.find(bid=>{ const b=(BOATS||[]).find(x=>x.id===bid); return b && typeof getCurStatus==='function' && getCurStatus(b, sel).s!=='available'; });
   pre=bad || inCell[0] || '';
   const boats=(BOATS||[]).filter(b=>b && !b.retired).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
-  const opt=(b, on)=>'<option value="'+esc(b.id)+'"'+(on?' selected':'')+'>'+esc(b.name)+' · '+bop2PierAbbr(b.pier)+(b.cap?(' · '+b.cap+' pax'):'')+'</option>';
+  const opt=(b, on)=>'<option value="'+esc(b.id)+'"'+(on?' selected':'')+'>'+esc(b.name)+' · '+bop2PierAbbr(b.pier)+(bop2Cap(b, sel)?(' · '+bop2Cap(b, sel)+' pax'):'')+'</option>';
   const L='display:block;font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em';
   const I='display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit';
   return `
@@ -11128,7 +11131,7 @@ function bop2RenderShell(){
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">
         ${_fleet.available.length === 0 ? '<span style="font-size:10px;color:#6B7785;font-style:italic">All boats deployed</span>' : _fleet.available.map(a => {
           const c = bop2BoatColor(a.boat.id);
-          return `<span style="padding:3px 9px;background:#F1F5F1;border-radius:12px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:${c}"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${escapeHTML(a.boat.name)} · ${a.boat.cap}</span>`;
+          return `<span style="padding:3px 9px;background:#F1F5F1;border-radius:12px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:${c}"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${escapeHTML(a.boat.name)} · ${bop2Cap(a.boat, _selDate)}</span>`;
         }).join('')}
       </div>
     </div>
