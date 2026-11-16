@@ -8883,6 +8883,9 @@ function fcCell(b, ds, load, memo){
   var pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b, ds):(b.pier||'other');
   var st=(typeof getCurStatus==='function')?getCurStatus(b, ds):{s:'available'};
   var c={pier:pier, s:st.s};
+  /* §fcCap (2026-11-16) · owner "ตัวเลข Cap ของ Alu2 ต้องเปลี่ยนไหม" · Aluminous2 57/44 ทั้งที่ตั้งช่วงที่นั่ง 57 ตั้งแต่ 15 พ.ย.
+     ปฏิทินเรืออ่าน b.cap ตรง ๆ · ใช้ที่นั่งของวันนั้น (ปรับเฉพาะวัน › ช่วงที่นั่ง › ค่าตั้งต้น) ตัวเดียวกับหน้าจอง */
+  c.cap=(typeof boatCapFor==='function')?boatCapFor(b.id, ds):(+b.cap||0);
   if(st.s!=='available'){ c.k='off'; return memo[key]=c; }
   var op=(typeof TRIPS!=='undefined' && TRIPS[ds]) ? TRIPS[ds][b.id] : null;
   if(op && op.route){
@@ -8920,11 +8923,12 @@ function fcAbbr(name){
 function fcFill(p){ return p>100?'#DC2626':p>=90?'#EA580C':p>=50?'#D97706':p>0?'#0891B2':'#CBD5E1'; }
 function fcInk(p){ return p>100?'#B91C1C':p>=90?'#C2410C':p>=50?'#92400E':p>0?'#0E7490':'#9CA3AF'; }
 function fcPct(pax,cap){ return cap?Math.round((pax||0)/cap*100):0; }
-function fcIsOver(b,c){ return !!(c && c.k==='run' && (b.cap||0)>0 && (c.pax||0)>(b.cap||0)); }
+function fcCap(b,c){ return (c && c.cap!=null) ? (+c.cap||0) : (+((b&&b.cap)||0)); }   /* §fcCap */
+function fcIsOver(b,c){ var k=fcCap(b,c); return !!(c && c.k==='run' && k>0 && (c.pax||0)>k); }
 function fcChip(b,c,mode){
   var e=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
   var col=(typeof getBoatColor==='function')?getBoatColor(b.id):{bg:'#F1F5F1',text:'#6B7785'};
-  var cap=b.cap||0, dot='<i style="background:'+col.text+'"></i>';
+  var cap=fcCap(b,c), dot='<i style="background:'+col.text+'"></i>';
   if(mode==='free') return '<span class="fc-bc out" title="'+e(b.name)+' · free at pier · '+cap+' seats">'
     +'<span class="nm">'+dot+e(b.name)+'</span><b>'+cap+'</b></span>';
   var pax=c.pax||0, pct=fcPct(pax,cap), held=c.chr&&!pax, over=pax>cap&&cap>0;
@@ -9139,16 +9143,16 @@ function fcMobileHtml(){
       h+='<section class="fm-card"><div class="fm-ph"><span class="pb" style="background:'+p[3]+'">'+p[1]+'</span>'+e(p[2])
         +'<span class="r"><span class="f'+(free.length?'':' z')+'">'+free.length+' free</span> · '+run.length+' out</span></div>';
       h+='<div class="fm-free'+(free.length?'':' z')+'"><div class="t">Free at pier'+(free.length?'':' · none')+'</div>'
-        +(free.length?('<div class="l">'+free.map(function(o){ return '<span class="fm-av">'+e(o.b.name)+' <small>'+(o.b.cap||0)+' seats</small></span>'; }).join('')+'</div>')
+        +(free.length?('<div class="l">'+free.map(function(o){ return '<span class="fm-av">'+e(o.b.name)+' <small>'+fcCap(o.b,o.c)+' seats</small></span>'; }).join('')+'</div>')
                      :'<div class="s">Every boat here is assigned or unavailable on this day</div>')+'</div>';
       var byR={}, order=[];
       run.forEach(function(o){ var k=o.c.chr?'__chr':o.c.rid; if(!byR[k]){ byR[k]=[]; order.push(k); } byR[k].push(o); });
       order.sort(function(a,b){ if(a==='__chr'||b==='__chr') return a===b?0:(a==='__chr'?1:-1);
         return (typeof laRouteOrdCmp==='function')?laRouteOrdCmp(a,b):0; });
-      order.forEach(function(k){ var arr=byR[k], c0=arr[0].c, ov=arr.reduce(function(s2,o){ return s2+Math.max(0,(o.c.pax||0)-(o.b.cap||0)); },0);
+      order.forEach(function(k){ var arr=byR[k], c0=arr[0].c, ov=arr.reduce(function(s2,o){ return s2+Math.max(0,(o.c.pax||0)-fcCap(o.b,o.c)); },0);
         h+='<div class="fm-pg'+(ov?' ov':'')+'"><div class="t"><i style="background:'+(k==='__chr'?'#7C3AED':c0.color)+'"></i>'
           +(k==='__chr'?'Charter':e(c0.routeFull))+(ov?('<span class="tag">+'+ov+' over</span>'):'')+'</div>'
-          +arr.map(function(o){ var cap=o.b.cap||0, pax=o.c.pax||0, held=o.c.chr&&!pax, pct=fcPct(pax,cap);
+          +arr.map(function(o){ var cap=fcCap(o.b,o.c), pax=o.c.pax||0, held=o.c.chr&&!pax, pct=fcPct(pax,cap);
             return '<div class="fm-b"><span class="nm">'+e(o.b.name)+'</span><span class="bar"><i style="width:'
               +(held?100:Math.max(pax?6:100,Math.min(100,pct)))+'%;background:'+(held?'#7C3AED':(o.c.chr?'#7C3AED':fcFill(pct)))+'"></i></span>'
               +'<span class="n" style="color:'+(held||o.c.chr?'#6D28D9':fcInk(pct))+'">'+(held?'Held':(pax+'<small>/'+cap+'</small>'))+'</span></div>'; }).join('')
@@ -9163,7 +9167,7 @@ function fcMobileHtml(){
     var cell=function(b,c){
       if(c.k==='free') return '<div class="fm-gc" style="background:#DCFCE7;border-color:#4ADE80;color:#065F46" title="Free at pier">FREE</div>';
       if(c.k==='off') return '<div class="fm-gc" style="background:#F3F4F6;border:1px dashed #9CA3AF;color:#6B7280" title="Unavailable">SHOP</div>';
-      var cap=b.cap||0, pax=c.pax||0, held=c.chr&&!pax, pct=fcPct(pax,cap);
+      var cap=fcCap(b,c), pax=c.pax||0, held=c.chr&&!pax, pct=fcPct(pax,cap);
       var bg='#F8FAFC', bd='#E5E7EB', fg='#6B7280';
       if(c.chr){ bg='#F5F3FF'; bd='#C4B5FD'; fg='#6D28D9'; }
       else if(pax>cap&&cap){ bg='#FEE2E2'; bd='#FCA5A5'; fg='#B91C1C'; }
