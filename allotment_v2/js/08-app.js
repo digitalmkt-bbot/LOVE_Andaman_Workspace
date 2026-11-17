@@ -8170,7 +8170,11 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
   var g=bk.guides||{}, L=[]; if(g.english)L.push('EN'); if(g.russian)L.push('RU'); if(g.chinese)L.push('CN'); if(g.otherLang)L.push(g.otherLang); if(L.length)req.push(L.join('/'));
   var al=(typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):(sm.allergies||''); if(al)req.push('⚠ '+al);
   var note=(bk.notes||bk.note||'').trim(); if(note)req.push(note);
-  var cot=''; if(bk.cashOnTour&&(+bk.cashOnTour.amount>0)){ cot=(bk.cashOnTour.currency||'THB')+' '+(+bk.cashOnTour.amount).toLocaleString()+(bk.cashOnTour.handling==='deduct'?' · deduct':''); }
+  /* §rcCotTxt (2026-11-17) · owner: ใบรีคอนเฟิร์มขึ้น "THB 400 · deduct" agent อ่านไม่เข้าใจ และไม่รู้ว่าเงินค่าอะไร
+     → บอกว่าเป็น Cash on tour + หมายเหตุ (เช่น 2 big luggages) + ใครจ่าย/หักยังไง เป็นภาษาที่ agent อ่านเข้าใจ */
+  var cot=''; if(bk.cashOnTour&&(+bk.cashOnTour.amount>0)){ var _cn=String(bk.cashOnTour.note||'').trim();
+    cot=(bk.cashOnTour.currency||'THB')+' '+(+bk.cashOnTour.amount).toLocaleString()+' · Cash on tour'+(_cn?(' ('+_cn+')'):'')
+      +(bk.cashOnTour.handling==='deduct'?' · deducted from your invoice':' · guest pays at pier'); }
   var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(bk, r.routeId):null, addon=[];
   if(af){ if(af.join)addon.push('Longtail join'); if(af.charter)addon.push('Longtail charter'+(af.charterQty>1?(' ×'+af.charterQty):'')); if(af.transfer)addon.push('Transfer'); }
   var payLabel=(typeof bkV2PayLabel==='function')?bkV2PayLabel(ag&&ag.payType):((ag&&ag.payType)||'');
