@@ -4617,7 +4617,9 @@ function _calTripsFor(ds, pier){
   });
   const out=[];
   raw.forEach(x=>{
-    const cap=x.b.cap, op=x.op;
+    /* §calCap (2026-11-18) · ความจุของวันนั้น (หน้า 💺 ที่นั่ง / ปรับรายวัน) เหมือน Daily Availability · เดิมใช้ b.cap พื้นฐาน
+       วัดจริง 30 วัน · ไม่ตรงกัน 30 จุด เช่น 19 พ.ย. Aluminous2 = 57 แต่ปฏิทินคิด 44 → ว่าง 0 แทน 13 */
+    const cap=(typeof laCapOn==='function')?laCapOn(x.b, ds):x.b.cap, op=x.op;
     const _ck=x.r.id+'|'+x.b.id;
     const isCharter = op.type==='charter' || op.charterBookingId || (_chtrBoat[_ck]!==undefined);
     let booked, free;
@@ -6222,7 +6224,10 @@ function buildDAGroups(ds){
       //   ไม่งั้นข้อความที่ส่งเอเจ้นเจ้าอื่นจะบอกว่าว่าง ทั้งที่กันไว้ให้อีกเจ้าแล้ว
       g.locked = al.lockedSeats||0;
       g.booked = (al.seatsConsumed||0) + g.locked;
-      if((al.availableCapacity||0)>0) g.allot = al.availableCapacity; } }
+      /* §daCharter (2026-11-18) · เรือทุกลำของเส้นทางถูกเหมา → availableCapacity = 0 คือคำตอบจริง (ขายที่นั่งไม่ได้)
+         เดิมข้ามค่า 0 แล้วใช้ความจุเต็มของเรือ · ข้อความส่งเอเจ้นบอก "ว่าง 76" ทั้งที่เหมาไปทั้งสองลำ (Se La Va 27 พ.ย.) */
+      if(al.hasAllotment) g.allot = Math.max(0, al.availableCapacity||0);
+      else if((al.availableCapacity||0)>0) g.allot = al.availableCapacity; } }
   }); });
   return groups;
 }
