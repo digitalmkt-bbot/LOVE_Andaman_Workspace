@@ -61565,7 +61565,7 @@ function bkV2RenderTab2(){
         const _sz=_selTrip[0].zone;
         const inZone=_selTrip.filter(a=>a.zone===_sz);
         const selPax=inZone.reduce((s,a)=>s+a.head,0);
-        const existing=[...new Set([].concat.apply([],grp.filter(r=>((r.charter&&!r.cxl)?'__CHARTER__':r.zone)===_sz).map(r=>{ const _o=(typeof bkOpsRead==='function')?bkOpsRead(r.bk,date):(r.bk.ops||{}); if(_o&&Array.isArray(_o.vanSplits)) return _o.vanSplits.map(s=>+s.vanGroup||0); return [+(_o&&_o.vanGroup)||0]; })).filter(g=>g>0))];
+        const existing=[...new Set([].concat.apply([],grp.filter(r=>((r.charter&&!r.cxl)?'__CHARTER__':r.zone)===_sz).map(r=>{ const _o=(typeof bkOpsRead==='function')?bkOpsRead(r.bk,date):(r.bk.ops||{}); if(_o&&Array.isArray(_o.vanSplits)) return _o.vanSplits.map(s=>+s.vanGroup||0); return [+(_o&&_o.vanGroup)||0]; })).filter(g=>g>0))].sort((a,b)=>a-b);   /* §vgrpWrap · เรียงเลขกรุ๊ป 1→N */
         groupRow=`<div style="display:flex;align-items:center;gap:8px;height:44px;box-sizing:border-box;padding:0 16px 0 21px;background:#EAF3FB;border-top:1px solid #CFE0F2;overflow-x:auto;flex-wrap:nowrap">
           <span style="display:inline-flex;align-items:baseline;gap:8px;flex:none"><span class="bkv2-selcount" style="background:#185FA5;color:#fff;font-family:'DM Mono',monospace;font-size:24px;font-weight:700;line-height:1;border-radius:10px;padding:7px 16px;box-shadow:0 2px 6px rgba(24,95,165,.3)">${selPax}</span><span style="color:#0C447C;font-size:13px;font-weight:700">pax</span><span style="color:#5a7290;font-size:11px;font-family:'DM Mono',monospace">· ${inZone.length} ราย</span></span>
           <button onclick="event.stopPropagation();bkV2VanGroupSelected('${date}','${rid}','${_sz}','new')" style="background:#185FA5;color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none">&#128101; จับเป็นกรุ๊ปใหม่</button>
@@ -62934,9 +62934,12 @@ function bkV2RenderTab2(){
     .bt-vtrip span{font-size:9px;color:#948f88;font-weight:600;white-space:nowrap}
     .bt-vgrp{border-top:1px solid #E4EFE9}
     /* แถบ Grouping เดิมสูง 44px ตายตัว · ในการ์ดให้ยืดตามเนื้อหาและตัดขอบซ้ายทิ้ง */
+    /* §vgrpWrap (2026-11-18) · owner: "มันล้นจอไป อันที่ล้นไปก็ไม่เห็น"
+       เดิมเรียงแถวเดียวแล้วเลื่อนข้าง · 13 กรุ๊ป (Phi Phi SB 19 พ.ย.) ปุ่มท้าย ๆ หลุดขอบขวา ไม่มีแถบเลื่อนให้เห็น
+       ตอนนี้ตกบรรทัดเอง · เกิน 3 แถวค่อยเลื่อนลง */
     .bt-vgrp>div{height:auto !important;min-height:46px;padding:6px 10px !important;
-      border-top:0 !important;flex-wrap:nowrap !important;overflow-x:auto !important;
-      overflow-y:hidden !important;overscroll-behavior:contain}
+      border-top:0 !important;flex-wrap:wrap !important;row-gap:6px;overflow-x:hidden !important;
+      overflow-y:auto !important;max-height:132px;overscroll-behavior:contain}
     .bt-vgrp>div+div{border-top:1px dashed #E4EFE9 !important}
     /* ป้ายชื่อทริปเหนือแถบจับกลุ่ม · โผล่เฉพาะตอนติ๊กข้ามทริปจนมีหลายแถบ */
     .bt-vgrpt{display:flex;align-items:center;gap:6px;padding:6px 11px 0;font-size:10px}
