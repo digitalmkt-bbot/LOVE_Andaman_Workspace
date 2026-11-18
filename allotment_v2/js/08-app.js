@@ -38732,13 +38732,111 @@ function pxStepTable(e, M, title, sub){
       +'<td><span class="num cost n">'+pxN(s.dep)+'</span></td>'+cell(a3,s.rev,'st3')+'</tr>';
   }
   var T=Object.assign({}, M.T, { name:L.length+' programme'+(L.length===1?'':'s') });
-  return '<div class="eg mb"><div class="phd"><div><h2>'+title+'</h2><p>'+sub+'</p></div></div>'
+  /* §pxSankey · สลับ ตาราง | แผนภาพ */
+  var _sk=(pxStViewGet()==='s') ? pxSankey(e, M) : null;
+  var _hd='<div class="eg mb"><div class="phd" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h2>'+title+'</h2><p>'+sub+'</p></div>'+pxStViewBtns()+'</div>';
+  if(_sk && _sk.ok) return _hd+_sk.html+'</div>';
+  return _hd+((_sk && !_sk.ok)?('<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border:1px solid #F5D98B;border-radius:8px;padding:7px 11px;margin:0 0 8px">'+e(_sk.why)+'</div>'):'')
     +'<div class="twrap"><div class="tscroll"><table class="sum stp" style="min-width:980px"><thead><tr>'
     +'<th class="l">Programme</th><th class="c">Trips</th><th class="c">Pax</th><th>Revenue</th>'
     +'<th>1 · Operation cost</th><th class="st1">After operation</th>'
     +'<th>2 · Wages</th><th class="st2">After wages</th>'
     +'<th>3 · Depreciation</th><th class="st3">Net per trip</th></tr></thead><tbody>'
     +L.map(function(s){ return row(s,false); }).join('')+row(T,true)+'</tbody></table></div></div></div>';
+}
+
+/* ══ §pxSankey (2026-11-18) · owner: ส่งภาพ income statement แบบเส้นไหล "ถ้าเอาไปวาดไว้กับ P&L เราจะเป็นแบบไหน" → "เอาเป็นแบบคลิกสลับ"
+   การ์ด Profit by step สลับดูได้ 2 แบบ: ตาราง | แผนภาพ · ใช้ข้อมูลชุดเดียวกับตาราง (pxStMerge) ตัวเลขจึงตรงกันเสมอ
+   ชั้น: โปรแกรม → ท่าเรือ → รายได้ → หลัง Operation → หลังค่าจ้าง → กำไรระดับทริป · ฝั่งขวาแตกรายบรรทัดของ Operation cost และค่าจ้าง
+   จำแบบที่เลือกไว้ในเครื่อง (localStorage · ไม่ลงฐานข้อมูล) · ขั้นไหนติดลบวาดเป็นเส้นไหลไม่ได้ → บอกแล้วแสดงตารางแทน ══ */
+function pxStViewGet(){ if(_px.stView==null){ try{ _px.stView=(localStorage.getItem('la_px_stview')==='s')?'s':'t'; }catch(_){ _px.stView='t'; } } return _px.stView; }
+function pxStView(v){ _px.stView=(v==='s')?'s':'t'; try{ localStorage.setItem('la_px_stview', _px.stView); }catch(_){} renderTripPL(); }
+function pxStViewBtns(){
+  var v=pxStViewGet();
+  function b(k,l){ var on=(v===k); return '<button type="button" onclick="pxStView(\''+k+'\')" aria-pressed="'+(on?'true':'false')+'" style="font:700 11.5px inherit;border:0;border-radius:7px;padding:6px 13px;cursor:pointer;'
+    +(on?'background:#0F172A;color:#fff':'background:transparent;color:#475569')+'">'+l+'</button>'; }
+  return '<div style="display:inline-flex;gap:2px;background:#EEF2F6;border-radius:9px;padding:3px;flex:none">'+b('t','ตาราง')+b('s','แผนภาพ')+'</div>';
+}
+function pxSkPier(k){
+  try{
+    if(k==='p:ranong') return 'ranong';
+    if(k.indexOf('r:')===0){ var r0=(typeof getRoute==='function')?getRoute(k.slice(2)):null; return (r0&&r0.pier)||''; }
+    if(k.indexOf('f:')===0 && typeof ROUTES!=='undefined'){ var id=k.slice(2);
+      for(var i=0;i<ROUTES.length;i++){ var f=bkV2RouteFamily(ROUTES[i].id); if(f && f.id===id && ROUTES[i].pier) return ROUTES[i].pier; } }
+  }catch(_){}
+  return '';
+}
+function pxSkM(v){ v=Math.round(v||0); var a=Math.abs(v); return '฿'+(a>=1e6?((a/1e6).toFixed(2)+'M'):(a>=1e3?(Math.round(a/1e3)+'K'):String(a))); }
+function pxSankey(e, M){
+  var T=M.T, rev=+T.rev||0, a1=rev-T.op, a2=a1-T.wage, a3=a2-T.dep;
+  if(!(rev>0) || a1<=0 || a2<=0 || a3<=0)
+    return { ok:false, why:(rev>0 ? 'ช่วงนี้มีขั้นที่ขาดทุน แผนภาพเส้นไหลวาดยอดติดลบไม่ได้ จึงแสดงเป็นตารางแทน' : 'ยังไม่มีรายได้ในช่วงนี้') };
+  var G='#1F7A4D', R='#B3372F', K='#111827', PC={ panwa:'#0E7C6B', tublamu:'#1D5FA8', ranong:'#8A4FBF', other:'#5B289A' },
+      PN={ panwa:'Visit Panwa', tublamu:'Tub Lamu', ranong:'Ranong', other:'Other' };
+  var S=440/rev, NW=22, X=[200,370,560,740,910,1090], W=1400;
+  var hOf=function(v){ return Math.max(v*S, 1.5); };
+  var pct=function(v){ var p=v/rev*100; return (p>=10?p.toFixed(0):p.toFixed(1))+'%'; };
+  var N={}, links=[], lab=[];
+  function put(id, col, y, v, c){ N[id]={ x:X[col], y:y, h:hOf(v), c:c, v:v, o:0, i:0 }; return y+hOf(v); }
+  /* ขวาสุด: กำไร · ค่าเสื่อม · รายบรรทัดค่าจ้าง · รายบรรทัด Operation */
+  var y=60, PITCH=20;
+  function leaf(id, v, c, gapAfter){ var b=put(id, 5, y, v, c); y=Math.max(b+ (gapAfter||0), N[id].y+PITCH); }
+  leaf('pf', a3, G, 26);
+  if(T.dep>0) leaf('dep', T.dep, R, 30);
+  var wl=PX_ST_WG.map(function(p){ return { k:p[0], l:p[1], v:+T.ln[p[0]]||0 }; }).filter(function(p){ return p.v>0; }).sort(function(a,b){ return b.v-a.v; });
+  var ol=PX_ST_OP.map(function(p){ return { k:p[0], l:p[1], v:+T.ln[p[0]]||0 }; }).filter(function(p){ return p.v>0; }).sort(function(a,b){ return b.v-a.v; });
+  wl.forEach(function(p){ leaf('w_'+p.k, p.v, R, 14); });
+  y+=20;
+  ol.forEach(function(p){ leaf('o_'+p.k, p.v, R, 14); });
+  var yEnd=y;
+  /* ชั้นกลาง */
+  put('aw', 4, 80, a2, G); if(T.wage>0) put('wg', 4, 80+hOf(a2)+62, T.wage, R);
+  put('gp', 3, 120, a1, G); put('op', 3, 120+hOf(a1)+96, T.op, R);
+  put('rev', 2, 184, rev, K);
+  /* ซ้าย: โปรแกรม → ท่าเรือ */
+  var fams=Object.keys(M.fam).map(function(k){ var f=M.fam[k]; return { k:k, name:f.name, v:+f.rev||0, pier:pxSkPier(k)||'other' }; }).filter(function(f){ return f.v>0; });
+  var pord=['panwa','tublamu','ranong','other'], piers=[];
+  pord.forEach(function(p){ var L=fams.filter(function(f){ return f.pier===p; }).sort(function(a,b){ return b.v-a.v; }); if(L.length) piers.push({ p:p, L:L, v:L.reduce(function(s,f){ return s+f.v; },0) }); });
+  var mid=184+220, GP=70, GF=24;
+  var ph=piers.reduce(function(s,p){ return s+hOf(p.v); },0)+GP*(piers.length-1), py=Math.max(70, mid-ph/2);
+  var nF=fams.length, fh=fams.reduce(function(s,f){ return s+Math.max(hOf(f.v),0); },0)+GF*(nF-1)+14*(piers.length-1), fy=Math.max(50, mid-fh/2);
+  piers.forEach(function(p){
+    var c=PC[p.p]||'#64748B';
+    p.L.forEach(function(f){ var id='f_'+f.k; var b=put(id, 0, fy, f.v, c); fy=Math.max(b+GF, N[id].y+34); links.push([id,'p_'+p.p,f.v,c]);
+      lab.push({ a:'end', x:X[0]-10, y:N[id].y+N[id].h/2-3, t1:f.name, c1:c, t2:pxSkM(f.v)+' · '+pct(f.v) }); });
+    fy+=14;
+    py=put('p_'+p.p, 1, py, p.v, c)+GP; links.push(['p_'+p.p,'rev',p.v,c]);
+    lab.push({ a:'middle', x:X[1]+NW/2, y:N['p_'+p.p].y-26, t1:PN[p.p]||p.p, c1:c, t2:pxSkM(p.v)+' · '+pct(p.v) });
+  });
+  links.push(['rev','gp',a1,G],['rev','op',T.op,R],['gp','aw',a2,G]); if(T.wage>0) links.push(['gp','wg',T.wage,R]);
+  links.push(['aw','pf',a3,G]); if(T.dep>0) links.push(['aw','dep',T.dep,R]);
+  wl.forEach(function(p){ links.push(['wg','w_'+p.k,p.v,R]); });
+  ol.forEach(function(p){ links.push(['op','o_'+p.k,p.v,R]); });
+  var f1=function(n){ return (Math.round(n*10)/10); };
+  var svg='';
+  links.forEach(function(L){ var a=N[L[0]], b=N[L[1]]; if(!a||!b) return; var h=hOf(L[2]);
+    var x0=a.x+NW, y0=a.y+a.o, x1=b.x, y1=b.y+b.i, m=Math.round((x0+x1)/2); a.o+=h; b.i+=h;
+    svg+='<path d="M'+x0+' '+f1(y0)+' C'+m+' '+f1(y0)+' '+m+' '+f1(y1)+' '+x1+' '+f1(y1)+' L'+x1+' '+f1(y1+h)+' C'+m+' '+f1(y1+h)+' '+m+' '+f1(y0+h)+' '+x0+' '+f1(y0+h)+' Z" fill="'+L[3]+'" fill-opacity=".22"/>'; });
+  var bot=yEnd;
+  Object.keys(N).forEach(function(k){ var n=N[k]; bot=Math.max(bot, n.y+n.h); svg+='<rect x="'+n.x+'" y="'+f1(n.y)+'" width="'+NW+'" height="'+f1(n.h)+'" rx="2" fill="'+n.c+'"/>'; });
+  var MU='#4B5563', tx=function(x,y,a,sz,w,c,s){ return '<text x="'+f1(x)+'" y="'+f1(y)+'" text-anchor="'+a+'" font-size="'+sz+'" font-weight="'+w+'" fill="'+c+'">'+s+'</text>'; };
+  lab.forEach(function(l){ svg+=tx(l.x,l.y,l.a,14,700,l.c1,e(l.t1))+tx(l.x,l.y+17,l.a,12,500,MU,l.t2); });
+  var cx=function(id){ return N[id].x+NW/2; };
+  svg+=tx(cx('rev'),N.rev.y-50,'middle',19,700,K,'รายได้')+tx(cx('rev'),N.rev.y-28,'middle',18,700,K,pxSkM(rev))
+     +tx(cx('rev'),N.rev.y-10,'middle',12,500,MU,pxN(T.n)+' ทริป · '+pxN(T.pax)+' pax');
+  function above(id, name, v){ var n=N[id]; svg+=tx(cx(id),n.y-46,'middle',14,700,G,name)+tx(cx(id),n.y-27,'middle',16,700,K,pxSkM(v))+tx(cx(id),n.y-10,'middle',12,500,MU,'margin '+(v/rev*100).toFixed(1)+'%'); }
+  function below(id, name, v){ var n=N[id], b=n.y+n.h; svg+=tx(cx(id),b+18,'middle',14,700,R,name)+tx(cx(id),b+37,'middle',15,700,K,'('+pxSkM(v)+')')+tx(cx(id),b+53,'middle',12,500,MU,pct(v)+' ของรายได้'); bot=Math.max(bot,b+58); }
+  above('gp','กำไรหลัง Operation',a1); above('aw','กำไรหลังค่าจ้าง',a2);
+  below('op','Operation cost',T.op); if(N.wg) below('wg','ค่าจ้าง',T.wage);
+  var lx=X[5]+NW+10, pfm=N.pf.y+N.pf.h/2;
+  svg+=tx(lx,pfm-4,'start',16,700,G,'กำไรระดับทริป')
+     +'<text x="'+lx+'" y="'+f1(pfm+16)+'" font-size="17" font-weight="700" fill="'+G+'">'+pxSkM(a3)+'<tspan dx="8" font-size="12" font-weight="500" fill="'+MU+'">margin '+(a3/rev*100).toFixed(1)+'% · '+pxB(a3/Math.max(1,T.pax))+'/หัว</tspan></text>';
+  function leafLab(id, name, v){ var n=N[id]; if(!n) return; svg+='<text x="'+lx+'" y="'+f1(n.y+n.h/2+5)+'" font-size="13.5" font-weight="700" fill="'+R+'">'+e(name)+'<tspan dx="8" font-size="12" font-weight="500" fill="'+MU+'">('+pxSkM(v)+') · '+pct(v)+'</tspan></text>'; }
+  leafLab('dep','ค่าเสื่อมเรือ',T.dep);
+  wl.forEach(function(p){ leafLab('w_'+p.k,p.l,p.v); }); ol.forEach(function(p){ leafLab('o_'+p.k,p.l,p.v); });
+  var H=Math.ceil(bot+26);
+  return { ok:true, html:'<div style="overflow-x:auto"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="แผนภาพเส้นไหล รายได้ ต้นทุน และกำไรระดับทริป" style="display:block;width:100%;min-width:900px;height:auto;font-family:inherit">'+svg+'</svg></div>'
+    +'<div style="font-size:11px;color:#64748B;padding:2px 4px 8px">ความหนาของเส้น = จำนวนเงิน · % คือสัดส่วนต่อรายได้ · ตัวเลขชุดเดียวกับตาราง</div>' };
 }
 
 /* ══ §pxForecast (2026-11-14) · owner: "ควรมีอีกแถบเป็น Forecast ทั้งเดือนของเดือนนี้" ═══
