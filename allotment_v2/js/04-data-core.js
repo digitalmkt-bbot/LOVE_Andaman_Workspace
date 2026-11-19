@@ -403,6 +403,34 @@ seed();
 // ══════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════
+/* ══ §mjDue (2026-11-19) · owner: "อันไหนที่กำหนดเสร็จ ก็ต้องยึดตามกำหนด · อันไหนยังไม่กำหนด ก็แบบเดิม" ══════════
+   เคส Aluminous1 · MJ-361 ตั้งกำหนดเสร็จ 20 พ.ย. แต่กด Start แล้วระบบเขียนแถวซ่อมแบบไม่มีวันจบ
+   และชั้นใบงาน (boatJobBlock) ก็กันไปจนกว่าจะปิดใบ · ปฏิทินเลยระบายซ่อมยาวถึงสิ้นปี
+   ตอนนี้ · ใบที่กำลังทำ และมีกำหนดเสร็จ → กันเรือถึงวันกำหนดเสร็จเท่านั้น
+            เลยกำหนดแล้วยังไม่ปิดใบ → กันต่อถึง "วันนี้" (ขยับตามวัน) เรือที่ยังซ่อมอยู่จะไม่หลุดไปว่างเอง
+            ใบที่ไม่มีกำหนดเสร็จ → เหมือนเดิมทุกอย่าง (กันจนกว่าจะปิดใบ)
+   คิดตอนอ่านอย่างเดียว · ไม่แก้แถวในตารางสถานะ และไม่แก้ใบงาน */
+function laJobDueEnd(m){
+  var d=String((m&&m.dueDate)||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+  var t=(typeof TODAY_STR!=='undefined')?String(TODAY_STR):'';
+  return (t && d<t) ? t : d;
+}
+function laJobOverdue(m){ var d=String((m&&m.dueDate)||'').slice(0,10); return !!(m && m.status==='inprogress' && /^\d{4}-\d{2}-\d{2}$/.test(d) && typeof TODAY_STR!=='undefined' && d<String(TODAY_STR)); }
+/* แถวสถานะที่มาจากใบซ่อม (note "Maintenance Job MJ-xxx" หรือ id sl_sync_<job id>) ยังไม่มีวันจบ และใบยังทำอยู่ → วันสุดท้ายที่นับ · ไม่เข้าเงื่อนไข = '' */
+function laRowDueEnd(e){
+  try{
+    if(!e || e.to || (e.s||'available')==='available') return '';
+    if(typeof FL_MAINT==='undefined' || !Array.isArray(FL_MAINT)) return '';
+    var mm=/Maintenance Job (MJ-\d+)/.exec(String(e.note||'')), no=mm?mm[1]:'', id=String(e.id||'');
+    if(!no && id.indexOf('sl_sync_')!==0) return '';
+    var jid=id.indexOf('sl_sync_')===0?id.slice(8).replace(/-\d+$/,''):'';
+    var m=null;
+    for(var i=0;i<FL_MAINT.length;i++){ var x=FL_MAINT[i]; if(x && ((no && x.no===no) || (jid && x.id===jid))){ m=x; break; } }
+    if(!m || m.status!=='inprogress') return '';
+    return laJobDueEnd(m);
+  }catch(_){ return ''; }
+}
 function getStoredStatus(boat,ds){
   // §flBoatPersist · วันที่มีผลเท่ากัน ให้ entry ที่บันทึกทีหลังชนะ (ถือเป็นการแก้ไขล่าสุด)
   //   เดิมเรียงด้วย from อย่างเดียว · เสมอกันแล้ว sort คงลำดับเดิม → ของเก่าชนะ
@@ -410,7 +438,8 @@ function getStoredStatus(boat,ds){
   const sorted=(boat.log||[]).map((e,i)=>({e,i}))
     .sort((a,b)=> b.e.from.localeCompare(a.e.from) || (b.i-a.i))
     .map(x=>x.e);
-  const hit=sorted.find(e=>e.from<=ds&&(!e.to||e.to>=ds));
+  /* §mjDue · แถวซ่อมที่ยังไม่มีวันจบ แต่ใบงานของมันตั้งกำหนดเสร็จไว้ → นับถึงวันกำหนดเสร็จ (ดู laJobDueEnd) */
+  const hit=sorted.find(e=>{ if(e.from>ds) return false; if(e.to) return e.to>=ds; const cap=laRowDueEnd(e); return !cap || cap>=ds; });
   if(hit) return hit;
   /* ══ §chWin · "ไม่มีรายการคลุมวันนั้น" แปลไม่เหมือนกันระหว่างเรือสองแบบ ═════════
      log สถานะถูกออกแบบเป็น "รายการข้อยกเว้น" ไม่ใช่ "ปฏิทินว่าเรือมีอยู่วันไหน"
@@ -569,9 +598,10 @@ function boatJobBlock(boatId, ds, raw){
         var t=m.boatStatus||'fixing';
         if(t==='available') return;
         if((m.startDate||'')>ds) return;            // ใบที่ยังไม่ถึงวันเริ่ม ไม่กันวันนี้
+        var _de=laJobDueEnd(m); if(_de && ds>_de) return;   // §mjDue · มีกำหนดเสร็จ = กันถึงวันนั้น (เลยกำหนด = ถึงวันนี้)
         if(_skip(m.no)) return;                     // §boatPlanAhead · วางแผนล่วงหน้าไว้แล้ว
         if(_boatRank(t)>_boatRank(out.s)) out.s=t;
-        out.jobs.push({no:m.no||'MJ', t:t, kind:'mj', r:m.boatStatusReason||''});
+        out.jobs.push({no:m.no||'MJ', t:t, kind:'mj', r:m.boatStatusReason||'', due:String(m.dueDate||''), od:laJobOverdue(m)});
       });
     }
   }catch(_e){}
@@ -7240,6 +7270,18 @@ function renderBoatDetailPink(){
         ${_bsLg('border:2px solid #0F1B3D','Today')}
       </div>
     </div>
+    ${(function(){ try{   /* §mjDue · บอกว่าปฏิทินกันเรือถึงวันไหน เพราะใบไหน */
+      if(typeof FL_MAINT==='undefined') return '';
+      var L=FL_MAINT.filter(function(m){ return m && m.boatId===b.id && m.status==='inprogress' && m.setFixing!==false && (m.boatStatus||'fixing')!=='available'; });
+      if(!L.length) return '';
+      var E=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+      return '<div style="display:flex;flex-wrap:wrap;gap:6px 8px;margin:0 0 12px">'+L.map(function(m){
+        var od=laJobOverdue(m), due=String(m.dueDate||'').slice(0,10);
+        var bg=od?'#FBE3E0':(due?'#EAF1FB':'#F4F5F7'), fg=od?'#8E2019':(due?'#1E4A8C':'#5B6170');
+        var tx=od?('เลยกำหนดเสร็จ '+due+' · ยังไม่ปิดใบ · กันเรือต่อถึงวันนี้'):(due?('กำหนดเสร็จ '+due+' · ปฏิทินกันเรือถึงวันนั้น'):'ยังไม่ตั้งกำหนดเสร็จ · กันเรือจนกว่าจะปิดใบ');
+        return '<span style="background:'+bg+';color:'+fg+';font-size:11.5px;font-weight:600;border-radius:8px;padding:4px 10px"><b style="font-family:\'DM Mono\',monospace;font-weight:500">'+E(m.no||'MJ')+'</b> · '+E(tx)+'</span>';
+      }).join('')+'</div>';
+    }catch(_){ return ''; } })()}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px 20px">${yearHtml}</div>
     <div data-bspier-legend="1" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:12px 0 18px;font-size:11.5px;color:#3E4658">
       <span style="color:#5B6170">Where the boat is that day:</span>
