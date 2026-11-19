@@ -442,20 +442,24 @@ function pslCss2(){
   var P='.psl.v2 ';
   s.textContent='.psl.v2{padding:0 0 60px;color:#0F1B3D;font-size:13px;background:#F4F3EF;min-height:100%}'
   +P+'.mn{font-family:"DM Mono",monospace;font-variant-numeric:tabular-nums}'
-  +P+'.hd{background:#16265C;color:#fff;padding:16px 26px 0}'
+  /* §pslHd (19 พ.ย.) · owner "ตรึง Header ไว้ · สีพื้นหลัง Header แยกกัน Visit ใช้สีเดิม Tublamu ใช้สี Cyan ที่เรามี"
+     สีหัวมาจากตัวแปร · Tub Lamu = --ci-cyan #00BCDF ตัวอักษร #002A33 (คู่เดียวกับป้าย TL ที่ใช้ทั้งแอป) · ท่าอื่น = กรมท่าเดิม */
+  +'.psl.v2{--hb:#16265C;--hf:#fff;--hm:#B9C2E0;--ho:rgba(255,255,255,.10);--ho2:rgba(255,255,255,.16);--hk:#16265C;--hs:dark}'
+  +'.psl.v2.p-tublamu{--hb:#00BCDF;--hf:#002A33;--hm:#00566A;--ho:rgba(0,42,51,.10);--ho2:rgba(0,42,51,.16);--hk:#00708A;--hs:light}'
+  +P+'.hd{background:var(--hb);color:var(--hf);padding:16px 26px 0;position:sticky;top:0;z-index:20;box-shadow:0 6px 14px -10px rgba(15,27,61,.45)}'
   +P+'.hr{display:flex;align-items:center;gap:14px;flex-wrap:wrap}'
-  +P+'.hr .ic{width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}'
-  +P+'.hr .ti i{display:block;font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:#B9C2E0}'+P+'.hr .ti h2{font-size:20px;font-weight:700;margin:0;line-height:1.2;color:#fff}'
-  +P+'.pz{display:inline-flex;background:rgba(255,255,255,.10);border-radius:11px;padding:3px;margin-left:8px}'+P+'.pz button{border:0;background:transparent;color:#D5DBF0;padding:6px 14px;border-radius:9px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer}'+P+'.pz button.on{background:#fff;color:#16265C;font-weight:700;cursor:default}'
+  +P+'.hr .ic{width:38px;height:38px;border-radius:11px;background:var(--ho2);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}'
+  +P+'.hr .ti i{display:block;font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--hm)}'+P+'.hr .ti h2{font-size:20px;font-weight:700;margin:0;line-height:1.2;color:var(--hf)}'
+  +P+'.pz{display:inline-flex;background:var(--ho);border-radius:11px;padding:3px;margin-left:8px}'+P+'.pz button{border:0;background:transparent;color:var(--hf);opacity:.85;padding:6px 14px;border-radius:9px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer}'+P+'.pz button.on{background:#fff;color:var(--hk);font-weight:700;cursor:default;opacity:1}'
   +P+'.hx{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
-  +P+'.hx .dt{display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,.10);border-radius:10px;padding:3px}'
-  +P+'.hx .dt button{border:0;background:transparent;color:#fff;font-size:16px;width:30px;height:30px;border-radius:8px;cursor:pointer;font-family:inherit}'+P+'.hx .dt button:hover{background:rgba(255,255,255,.14)}'
-  +P+'.hx .dt input{border:0;background:transparent;color:#fff;font-family:"DM Mono",monospace;font-size:13px;font-weight:500;padding:4px 4px;color-scheme:dark}'
+  +P+'.hx .dt{display:inline-flex;align-items:center;gap:2px;background:var(--ho);border-radius:10px;padding:3px}'
+  +P+'.hx .dt button{border:0;background:transparent;color:var(--hf);font-size:16px;width:30px;height:30px;border-radius:8px;cursor:pointer;font-family:inherit}'+P+'.hx .dt button:hover{background:var(--ho2)}'
+  +P+'.hx .dt input{border:0;background:transparent;color:var(--hf);font-family:"DM Mono",monospace;font-size:13px;font-weight:500;padding:4px 4px;color-scheme:var(--hs)}'
   +P+'.hx .dt b{font-family:"DM Mono",monospace;font-weight:500;font-size:13px;min-width:96px;text-align:center}'
-  +P+'.hx .hb2{border:0;background:rgba(255,255,255,.10);color:#fff;border-radius:10px;padding:8px 13px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}'+P+'.hx .hb2.on{background:#fff;color:#16265C}'
-  +P+'.hx .up{background:#fff;color:#16265C;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}'
+  +P+'.hx .hb2{border:0;background:var(--ho);color:var(--hf);border-radius:10px;padding:8px 13px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}'+P+'.hx .hb2.on{background:#fff;color:var(--hk)}'
+  +P+'.hx .up{background:#fff;color:var(--hk);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}'
   +P+'.tabs{display:inline-flex;gap:4px;margin-top:14px;background:#fff;border-radius:13px 13px 0 0;padding:6px}'
-  +P+'.tabs button{border:0;background:transparent;padding:8px 16px;border-radius:10px;font-size:13.5px;font-weight:500;font-family:inherit;color:#5B6170;cursor:pointer;display:inline-flex;align-items:center;gap:6px}'+P+'.tabs button.on{background:#16265C;color:#fff;font-weight:700}'
+  +P+'.tabs button{border:0;background:transparent;padding:8px 16px;border-radius:10px;font-size:13.5px;font-weight:500;font-family:inherit;color:#5B6170;cursor:pointer;display:inline-flex;align-items:center;gap:6px}'+P+'.tabs button.on{background:var(--hk);color:#fff;font-weight:700}'
   +P+'.tabs em{font-style:normal;background:#F6C453;color:#5C3B00;font-size:9.5px;font-weight:700;border-radius:99px;padding:1px 6px}'
   +P+'.bd{padding:20px 26px 0}'
   +P+'.cd{background:#fff;border:1px solid #E6E7EB;border-radius:16px;padding:18px 20px;min-width:0}'
@@ -567,7 +571,7 @@ function renderPosSales(pier){
     ctl='<div class="dt"><button onclick="pslMon(-1)" title="เดือนก่อนหน้า">&#8249;</button><b>'+e(pslMonLbl(mon))+'</b><button onclick="pslMon(1)" title="เดือนถัดไป">&#8250;</button></div>'
       +'<button class="hb2'+(mon==='all'?' on':'')+'" onclick="pslMon(\'all\')">ทุกเดือน</button>';
   }
-  var h='<div class="psl v2"><div class="hd"><div class="hr"><span class="ic">&#128717;</span><div class="ti"><i>POS · SHOP SALES</i><h2>ยอดขายร้านค้า</h2></div>'
+  var h='<div class="psl v2 p-'+e(_psl.pier)+'"><div class="hd"><div class="hr"><span class="ic">&#128717;</span><div class="ti"><i>POS · SHOP SALES</i><h2>ยอดขายร้านค้า</h2></div>'
     +'<div class="pz">'+piers.map(function(p){ return '<button class="'+(p===_psl.pier?'on':'')+'" onclick="pslGoPier(\''+p+'\')">'+e(pslPierName(p))+'</button>'; }).join('')+'</div>'
     +'<div class="hx">'+ctl+'</div></div>'
     +'<div class="tabs">'+tb('ov','ภาพรวม',1)+tb('day','บันทึกรายวัน')+tb('an','วิเคราะห์')+tb('reg','ทะเบียนสินค้า')+'</div></div><div class="bd">';
