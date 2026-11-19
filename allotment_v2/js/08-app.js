@@ -4675,10 +4675,12 @@ function laAskSheet(opt){
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
       +'<button type="button" data-ask="no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">'+e(opt.noLabel||'ยกเลิก')+'</button>'
       +'<button type="button" data-ask="yes" style="padding:12px 0;border:none;border-radius:11px;background:'+(opt.color||'#A32D2D')+';color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">'+e(opt.okLabel||'ยืนยัน')+'</button>'
-    +'</div></div>';
+    +'</div>'+(opt.cancelLabel?('<button type="button" data-ask="cancel" style="margin-top:11px;border:none;background:none;color:#7C8091;font:600 12.5px inherit;cursor:pointer;text-decoration:underline;padding:6px 10px">'+e(opt.cancelLabel)+'</button>'):'')+'</div>';
   document.body.appendChild(ov);
   var close=function(){ try{ ov.remove(); }catch(_){} };
-  ov.querySelector('[data-ask="no"]').onclick=close;
+  /* §selfAsk · ปุ่มซ้ายทำงานได้ถ้าส่ง onNo มา · ไม่ส่ง = ปิดเฉย ๆ เหมือนเดิม · cancelLabel = ลิงก์ยกเลิกแถวล่าง */
+  ov.querySelector('[data-ask="no"]').onclick=function(){ close(); try{ if(typeof opt.onNo==='function') opt.onNo(); }catch(err){ console.warn('laAskSheet', err); } };
+  if(ov.querySelector('[data-ask="cancel"]')) ov.querySelector('[data-ask="cancel"]').onclick=close;
   ov.onclick=function(ev){ if(ev.target===ov) close(); };
   ov.querySelector('[data-ask="yes"]').onclick=function(){ close(); try{ if(typeof opt.onYes==='function') opt.onYes(); }catch(err){ console.warn('laAskSheet', err); } };
 }
@@ -10885,10 +10887,24 @@ function _bkV2VanNextGroup(date, routeId, zone){
   });
   return mx+1;
 }
-function bkV2VanGroupSelected(date, routeId, zone, groupId){
+function bkV2VanGroupSelected(date, routeId, zone, groupId, _selfOk){
   const sel=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
   const keys=sel.filter(key=>{ const b=SB_BOOKINGS.find(x=>x.id===String(key).split('@')[0]); return b && _bkV2InZone(b,date,routeId,zone); });
   if(!keys.length) return;
+  /* §selfAsk · ผู้ใช้ถาม 19 พ.ย. "จะมีเตือน เผื่อ User เผลอกดผิดไหม" · เคส NMH507214: RSVN ติ๊กมาเอง แล้วคนจัดรถจับเข้ากรุ๊ปต่อ ไม่มีอะไรถาม
+     จับบุคกิ้งที่ติ๊ก "มาเอง" เข้ากรุ๊ปรถ → ถามก่อนว่ารถคันนี้ส่งกลับอย่างเดียว หรือเอาติ๊กออกให้รถไปรับ */
+  if(!_selfOk && typeof laAskSheet==='function'){
+    const _sf=[]; keys.forEach(key=>{ const b=SB_BOOKINGS.find(x=>x.id===String(key).split('@')[0]); if(b && b.pickupSelf && _sf.indexOf(b)<0) _sf.push(b); });
+    if(_sf.length){
+      const _nm=_sf.map(b=>'• '+(b.leadPax||'-')+' ('+(b.voucherRef||b.id)+')'+((b.hotelName||'').trim()?(' · '+(b.hotelName||'').trim()):'')).join('\n');
+      laAskSheet({ title:'มีลูกค้าติ๊ก "มาเอง" '+_sf.length+' ราย',
+        body:_nm+'\n\nขาไปลูกค้ามาเองที่ท่าเรือ รถจะไม่ไปรับ และไม่ขึ้นในใบงานรถขาไป\nจับเข้ากรุ๊ปนี้ = ใช้รถคันนี้ส่งกลับอย่างเดียว\n\nถ้าต้องให้รถไปรับที่โรงแรมด้วย เลือก "เอาติ๊กออก"',
+        okLabel:'ส่งกลับอย่างเดียว', color:'#5B289A', noLabel:'เอาติ๊กออก · ให้รถไปรับ', cancelLabel:'ยกเลิก ไม่จับกรุ๊ป',
+        onYes:function(){ bkV2VanGroupSelected(date, routeId, zone, groupId, true); },
+        onNo:function(){ _sf.forEach(b=>{ b.pickupSelf=false; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','เอาติ๊ก "ลูกค้ามาเอง" ออกตอนจัดรถ · ให้รถไปรับที่จุดรับ','Edited'); }); bkV2VanGroupSelected(date, routeId, zone, groupId, true); } });
+      return;
+    }
+  }
   const gid=(groupId==='new')?_bkV2VanNextGroup(date,routeId,zone):(+groupId);
   // current max pickup-seq + the group's existing van/return-van (so rows added to a group that already has a van INHERIT it immediately)
   let _maxSeq=0, _gVan=null, _gRet=null;
