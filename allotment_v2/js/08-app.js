@@ -56332,6 +56332,7 @@ function bkV2RenderNewBooking(){
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bkV2RenderAttachSection()}
+             <div id="nbf-diff-slot" style="display:contents">${(typeof bkV2EditDiffHtml==='function')?bkV2EditDiffHtml():''}</div>
              <div id="nbf-checks-slot" style="display:contents">${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                <div id="nbf-submit-slot" style="display:contents">${bkV2RenderSubmitButton()}</div>
@@ -57218,6 +57219,93 @@ function bkV2HasAvailableAddOns(){
 }
 
 // Right-column live Review · summarizes what's been filled
+/* ══ §nbDiff · ป้าย "มีการแก้ไข" ในแผง Booking Review ═══════════════════════
+   ผู้ใช้ขอ 19 พ.ย. · ตอนแก้บุคกิ้ง ให้เห็นก่อนกด Update ว่าแก้อะไร จากอะไรเป็นอะไร
+   (ที่มา: เคสติ๊ก "มาเอง" โดยไม่ตั้งใจ แล้วไม่มีใครเห็นจนใบงานรถออก)
+   เทียบร่างในฟอร์มกับภาพที่ถ่ายไว้ตอนกด Edit · ไม่เทียบกับ SB_BOOKINGS สด
+   เพราะถ้าคนอื่นแก้ใบเดียวกันระหว่างนั้น จะขึ้นเป็นว่าเราแก้ทั้งที่ไม่ได้แตะ
+   เทียบเฉพาะช่องที่คนกรอกเอง · ไม่เทียบช่องที่ฟอร์มเติมค่าให้อัตโนมัติ */
+function bkV2EditDiff(o, d){
+  var out=[]; if(!o||!d) return out;
+  var S=function(x){ return String(x==null?'':x).trim(); };
+  var add=function(lab,a,b,tone){ if(S(a)!==S(b)) out.push({lab:lab, from:S(a), to:S(b), tone:tone||''}); };
+  var agN=function(id){ try{ var a=id&&typeof sbGetAgent==='function'?sbGetAgent(id):null; return a?(a.name||id):S(id); }catch(_){ return S(id); } };
+  var rtN=function(id){ try{ var r=id&&typeof SB_RATE_TYPES!=='undefined'?(SB_RATE_TYPES||[]).find(function(x){ return x.id===id; }):null; return r?(r.name||id):S(id); }catch(_){ return S(id); } };
+  var arN=function(id){ try{ var a=id&&typeof bkV2GetArea==='function'?bkV2GetArea(id):null; return a?(a.name||id):S(id); }catch(_){ return S(id); } };
+  var roN=function(id){ try{ var r=id&&typeof ROUTES!=='undefined'?ROUTES.find(function(x){ return x.id===id; }):null; return r?(r.name||id):S(id); }catch(_){ return S(id); } };
+  var dmy=function(x){ return x?((typeof bkNbfDMY==='function')?bkNbfDMY(x):x):''; };
+  var px=function(p){ var L={ad:'AD',chd:'CHD',inf:'INF',foc:'FOC'}, r=[]; ['ad','chd','inf','foc'].forEach(function(k){ var n=0; try{ n=(typeof bkV2PaxTot==='function')?(+bkV2PaxTot(p||{},k)||0):0; }catch(_){ } if(n) r.push(n+' '+L[k]); }); return r.join(' · ')||'0'; };
+  if(S(o.agentId)!==S(d.agentId)) add('Agent', agN(o.agentId), agN(d.agentId));
+  add('Voucher', o.voucherRef, d.voucherRef);
+  if(S(o.rateTypeRef)!==S(d.rateTypeRef)) add('Rate type', rtN(o.rateTypeRef), rtN(d.rateTypeRef));
+  add('ชื่อลูกค้า', o.leadPax, d.leadPax);
+  add('เบอร์โทร', o.leadPhone, d.leadPhone);
+  add('อีเมล', o.leadEmail, d.leadEmail);
+  add('สัญชาติ', o.leadNationality, d.leadNationality);
+  /* ทริป */
+  var ot=(o.trips||[]), dt=(d.trips||[]).filter(function(t){ return t&&t.routeId; });
+  if(ot.length!==dt.length) add('จำนวนทริป', ot.length+' ทริป', dt.length+' ทริป');
+  for(var i=0;i<Math.min(ot.length,dt.length);i++){
+    var a=ot[i]||{}, b=dt[i]||{}, pre=(Math.max(ot.length,dt.length)>1)?('ทริป '+(i+1)+' · '):'';
+    if(S(a.routeId)!==S(b.routeId)) add(pre+'โปรแกรม', roN(a.routeId), roN(b.routeId));
+    if(S(a.date)!==S(b.date)) add(pre+'วันเดินทาง', dmy(a.date), dmy(b.date));
+    add(pre+'จำนวนคน', px(a.pax), px(b.pax));
+    if(S(a.bookingMode||'seat')!==S(b.bookingMode||'seat')) add(pre+'รูปแบบ', a.bookingMode==='charter'?'เหมาลำ':'ที่นั่ง', b.bookingMode==='charter'?'เหมาลำ':'ที่นั่ง');
+    if(b.pickupTimeEdited && S(a.pickupTime)!==S(b.pickupTime)) add(pre+'เวลารับ', a.pickupTime, b.pickupTime);
+  }
+  /* รับ-ส่ง */
+  if(!!o.pickupSelf!==!!d.pickupSelf) out.push({lab:'ขารับ', from:o.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับ', to:d.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับ', tone:'warn', note:d.pickupSelf?'ขาไปจะไม่มีรถไปรับ และไม่ขึ้นในใบงานรถขาไป':'รถจะไปรับที่จุดรับ และขึ้นในใบงานรถขาไป'});
+  if(S(o.pickupAreaId)!==S(d.pickupAreaId)) add('พื้นที่รับ', arN(o.pickupAreaId), arN(d.pickupAreaId));
+  add('โรงแรม / จุดรับ', o.hotelName, d.hotelName);
+  add('ห้อง', o.roomNumber, d.roomNumber);
+  var dr=function(x){ return (x.dropoffSame!==false && !x.dropoffAreaId && !S(x.dropoffHotelName)) || x.dropoffSame===true ? 'เหมือนจุดรับ' : (S(x.dropoffHotelName)||arN(x.dropoffAreaId)||'—'); };
+  add('จุดส่งกลับ', dr(o), dr(d));
+  add('กระเป๋าใหญ่', o.largeLuggage||'', d.largeLuggage||'');
+  add('หมายเหตุ', o.notes, d.notes);
+  var J=function(x){ try{ return JSON.stringify(x||[]); }catch(_){ return ''; } };
+  var nAlt=function(x){ return (Array.isArray(x)?x:[]).filter(function(a){ return a&&(S(a.who)||S(a.place)||a.areaId); }).length; };
+  if(J((o.altPickups||[]))!==J((d.altPickups||[])) && (nAlt(o.altPickups)||nAlt(d.altPickups))) out.push({lab:'รับหลายจุด', from:nAlt(o.altPickups)+' จุด', to:nAlt(d.altPickups)+' จุด'+(nAlt(o.altPickups)===nAlt(d.altPickups)?' (แก้รายละเอียด)':'')});
+  var nAdj=function(x){ return (Array.isArray(x)?x:[]).filter(function(a){ return a&&(+a.value||0); }).length; };
+  if(J(o.adjustments)!==J(d.adjustments) && (nAdj(o.adjustments)||nAdj(d.adjustments))) out.push({lab:'ส่วนลด / ค่าใช้จ่ายเพิ่ม', from:nAdj(o.adjustments)+' รายการ', to:nAdj(d.adjustments)+' รายการ'+(nAdj(o.adjustments)===nAdj(d.adjustments)?' (แก้ยอด)':'')});
+  /* ยอดเงิน · ข้ามถ้าใบนี้มีธงราคาเคลื่อน (§rtKeep) เพราะยอดต่างตั้งแต่ยังไม่แตะอะไร */
+  try{
+    if(!(d._rtKeep && d._rtKeep.drift) && typeof bkV2CalcQuote==='function'){
+      var was=Math.round(+o.total||0), now=Math.round(+(bkV2CalcQuote()||{}).grandTotal||0);
+      if(was!==now && isFinite(now)) out.push({lab:'ยอดรวม', from:'฿'+was.toLocaleString(), to:'฿'+now.toLocaleString(), tone:'money'});
+    }
+  }catch(_){}
+  return out;
+}
+function bkV2EditDiffHtml(){
+  try{
+    if(!_bkV2 || !_bkV2.editingId || !_bkV2.newBooking) return '';
+    var sn=_bkV2.editSnap; if(!sn || sn.id!==_bkV2.editingId) return '';
+    var L=bkV2EditDiff(sn.bk, _bkV2.newBooking);
+    var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    if(!L.length) return '<div style="display:flex;align-items:center;gap:8px;background:#F6F7F9;border:1px solid #E6E8EC;border-radius:12px;padding:9px 13px;margin-bottom:10px;font-size:12px;color:#7C8091"><span style="width:7px;height:7px;border-radius:50%;background:#B8BDC7;flex:none"></span>ยังไม่มีการแก้ไข</div>';
+    var em='<span style="color:#B0B4BE">ว่าง</span>';
+    var rows=L.map(function(c){
+      var w=c.tone==='warn';
+      return '<div style="padding:9px 0;border-top:1px solid '+(w?'#EBD9FB':'#F3E3BF')+'">'
+        +'<div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:'+(w?'#5B289A':'#8A5B00')+'">'+e(c.lab)+'</div>'
+        +'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px;line-height:1.35">'
+          +'<span style="font-size:12.5px;color:#8E93A0;text-decoration:line-through;text-decoration-color:#C9CDD4;overflow-wrap:anywhere">'+(c.from?e(c.from):em)+'</span>'
+          +'<span style="color:'+(w?'#5B289A':'#B7791F')+';font-weight:700;flex:none">&rarr;</span>'
+          +'<span style="font-size:13.5px;font-weight:700;color:'+(w?'#5B289A':'#15264F')+';overflow-wrap:anywhere">'+(c.to?e(c.to):em)+'</span>'
+        +'</div>'
+        +(c.note?('<div style="font-size:11.5px;color:#5B289A;margin-top:4px;line-height:1.4;background:#F3E8FF;border-radius:7px;padding:5px 8px">'+e(c.note)+'</div>'):'')
+        +'</div>';
+    }).join('');
+    return '<div style="background:#FFFAEC;border:1px solid #F0D58A;border-radius:14px;padding:12px 14px 4px;margin-bottom:10px;box-shadow:0 1px 0 rgba(183,121,31,.08)">'
+      +'<div style="display:flex;align-items:center;gap:9px;padding-bottom:9px">'
+        +'<span style="width:26px;height:26px;border-radius:8px;background:#F6C453;color:#5C3B00;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none">&#9998;</span>'
+        +'<span style="font-size:13.5px;font-weight:800;color:#5C3B00">มีการแก้ไข</span>'
+        +'<span style="margin-left:auto;background:#5C3B00;color:#FFF6DC;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;font-variant-numeric:tabular-nums">'+L.length+' รายการ</span>'
+      +'</div>'+rows
+      +'<div style="font-size:11px;color:#8A5B00;padding:8px 0 8px;border-top:1px solid #F3E3BF">ตรวจให้ตรงกับที่ตั้งใจก่อนกด Update</div>'
+      +'</div>';
+  }catch(err){ console.warn('nbDiff', err); return ''; }
+}
 function bkV2RenderReviewPanel(){
   const d = _bkV2.newBooking;
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -57367,7 +57455,11 @@ function bkV2RenderReviewPanel(){
       ${pickupArea ? `
         <div class="rv-section">
           <div class="rv-lab">Pickup</div>
-          ${d.hotelName
+          ${d.pickupSelf
+            ? `<div class="rv-val" style="font-size:13.5px;line-height:1.3;color:#5B289A">&#128694; ลูกค้ามาเองที่ท่าเรือ</div>
+               <div class="rv-sub" style="text-transform:none">ขาไปไม่มีรถไปรับ</div>
+               ${(d.dropoffSame && (d.hotelName||'').trim()) ? `<div class="rv-sub" style="text-transform:none">&#8617; ส่งกลับ: <b>${escapeHTML(d.hotelName)}</b> · ${escapeHTML(pickupArea.name)}${d.roomNumber?' · Room '+escapeHTML(d.roomNumber):''}</div>` : ''}`
+            : d.hotelName
             ? `<div class="rv-val" style="font-size:13.5px;line-height:1.3">${escapeHTML(d.hotelName)}</div>
                <div class="rv-sub" style="text-transform:none">${escapeHTML(pickupArea.name)}${d.roomNumber?' · Room '+escapeHTML(d.roomNumber):''}</div>`
             : `<div class="rv-val" style="font-size:13.5px;line-height:1.3">${escapeHTML(pickupArea.name)}</div>
@@ -68914,6 +69006,8 @@ function bkV2NbRefreshSide(){
   if(_bkV2NbSideRaf) return;
   var go=function(){ _bkV2NbSideRaf=0; try{
     if(!_bkV2.newBooking) return;
+    var df=document.getElementById('nbf-diff-slot');
+    if(df && typeof bkV2EditDiffHtml==='function') df.innerHTML=bkV2EditDiffHtml();   /* §nbDiff */
     var c=document.getElementById('nbf-checks-slot');
     if(c && typeof bkNbfChecksHtml==='function') c.innerHTML=bkNbfChecksHtml();
     var b=document.getElementById('nbf-submit-slot');
@@ -69677,6 +69771,7 @@ function bkV2EditBooking(bookingId){
   bkV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
+  try{ _bkV2.editSnap = { id:bk.id, bk:JSON.parse(JSON.stringify(bk)) }; }catch(_){ _bkV2.editSnap = null; }   /* §nbDiff · ภาพก่อนแก้ ไว้เทียบว่าแก้อะไรไปบ้าง */
   _bkV2.detailId = null;
   /* §rtKeep · ยังไม่ได้แก้อะไรเลย ยอดก็ไม่เท่าที่บันทึกไว้แล้ว = ราคาในชุดถูกแก้หลังใบนี้บันทึก */
   if(clone._rtKeep){ try{
