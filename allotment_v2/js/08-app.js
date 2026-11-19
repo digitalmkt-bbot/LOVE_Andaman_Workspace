@@ -33948,59 +33948,78 @@ function bkV2UpgConfirmView(c){
 /* ══ §upgUndoUi (2026-11-19) · owner: "ปรับ ui หน่อย" (กล่อง alert ดำของเบราว์เซอร์ตอนยกเลิก Upgrade ไม่ได้) ══════════
    กล่องของแอปเอง หน้าตาชุดเดียวกับ "ยืนยันการ Upgrade" · บอกว่าติดอะไร ขาดกี่ที่ และต้องทำอะไรต่อ
    กติกาไม่เปลี่ยน · ยังย้ายกลับไม่ได้ถ้าโปรแกรมเดิมไม่มีที่ว่างพอ */
+/* §upgUndoUi2 (19 พ.ย.) · owner: "UI ปรับให้ตรงกับ Design ของ By trip date"
+   หน้าตายกมาจากหน้า By trip date เอง · หัวกรมท่าแบบกล่องเลือกเรือ (#0B1E5B) · แถวโปรแกรมแบบการ์ด Programmes
+   (ชื่อ · จำนวน/ความจุ DM Mono · ป้าย ว่าง/เต็ม ชุด .bt-free · แถบบาง) · ป้ายหัวข้อตัวพิมพ์ใหญ่ 9.5px · ปุ่มขอบ #D5DCE8 */
 function bkUpgSheet(o){
   o=o||{}; var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var T=function(x){ return (typeof laT==='function')?laT(x):x; };
   var old=document.getElementById('upg-sheet'); if(old){ try{ old.remove(); }catch(_){} }
   var dmy=function(d){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||'')); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(d||''); };
-  var blk=(o.mode!=='ask'), ac=blk?'#A32D2D':'#6B289A';
-  var card=function(lbl,nm,tag,hot){ return '<div style="flex:1;min-width:0;border:1px solid '+(hot?(blk?'#F0C8C4':'#CDB4E6'):'#E4E1D9')+';background:'+(hot?(blk?'#FDF3F2':'#F7F1FC'):'#FAFAF8')+';border-radius:12px;padding:10px 12px">'
-    +'<div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:'+(hot?ac:'#8a8a82')+'">'+e(lbl)+'</div>'
-    +'<div style="font-size:14px;font-weight:800;line-height:1.3;margin-top:3px;color:'+(hot?(blk?'#7A1F18':'#3E1563'):'#5F5E5A')+'">'+e(nm)+'</div>'
-    +(tag?'<div style="margin-top:6px"><span style="font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px;background:'+(hot&&blk?'#A32D2D':'#EEF2F1')+';color:'+(hot&&blk?'#fff':'#3F5B52')+'">'+e(tag)+'</span></div>':'')+'</div>'; };
-  var row=function(k,v){ return '<div style="display:flex;gap:12px;padding:7px 0;border-top:1px solid #F1EFE9;font-size:13px"><span style="width:96px;flex-shrink:0;color:#8a8a82">'+e(k)+'</span><span style="flex:1;min-width:0;font-weight:700;color:#2C2C2A">'+v+'</span></div>'; };
+  var blk=(o.mode!=='ask'), MONO='font-family:\'DM Mono\',monospace;';
+  var lab=function(x){ return '<div style="font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#6B7489;font-weight:700">'+e(x)+'</div>'; };
+  var alOf=function(rid){ try{ return (rid && typeof getAllotment==='function')?getAllotment(rid, o.date, null):null; }catch(_){ return null; } };
+  var fa=(o.fromAl!==undefined)?o.fromAl:alOf(o.fromRid), ta=alOf(o.toRid);
+  /* แถวโปรแกรม · หน้าตาเดียวกับแถวในการ์ด Programmes */
+  var prow=function(lbl, nm, al, hot, tagTxt){
+    var has=!!(al && al.hasAllotment), cap=has?(+al.availableCapacity||+al.totalCapacity||0):0, free=has?Math.max(0,+al.seatsAvailable||0):0, used=has?((al.seatsConsumed!=null)?(+al.seatsConsumed||0):Math.max(0,cap-free)):0;
+    var pc=cap?Math.min(100,Math.round(used/cap*100)):0;
+    var chip=tagTxt?['#FCEBEB','#A32D2D',tagTxt]:(!has?null:(free<=0?['#FCEBEB','#A32D2D',T('เต็ม')]:(free<=5?['#FFF0D6','#9A4A06',T('ว่าง')+' '+free]:['#E3F5EC','#0B6142',T('ว่าง')+' '+free])));
+    var bad=hot&&blk, ac=bad?'#A32D2D':'#1B2A55';
+    return '<div style="background:'+(hot?'#F6F8FC':'#fff')+';border-radius:9px;padding:9px 12px;box-shadow:inset 3px 0 0 '+(hot?ac:'#C9D0DE')+(hot?(',0 0 0 1.5px '+(bad?'#F0CFCB':'#C9D4F0')):',0 0 0 1px #E6E9EF')+'">'
+      +lab(lbl)
+      +'<div style="display:flex;align-items:center;gap:8px;margin-top:3px"><span style="width:7px;height:7px;border-radius:50%;background:'+ac+';flex:none"></span>'
+        +'<b style="font-size:13.5px;font-weight:700;color:'+ac+';flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(nm)+'</b>'
+        +(has?('<span style="'+MONO+'font-size:12px;color:#5B6478;white-space:nowrap"><b style="color:#0F1B3D;font-weight:500">'+used+'</b>/'+cap+'</span>'):'')
+        +(chip?('<span style="font-size:10.5px;font-weight:800;border-radius:10px;padding:2px 8px;white-space:nowrap;background:'+chip[0]+';color:'+chip[1]+'">'+e(chip[2])+'</span>'):'')+'</div>'
+      +(has?('<div style="height:4px;border-radius:2px;background:#E9ECF2;overflow:hidden;margin-top:7px"><s style="display:block;height:100%;width:'+pc+'%;border-radius:2px;background:'+(pc>=100?'#C62828':(pc>=90?'#E6A23C':'#2E7D5B'))+'"></s></div>'):'')+'</div>';
+  };
   var meter='';
   if(blk && o.need!=null && o.free!=null){
-    var cap=+o.cap||0, used=+o.used||0, pc=cap?Math.min(100,Math.round(used/cap*100)):100;
-    var num=function(l,v,c){ return '<div style="flex:1;text-align:center"><div style="font-family:\'DM Mono\',monospace;font-size:26px;font-weight:500;line-height:1.1;color:'+c+'">'+v+'</div><div style="font-size:11px;color:#8a8a82;margin-top:2px">'+e(l)+'</div></div>'; };
-    meter='<div style="border:1px solid #EFECE4;border-radius:12px;padding:12px 14px">'
-      +'<div style="display:flex;align-items:center">'+num(T('ต้องใช้'),(+o.need||0),'#2C2C2A')+'<div style="width:1px;height:34px;background:#EFECE4"></div>'+num(T('ว่างอยู่'),(+o.free||0),'#2C2C2A')+'<div style="width:1px;height:34px;background:#EFECE4"></div>'+num(T('ขาดอีก'),Math.max(0,(+o.need||0)-(+o.free||0)),'#A32D2D')+'</div>'
-      +(cap?('<div style="margin-top:11px"><div style="height:8px;background:#F1EFE9;border-radius:99px;overflow:hidden"><div style="width:'+pc+'%;height:100%;background:'+(pc>=100?'#A32D2D':'#E0A040')+'"></div></div>'
-        +'<div style="display:flex;justify-content:space-between;font-size:11px;color:#8a8a82;margin-top:5px"><span>'+e(o.fromNm||'')+'</span><span style="font-family:\'DM Mono\',monospace">'+used+' / '+cap+' '+e(T('ที่นั่ง'))+'</span></div></div>'):'')+'</div>';
+    var num=function(l,v,c){ return '<div style="flex:1;text-align:center;padding:9px 4px"><div style="'+MONO+'font-size:24px;font-weight:500;line-height:1.1;color:'+c+'">'+v+'</div><div style="font-size:10.5px;color:#6B7489;font-weight:600;margin-top:2px">'+e(l)+'</div></div>'; };
+    var dv='<div style="width:1px;background:#E6E9EF;margin:8px 0"></div>';
+    meter='<div style="display:flex;border:1px solid #E6E9EF;border-radius:10px;background:#FAFBFD">'+num(T('ต้องใช้'),(+o.need||0),'#0F1B3D')+dv+num(T('ว่างอยู่'),(+o.free||0),'#0F1B3D')+dv+num(T('ขาดอีก'),Math.max(0,(+o.need||0)-(+o.free||0)),'#C62828')+'</div>';
   }
+  var kv=function(k,v){ return '<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid #EEF0F3;font-size:12.5px"><span style="width:92px;flex:none;color:#6B7489">'+e(k)+'</span><span style="flex:1;min-width:0;font-weight:600;color:#0F1B3D">'+v+'</span></div>'; };
   var ov=document.createElement('div'); ov.id='upg-sheet'; ov.className='la-modal';
-  ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(20,16,30,.45);display:flex;align-items:center;justify-content:center;padding:16px';
-  ov.innerHTML='<div role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;width:min(480px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:\'DM Sans\',sans-serif;text-align:left">'
-    +'<div style="padding:16px 20px;border-bottom:1px solid #EFECE4;display:flex;gap:12px;align-items:center"><span aria-hidden="true" style="width:36px;height:36px;border-radius:11px;background:'+(blk?'#FBE3E0':'#F1E7FF')+';color:'+ac+';display:flex;align-items:center;justify-content:center;font-size:17px;flex:none">'+(blk?'&#9888;':'&#8617;')+'</span>'
-      +'<div><div style="font-size:15px;font-weight:800;color:'+(blk?'#7A1F18':'#4A1D6E')+'">'+e(o.title||'')+'</div><div style="font-size:11.5px;color:#8a8a82;margin-top:2px">'+e(o.sub||'')+'</div></div></div>'
-    +'<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">'
-    +'<div style="display:flex;align-items:stretch;gap:8px">'+card(T('ตอนนี้อยู่ที่'), o.toNm||'', '', false)
-      +'<div aria-hidden="true" style="align-self:center;font-size:18px;color:'+ac+';font-weight:800">&rarr;</div>'+card(T('ย้ายกลับไป'), o.fromNm||'', o.fromTag||'', true)+'</div>'
-    +meter
-    +'<div>'+(o.who?row(T('ลูกค้า'), e(o.who)+(o.pax?(' <span style="font-weight:600;color:#8a8a82">&middot; '+(+o.pax)+' pax</span>'):'')):'')+row(T('วันที่เดินทาง'), '<span style="font-family:\'DM Mono\',monospace;font-weight:500">'+e(dmy(o.date))+'</span>')+(o.rows||[]).map(function(r){ return row(r[0], r[1]); }).join('')+'</div>'
-    +(o.tip?('<div style="display:flex;gap:9px;align-items:flex-start;background:'+(blk?'#FFF6E5':'#F7F1FC')+';border:1px solid '+(blk?'#F0D9A8':'#E3D3F3')+';border-radius:10px;padding:9px 12px;font-size:12.5px;color:'+(blk?'#6B4500':'#4A1D6E')+';line-height:1.5"><span aria-hidden="true" style="font-size:14px">'+(blk?'&#128161;':'&#8505;')+'</span><span>'+o.tip+'</span></div>'):'')
+  ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(11,20,50,.42);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;width:min(440px,96vw);max-height:92vh;overflow:auto;box-shadow:0 18px 50px rgba(11,20,50,.32);font-family:\'DM Sans\',sans-serif;text-align:left;color:#0F1B3D">'
+    +'<div style="display:flex;align-items:flex-start;gap:10px;background:#0B1E5B;color:#fff;padding:12px 10px 12px 16px;border-radius:14px 14px 0 0">'
+      +'<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:#C9D4F0">Upgrade</span>'
+        +'<span style="font-size:10.5px;font-weight:800;border-radius:10px;padding:1px 8px;background:'+(blk?'#FCEBEB':'#F3EEFE')+';color:'+(blk?'#A32D2D':'#5B289A')+'">'+e(blk?T('ยกเลิกไม่ได้'):T('ยืนยันการยกเลิก'))+'</span></div>'
+        +'<div style="font-size:15px;font-weight:700;line-height:1.3;margin-top:4px">'+e(o.title||'')+'</div>'
+        +'<div style="font-size:11px;color:#C9D4F0;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(o.who?(e(o.who)+' &middot; '):'')+(o.pax?('<em style="font-style:normal;background:rgba(255,255,255,.16);color:#fff;border-radius:5px;padding:0 4px">'+(+o.pax)+' pax</em> &middot; '):'')+'<span style="'+MONO+'">'+e(dmy(o.date))+'</span></div></div>'
+      +'<button type="button" data-x="1" aria-label="close" style="flex:none;background:transparent;border:0;color:#B9C6E8;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px">&times;</button></div>'
+    +'<div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">'
+      +prow(T('ตอนนี้อยู่ที่'), o.toNm||'', ta, false, '')
+      +'<div aria-hidden="true" style="text-align:center;color:#9AA0AC;font-size:13px;line-height:.6">&darr;</div>'
+      +prow(T('ย้ายกลับไป'), o.fromNm||'', fa, true, (blk && !fa)?(o.fromTag||''):'')
+      +meter
+      +((o.rows&&o.rows.length)?('<div>'+o.rows.map(function(r){ return kv(r[0], r[1]); }).join('')+'</div>'):'')
+      +(o.tip?('<div style="background:#F6F8FC;border-radius:7px;box-shadow:inset 3px 0 0 '+(blk?'#E6A23C':'#7B61C9')+';padding:9px 12px 9px 14px;font-size:12px;color:#3E4658;line-height:1.5">'+o.tip+'</div>'):'')
     +'</div>'
-    +'<div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
-    +(blk?'<button type="button" data-x="1" style="border:none;background:#2C2C2A;color:#fff;border-radius:9px;padding:10px 22px;min-height:40px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit">'+e(T('เข้าใจแล้ว'))+'</button>'
-      :('<button type="button" data-x="1" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:10px 16px;min-height:40px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'+e(T('ไม่ยกเลิก'))+'</button>'
-       +'<button type="button" data-y="1" style="border:none;background:#6B289A;color:#fff;border-radius:9px;padding:10px 20px;min-height:40px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit">'+e(o.okLabel||T('ยืนยัน'))+'</button>'))
+    +'<div style="display:flex;gap:6px;justify-content:flex-end;padding:10px 12px;border-top:1px solid #E6E9EF;background:#FAFBFD;border-radius:0 0 14px 14px">'
+    +(blk?'<button type="button" data-x="1" style="border:1px solid #0B1E5B;background:#0B1E5B;color:#fff;border-radius:8px;padding:8px 20px;min-height:36px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">'+e(T('เข้าใจแล้ว'))+'</button>'
+      :('<button type="button" data-x="1" style="border:1px solid #D5DCE8;background:#fff;color:#1B2A55;border-radius:8px;padding:8px 14px;min-height:36px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">'+e(T('ไม่ยกเลิก'))+'</button>'
+       +'<button type="button" data-y="1" style="border:1px solid #0B1E5B;background:#0B1E5B;color:#fff;border-radius:8px;padding:8px 18px;min-height:36px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">'+e(o.okLabel||T('ยืนยัน'))+'</button>'))
     +'</div></div>';
   document.body.appendChild(ov);
   var close=function(){ try{ ov.remove(); }catch(_){} };
   ov.onclick=function(ev){ if(ev.target===ov) close(); };
-  var x=ov.querySelector('[data-x]'); if(x) x.onclick=close;
+  var xs=ov.querySelectorAll?ov.querySelectorAll('[data-x]'):[ov.querySelector('[data-x]')];
+  for(var i=0;i<xs.length;i++){ if(xs[i]) xs[i].onclick=close; }
   var y=ov.querySelector('[data-y]'); if(y) y.onclick=function(){ close(); try{ if(typeof o.onYes==='function') o.onYes(); }catch(er){ console.warn('upgSheet', er); alert('ทำรายการไม่สำเร็จ: '+((er&&er.message)||er)); } };
-  try{ (y||x).focus(); }catch(_){}
+  try{ (y||xs[xs.length-1]).focus(); }catch(_){}
 }
 /* ที่นั่งไม่พอ / โปรแกรมเดิมไม่วิ่ง · al = getAllotment ของโปรแกรมเดิม (null = กรณีไม่วิ่ง) */
 function bkUpgUndoBlocked(c){
   var T=function(x){ return (typeof laT==='function')?laT(x):x; }, e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
   var al=c.al, van=!!c.n;
-  if(!al){ bkUpgSheet({ title:T('ยกเลิก Upgrade ไม่ได้'), sub:T('โปรแกรมเดิมไม่ได้วิ่งในวันนี้'), toNm:c.toNm, fromNm:c.fromNm, fromTag:T('ไม่วิ่งวันนี้'), who:c.who, pax:c.pax, date:c.date,
+  if(!al){ bkUpgSheet({ title:T('โปรแกรมเดิมไม่ได้วิ่งในวันนี้'), toNm:c.toNm, fromNm:c.fromNm, toRid:c.toRid, fromAl:null, fromTag:T('ไม่วิ่งวันนี้'), who:c.who, pax:c.pax, date:c.date,
       rows:van?[[T('ทั้งคัน'), c.n+' booking &middot; '+c.pax+' pax']]:[], tip:'<b>'+e(c.fromNm)+'</b> '+e(T('ไม่มีรอบในวันที่เลือก จึงย้ายกลับไม่ได้ · ถ้าต้องย้ายจริง ให้เปิดรอบของโปรแกรมนั้นก่อน')) }); return; }
   var need=+c.pax||0, free=Math.max(0,+al.seatsAvailable||0), cap=+al.availableCapacity||+al.totalCapacity||0, used=(al.seatsConsumed!=null)?(+al.seatsConsumed||0):Math.max(0,cap-free);
-  bkUpgSheet({ title:T('ยกเลิก Upgrade ไม่ได้'), sub:T('โปรแกรมเดิมที่นั่งไม่พอ'), toNm:c.toNm, fromNm:c.fromNm, fromTag:free>0?(T('ว่าง')+' '+free+' '+T('ที่')):T('เต็มแล้ว'),
-    who:c.who, pax:van?0:c.pax, date:c.date, need:need, free:free, cap:cap, used:used, rows:van?[[T('ทั้งคัน'), c.n+' booking &middot; '+c.pax+' pax']]:[],
+  bkUpgSheet({ title:T('โปรแกรมเดิมที่นั่งไม่พอ'), toNm:c.toNm, fromNm:c.fromNm, toRid:c.toRid, fromAl:al,
+    who:c.who, pax:c.pax, date:c.date, need:need, free:free, cap:cap, used:used, rows:van?[[T('ทั้งคัน'), c.n+' booking &middot; '+c.pax+' pax']]:[],
     tip:e(T('ที่นั่งเดิมถูกใช้ไปแล้วหลังจากย้ายออก'))+' &middot; '+e(T('ถ้าต้องย้ายกลับ ต้องทำให้'))+' <b>'+e(c.fromNm)+'</b> '+e(T('ว่างอย่างน้อย'))+' <b>'+need+'</b> '+e(T('ที่ก่อน เช่น ย้ายบุคกิ้งอื่นออก หรือเพิ่มเรือของโปรแกรมนั้น')) });
 }
 function bkV2UpgUndo(bkId, routeId, date, _ok){
@@ -34011,13 +34030,13 @@ function bkV2UpgUndo(bkId, routeId, date, _ok){
   var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
   var _who=b.leadPax||b.customerName||b.voucherRef||b.id;
   if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(u.fromRouteId, date)){
-    bkUpgUndoBlocked({al:null, fromNm:fromNm, toNm:toNm, who:_who, pax:pax, date:date}); return; }
+    bkUpgUndoBlocked({al:null, fromNm:fromNm, toNm:toNm, toRid:t.routeId, who:_who, pax:pax, date:date}); return; }
   var al=(typeof getAllotment==='function')?getAllotment(u.fromRouteId, date, null):null;
   if(al && al.hasAllotment && pax>al.seatsAvailable){
-    bkUpgUndoBlocked({al:al, fromNm:fromNm, toNm:toNm, who:_who, pax:pax, date:date}); return; }
+    bkUpgUndoBlocked({al:al, fromNm:fromNm, toNm:toNm, toRid:t.routeId, who:_who, pax:pax, date:date}); return; }
   if(!_ok){   /* §upgUndoUi · ถามด้วยกล่องของแอป · กดยืนยันแล้วเรียกตัวเองซ้ำพร้อมธง (ตรวจที่นั่งอีกรอบ ณ ตอนกด) */
     var _T=function(x){ return (typeof laT==='function')?laT(x):x; };
-    bkUpgSheet({ mode:'ask', title:_T('ยกเลิก Upgrade?'), sub:_T('ย้ายลูกค้ากลับโปรแกรมเดิม'), toNm:toNm, fromNm:fromNm, who:_who, pax:pax, date:date,
+    bkUpgSheet({ mode:'ask', title:_T('ย้ายลูกค้ากลับโปรแกรมเดิม?'), toNm:toNm, fromNm:fromNm, toRid:t.routeId, fromRid:u.fromRouteId, who:_who, pax:pax, date:date,
       rows:item?[[_T('ค่า Upgrade'), item.collected?_T('เก็บแล้ว · คงไว้ในบุคกิ้ง'):('<span style="color:#7A4A00">&#3647;'+(+item.sellPrice||0).toLocaleString()+'</span> '+_T('ยังไม่เก็บ · จะถูกลบออก'))]]:[],
       tip:_T('ย้ายกลับแล้วเรือที่จัดไว้จะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมเดิม'), okLabel:_T('ยืนยันยกเลิก Upgrade'),
       onYes:function(){ bkV2UpgUndo(bkId, routeId, date, true); } });
@@ -34285,15 +34304,15 @@ function bkV2VanUpgUndo(date, rid, zone, gid, _ok){
   var m=bkUpgVanMembers(date, rid, gid);
   var from=U.from, fromNm=bkUpgRouteName(from), toNm=bkUpgRouteName(rid);
   var pax=m.reduce(function(s,x){ return s+x.pax; },0);
-  if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(from, date)){ bkUpgUndoBlocked({al:null, fromNm:fromNm, toNm:toNm, pax:pax, n:m.length, date:date}); return; }
+  if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(from, date)){ bkUpgUndoBlocked({al:null, fromNm:fromNm, toNm:toNm, toRid:rid, pax:pax, n:m.length, date:date}); return; }
   var al=(typeof getAllotment==='function')?getAllotment(from, date, null):null;
-  if(al && al.hasAllotment && pax>al.seatsAvailable){ bkUpgUndoBlocked({al:al, fromNm:fromNm, toNm:toNm, pax:pax, n:m.length, date:date}); return; }
+  if(al && al.hasAllotment && pax>al.seatsAvailable){ bkUpgUndoBlocked({al:al, fromNm:fromNm, toNm:toNm, toRid:rid, pax:pax, n:m.length, date:date}); return; }
   var uncol=0, col=0; m.forEach(function(x){ var u=x.t.upg; var it=(u.upgId && Array.isArray(x.b.upgrades))?x.b.upgrades.find(function(y){ return y.id===u.upgId; }):null; if(it){ if(it.collected) col+=(+it.sellPrice||0); else uncol+=(+it.sellPrice||0); } });
   if(!_ok){   /* §upgUndoUi */
     var _T=function(x){ return (typeof laT==='function')?laT(x):x; }, _rw=[[_T('ทั้งคัน'), m.length+' booking &middot; '+pax+' pax']];
     if(uncol) _rw.push([_T('ค่า Upgrade'), '<span style="color:#7A4A00">&#3647;'+uncol.toLocaleString()+'</span> '+_T('ยังไม่เก็บ · จะถูกลบออก')]);
     if(col) _rw.push([_T('เก็บแล้ว'), '&#3647;'+col.toLocaleString()+' '+_T('คงไว้ในบุคกิ้ง')]);
-    bkUpgSheet({ mode:'ask', title:_T('ยกเลิก Upgrade ทั้งคัน?'), sub:_T('ย้ายลูกค้าทั้งคันกลับโปรแกรมเดิม'), toNm:toNm, fromNm:fromNm, date:date, rows:_rw,
+    bkUpgSheet({ mode:'ask', title:_T('ย้ายทั้งคันกลับโปรแกรมเดิม?'), toNm:toNm, fromNm:fromNm, toRid:rid, fromRid:from, pax:pax, date:date, rows:_rw,
       tip:_T('ย้ายกลับแล้วเรือที่จัดไว้จะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมเดิม'), okLabel:_T('ยืนยันยกเลิกทั้งคัน'),
       onYes:function(){ bkV2VanUpgUndo(date, rid, zone, gid, true); } });
     return; }
