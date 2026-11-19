@@ -57235,11 +57235,12 @@ function bkV2EditDiff(o, d){
   var roN=function(id){ try{ var r=id&&typeof ROUTES!=='undefined'?ROUTES.find(function(x){ return x.id===id; }):null; return r?(r.name||id):S(id); }catch(_){ return S(id); } };
   var dmy=function(x){ return x?((typeof bkNbfDMY==='function')?bkNbfDMY(x):x):''; };
   var px=function(p){ var L={ad:'AD',chd:'CHD',inf:'INF',foc:'FOC'}, r=[]; ['ad','chd','inf','foc'].forEach(function(k){ var n=0; try{ n=(typeof bkV2PaxTot==='function')?(+bkV2PaxTot(p||{},k)||0):0; }catch(_){ } if(n) r.push(n+' '+L[k]); }); return r.join(' · ')||'0'; };
+  var pxN=function(p){ var n=0; ['ad','chd','inf','foc'].forEach(function(k){ try{ n+=(typeof bkV2PaxTot==='function')?(+bkV2PaxTot(p||{},k)||0):0; }catch(_){ } }); return n; };
   if(S(o.agentId)!==S(d.agentId)) add('Agent', agN(o.agentId), agN(d.agentId));
-  add('Voucher', o.voucherRef, d.voucherRef);
+  add('Voucher', o.voucherRef, d.voucherRef, 'mono');
   if(S(o.rateTypeRef)!==S(d.rateTypeRef)) add('Rate type', rtN(o.rateTypeRef), rtN(d.rateTypeRef));
   add('ชื่อลูกค้า', o.leadPax, d.leadPax);
-  add('เบอร์โทร', o.leadPhone, d.leadPhone);
+  add('เบอร์โทร', o.leadPhone, d.leadPhone, 'mono');
   add('อีเมล', o.leadEmail, d.leadEmail);
   add('สัญชาติ', o.leadNationality, d.leadNationality);
   /* ทริป */
@@ -57248,16 +57249,16 @@ function bkV2EditDiff(o, d){
   for(var i=0;i<Math.min(ot.length,dt.length);i++){
     var a=ot[i]||{}, b=dt[i]||{}, pre=(Math.max(ot.length,dt.length)>1)?('ทริป '+(i+1)+' · '):'';
     if(S(a.routeId)!==S(b.routeId)) add(pre+'โปรแกรม', roN(a.routeId), roN(b.routeId));
-    if(S(a.date)!==S(b.date)) add(pre+'วันเดินทาง', dmy(a.date), dmy(b.date));
-    add(pre+'จำนวนคน', px(a.pax), px(b.pax));
+    if(S(a.date)!==S(b.date)) add(pre+'วันเดินทาง', dmy(a.date), dmy(b.date), 'mono');
+    if(px(a.pax)!==px(b.pax)){ var _dn=pxN(b.pax)-pxN(a.pax); out.push({lab:pre+'จำนวนคน', from:px(a.pax), to:px(b.pax), tone:'mono', chip:_dn?((_dn>0?'+':'')+_dn+' pax'):''}); }
     if(S(a.bookingMode||'seat')!==S(b.bookingMode||'seat')) add(pre+'รูปแบบ', a.bookingMode==='charter'?'เหมาลำ':'ที่นั่ง', b.bookingMode==='charter'?'เหมาลำ':'ที่นั่ง');
-    if(b.pickupTimeEdited && S(a.pickupTime)!==S(b.pickupTime)) add(pre+'เวลารับ', a.pickupTime, b.pickupTime);
+    if(b.pickupTimeEdited && S(a.pickupTime)!==S(b.pickupTime)) add(pre+'เวลารับ', a.pickupTime, b.pickupTime, 'mono');
   }
   /* รับ-ส่ง */
-  if(!!o.pickupSelf!==!!d.pickupSelf) out.push({lab:'ขารับ', from:o.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับ', to:d.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับ', tone:'warn', note:d.pickupSelf?'ขาไปจะไม่มีรถไปรับ และไม่ขึ้นในใบงานรถขาไป':'รถจะไปรับที่จุดรับ และขึ้นในใบงานรถขาไป'});
+  if(!!o.pickupSelf!==!!d.pickupSelf) out.push({lab:'ขารับ', from:o.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับที่จุดรับ', to:d.pickupSelf?'ลูกค้ามาเองที่ท่าเรือ':'รถไปรับที่จุดรับ', tone:'warn', note:d.pickupSelf?'ขาไปจะไม่มีรถไปรับ และไม่ขึ้นในใบงานรถขาไป':'รถจะไปรับที่จุดรับ และขึ้นในใบงานรถขาไป'});
   if(S(o.pickupAreaId)!==S(d.pickupAreaId)) add('พื้นที่รับ', arN(o.pickupAreaId), arN(d.pickupAreaId));
   add('โรงแรม / จุดรับ', o.hotelName, d.hotelName);
-  add('ห้อง', o.roomNumber, d.roomNumber);
+  add('ห้อง', o.roomNumber, d.roomNumber, 'mono');
   var dr=function(x){ return (x.dropoffSame!==false && !x.dropoffAreaId && !S(x.dropoffHotelName)) || x.dropoffSame===true ? 'เหมือนจุดรับ' : (S(x.dropoffHotelName)||arN(x.dropoffAreaId)||'—'); };
   add('จุดส่งกลับ', dr(o), dr(d));
   add('กระเป๋าใหญ่', o.largeLuggage||'', d.largeLuggage||'');
@@ -57276,34 +57277,54 @@ function bkV2EditDiff(o, d){
   }catch(_){}
   return out;
 }
+/* §nbDiff2 (19 พ.ย.) · ผู้ใช้เลือกแบบ "เข้ากับ UI ของการทำ Booking" · ป้ายในแผงรีวิวกับป๊อปอัปใช้ตัววาดแถวตัวเดียวกัน
+   หน้าตายกมาจากฟอร์มเอง: หัวข้อวงกลมเลข · ป้ายตัวพิมพ์ใหญ่ · การ์ดติ๊กสีฟ้าของ self-arrive · แถบแดงคำเตือน · ตัวเลข DM Mono */
+function bkV2EditDiffEsc(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function bkV2EditDiffLab(s){ return '<div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5B6170">'+bkV2EditDiffEsc(s)+'</div>'; }
+function bkV2EditDiffRows(L, d){
+  var e=bkV2EditDiffEsc, NAVY='#16265C', BD='#E6E7EB', MONO="font-family:'DM Mono',monospace;";
+  var em='<span style="color:#A9ADB8;font-style:italic;font-weight:400">ว่าง</span>';
+  return (L||[]).filter(function(c){ return c.tone!=='money'; }).map(function(c){
+    if(c.tone==='warn'){
+      var toSelf=!!(d&&d.pickupSelf), hotel=String((d&&d.hotelName)||'').trim();
+      return '<div style="padding:11px 0;border-top:1px solid '+BD+'">'+bkV2EditDiffLab(c.lab)
+        +'<div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font-size:12.5px;color:#9A9FAB;text-decoration:line-through">'+e(c.from)+'</span><span style="color:'+NAVY+';font-weight:700">&rarr;</span></div>'
+        +'<div style="margin-top:7px;background:#EAF1FB;border:1.5px solid #2D5BA8;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start">'
+          +'<span style="width:17px;height:17px;border-radius:4px;background:'+(toSelf?NAVY:'#fff')+';border:1.5px solid '+NAVY+';box-sizing:border-box;color:#fff;font-size:12px;line-height:14px;text-align:center;flex:none;margin-top:1px">'+(toSelf?'&check;':'')+'</span>'
+          +'<div><div style="font-size:13.5px;font-weight:700;color:#1E4A8C">'+(toSelf?'&#128694; ขารับ: ลูกค้ามาเองที่ท่าเรือ (self-arrive)':'&#128656; ขารับ: รถไปรับที่จุดรับ (เอาติ๊กมาเองออก)')+'</div>'
+          +'<div style="font-size:11.5px;color:#5B6170;margin-top:2px">'+(toSelf?'No van on the way out · the full rate still applies':'Van picks up at the hotel / pickup location')+'</div></div></div>'
+        +(toSelf
+          ? '<div style="margin-top:7px;background:#FBE3E0;border-radius:10px;padding:8px 12px;font-size:12px;color:#8E2019;line-height:1.45">&#9888; ขาไป<b>ไม่ขึ้นในใบงานรถ</b>'+(hotel?(' · ขากลับรถยังส่งที่ <b>'+e(hotel)+'</b>'):'')+'</div>'
+          : '<div style="margin-top:7px;background:#E6F5EE;border-radius:10px;padding:8px 12px;font-size:12px;color:#0B5A43;line-height:1.45">รถจะไปรับ'+(hotel?('ที่ <b>'+e(hotel)+'</b>'):'ที่จุดรับ')+' และ<b>ขึ้นในใบงานรถขาไป</b></div>')
+        +'</div>';
+    }
+    var m=(c.tone==='mono')?MONO:'';
+    return '<div style="padding:11px 0;border-top:1px solid '+BD+'">'
+      +'<div style="display:flex;align-items:center">'+bkV2EditDiffLab(c.lab)+(c.chip?('<span style="margin-left:auto;background:#EEF1F8;color:'+NAVY+';font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 7px;'+MONO+'">'+e(c.chip)+'</span>'):'')+'</div>'
+      +'<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:4px">'
+        +'<span style="'+m+'font-size:12.5px;color:#9A9FAB;text-decoration:line-through;overflow-wrap:anywhere">'+(c.from?e(c.from):em)+'</span>'
+        +'<span style="color:'+NAVY+';font-weight:700;flex:none">&rarr;</span>'
+        +'<span style="'+m+'font-size:14px;font-weight:700;color:#0F1B3D;overflow-wrap:anywhere">'+(c.to?e(c.to):em)+'</span>'
+      +'</div></div>';
+  }).join('');
+}
+function bkV2EditDiffHead(n){
+  return '<div style="display:flex;align-items:center;gap:10px;margin:0 0 10px"><span style="width:22px;height:22px;border-radius:50%;background:#16265C;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none;font-variant-numeric:tabular-nums">'+n+'</span>'
+    +'<div style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">Changes <span style="color:#9A9FAB;letter-spacing:0;text-transform:none;font-weight:500">· '+n+' รายการที่จะถูกบันทึก</span></div></div>';
+}
+function bkV2EditDiffMoney(L){
+  var c=(L||[]).filter(function(x){ return x.tone==='money'; })[0]; if(!c) return '';
+  return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 0 2px;border-top:1px solid #E6E7EB">'+bkV2EditDiffLab('Quote total')
+    +'<div style="white-space:nowrap"><span style="font-family:\'DM Mono\',monospace;font-size:12.5px;color:#9A9FAB;text-decoration:line-through;margin-right:8px">'+bkV2EditDiffEsc(c.from)+'</span><span style="font-family:\'DM Mono\',monospace;font-style:italic;font-weight:500;font-size:22px;color:#16265C">'+bkV2EditDiffEsc(c.to)+'</span></div></div>';
+}
 function bkV2EditDiffHtml(){
   try{
     if(!_bkV2 || !_bkV2.editingId || !_bkV2.newBooking) return '';
     var sn=_bkV2.editSnap; if(!sn || sn.id!==_bkV2.editingId) return '';
     var L=bkV2EditDiff(sn.bk, _bkV2.newBooking);
-    var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
-    if(!L.length) return '<div style="display:flex;align-items:center;gap:8px;background:#F6F7F9;border:1px solid #E6E8EC;border-radius:12px;padding:9px 13px;margin-bottom:10px;font-size:12px;color:#7C8091"><span style="width:7px;height:7px;border-radius:50%;background:#B8BDC7;flex:none"></span>ยังไม่มีการแก้ไข</div>';
-    var em='<span style="color:#B0B4BE">ว่าง</span>';
-    var rows=L.map(function(c){
-      var w=c.tone==='warn';
-      return '<div style="padding:9px 0;border-top:1px solid '+(w?'#EBD9FB':'#F3E3BF')+'">'
-        +'<div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:'+(w?'#5B289A':'#8A5B00')+'">'+e(c.lab)+'</div>'
-        +'<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px;line-height:1.35">'
-          +'<span style="font-size:12.5px;color:#8E93A0;text-decoration:line-through;text-decoration-color:#C9CDD4;overflow-wrap:anywhere">'+(c.from?e(c.from):em)+'</span>'
-          +'<span style="color:'+(w?'#5B289A':'#B7791F')+';font-weight:700;flex:none">&rarr;</span>'
-          +'<span style="font-size:13.5px;font-weight:700;color:'+(w?'#5B289A':'#15264F')+';overflow-wrap:anywhere">'+(c.to?e(c.to):em)+'</span>'
-        +'</div>'
-        +(c.note?('<div style="font-size:11.5px;color:#5B289A;margin-top:4px;line-height:1.4;background:#F3E8FF;border-radius:7px;padding:5px 8px">'+e(c.note)+'</div>'):'')
-        +'</div>';
-    }).join('');
-    return '<div style="background:#FFFAEC;border:1px solid #F0D58A;border-radius:14px;padding:12px 14px 4px;margin-bottom:10px;box-shadow:0 1px 0 rgba(183,121,31,.08)">'
-      +'<div style="display:flex;align-items:center;gap:9px;padding-bottom:9px">'
-        +'<span style="width:26px;height:26px;border-radius:8px;background:#F6C453;color:#5C3B00;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none">&#9998;</span>'
-        +'<span style="font-size:13.5px;font-weight:800;color:#5C3B00">มีการแก้ไข</span>'
-        +'<span style="margin-left:auto;background:#5C3B00;color:#FFF6DC;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;font-variant-numeric:tabular-nums">'+L.length+' รายการ</span>'
-      +'</div>'+rows
-      +'<div style="font-size:11px;color:#8A5B00;padding:8px 0 8px;border-top:1px solid #F3E3BF">ตรวจให้ตรงกับที่ตั้งใจก่อนกด Update</div>'
-      +'</div>';
+    if(!L.length) return '<div style="display:flex;align-items:center;gap:8px;background:#F7F7F5;border:1px solid #ECEBE6;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#7C8091"><span style="width:7px;height:7px;border-radius:50%;background:#B8BDC7;flex:none"></span>ยังไม่มีการแก้ไข</div>';
+    return '<div style="background:#fff;border:1.5px solid #16265C;border-radius:12px;padding:12px 14px 8px;margin-bottom:10px">'
+      +bkV2EditDiffHead(L.length)+bkV2EditDiffRows(L,_bkV2.newBooking)+bkV2EditDiffMoney(L)+'</div>';
   }catch(err){ console.warn('nbDiff', err); return ''; }
 }
 /* §nbDiffAsk · คืน true = ขึ้นป๊อปอัปแล้ว (รอคนกด) · false = ไม่มีอะไรให้ถาม ให้บันทึกต่อได้เลย */
@@ -57311,19 +57332,37 @@ function bkV2EditDiffAsk(onYes){
   try{
     if(!_bkV2 || !_bkV2.editingId || !_bkV2.newBooking || typeof document==='undefined') return false;
     var sn=_bkV2.editSnap; if(!sn || sn.id!==_bkV2.editingId) return false;
-    var L=bkV2EditDiff(sn.bk, _bkV2.newBooking); if(!L.length) return false;
-    var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    var d=_bkV2.newBooking, L=bkV2EditDiff(sn.bk, d); if(!L.length) return false;
+    var e=bkV2EditDiffEsc, NAVY='#16265C';
     var old=document.getElementById('nbdiff-ask'); if(old){ try{ old.remove(); }catch(_){} }
-    var d=_bkV2.newBooking;
+    var ag=''; try{ var _a=d.agentId&&typeof sbGetAgent==='function'?sbGetAgent(d.agentId):null; ag=_a?(_a.name||''):''; }catch(_){}
+    var totPax=0, trips=(d.trips||[]).filter(function(t){ return t&&t.routeId; }).map(function(t,i){
+      var n=0; try{ n=(typeof bkV2PaxAllTot==='function')?(+bkV2PaxAllTot(t.pax||{})||0):0; }catch(_){} totPax+=n;
+      var rn=t.routeId; try{ var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){ return x.id===t.routeId; }):null; if(r) rn=r.name; }catch(_){}
+      var z=t.zone||d.pickupZone||'';
+      return '<div style="grid-column:1/-1;border-left:3px solid #2F7D32;padding-left:10px"><div style="font-size:12.5px;font-weight:700;color:#0F1B3D">'+(i+1)+'. '+e(rn)+'</div>'
+        +'<div style="font-family:\'DM Mono\',monospace;font-size:11.5px;color:#5B6170">'+e(t.date?((typeof bkNbfDMY==='function')?bkNbfDMY(t.date):t.date):'—')+' · '+n+' pax'+(z?(' <span style="background:#ECEBE6;border-radius:3px;padding:0 5px;font-size:10px">'+e(z)+'</span>'):'')+'</div></div>';
+    }).join('');
+    var ff="'DM Sans','IBM Plex Sans Thai',sans-serif"; try{ var vb=document.querySelector('#view-booking .bkv2-review-inner')||document.getElementById('view-booking'); if(vb&&typeof getComputedStyle==='function') ff=getComputedStyle(vb).fontFamily||ff; }catch(_){}
+    var cks=''; try{ cks=(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''; }catch(_){}
     var ov=document.createElement('div'); ov.className='la-modal'; ov.id='nbdiff-ask'; ov.style.zIndex='100050';
-    ov.innerHTML='<div class="la-card" style="width:460px;max-width:94vw;padding:22px 22px 18px;display:flex;flex-direction:column;max-height:88vh">'
-      +'<div style="font-size:17px;font-weight:800;color:#15264F">ยืนยันการแก้ไข booking</div>'
-      +'<div style="font-size:12.5px;color:#7C8091;margin:4px 0 14px;line-height:1.5">'+e(d.leadPax||'-')+(d.voucherRef?(' · '+e(d.voucherRef)):'')+' · <span style="font-family:\'DM Mono\',monospace">'+e(_bkV2.editingId)+'</span></div>'
-      +'<div style="overflow:auto;min-height:0;flex:1 1 auto;margin:0 -4px;padding:0 4px">'+bkV2EditDiffHtml().replace('ตรวจให้ตรงกับที่ตั้งใจก่อนกด Update','กด "ยืนยัน" เพื่อบันทึกการแก้ไขทั้งหมดนี้')+'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin-top:6px">'
-        +'<button type="button" data-ask="no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">กลับไปแก้</button>'
-        +'<button type="button" data-ask="yes" style="padding:12px 0;border:none;border-radius:11px;background:#15264F;color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">ยืนยัน · บันทึก '+L.length+' รายการ</button>'
-      +'</div></div>';
+    ov.innerHTML='<div class="la-card" style="width:470px;max-width:94vw;padding:18px 20px;display:flex;flex-direction:column;max-height:92vh;border-radius:16px;font-family:'+ff.replace(/"/g,"'")+';color:#0F1B3D;text-align:left">'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="font-size:11px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:#3E4658">Review changes</div>'
+        +'<span style="background:#dbeafe;color:#1e40af;font-size:11.5px;font-weight:700;border-radius:12px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:#1e40af"></span>Editing</span>'
+        +'<span style="margin-left:auto;font-family:\'DM Mono\',monospace;font-size:11px;color:#5B6170">'+e(_bkV2.editingId)+'</span></div>'
+      +'<div style="font-size:19px;font-weight:700;color:#0F1B3D;margin-top:8px;letter-spacing:-.01em">ยืนยันการแก้ไข booking</div>'
+      +'<div style="overflow:auto;min-height:0;flex:1 1 auto;margin:12px -6px 0;padding:0 6px">'
+        +'<div style="padding:10px 12px;background:#F7F7F5;border:1px solid #ECEBE6;border-radius:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px 14px">'
+          +'<div style="min-width:0">'+bkV2EditDiffLab('Agent')+'<div style="font-size:13px;font-weight:700;margin-top:2px;overflow-wrap:anywhere">'+e(ag||'—')+'</div>'+(d.voucherRef?('<div style="font-size:11px;color:#5B6170;overflow-wrap:anywhere">Voucher: '+e(d.voucherRef)+'</div>'):'')+'</div>'
+          +'<div style="min-width:0">'+bkV2EditDiffLab('Guest')+'<div style="font-size:13px;font-weight:700;margin-top:2px;overflow-wrap:anywhere">'+e(d.leadPax||'—')+'</div><div style="font-size:11px;color:#5B6170">'+totPax+' pax</div></div>'
+          +trips+'</div>'
+        +'<div style="margin-top:16px">'+bkV2EditDiffHead(L.length)+'</div>'
+        +bkV2EditDiffRows(L,d)+bkV2EditDiffMoney(L)
+        +((cks.indexOf('>ready<')>=0)?('<div style="margin-top:14px;padding:10px 12px;border-radius:10px;background:#F7F7F5;border:1px solid #ECEBE6;display:flex;align-items:center;gap:9px"><span style="width:18px;height:18px;border-radius:50%;background:#3C9D6B;color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;flex:none">&check;</span><span style="font-size:12.5px;color:#3E4658">Before you confirm · checks passed</span><span style="margin-left:auto;font-size:11.5px;font-weight:700;color:#0B5A43">ready</span></div>'):'')
+      +'</div>'
+      +'<button type="button" data-ask="yes" style="margin-top:12px;background:'+NAVY+';color:#fff;border:none;border-radius:12px;min-height:48px;font:700 15px inherit;cursor:pointer;width:100%">Confirm Update · '+L.length+' รายการ &check;</button>'
+      +'<button type="button" data-ask="no" style="margin-top:6px;background:#fff;border:1px solid #CFCFC8;border-radius:10px;min-height:40px;font:600 13px inherit;color:#0F1B3D;cursor:pointer;width:100%">&larr; กลับไปแก้</button>'
+      +'</div>';
     document.body.appendChild(ov);
     var close=function(){ try{ ov.remove(); }catch(_){} };
     ov.querySelector('[data-ask="no"]').onclick=close;
