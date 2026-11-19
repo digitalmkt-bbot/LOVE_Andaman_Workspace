@@ -57306,6 +57306,32 @@ function bkV2EditDiffHtml(){
       +'</div>';
   }catch(err){ console.warn('nbDiff', err); return ''; }
 }
+/* §nbDiffAsk · คืน true = ขึ้นป๊อปอัปแล้ว (รอคนกด) · false = ไม่มีอะไรให้ถาม ให้บันทึกต่อได้เลย */
+function bkV2EditDiffAsk(onYes){
+  try{
+    if(!_bkV2 || !_bkV2.editingId || !_bkV2.newBooking || typeof document==='undefined') return false;
+    var sn=_bkV2.editSnap; if(!sn || sn.id!==_bkV2.editingId) return false;
+    var L=bkV2EditDiff(sn.bk, _bkV2.newBooking); if(!L.length) return false;
+    var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    var old=document.getElementById('nbdiff-ask'); if(old){ try{ old.remove(); }catch(_){} }
+    var d=_bkV2.newBooking;
+    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='nbdiff-ask'; ov.style.zIndex='100050';
+    ov.innerHTML='<div class="la-card" style="width:460px;max-width:94vw;padding:22px 22px 18px;display:flex;flex-direction:column;max-height:88vh">'
+      +'<div style="font-size:17px;font-weight:800;color:#15264F">ยืนยันการแก้ไข booking</div>'
+      +'<div style="font-size:12.5px;color:#7C8091;margin:4px 0 14px;line-height:1.5">'+e(d.leadPax||'-')+(d.voucherRef?(' · '+e(d.voucherRef)):'')+' · <span style="font-family:\'DM Mono\',monospace">'+e(_bkV2.editingId)+'</span></div>'
+      +'<div style="overflow:auto;min-height:0;flex:1 1 auto;margin:0 -4px;padding:0 4px">'+bkV2EditDiffHtml().replace('ตรวจให้ตรงกับที่ตั้งใจก่อนกด Update','กด "ยืนยัน" เพื่อบันทึกการแก้ไขทั้งหมดนี้')+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin-top:6px">'
+        +'<button type="button" data-ask="no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">กลับไปแก้</button>'
+        +'<button type="button" data-ask="yes" style="padding:12px 0;border:none;border-radius:11px;background:#15264F;color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">ยืนยัน · บันทึก '+L.length+' รายการ</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    var close=function(){ try{ ov.remove(); }catch(_){} };
+    ov.querySelector('[data-ask="no"]').onclick=close;
+    ov.onclick=function(ev){ if(ev.target===ov) close(); };
+    ov.querySelector('[data-ask="yes"]').onclick=function(){ close(); try{ if(typeof onYes==='function') onYes(); }catch(err){ console.warn('nbDiffAsk', err); alert('บันทึกไม่สำเร็จ: '+(err&&err.message||err)); } };
+    return true;
+  }catch(err){ console.warn('nbDiffAsk', err); return false; }
+}
 function bkV2RenderReviewPanel(){
   const d = _bkV2.newBooking;
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -67243,7 +67269,11 @@ function bkV2SubmitBooking(){
     if(_was !== _now && !confirm('Saved total: THB '+_was.toLocaleString()+'\nTotal at current rates: THB '+_now.toLocaleString()
         +'\n\nPrices in this rate type changed after the booking was saved.\nSave with the new total?')) return;
   }
-  bkV2CommitBooking(hasFoc ? 'pending_foc' : 'confirmed');
+  /* §nbDiffAsk · ผู้ใช้ขอ 19 พ.ย. "ขึ้น Popup ด้วย ว่ามีการแก้ไขอะไรไป หลังจากกด Update และก็ confirm"
+     แก้ใบเดิมและมีอะไรเปลี่ยนจริง → ขึ้นรายการให้ดูก่อน กดยืนยันถึงจะบันทึก · ใบใหม่/ไม่ได้แก้อะไร ผ่านตามเดิม */
+  const _st = hasFoc ? 'pending_foc' : 'confirmed';
+  if(typeof bkV2EditDiffAsk==='function' && bkV2EditDiffAsk(function(){ bkV2CommitBooking(_st); })) return;
+  bkV2CommitBooking(_st);
 }
 // Cancel a booking · marks status='cancelled' · releases charter locks in TRIPS
 function bkV2CancelBooking(bookingId, opts){
