@@ -22807,6 +22807,23 @@ function pckDetailClose(){ var el=document.getElementById('pck-drawer'); if(el) 
 var PCK_MOVE_WHY=[{k:'breakdown',t:'เรือเสีย / มีปัญหา'},{k:'full',t:'ลำเดิมเต็ม / เกลี่ยคน'},
                   {k:'group',t:'แยก / รวมกรุ๊ป'},{k:'guest',t:'ลูกค้าขอ'},{k:'other',t:'อื่น ๆ'}];
 function pckMoveCan(){ return (typeof window.laCanAct!=='function') || window.laCanAct('act-pckmove'); }
+/* §pckMoveNs (2026-11-19) · owner: "Artemis มี ลค ยกเลิก No show นะ ซึ่งก็สามารถย้ายบางบุคกิ้งไปได้"
+   ของเดิมนับคนบนลำปลายทางจากยอดจอง (baAssignedPax) · คนที่เช็คอินบันทึกว่า No-show / ยกเลิกหน้าท่ายังกินที่อยู่
+   → Artemis 19 พ.ย. ขึ้น 68 ทั้งที่มาจริง 61 (LOV-7003015 ไม่มา 7) ย้าย 3 คนเข้าไม่ได้
+   หักคนที่ไม่มาออกจากยอดบนลำ · ไม่หัก: ใบที่หน้าท่ากด "มาแล้ว" (reinstate) · ใบที่รถบันทึกว่าไม่ขึ้นรถแต่จะมาเองที่ท่าและท่ายังไม่เช็ค */
+function pckMoveGone(b, d, boatId){
+  try{
+    var on=(typeof bkBoatPaxOnBoat==='function')?bkBoatPaxOnBoat(b,d,boatId):0; if(!(on>0)) return 0;
+    var s=(typeof ckSummary==='function')?ckSummary(b,d):null; if(!s || !(s.noShow>0)) return 0;
+    var pierDone=!!(s.pier && s.pier.at);
+    if(!pierDone){
+      if(typeof ckReinstateOf==='function' && ckReinstateOf(b,d)) return 0;
+      if(s.van && s.van.reasonCode && typeof ckExpectAtPier==='function' && ckExpectAtPier(s.van.reasonCode)) return 0;
+    }
+    return Math.min(on, s.noShow);
+  }catch(_){ return 0; }
+}
+function pckMoveGoneOn(d, boatId){ var n=0; (SB_BOOKINGS||[]).forEach(function(b){ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; n+=pckMoveGone(b,d,boatId); }); return n; }
 function pckMoveCtx(bkId, date){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return {err:'ไม่พบใบจอง', errEn:'Booking not found'};
   var t=ckTripOn(b,date); if(!t) return {err:'ใบนี้ไม่มีทริปวันนี้', errEn:'This booking has no trip on this day'};
@@ -22820,10 +22837,11 @@ function pckMoveCtx(bkId, date){
   var tol=(typeof BA_CAP_TOL!=='undefined')?BA_CAP_TOL:2;
   var opts=pool.filter(function(x){ return x.boatId!==cur && !ch.has(x.boatId); }).map(function(x){
     var cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,d):(+((x.boat||{}).cap)||0);
-    var load=(typeof baAssignedPax==='function')?baAssignedPax(d,x.boatId):0;
+    var gone=pckMoveGoneOn(d,x.boatId);   /* §pckMoveNs */
+    var load=Math.max(0, ((typeof baAssignedPax==='function')?baAssignedPax(d,x.boatId):0)-gone);
     var next=load+pax, lic=(typeof boatCapLicense==='function')?boatCapLicense(x.boatId):0;
     var block=(cap>0 && next>cap+tol) || (lic>0 && next>lic);
-    return {id:x.boatId, name:(x.boat&&x.boat.name)||x.boatId, cap:cap, load:load, next:next, over:(cap>0 && next>cap), block:block};
+    return {id:x.boatId, name:(x.boat&&x.boat.name)||x.boatId, cap:cap, load:load, next:next, gone:gone, over:(cap>0 && next>cap), block:block};
   });
   var iss=0;
   try{ if(cur && typeof poDayMoves==='function') poDayMoves(d,cur).forEach(function(m){ if(m.type==='issue') iss+=poNum(m.qty); else if(m.type==='return') iss-=poNum(m.qty); }); }catch(_){}
@@ -22841,7 +22859,7 @@ function pckMoveOpen(bkId){
         +'<input type="radio" name="pmvb" value="'+e(o.id)+'"'+(o.block?' disabled':'')+'>'
         +'<b>'+e(o.name)+'</b>'
         +'<span class="pmv-l'+(o.block?' bad':(o.over?' warn':''))+'">'+o.load+' → '+o.next+' / '+o.cap
-        +(o.block?' · เต็ม':(o.over?' · เกิน cap':''))+'</span></label>'; }).join('')
+        +(o.block?' · เต็ม':(o.over?' · เกิน cap':''))+(o.gone>0?(' · หัก No-show '+o.gone):'')+'</span></label>'; }).join('')
     : '<div style="color:#A32D2D;font-size:12.5px;padding:8px 0">ไม่มีลำอื่นที่วิ่งโปรแกรมนี้วันนี้ · ต้องไปผูกเรือเพิ่มที่ Boat Operation ก่อน</div>';
   var ov=document.createElement('div'); ov.id='pck-move';
   ov.innerHTML='<style>#pck-move{position:fixed;inset:0;z-index:9500;font-family:inherit}'
