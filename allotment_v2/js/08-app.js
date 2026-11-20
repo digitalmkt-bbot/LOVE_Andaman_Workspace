@@ -3114,8 +3114,31 @@ function bkV2LockReleaseRound(lockId, tripDate, by){
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   (l.log = l.log||[]).push({ date:today, at:new Date().toISOString(), type:'release-round',
                              tripDate:tripDate, qty:seats, by:(by || ((typeof laBy==='function')?laBy():'')) });
+  bkV2LockCloseIfReleased(l, by);   /* §lkRelClose */
   sbSeatLocksPersist();
   return seats;
+}
+/* §lkRelClose (2026-11-20) · ล็อกรายวันที่ปล่อยรอบของตัวเองแล้ว = ไม่เหลืออะไรให้กัน · ปิดสถานะไปด้วย
+   เดิมปล่อยแล้วสถานะยังเป็น active · หน้าจอนี้รู้ว่าปล่อยแล้ว (อ่าน releasedDates) แต่ระบบขาย B2C อ่านตาราง
+   สรุปในฐานข้อมูลที่ดูแค่ status จึงยังเห็นที่นั่งถูกกันอยู่ (Surin 21 พ.ย. · ออฟฟิศปล่อย 2 ที่ 16:17 · B2C ยังขึ้นเต็ม)
+   และไม่มีปุ่มไหนในหน้านี้ปิดใบแบบนี้ได้ (แก้ที่นั่งเป็น 0 ก็ไม่ให้บันทึก)
+   ล็อกแบบช่วงวันที่ไม่แตะ · รอบอื่นของมันยังกันอยู่ · ใบชนิดเรือไม่แตะ · มีทางปล่อยของมันเอง
+   คืน true เมื่อมีการเปลี่ยนสถานะ */
+function bkV2LockCloseIfReleased(l, by){
+  if(!l || l.status!=='active' || bkV2LockSpansDays(l)) return false;
+  if(typeof bkV2IsBoatLock==='function' && bkV2IsBoatLock(l)) return false;
+  if(l.parentId || !l.date || !bkV2LockRoundReleased(l, l.date)) return false;
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  const who = by || ((typeof laBy==='function')?laBy():'');
+  l.status = 'released';
+  (l.log = l.log||[]).push({ date:today, at:new Date().toISOString(), type:'release', note:'ปิดใบ · ปล่อยรอบแล้ว', by:who });
+  SB_SEAT_LOCKS.forEach(k => {
+    if(k && k.parentId===l.id && k.status==='active'){
+      k.status = 'released';
+      (k.log = k.log||[]).push({ date:today, at:new Date().toISOString(), type:'release', note:'ปิดพร้อมล็อกแม่ · ปล่อยรอบแล้ว', by:who });
+    }
+  });
+  return true;
 }
 // Human label of the rolling cutoff rule · '' when none
 function bkV2LockCutoffLabel(l){
@@ -3142,6 +3165,8 @@ function bkV2LockExpireSweep(){
       if(l.status==='active' && to && today > to){ l.status='expired'; (l.log=l.log||[]).push({date:today,type:'expire',note:'range ended'}); changed=true; }
     } else {
       if(l.status==='active' && l.expiry && l.expiry < today){ l.status='expired'; (l.log=l.log||[]).push({date:today,type:'expire'}); changed=true; }
+      /* §lkRelClose · ใบที่กดปล่อยไปก่อนหน้านี้แล้วสถานะยังค้าง active · ปิดให้ตรงกับที่กดไว้ */
+      else if(typeof bkV2LockCloseIfReleased==='function' && bkV2LockCloseIfReleased(l, 'system')) changed=true;
     }
   });
   if(changed) sbSeatLocksPersist();
