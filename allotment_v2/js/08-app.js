@@ -25948,6 +25948,17 @@ function pckOvnVanHead(vg, date){
    หนึ่งการ์ดต่อหนึ่งลำ · ร้านที่จะกิน + หัวจริง + อาหารพิเศษ + ยอดเงิน
    ทารกไม่นับ (ไม่ได้สั่งอาหาร) · คนที่ไม่มาหักออกจากผู้ใหญ่ก่อน เพราะเด็กแทบไม่มาคนเดียว
    ═══════════════════════════════════════════════════════════════════════════ */
+/* §mealStrand (2026-11-20) · ผู้ใช้แจ้ง "LKC77 ไม่มีมังสวิรัติ แต่ทำไมขึ้น"
+   AS-LMD-2026-110023 (มังสวิรัติ 1 · แพ้ 1) เลื่อนจาก 20 พ.ย. ไป 21 พ.ย. · หน้าท่ายังเก็บแถวขีดฆ่า "เลื่อนวันแล้ว"
+   ไว้ในวันเดิม (§strandMove · booked 0) ตัวนับหัวได้ 0 ถูกแล้ว แต่อาหารพิเศษอ่านจากใบจองตรง ๆ จึงยังนับ
+   แถวที่ไม่เหลือใครกินในลำนี้วันนี้ = ไม่นับอาหารพิเศษ · เลื่อนวัน/ยกเลิกที่ค้างแถวไว้ หรือไม่มาทั้งใบ
+   ไม่มาบางคนยังนับตามเดิม (ไม่รู้ว่าคนที่ไม่มาคือคนที่สั่งอะไร · ทำขาดเสียหายกว่าทำเกิน) */
+function pckMealRowGone(r){
+  if(!r) return true;
+  if(r.strand) return true;
+  var tot=Math.max(0, ((r.expect!=null?r.expect:r.booked)||0) - ((r.ck && r.ck.at) ? (+r.ck.noShow||0) : 0));
+  return tot<=0;
+}
 function pckMealCount(rows){
   var o={ad:0, chd:0, inf:0, tot:0, book:0, veg:0, vegan:0, halal:0, allergy:0};
   (rows||[]).forEach(function(r){
@@ -25966,7 +25977,7 @@ function pckMealCount(rows){
     var inf=Math.min(PT(px,'inf'), Math.max(0, tot-chd));
     o.book+=r.booked||0; o.tot+=tot; o.chd+=chd; o.inf+=inf;
     o.ad+=Math.max(0, tot-chd-inf);
-    var m=(r.b&&r.b.specialMeals)||{};
+    var m=pckMealRowGone(r)?{}:((r.b&&r.b.specialMeals)||{});   /* §mealStrand */
     o.veg+=(+m.veg||0); o.vegan+=(+m.vegan||0); o.halal+=(+m.halal||0);
     o.allergy+=(typeof bkV2AllergyCount==='function')?(bkV2AllergyCount(m)||0)
               :(String(m.allergies||'').trim()?1:0);
@@ -25978,6 +25989,7 @@ function pckAllergyList(rows){
   var by={};
   (rows||[]).forEach(function(r){
     if(r._vd) return;
+    if(pckMealRowGone(r)) return;   /* §mealStrand */
     var m=(r.b&&r.b.specialMeals)||{};
     (Array.isArray(m.allergyList)?m.allergyList:[]).forEach(function(x){
       if(!x||!x.name) return; var k=String(x.name).trim(); if(!k) return;
