@@ -4101,13 +4101,33 @@ function bkV2LockDateOf(l){
   }
   return '';
 }
-function bkV2LockClaims(lockId){
-  const out = [];
-  const _L=(typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS.find(y=>y.id===lockId):null;
-  const _ld=bkV2LockDateOf(_L);   /* ว่าง = ล็อคแบบช่วง ข้ามการเช็ควัน */
+/* §lkSweepFast (2026-11-20) · owner: "หน้า Seat lock ค้างหนักกว่าหน้าอื่น เข้าก็ช้า ออกก็ช้า"
+   วัดบนข้อมูลจริง · เปิดหน้า Seat Locks ใช้ 10.2 วินาที · 10.1 วินาทีอยู่ในการตรวจตัวนับ (bkV2LockSweep)
+   เพราะตรวจทีละล็อก (2,828 ใบ) และแต่ละใบไล่อ่านใบจองทั้งหมด (13,962 ใบ) ใหม่ทุกครั้ง = 39 ล้านรอบ
+   ดัชนีนี้ไล่ใบจองรอบเดียว แล้วแจกให้ทุกล็อก · ผลลัพธ์ของ Claims/Audit เหมือนเดิมทุกตัว */
+function bkV2LockClaimsIndex(){
+  const by = new Map(), lockOf = new Map();
+  (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).forEach(l => { if(l&&l.id!=null&&!lockOf.has(l.id)) lockOf.set(l.id, l); });
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b => {
-    const gone = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
     (b.trips||[]).forEach(t => { (t.lockDraws||[]).forEach(x => {
+      if(!x || x.lockId==null) return;
+      let a = by.get(x.lockId); if(!a){ a=[]; by.set(x.lockId, a); }
+      a.push({ b:b, t:t, x:x });
+    }); });
+  });
+  return { by:by, lockOf:lockOf };
+}
+function bkV2LockClaims(lockId, idx){
+  const out = [];
+  const _L=idx ? (idx.lockOf.get(lockId)||null) : ((typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS.find(y=>y.id===lockId):null);
+  const _ld=bkV2LockDateOf(_L);   /* ว่าง = ล็อคแบบช่วง ข้ามการเช็ควัน */
+  const _src = idx ? [null] : (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]);
+  const _hits = idx ? (idx.by.get(lockId)||[]) : null;
+  _src.forEach(b0 => {
+    const _trips = idx ? _hits : (b0.trips||[]);
+    _trips.forEach(t0 => { const b = idx ? t0.b : b0, t = idx ? t0.t : t0;
+     const gone = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
+     (idx ? [t0.x] : (t.lockDraws||[])).forEach(x => {
       if(x.lockId!==lockId) return;
       /* §lkStale · ใบย้ายวันไปแล้ว แต่ที่นั่งยังชี้ล็อคของวันเดิม
          ไม่ใช่ใบจองของวันนี้แล้ว จึงไม่ใช่ของจริงเท่ากับใบที่ยกเลิก */
@@ -4120,9 +4140,9 @@ function bkV2LockClaims(lockId){
   return out.sort((a,b)=> String(a.date).localeCompare(String(b.date)) || String(a.vc).localeCompare(String(b.vc)));
 }
 /* ตัวนับของล็อก vs ใบจองที่อ้างถึงจริง · diff > 0 = ล็อกกันที่ไว้เกินความจริง (ขายได้น้อยกว่าที่ควร) */
-function bkV2LockAudit(l){
+function bkV2LockAudit(l, idx){
   if(!l) return {used:0, live:0, dead:0, diff:0, claims:[]};
-  const cl = bkV2LockClaims(l.id);
+  const cl = bkV2LockClaims(l.id, idx);
   const live = cl.filter(c=>!c.dead).reduce((s,c)=>s+c.qty,0);
   const dead = cl.filter(c=> c.dead).reduce((s,c)=>s+c.qty,0);
   return { used:Number(l.used)||0, live:live, dead:dead, diff:(Number(l.used)||0)-live, claims:cl };
@@ -4769,9 +4789,11 @@ function bkV2LockSweep(){
   const L=(typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]);
   const rows=[], over=[];
   let seatsMoved=0, seatsDead=0, seatsOver=0;
+  const _idx=bkV2LockClaimsIndex();                                   /* §lkSweepFast · ไล่ใบจองรอบเดียว */
+  const _hasKid=new Set(L.filter(x=>x&&x.parentId).map(x=>x.parentId));   /* แม่ที่ไม่มีลูก ไม่ต้องไล่หาลูก */
   L.forEach(l=>{
     if(bkV2IsBoatLock(l)) return;   /* §bkLock · ไม่มีที่นั่งให้ตามหา · qty เป็นขนาดที่สัญญาไว้ ไม่ใช่โควตา */
-    const A=bkV2LockAudit(l);
+    const A=bkV2LockAudit(l, _idx);
     if(A.diff>0){
       const mv=A.claims.filter(c=>c.moved).reduce((n,c)=>n+c.qty,0);
       const dd=A.claims.filter(c=>c.dead&&!c.moved).reduce((n,c)=>n+c.qty,0);
@@ -4781,7 +4803,7 @@ function bkV2LockSweep(){
         qty:l.qty||0, used:A.used, live:A.live, diff:A.diff, moved:mv, dead:dd,
         vcs:A.claims.filter(c=>c.dead).map(c=>c.vc+(c.qty>1?(' ×'+c.qty):'')+(c.moved?' (ย้ายวัน)':' (ยกเลิก)')) });
     }
-    if(!l.parentId){
+    if(!l.parentId && _hasKid.has(l.id)){
       const kids=bkV2LockChildren(l.id);
       if(kids.length){
         const un=bkV2LockUnalloc(l), pu=Number(l.used)||0;
