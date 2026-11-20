@@ -65864,8 +65864,8 @@ function bkV2DietPreviewHtml(){
   if(hasList) O.push(pc('&#9888; แพ้อาหาร <b>'+alN+'</b> คน &middot; '+(sm.allergyList||[]).filter(x=>x&&x.name).map(x=>esc(x.name)+' <b>&times;'+Math.max(1,Math.floor(+x.qty||1))+'</b>').join(' &middot; '),'#FEF2F2','#F5CFCF','#B91C1C'));
   else if(allPax) O.push(pc('&#9888; แพ้อาหาร <b>ทั้งใบ</b> &middot; '+esc(String(sm.allergies).trim()),'#FEF2F2','#F5CFCF','#B91C1C'));
   else if(txtAl) O.push(pc('&#9888; แพ้อาหาร <b>ยังไม่รู้จำนวน 1 ใบ</b> &middot; '+esc(String(sm.allergies).trim()),'#FEF2F2','#F5CFCF','#B91C1C'));
-  if(nt && !allPax) O.push(pc('&#127860; โน้ตอาหาร <b>1</b> ใบ &middot; '+esc(nt),'#F4F3EF','#DDD9CF','#4A4740'));
-  const r3=O.length?O.join(''):'<span style="color:#9AA1AE;font-size:11.5px">ไม่มีรายการอาหารพิเศษ</span>';
+  const _nl=(nt && !allPax && typeof ppNoteLine==='function')?ppNoteLine({t:nt,veg:veg,vegan:vegan,halal:halal}):'';   /* §mealNote4 */
+  const r3=(O.length?O.join(''):(_nl?'':'<span style="color:#9AA1AE;font-size:11.5px">ไม่มีรายการอาหารพิเศษ</span>'))+_nl;
   const row=(lb,who,body)=>`<div style="padding:8px 0;border-top:1px solid #E9ECF2">
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px"><b style="font-size:11px;color:#16265C">${lb}</b><span style="font-size:10px;color:#8A8F9C">${who}</span></div>${body}</div>`;
   const tips=[];
@@ -86465,7 +86465,7 @@ function ppAdd(A,r){
     var e=A.al[x.name]||(A.al[x.name]={q:0,ft:0,all:false});
     if(x.all) e.all=true;
     if(x.ft) e.ft++; else e.q+=x.qty; });
-  if(r.mNote){ if(!A.notes) A.notes=[]; A.notes.push(r.mNote); }   /* §mealNote */
+  if(r.mNote){ if(!A.notes) A.notes=[]; A.notes.push({t:r.mNote, veg:r.veg, vegan:r.vegan, halal:r.halal}); }   /* §mealNote · §mealNote4 เก็บยอดของใบเดียวกันไว้ด้วย */
   if(r.sp) A.sp.push(r);
   A.rows.push(r);   /* ทุกใบ ไม่ใช่เฉพาะใบที่มีอาหารพิเศษ · ใช้ตอนกางรายชื่อ */
   return A;
@@ -86491,7 +86491,17 @@ function ppAlHtml(al){
       +' — นับจากหัวที่กินอาหารของใบนั้น (ทารกไม่นับ)"':'')+'>&times;'+v.q+'</b>'):'');
   }).join(' · ');
 }
-function ppChips(A){
+/* หนึ่งบรรทัดหมายเหตุ · ใช้ทั้งหน้า PR/PO และกล่องตัวอย่างในฟอร์ม Booking จะได้ตรงกันเสมอ */
+function ppNoteLine(n){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  if(typeof n==='string') n={t:n};
+  var of=[]; if(+n.veg) of.push('มังสวิรัติ '+(+n.veg)); if(+n.vegan) of.push('วีแกน '+(+n.vegan)); if(+n.halal) of.push('ฮาลาล '+(+n.halal));
+  var lead=of.length?('&#8627; หมายเหตุของ '+e(of.join(' + '))+' ท่านนี้')
+                    :'หมายเหตุ (ไม่ใช่ยอดอาหารพิเศษ)';
+  return '<div class="pp-mnote" style="flex-basis:100%;width:100%;font-size:11px;line-height:1.45;color:#6B7280;margin:1px 0 2px 2px">'
+    +lead+': <span style="color:#3E4658">'+e(n.t)+'</span></div>';
+}
+function ppChips(A, tot){   /* tot = แถวยอดรวมท่า/ทั้งหมด · ไม่กางหมายเหตุรายใบซ้ำ */
   var e=ckEsc, out=[];
   var c=function(t,bg,bd,col){ return '<span class="pp-chip" style="background:'+bg+';border-color:'+bd+';color:'+col+'">'+t+'</span>'; };
   if(A.veg)   out.push(c('มังสวิรัติ <b>'+A.veg+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
@@ -86511,7 +86521,12 @@ function ppChips(A){
     out.push(c(lead+(alt?(' · '+alt):''),'#FEF2F2','#F5CFCF','#B91C1C'));
   }
   /* §mealNote · โน้ตอาหารของใบที่ไม่ได้แพ้ · ครัวต้องอ่าน แต่ไม่ใช่คำเตือน */
-  if(A.notes&&A.notes.length) out.push(c('&#127860; โน้ตอาหาร <b>'+A.notes.length+'</b> ใบ · '+A.notes.map(e).join(' · '),'#F4F3EF','#DDD9CF','#4A4740'));
+  /* §mealNote4 (2026-11-20) · owner: "ดูใน PR/PO แบบนี้จะสับสนไหม ว่าต้องแยกอาหารเป็น 4 คน"
+     ป้าย "มังสวิรัติ 2" คู่กับป้าย "โน้ตอาหาร 1 ใบ · 2 AD ทานไข่ได้" อ่านเป็น 2 + 2 ได้
+     โน้ตจึงไม่เป็นป้ายแล้ว · เป็นบรรทัดรองสีเทา บอกว่าเป็นหมายเหตุของยอดไหน และไม่มีเลข "กี่ใบ" ให้หยิบไปบวก */
+  if(A.notes&&A.notes.length) out.push(tot
+    ? '<div class="pp-mnote" style="flex-basis:100%;width:100%;font-size:11px;color:#6B7280;margin:1px 0 2px 2px">มีหมายเหตุอาหาร &middot; ดูที่แถวของแต่ละลำ</div>'
+    : A.notes.map(function(n){ return ppNoteLine(n); }).join(''));
   /* เขียนเต็มว่าไม่มีอะไร · "ไม่มี" เฉย ๆ ในคอลัมน์นี้อ่านกำกวม
      เพราะแถวข้าง ๆ ก็มีคำว่าไม่มีทัวร์อยู่ด้วย */
   return out.length?out.join(''):'<span class="pp-none">ไม่มีรายการอาหารพิเศษ</span>';
@@ -86887,7 +86902,7 @@ function renderPrPo(){
 
   /* ── สรุปอาหารพิเศษทั้งช่วง · ตัวเลขที่ฝ่ายจัดซื้อเอาไปตั้งยอดสั่งได้เลย ── */
   var sumBox='<div class="pp-sum"><div class="st">สรุปอาหารพิเศษทั้งช่วง &middot; '+e(ppRangeLbl())+'</div>'
-    + ppChips(GT) + '</div>';
+    + ppChips(GT,1) + '</div>';
 
   /* ── ชิปกรอง ── */
   var filt='<div class="pp-filt pp-noprint"><span class="pp-flab">ท่า</span>'
@@ -86980,12 +86995,12 @@ function ppBodySheet(P,pOrd,GT){
       return;
     }
     out+=wrap('<tr class="g-pier"><td colspan="2">'+lb+'</td>'
-        +ppNumCells(PA,'',ppPierCapTag(PB))+'<td class="mealc">'+ppChips(PA)+'</td></tr>'
+        +ppNumCells(PA,'',ppPierCapTag(PB))+'<td class="mealc">'+ppChips(PA,1)+'</td></tr>'
       + PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join(''), true);
   });
   /* ยอดรวมทั้งช่วง · ตารางของตัวเอง จะได้ไม่ดูเหมือนห้อยท้ายเป็นของท่าสุดท้าย */
   out+=wrap('<tr class="g-tot"><td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
-    + ppNumCells(GT)+'<td class="mealc">'+ppChips(GT)+'</td></tr>', false, 'tot');
+    + ppNumCells(GT)+'<td class="mealc">'+ppChips(GT,1)+'</td></tr>', false, 'tot');
   return out;
 }
 
@@ -87004,7 +87019,7 @@ function ppBodyFriendly(P,pOrd,GT){
       +'</header>';
     if(PB.empty){ out+='<div class="fr-none">'+e(ppNoTourMsg())+'</div></section>'; return; }
     if(PA.veg||PA.vegan||PA.halal||PA.allergy||PA.alUnk)
-      out+='<div class="fr-pmeal">'+ppChips(PA)+'</div>';
+      out+='<div class="fr-pmeal">'+ppChips(PA,1)+'</div>';
     PB.gOrd.forEach(function(k){
       var g=PB.G[k], rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
       var rc=(rt&&rt.color)||'#94A3B8';
@@ -87044,7 +87059,7 @@ function ppBodyFriendly(P,pOrd,GT){
   out+='<div class="fr-tot"><span>รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</span>'
     +'<div class="v"><b>'+GT.tot+'</b><small>คน</small></div>'
     +'<div class="v acc"><b>'+GT.eat+'</b><small>ที่ต้องเตรียมอาหาร</small></div>'
-    +'<div class="m">'+ppChips(GT)+'</div></div>';
+    +'<div class="m">'+ppChips(GT,1)+'</div></div>';
   return '<div class="fr-wrap">'+out+'</div>';
 }
 
@@ -87083,14 +87098,14 @@ function ppBodyBoard(P,pOrd,GT){
       +'<b>'+e(M.n)+'</b>'+(M.t?('<i>'+e(M.t)+'</i>'):'')
       +(PB.empty?'':('<span class="sum"><b>'+PA.eat+'</b> ที่ &middot; '+PA.tot+' คน &middot; '
         +PB.gOrd.length+' โปรแกรม</span>'
-        +'<span class="ml">'+ppChips(PA)+'</span>'))
+        +'<span class="ml">'+ppChips(PA,1)+'</span>'))
       +'</header><div class="bd-g">'
       +(PB.empty?('<div class="bd-none">'+e(ppNoTourMsg())+'</div>'):tiles)
       +'</div></section>';
   });
   out+='<div class="bd-tot"><span>รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</span>'
     +'<b>'+GT.eat+'</b><small>ที่ต้องเตรียมอาหาร</small>'
-    +'<span class="m">'+ppChips(GT)+'</span></div>';
+    +'<span class="m">'+ppChips(GT,1)+'</span></div>';
   return '<div class="bd-wrap">'+out+'</div>';
 }
 
