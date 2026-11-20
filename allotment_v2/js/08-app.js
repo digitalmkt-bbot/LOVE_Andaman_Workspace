@@ -61290,7 +61290,7 @@ function bkV2RenderTab2(){
             return (/longtail|หางยาว/i.test(t) ? (/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(t)?'เหมาหางยาว':'หางยาว join') : String(x.label||x.type||''))+q; }).filter(Boolean).join(', ');
           const _tot=Math.round(+((bk.priceBreakdown||{}).total)||+bk.total||0);
           const _pd=String(((bk.paymentSnapshot||{}).paidStatus)||'').toLowerCase()==='paid';
-          return {g:a.g, boat:'', html:`
+          return {g:a.g, boat:'', sub:true, html:`
           <tr class="t2-b2csub" data-al="${esc(a.key)}"><td colspan="${COLN}" style="padding:2px 12px 5px 26px;background:#FAFBFC;border-top:1px dashed #DCE3EA;font-size:11px;line-height:1.4;color:#6B7785">
             &#8627; <a href="javascript:void 0" onclick="event.stopPropagation();(typeof bkV2OpenDetail==='function'?bkV2OpenDetail('${esc(bk.id)}'):(window.dashOpenBooking&&dashOpenBooking('${esc(bk.id)}')))" title="เปิดใบ B2C" style="font-family:'DM Mono',monospace;color:#185FA5;text-decoration:none">${esc(bk.voucherRef||bk.id)}</a>
             <span style="color:#8A94A1">B2C</span> &middot; <b style="color:#8A3E05;font-weight:700">${esc(_ad||'Add-on')}</b> ของใบ VC ${esc(_L.vc||'')}
@@ -61584,16 +61584,44 @@ function bkV2RenderTab2(){
             ${mem.length?`<button type="button" class="t2-bclr" onclick="event.stopPropagation();bkV2BoatClearTrip('${esc(bid)}','${esc(date)}','${esc(rid)}')" title="${esc(laT('ถอดเรือลำนี้ออกจากทุก booking ของรอบนี้ (ทุกโซน) · กลับไปเป็นยังไม่จัดเรือ'))}">&#10005; ${laT('ถอดทั้งลำ')}</button>`:''}
           </div></td></tr>`;
       };
-      { let _pg=null, _pb=null, _inUn=false, _inOb=false;
-        const _unLast=(()=>{ let k=null; _rowObjs.forEach(o=>{ if(!_boatCluster && _grouped && !o.g && !o.ovnBack) k=o; }); return k; })();   /* §unBlock · แถวสุดท้ายของบล็อก → มุมโค้งล่าง */
+      /* §chSplit · วงวาดแถวเดิม ยกเป็นฟังก์ชันของรายการแถว · เหมาลำหลายลำเรียกทีละลำ · โซนอื่นเรียกครั้งเดียวเหมือนเดิม */
+      const _emitRows=(L)=>{ let body=''; let _pg=null, _pb=null, _inUn=false, _inOb=false;
+        const _unLast=(()=>{ let k=null; L.forEach(o=>{ if(!_boatCluster && _grouped && !o.g && !o.ovnBack) k=o; }); return k; })();   /* §unBlock · แถวสุดท้ายของบล็อก → มุมโค้งล่าง */
         /* §ovnBackBlk · หัวม่วงก่อนแถวขากลับค้างคืนที่ยังไม่จัดรถ (อยู่ท้ายโซน) */
         const _ovnHdr=()=>{ const L=_rowObjs.filter(o=>o.ovnBack), px=alist.filter(a=>a.ovnBack&&!a.g).reduce((s,a)=>s+a.head,0);
           return `<tr class="t2-unsp"><td colspan="${COLN}"></td></tr><tr class="t2-ownhd"><td colspan="${COLN}" style="background:#F5F2FB;box-shadow:inset 4px 0 0 #5B289A;padding:6px 12px;font-size:12px;color:#5B289A"><b>&#8617; ${laT('รับกลับจากเกาะ (OVN)')}</b> <span style="font-size:11px;opacity:.85">${L.length} booking · ${px} pax · ${laT('ไม่มีรถไปรับ · ต้องจัดรถไปส่ง')}</span></td></tr>`; };
-        _rowObjs.forEach(o=>{ if(!_boatCluster && o.ovnBack && !_inOb){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } body+=_ovnHdr(); _inOb=true; _pg=o.g; body+=o.html.replace('t2-unassigned',''); return; }
+        L.forEach(o=>{ if(!_boatCluster && o.ovnBack && !_inOb){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } body+=_ovnHdr(); _inOb=true; _pg=o.g; body+=o.html.replace('t2-unassigned',''); return; }
           if(_inOb && !_boatCluster){ body+=o.html.replace('t2-unassigned',''); return; }
           if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(_inUn){ body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; _inUn=false; } if(o.g>0) body+=_grpHeaderRow(o.g)+_vsGrpRows(o.g); else if(vanMode || _hasGroups){ body+=_unassignedHdr(); _inUn=true; } _pg=o.g; }
           body+=(o===_unLast && _inUn)?o.html.replace('t2-unassigned','t2-unassigned t2-un-last'):o.html; });
-        if(_inUn) body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; }
+        if(_inUn) body+=`<tr class="t2-unsp"><td colspan="${COLN}"></td></tr>`; return body; };
+      /* §chSplit (2026-11-20) · owner: "ควรแยกให้หน่อย จะได้ไม่สับสนว่าเป็นกรุ๊ปเดียวกัน อันนี้เป็นคนละกรุ๊ป"
+         เหมาลำ 2 ลำขึ้นไปในโปรแกรมเดียว เคยอยู่ใต้แถบ CHARTER แถบเดียว อ่านเป็นคณะเดียวกัน
+         แยกเป็นกลุ่มตามลำ · แต่ละลำมีแถบหัวของตัวเอง (เป็น t2-zband จริง → มุมมอง Layer ได้การ์ดของตัวเองเอง)
+         โหมดจัดเรือ (_boatCluster) มีหัวเรือคั่นอยู่แล้ว ไม่แตะ · ลำเดียวก็ไม่แตะ */
+      const _chSplit = (z==='__CHARTER__' && !_boatCluster) ? (()=>{ const ord=[], by={}; let _lastK=null;
+          /* แถวเสริมของใบ B2C (o.sub) ไม่มีเรือของตัวเอง · ตามแถวแม่ที่อยู่ข้างบน ไม่ตั้งกลุ่มใหม่ */
+          _rowObjs.forEach(o=>{ const k=(o.sub && _lastK!=null) ? _lastK : (o.boat||''); _lastK=k; if(!by[k]){ by[k]=[]; ord.push(k); } by[k].push(o); });
+          return ord.length>1 ? {ord, by} : null; })() : null;
+      if(_chSplit){
+        const N=_chSplit.ord.length;
+        _chSplit.ord.forEach((bid,i)=>{
+          const bo=(typeof BOATS!=='undefined'?BOATS.find(b=>b.id===bid):null)||{};
+          const c=bid?bkV2BoatAvatarColor(bid):'#8A8F9C', bn=bo.name||bid||laT('ยังไม่ระบุเรือ');
+          const its=_chtrItems.filter(it=>(it.bid||'')===bid), px=its.reduce((n,it)=>n+(+it.px||0),0), cap=bid?laCapOn(bo,date):0;
+          const ags=[...new Set(its.map(it=>it.ag).filter(Boolean))], leads=[...new Set(its.map(it=>it.lead).filter(Boolean))];
+          /* สีเรือบางลำเป็น rgb(...) ไม่ใช่ hex · _bkV2Soft รับได้แต่ hex จึงผสมสีด้วย CSS แทน */
+          const soft=`color-mix(in srgb, ${c} 12%, #fff)`, mid=`color-mix(in srgb, ${c} 55%, #fff)`;
+          if(i) body+=`<tr class="t2-zgap t2-chgap"><td colspan="${COLN}"></td></tr>`;
+          body+=`<tr class="t2-zband t2-zband-ch t2-chgrp" data-cc="${esc(c)}" data-ccb="${esc(mid)}" data-ccbg="${esc(soft)}" style="--cc:${c};--ccbg:${soft}"><td colspan="${COLN}"><div class="zw">`
+            + `<span class="chg">${laTp('กรุ๊ป {0}', (i+1)+'/'+N)}</span><span class="znm">&#128676; CHARTER</span>`
+            + `<span class="zboats"><span class="zb"><b>${esc(bn)}</b><s>${cap?(px+'/'+cap):(px+' pax')}</s></span></span>`
+            + `<span class="zsub">${ags.length?('<b>'+esc(ags.join(' / '))+'</b>'):''}${(ags.length&&leads.length)?' &middot; ':''}${esc(leads[0]||'')}${leads.length>1?(' +'+(leads.length-1)):''}</span>`
+            + `<span class="zsub chr">${laT('เหมาทั้งลำ')} &middot; ${its.length||_chSplit.by[bid].length} booking &middot; ${px} pax</span>`
+            + `</div></td></tr>`;
+          body+=_emitRows(_chSplit.by[bid]);
+        });
+      } else body+=_emitRows(_rowObjs);
       /* ══ §btTable (2026-09-04) · ทุกโซนของทริปนี้อยู่ในตารางเดียว ═══════════
          ของเดิมแยกเป็นคนละ <table> ต่อโซน · ความกว้างคอลัมน์จึงคำนวณแยกกัน
          Voucher ของ Phuket กว้าง 118px แต่ของเขาหลัก 96px ตาไล่ลงมาแล้วสะดุด
@@ -61601,7 +61629,14 @@ function bkV2RenderTab2(){
          ยุบเป็นตารางเดียว หัวโซนกลายเป็นแถบคาดเต็มความกว้างเหมือนแถบคันรถ
          แถวและปุ่มทุกตัวเป็นของเดิมไม่ถูกแตะ (o.html เดิมทั้งดุ้น)          */
       const _isChtr = z==='__CHARTER__';
-      const _zband = _isChtr
+      const _zband = (_isChtr && _chSplit)
+        ? `<tr class="t2-chsum"><td colspan="${COLN}"><div class="zw">`
+          + `<span class="zkind">${laT('เหมาลำ')}</span><span class="znm">&#128676; CHARTER</span>`
+          + `<span class="chn">${laTp('{0} กรุ๊ป แยกกัน', _chSplit.ord.length)}</span>`
+          + `<span class="zsub">${laT('รวม')} ${zpax} pax`
+            + ((_cAd||_cChd||_cInf||_cFoc)?` <span class="zpx">(${[['AD',_cAd],['CHD',_cChd],['INF',_cInf],['FOC',_cFoc]].filter(x=>x[1]).map(x=>x[0]+' '+x[1]).join(' &middot; ')})</span>`:'')
+            + ` &middot; ${laT('คนละลำ คนละคณะ')}</span></div></td></tr>`
+        : _isChtr
         ? `<tr class="t2-zband t2-zband-ch"><td colspan="${COLN}"><div class="zw">`
           + `<span class="zkind">${laT('เหมาลำ')}</span><span class="znm">&#128676; CHARTER</span>`
           /* §pbPax2 · ยอดเหมาลำแยกประเภทอยู่ตรงนี้ · แถบโปรแกรมข้างบนไม่นับเหมาลำแล้ว */
@@ -63402,6 +63437,26 @@ function bkV2RenderTab2(){
     .t2-zband-ch .zb i{font-style:normal;background:#EBE2FA;color:#5B289A;border-radius:4px;
       padding:0 5px;font-size:9px;font-weight:800}
     .t2-zband-ch .zb s{text-decoration:none;color:#7A6FA8;font-family:'DM Mono',monospace}
+    /* §chSplit · เหมาลำหลายลำ · แถบสรุป + แถบหัวของแต่ละลำ (สีประจำเรือ) */
+    .t2-mtbl tr.t2-chsum>td{background:#F2EEFC;border-top:2px solid #D6CCF2;border-bottom:1px solid #DDD4F2;padding:7px 14px;box-shadow:inset 5px 0 0 #5B289A}
+    .t2-chsum .zw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .t2-chsum .zkind{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#7A6FA8}
+    .t2-chsum .znm{font-size:13px;font-weight:800;color:#5B289A}
+    .t2-chsum .zsub{font-size:11px;color:#7A6FA8;font-weight:600}
+    .t2-chsum .chn{background:#5B289A;color:#fff;border-radius:999px;padding:1px 10px;font-size:11px;font-weight:800;white-space:nowrap}
+    .t2-mtbl tr.t2-chgrp>td{background:var(--ccbg,#F4F5F7);border-top:1px solid #E1E4EA;border-bottom:1px solid #E1E4EA;box-shadow:inset 5px 0 0 var(--cc,#8A8F9C);padding:6px 14px}
+    .t2-chgrp .chg{background:var(--cc,#8A8F9C);color:#fff;border-radius:6px;padding:1px 8px;font-size:10.5px;font-weight:800;white-space:nowrap}
+    .t2-chgrp .znm{font-size:12px}
+    .t2-chgrp .zboats{margin-left:0}
+    .t2-mtbl tr.t2-chgrp .zb{background:#fff;border-color:var(--cc,#8A8F9C)}
+    .t2-mtbl tr.t2-chgrp .zb b{color:#2B2622}
+    .t2-mtbl tr.t2-chgrp .zb s{color:#4A5162}
+    .t2-chgrp .zsub{color:#4A5162}
+    .t2-chgrp .zsub b{color:#2B2622}
+    .t2-chgrp .zsub.chr{margin-left:auto;font-weight:600;color:#7C8091}
+    .t2-chgap td{height:14px}
+    body.btl #view-booking .t2-mtbl tr.t2-chsum>td{background:transparent!important;border:0!important;box-shadow:none!important;padding:12px 6px 0!important}
+    body.btl #view-booking .t2-mtbl tr.t2-chgrp.ly-zh .znm{color:#5B289A!important;font-size:13px!important}
     .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
     /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
     .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
@@ -91060,7 +91115,8 @@ function pc2CSS3(S){
       var rows = Array.prototype.slice.call(tbody.rows), zone = null, zrows = [], first = true;
       var flush = function(){
         if(!zone) return;
-        var k = zone.k, C = ZC[k] || ZC.oth, grp = 0, novan = 0, unN = 0;
+        var k = zone.k, C = zone.C || ZC[k] || ZC.oth, grp = 0, novan = 0, unN = 0;
+        if(!zrows.length) return;   /* §chSplit · แถบที่ไม่มีแถวตาม ไม่ต้องปิดการ์ด (เดิมจะพังที่ last) */
         zrows.forEach(function(r){
           r.classList.add('ly-in', 'ly-z-' + k); r.style.setProperty('--lyc', C[0]); r.style.setProperty('--lyb', C[1]);
           if(r.hasAttribute('data-grp')){ grp++; if((r.classList.contains('vgb')&&r.classList.contains('off'))||/ยังไม่เลือกรถ|ยังไม่จัดรถ/.test(r.textContent)) novan++;   /* §vgBar · แถบใหม่ไม่มีข้อความนี้แล้ว ดูจาก class */ }
@@ -91093,12 +91149,14 @@ function pc2CSS3(S){
         if(tr.classList.contains('t2-zband')){
           flush();
           var znm = tr.querySelector('.znm'), k = zoneKey((znm && znm.textContent) || tr.textContent), C = ZC[k] || ZC.oth;
+          if(tr.getAttribute('data-cc')) C = [tr.getAttribute('data-cc'), tr.getAttribute('data-ccb') || C[1], tr.getAttribute('data-ccbg') || C[2]];   /* §chSplit · การ์ดเหมาลำใช้สีประจำเรือ */
           tr.classList.add('ly-zh', 'ly-z-' + k); tr.style.setProperty('--lyc', C[0]); tr.style.setProperty('--lyb', C[1]); tr.style.setProperty('--lybg', C[2]);
           var zk = tr.querySelector('.zkind'); if(zk) zk.style.display = 'none';   /* owner "ตัดคำว่า โซน ออก" */
           if(!first){ var sp0 = document.createElement('tr'); sp0.className = 'ly-sp'; sp0.innerHTML = '<td colspan="' + (headTr ? headTr.cells.length : 20) + '"></td>'; tr.parentNode.insertBefore(sp0, tr); }
-          first = false; zone = {tr:tr, k:k}; zrows = []; continue;
+          first = false; zone = {tr:tr, k:k, C:C}; zrows = []; continue;
         }
         if(tr.classList.contains('t2-pband')){ flush(); zone = null; zrows = []; continue; }
+        if(tr.classList.contains('t2-chgap')){ tr.style.display = 'none'; continue; }   /* §chSplit · ใน Layer การ์ดเว้นกันเองอยู่แล้ว */
         if(zone) zrows.push(tr);
       }
       flush();
