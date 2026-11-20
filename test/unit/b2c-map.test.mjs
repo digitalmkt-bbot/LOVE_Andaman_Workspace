@@ -130,6 +130,8 @@ test('§b2cLoneLead · later line with ONE head, Thai lead, order list has 2 US 
   assert.deepEqual(out[0].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 }, 'line 0 unchanged: both heads counted foreign');
   assert.equal(out[1].trips[0].pax.ad_th, 1, 'priced Thai');
   assert.equal(out[1].trips[0].nat, undefined, 'lone Thai lead is not turned foreign');
+  assert.equal(out[1].trips[0]._natDrop, true, '§b2cLoneLead2 · marked so server.js does not restore the stale 0 stored by older imports');
+  assert.equal(out[0].trips[0]._natDrop, undefined, 'line 0 is not marked');
   assert.deepEqual(out[1].passengers, [], 'and the line shows no other name (§b2cPaxAllLines cap)');
 });
 test('§b2cLoneLead · later line with TWO heads keeps the old count (names may fill it)', () => {

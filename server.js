@@ -390,7 +390,9 @@ const B2C_OWN_BK = new Set([
 //      ticked on that line (customer included only if 'lead' is ticked) instead of the whole order's list.
 //      LOV-1809451 re-counts as 0 / 1 / 1 / 1 Thai; a fully labelled line is a firm count, so the 0
 //      already stored on lines 3–4 is replaced on the next sync.
-const B2C_MAP_VER = 37;
+// v38: §b2cLoneLead2 · the stale "0 Thai" that pre-v37 imports stored on such a lone-lead line is no
+//      longer restored after the re-insert (trip._natDrop); non-zero stored counts are untouched.
+const B2C_MAP_VER = 38;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -986,8 +988,10 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
     // §b2cParkFee · a soft nat is a floor, not a full count: remember which trips carry one and keep
     // the marker out of the row decomposition (it is not a column).
     const natSoft = new Map();
+    const natDrop = new Set();   // §b2cLoneLead2 · trips whose stored all-zero nat is the old mapper's mistake, not a hand count
     for (const b of b2cBks) (b.trips || []).forEach((t, i) => {
       if (t && t._natSoft) { if (t.nat) natSoft.set(b.id + '|' + i, t.nat); delete t._natSoft; }
+      if (t && t._natDrop) { if (!t.nat) natDrop.add(b.id + '|' + i); delete t._natDrop; }
     });
     if (unchanged) { await _b2cRunChecks(itemRows, b2cBks, paxByBooking, null); _b2cHealthOk(); return; }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
@@ -1191,6 +1195,9 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
       for (const [bkId, byIdx] of Object.entries(savedTripNat)) {
         for (const [idx, old] of Object.entries(byIdx)) {
           if (NAT_COLS.every(c => old[c] == null)) continue;
+          // §b2cLoneLead2 · "0 Thai" on a lone Thai-priced head of a Thai lead came from the pre-v37 rule;
+          // leave the trip blank so the price fields (Thai) are used. Any non-zero stored count is kept.
+          if (natDrop.has(bkId + '|' + idx) && NAT_COLS.every(c => (Number(old[c]) || 0) === 0)) continue;
           // §b2cParkFee · the mapper's soft count (park-fee qty / labelled travellers) does not beat a
           // count already on the trip that has at least as many foreigners (fewer or equal Thai heads):
           // that one was typed by someone who knows which guest is the child. More foreigners → mapper.

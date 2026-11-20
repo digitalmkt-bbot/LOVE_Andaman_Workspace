@@ -548,6 +548,12 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
         .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
         .filter(n => n && n !== 'TH').length;
     const foreign = Math.min(heads, Math.max(feeQty, named));
+    // §b2cLoneLead2 · the rule above now leaves this line without a nat — but imports made before it
+    // already stored "0 Thai" on the trip, and server.js gives a blank trip its previous value back
+    // (it cannot tell a hand count from the mapper's own earlier output). Seen live on LOV-1809451
+    // right after v37: lines 3–4 still read foreign. Mark the case so the stale all-zero value is not
+    // restored: one Thai-priced head, Thai lead, nothing on the line saying a foreigner is on it.
+    if (loneLead && leadNat === 'TH' && foreign === 0 && (P.ad_th + P.chd_th + P.inf_th) === heads) trip._natDrop = true;
     const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + (P.foc - focThai);   /* §focNat · Thai FOC are not foreign-priced heads */
     if (heads > 0 && foreign > byPrice) {
       let extra = foreign - byPrice;
