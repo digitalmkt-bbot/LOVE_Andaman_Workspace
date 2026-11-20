@@ -259,3 +259,26 @@ test('charter boat ids: splits win, later trips read the trip row, charterboatid
   ]).map(x => x.boat_id);
   assert.deepEqual(ids, ['b1', 'b2', 'b3', 'b4']);
 });
+
+// §lkRelApi · r6 / 21 Nov 2026: an office hold of 2 was handed back in the staff app at 16:17, and the
+// webshop still answered "65 + 2 held / 67 — fully booked". A released round keeps status='active'; only
+// releaseddates says it is gone, so every reader of sb_seat_locks has to look at it.
+test('a lock round that was handed back no longer holds seats in any server-side reader', async () => {
+  const frag = v1.lockRoundLiveSql('sl');
+  assert.match(frag, /releaseddates/);
+  assert.match(frag, /left\(sl\.date, 10\)/);
+  assert.equal(v1.lockRoundLiveSql(''), "position(left(date, 10) in COALESCE(releaseddates, '')) = 0");
+  const seen = [];
+  const pool = fakePool();
+  const q = pool.query.bind(pool);
+  pool.query = (sql, ...rest) => { seen.push(String(sql)); return q(sql, ...rest); };
+  await call({ query: `route_id=r10&date=${DAY}`, pool });
+  const lockSql = seen.filter(x => x.includes('sb_seat_locks') && x.includes('AS locked'));
+  assert.equal(lockSql.length, 1);
+  assert.ok(lockSql[0].includes(frag), '/v1/availability must skip released rounds');
+  const fs = await import('node:fs');
+  const server = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+  const holds = server.split("FROM ${fqt('sb_seat_locks')}").slice(1).map(x => x.slice(0, 700)).filter(x => /status\s*=\s*'active'/.test(x));
+  assert.ok(holds.length >= 2, 'expected the seat gate and /api/b2c/availability to read sb_seat_locks');
+  for (const h of holds) assert.ok(h.includes('lockRoundLiveSql('), 'a server.js hold query ignores releaseddates: ' + h.slice(0, 120));
+});

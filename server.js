@@ -1302,7 +1302,9 @@ async function relSyncB2C(singleExtId = null, opts = {}) {
         for (const r of (await client.query(
           /* §lkPend · pendqty = ส่วนของ qty ที่ยังรอที่ว่าง ไม่ได้กันที่นั่ง · ไม่หักออกแล้วตาข่ายกันขายเกินจะเห็นที่นั่งถูกกันมากกว่าจริง */
           `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used - COALESCE(pendqty,0), 0)), 0)::int AS n
-           FROM ${fqt('sb_seat_locks')} WHERE date = ANY($1) AND status='active' GROUP BY routeid, date`, [affDates])).rows)
+           FROM ${fqt('sb_seat_locks')} WHERE date = ANY($1) AND status='active'
+             AND ${b2cV1.lockRoundLiveSql('')}   /* §lkRelApi · รอบที่กดปล่อยคืนแล้วไม่กันที่นั่ง */
+           GROUP BY routeid, date`, [affDates])).rows)
           lockByKey[r.routeid + NUL + r.date] = r.n;
         const bkByKey = {};
         for (const r of (await client.query(
@@ -3494,6 +3496,7 @@ const server = http.createServer((req, res) => {
          ) ch ON true
          WHERE sl.routeid=$1 AND sl.date>=$2 AND sl.date<=$3 AND sl.status='active'
            AND (sl.parentid IS NULL OR sl.parentid='')
+           AND ${b2cV1.lockRoundLiveSql('sl')}   /* §lkRelApi */
          GROUP BY sl.date`,
         [routeId, dateFrom, dateTo]
       ),
