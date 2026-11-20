@@ -386,6 +386,10 @@ const B2C_OWN_BK = new Set([
 //      travellerUids) no longer counts the order's labelled foreign travellers: that head is the lead.
 //      LOV-1809451 lines 3–4 (Thai lead alone, order list "2 US") were counted foreign on the park page.
 //      Only new/blank nat is affected: a nat already stored on the trip is restored as before.
+//      §b2cLineNat · when the line carries travellerUids, the nationality rules count exactly the people
+//      ticked on that line (customer included only if 'lead' is ticked) instead of the whole order's list.
+//      LOV-1809451 re-counts as 0 / 1 / 1 / 1 Thai; a fully labelled line is a firm count, so the 0
+//      already stored on lines 3–4 is replaced on the next sync.
 const B2C_MAP_VER = 37;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────

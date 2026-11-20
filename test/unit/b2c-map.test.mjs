@@ -140,6 +140,31 @@ test('§b2cLoneLead · park fee on the one-head line still makes it foreign', ()
   const out = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = '2'; setPax(fx, ['US', 'US']); addLine(fx, 1); setFee(fx, 1); });
   assert.deepEqual(out[1].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 });
 });
+// §b2cLineNat (2026-11-20) · LOV-1809451 as B2C really sends it: each line says who is on it (travellerUids).
+const lov1809451 = fx => { dropFee(fx);
+  fx.paxRows = [{ paxNo: 1, name: 'Tresa Kirk (American)', nationality: 'US' }, { paxNo: 2, name: 'David Kirk (American)', nationality: 'US' }];
+  const pj = [{ uid: 'u1', name: 'Tresa Kirk (American)' }, { uid: 'u2', name: 'David Kirk (American)' }];
+  const mk = (adults, date, uids) => { const it = JSON.parse(JSON.stringify(fx.items[0])); it.travel_date = date; it.pax_adult = String(adults);
+    it.pax_child = '0'; it.pax_infant = '0'; it.pax_foc = '0'; it.bk_passengers = pj;
+    let d = it.details; if (typeof d === 'string') d = JSON.parse(d); d = Object.assign({}, d, { travellerUids: uids }); it.details = d; return it; };
+  fx.items = [mk(2, '2026-11-18', ['u1', 'u2']), mk(2, '2026-11-19', ['lead', 'u1']), mk(1, '2026-11-20', ['lead']), mk(1, '2026-11-21', ['lead'])];
+  fx.items.forEach((it, i) => { it.line_no = i + 1; }); };
+test('§b2cLineNat · LOV-1809451 shape · per-line travellers decide the park count (2 US / TH+US / TH alone / TH alone)', () => {
+  const out = runWith('LOV-7485231', lov1809451);
+  assert.equal(out.length, 4);
+  assert.deepEqual(out.map(b => b.trips[0].nat), [
+    { ad: 0, chd: 0, inf: 0, foc: 0 },   // two Americans, the customer is not on this trip
+    { ad: 1, chd: 0, inf: 0, foc: 0 },   // customer + Tresa
+    { ad: 1, chd: 0, inf: 0, foc: 0 },   // customer alone — was 0 (foreign) before
+    { ad: 1, chd: 0, inf: 0, foc: 0 },   // customer alone — was 0 (foreign) before
+  ]);
+  assert.equal(out[2].trips[0]._natSoft, undefined, 'a full list is a firm count: it replaces the stale 0 already stored on the trip');
+  assert.deepEqual(out[3].passengers, [], 'and no other name is listed on the lone line');
+});
+test('§b2cLineNat · uids that cannot be lined up → the order list is used whole, as before', () => {
+  const out = runWith('LOV-7485231', fx => { lov1809451(fx); fx.items.forEach(it => { it.bk_passengers = [{ name: 'x' }, { name: 'y' }]; }); });
+  assert.deepEqual(out[0].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 });
+});
 // §focNat (2026-10-14) · FOC on a Thai-lead party are Thai unless a name says otherwise (LOV-0660717 / LOV-8099472).
 test('§focNat · LOV-0660717 shape · lead TH, FOC 3 + 1 Thai infant, names blank → 3 Thai FOC', () => {
   const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 0; fx.items[0].pax_infant = 1; fx.items[0].pax_foc = 3; setPax(fx, ['', '', '']); });

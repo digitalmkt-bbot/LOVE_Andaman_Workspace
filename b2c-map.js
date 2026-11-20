@@ -475,10 +475,22 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // nationality who are not already in the foreign price fields (LOV-8099472: TH + 3 DE, FOC 4 →
   // 1 Thai 3 foreign). Lead not Thai → FOC foreign, as before. js/08-app.js bkFocThInfer applies
   // the same rule client-side to lines imported before this.
+  // §b2cLineNat (2026-11-20) · LOV-1809451, seen on the B2C form: the line for 20 Nov has "Travellers
+  // on this trip · 1 of 3 ticked" — only the customer, the two Americans unticked. B2C sends that as
+  // details.travellerUids (v36) and the passenger LIST already honours it (b2cLineTravellers), but
+  // the nationality rules below still read the whole order's list, so the lone Thai head was counted
+  // foreign. When the line says who is on it, count exactly those people: natRows = the ticked
+  // passengers, natLead = whether the customer ('lead') is ticked. When it does not say (no key, or
+  // the uids cannot be lined up and the list is left whole), everything is as before.
+  const _wantUids = det && det.travellerUids;
+  const _lineRows = Array.isArray(_wantUids) ? b2cLineTravellers(paxRows, h, det) : paxRows;
+  const lineKnown = Array.isArray(_wantUids) && (!Array.isArray(paxRows) || _lineRows !== paxRows);
+  const natRows = lineKnown ? (Array.isArray(_lineRows) ? _lineRows : []) : paxRows;
+  const natLead = lineKnown ? _wantUids.map(String).includes('lead') : true;
   const focThai = (() => {
     const P = trip.pax;
     if (!(P.foc > 0) || leadNat !== 'TH') return 0;
-    const namedFr = (Array.isArray(paxRows) ? paxRows : [])
+    const namedFr = (Array.isArray(natRows) ? natRows : [])
       .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || '')
       .filter(n => n && n !== 'TH').length;
     const frPrice = P.ad_fr + P.chd_fr + P.inf_fr;
@@ -496,7 +508,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   {
     const P = trip.pax;
     const heads = P.ad_fr + P.ad_th + P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
-    const nats = [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+    const nats = (natLead ? [leadNat] : []).concat((Array.isArray(natRows) ? natRows : [])   /* §b2cLineNat */
       .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''));
     if (heads > 0 && nats.length === heads && nats.every(Boolean)) {
       const th = nats.filter(n => n === 'TH').length;
@@ -530,9 +542,9 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     // Narrow on purpose: later lines only (line 0 keeps the whole list), exactly one head, and no
     // per-line travellerUids (when B2C does say who is on the line, that is not this rule's call).
     // The park-fee add-on is a fact about THIS line and still counts.
-    const loneLead = !isFirstLine && heads === 1 && !(det && Array.isArray(det.travellerUids));
+    const loneLead = !lineKnown && !isFirstLine && heads === 1;
     const named = loneLead ? ((leadNat && leadNat !== 'TH') ? 1 : 0)
-      : [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+      : (natLead ? [leadNat] : []).concat((Array.isArray(natRows) ? natRows : [])   /* §b2cLineNat */
         .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
         .filter(n => n && n !== 'TH').length;
     const foreign = Math.min(heads, Math.max(feeQty, named));
