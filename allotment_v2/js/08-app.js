@@ -23648,6 +23648,9 @@ function pckMealChips(b){
     out.push({ t:'⚠ แพ้อาหาร ' + al, c:'#A32D2D', bg:'#FCEBEB', bd:'#F0C9C9',
                tip:(_alT?('แพ้อาหาร · '+_alT):'') });
   }
+  /* §mealNote · โน้ตอาหารที่ไม่ใช่เรื่องแพ้ · ไม่นับเป็นคนแพ้แล้ว แต่ต้องยังมีที่ให้อ่านหน้าท่า */
+  var _mn=(typeof bkV2MealNoteOnly==='function')?bkV2MealNoteOnly(m):'';
+  if(_mn) out.push({ t:'โน้ตอาหาร', c:'#5F5E5A', bg:'#F4F3EF', bd:'#DDD9CF', tip:'โน้ตอาหาร · '+_mn });
   return out;
 }
 /* §pckSheet3 · ป้ายภาษาไกด์อย่างเดียว · ในตารางชีทไกด์เป็นคอลัมน์ของตัวเอง
@@ -57781,6 +57784,7 @@ function bkV2RenderDietaryLuggageSection(){
       ${pill((m.veg||0)>0, m.veg||0, 'Vegetarian', '#246b43', 'veg', "bkV2ToggleMealOn('veg',this.checked)", "bkV2SetMealQty('veg',this)")}
       ${pill((m.vegan||0)>0, m.vegan||0, 'Vegan', '#1f8a4a', 'vegan', "bkV2ToggleMealOn('vegan',this.checked)", "bkV2SetMealQty('vegan',this)")}
       ${pill((m.halal||0)>0, m.halal||0, 'Halal', '#8a5b1f', 'halal', "bkV2ToggleMealOn('halal',this.checked)", "bkV2SetMealQty('halal',this)")}
+        <div style="flex-basis:100%;font-size:10.5px;color:#6B7280;margin-top:1px">ทานมังสวิรัติ / วีแกน / ฮาลาล ติ๊กที่นี่แล้วใส่จำนวนคน &middot; ครัวนับยอดจากช่องนี้</div>
       </div>
       <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Luggage</span>
       <div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
@@ -57792,10 +57796,11 @@ function bkV2RenderDietaryLuggageSection(){
       ${(typeof bkV2AllergyCount==='function'&&bkV2AllergyCount(m)>0)?`<div style="font-size:12px;font-weight:600;color:#8E2019;margin-bottom:6px">&#9888; ${bkV2AllergyCount(m)} ราย</div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         ${(Array.isArray(m.allergyList)?m.allergyList:[]).map((a,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;background:#FCEBEB;border:1px solid #F0C9C9;color:#A32D2D;border-radius:12px;padding:4px 5px 4px 11px;font-size:11.5px;font-weight:700">${escapeHTML(a.name)} &times;<input type="number" min="1" max="99" value="${Math.floor(+a.qty||1)}" onchange="bkV2AllergySetQty(${i},this.value)" onclick="event.stopPropagation()" style="width:44px;height:24px;box-sizing:border-box;padding:0 3px;text-align:center;border:1px solid #E6B8B8;border-radius:6px;font-size:13px;font-weight:500;color:#8E2019;font-family:'DM Mono',monospace;background:#fff"><span onclick="bkV2AllergyRemove(${i})" style="cursor:pointer;color:#C77;font-size:14px;padding:0 3px;line-height:1" title="ลบ">&times;</span></span>`).join('')}
-        <input id="bkv2-allerg-name" placeholder="เพิ่มสิ่งที่แพ้ เช่น Peanut" onkeydown="if(event.key==='Enter'){event.preventDefault();bkV2AllergyAdd();}" style="flex:1;min-width:150px;height:36px;box-sizing:border-box;border:1.5px solid #C9CCD6;border-radius:10px;padding:0 10px;font-size:13px;font-family:inherit">
+        <input id="bkv2-allerg-name" placeholder="เฉพาะสิ่งที่แพ้ เช่น Peanut, กุ้ง" onkeydown="if(event.key==='Enter'){event.preventDefault();bkV2AllergyAdd();}" style="flex:1;min-width:150px;height:36px;box-sizing:border-box;border:1.5px solid #C9CCD6;border-radius:10px;padding:0 10px;font-size:13px;font-family:inherit">
         <input id="bkv2-allerg-qty" type="number" min="1" max="99" value="1" title="จำนวนคน" style="width:52px;height:36px;box-sizing:border-box;text-align:center;border:1.5px solid #C9CCD6;border-radius:10px;font-size:13px;font-weight:500;font-family:'DM Mono',monospace">
         <button type="button" onclick="bkV2AllergyAdd()" style="height:36px;background:#16265C;color:#fff;border:none;border-radius:10px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ เพิ่ม</button>
       </div>
+      ${(Array.isArray(m.allergyList)?m.allergyList:[]).map((a,i)=>{ const k=bkV2DietKeyOf(a&&a.name); return k?`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;background:#FFF7E6;border:1px solid #F1D9A6;border-radius:10px;padding:7px 10px;font-size:12px;color:#7A4300"><span>&#9888; "<b>${escapeHTML(a.name)}</b>" เป็นประเภทอาหาร ไม่ใช่สิ่งที่แพ้ &middot; ตอนนี้ครัวเห็นเป็นแพ้อาหาร และยอด ${BKV2_DIET_LBL[k]} ไม่ถูกนับ</span><button type="button" onclick="bkV2AllergyToDiet(${i})" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">ย้ายไป ${BKV2_DIET_LBL[k]} ${Math.floor(+a.qty||1)} คน</button></div>`:''; }).join('')}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
         ${['Peanut','Tree nuts','Shellfish','Fish','Egg','Milk/Lactose','Gluten','Soy'].map(p=>`<button type="button" onclick="bkV2AllergyAddPreset('${p}')" style="font-size:10.5px;color:#3E4658;background:#fff;border:1px dashed #C9CCD6;border-radius:13px;padding:4px 10px;cursor:pointer;font-family:inherit">+ ${p}</button>`).join('')}
       </div>
@@ -57805,14 +57810,15 @@ function bkV2RenderDietaryLuggageSection(){
            และคนที่อยากโน้ตเป็นประโยค (ไม่ใช่ชื่อวัตถุดิบ) ไม่มีที่ให้ลง
            ชิปข้างบนไว้ของที่นับจำนวนคนได้ · ช่องนี้ไว้รายละเอียดที่นับไม่ได้ */''}
       <div style="margin-top:8px">
-        <label class="bkv2-nb-label" style="display:flex;align-items:center;gap:7px">รายละเอียดเพิ่มเติมเรื่องอาหาร
-          <em style="font-weight:600;font-style:normal;color:var(--ink-soft);font-size:10px">ประโยคที่ครัวกับไกด์ต้องอ่าน · ขึ้นบนใบพิมพ์</em>
+        <label class="bkv2-nb-label" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">โน้ตอาหารถึงครัว / ไกด์
+          <em style="font-weight:600;font-style:normal;color:var(--ink-soft);font-size:10px">ขึ้นบนใบพิมพ์ · ไม่นับเป็นจำนวนคน · ถ้าแพ้อาหารให้เพิ่มในช่อง Allergies ด้านบน</em>
           ${(m.pierBy||m.pierAt)?`<em style="font-weight:700;font-style:normal;color:#0C6285;background:#E4F2F8;border-radius:9px;padding:1px 8px;font-size:9.5px">หน้าท่าบันทึก${m.pierBy?(' · '+escapeHTML(m.pierBy)):''}${m.pierAt?(' · '+escapeHTML(m.pierAt)):''}</em>`:''}
         </label>
-        <textarea id="bkv2-allerg-free" rows="2" placeholder="เช่น เด็ก 1 คนไม่กินเผ็ด · ขอข้าวสวยเพิ่ม 2 ที่ · ห้ามใส่ถั่วทุกจาน"
+        <textarea id="bkv2-allerg-free" rows="2" placeholder="เช่น มังสวิรัติทานไข่ได้ · ขอข้าวสวยเพิ่ม 2 ที่ · เด็ก 1 คนขอไม่เผ็ด"
           oninput="bkV2SetMealNote(this.value)"
-          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${(m.allergies||'').trim()?'#F0C9C9':'var(--border)'};background:${(m.allergies||'').trim()?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
+          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${bkV2MealNoteIsAl(m)?'#F0C9C9':'var(--border)'};background:${bkV2MealNoteIsAl(m)?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
       </div>
+      <div id="bkv2-diet-pv">${bkV2DietPreviewHtml()}</div>
     </div>
     </div>
   `;
@@ -57823,6 +57829,7 @@ function bkV2SetMealNote(v){
   const d=_bkV2.newBooking; if(!d) return;
   const sm=d.specialMeals||(d.specialMeals={veg:0,vegan:0,halal:0,allergies:''});
   sm.allergies=String(v==null?'':v);
+  if(typeof bkV2DietPvRefresh==='function') bkV2DietPvRefresh();   /* §mealNote */
 }
 
 // ── Cash on Tour ──
@@ -61304,7 +61311,8 @@ function bkV2RenderTab2(){
         const noteTxt = (bk.notes||bk.note||'').trim();
         const _cot = (typeof bkV2CotChip==='function') ? bkV2CotChip(bk, noteTxt) : {chip:'', note:noteTxt};
         const _note = _cot.note;
-        const allergTxt = (typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):(sm.allergies||'').trim();
+        const allergTxt = (typeof bkV2AllergyOnlyText==='function')?bkV2AllergyOnlyText(sm):(sm.allergies||'').trim();   /* §mealNote */
+        const mealNoteTxt = (typeof bkV2MealNoteOnly==='function')?bkV2MealNoteOnly(sm):'';
         const _ri = (typeof bkV2RetInfo==='function')?bkV2RetInfo(bk,date):{sep:false};
         const _ovTrip=(bk.trips||[]).find(x=>x.date===date&&x.routeId===r.routeId);
         let _ovSB='';
@@ -61489,9 +61497,10 @@ function bkV2RenderTab2(){
               ${_altPickBadge}
               ${reqBadges.length?`<div class="t2-rbwrap">${reqBadges.join('')}</div>`:''}
               ${allergTxt?`<div class="t2-allerg" title="Allergy: ${esc(allergTxt)}">Allergy: ${esc(allergTxt)}</div>`:''}
+              ${mealNoteTxt?`<div class="t2-note" title="โน้ตอาหาร: ${esc(mealNoteTxt)}">&#127860; ${esc(mealNoteTxt)}</div>`:''}
               ${''/* §upgPay · ย้ายไปช่อง Pay แล้ว (bkUpgPayChip) */}
               ${_note?`<div class="t2-note" title="${esc(_note)}">${esc(_note)}</div>`:''}
-              ${(!reqBadges.length && !allergTxt && !_note && !_movedBadge && !_tbBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
+              ${(!reqBadges.length && !allergTxt && !mealNoteTxt && !_note && !_movedBadge && !_tbBadge && !_altPickBadge && !_splitBadge)?'<span class="t2-dim">—</span>':''}
             </td>
             ${vanMode?'':(_2nd?'<td></td>':`<td${bkUpgPayChip(bk, date)?' class="t2-pyc"':''}><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div>${bkUpgPayChip(bk, date, 'fl')}</td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}${bkV2PaidLine(bk)}</td>`)}
@@ -65778,10 +65787,81 @@ function bkV2SetSpecialMeal(key, val){
 }
 // ── Structured food allergies · specialMeals.allergyList = [{name, qty}] (qty = number of people) ──
 // `allergies` free-text is kept for un-counted notes (e.g. "no shellfish"). bkV2AllergyCount = Σ qty (people); legacy text-only = counts 1.
-function bkV2AllergyCount(sm){ if(!sm) return 0; let n=0; if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(a=>{ n+=Math.max(0,Math.floor(+a.qty||0)); }); if(!n && (sm.allergies||'').trim()) n=1; return n; }
+/* §mealNote (2026-11-20) · owner: "ปรับให้ User ใช้แล้วไม่งง"
+   ช่องข้อความ specialMeals.allergies ในฟอร์มชื่อ "รายละเอียดเพิ่มเติมเรื่องอาหาร" แต่ทุกหน้าที่อ่านมันเรียกว่า "แพ้อาหาร"
+   พิมพ์ "2 ทานมัง+ไข่" จึงขึ้นป้ายแดงแพ้อาหาร และยอดมังสวิรัติไม่ถูกนับ
+   กติกาใหม่ ใช้ที่เดียวทุกหน้า · ข้อความเป็น "เรื่องแพ้" เมื่อ (1) หน้าท่าเป็นคนบันทึก (ช่องหน้าท่าคือช่องแพ้อาหาร)
+   หรือ (2) มีคำที่เกี่ยวกับการแพ้/ห้าม/ชื่อของที่แพ้บ่อย · ไม่แน่ใจ = ถือว่าแพ้ไว้ก่อน (ป้ายแดงเกินดีกว่าหลุด)
+   ที่เหลือเป็น "โน้ตอาหาร" · ยังขึ้นให้ครัวอ่านทุกหน้าเหมือนเดิม แค่ไม่ใช่ป้ายแดง และไม่นับเป็นคนแพ้ */
+var BKV2_AL_RE=/แพ้|allerg|intoler|anaphyl|ห้าม|ไม่ทาน|ไม่กิน|ไม่รับ|งด|no\s|free|ซีฟู้ด|seafood|shellfish|อาหารทะเล|กุ้ง|ปู|หอย|ปลาหมึก|ถั่ว|peanut|nut|gluten|กลูเตน|lactose|แลคโตส|นมวัว|แพ้นม|milk|soy/i;   /* ไม่ใส่ "นม" เดี่ยว ๆ · ไปชนกับ "ทานมัง" */
+function bkV2MealNoteIsAl(sm){ if(!sm) return false; var t=String(sm.allergies||'').trim(); if(!t) return false; if(sm.pierAt||sm.pierBy) return true; return BKV2_AL_RE.test(t); }
+function bkV2MealNoteOnly(sm){ if(!sm) return ''; var t=String(sm.allergies||'').trim(); return (t && !bkV2MealNoteIsAl(sm)) ? t : ''; }
+function bkV2AllergyOnlyText(sm){ if(!sm) return ''; var parts=[]; if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(function(a){ if(a&&a.name) parts.push(a.name+((+a.qty>1)?(' ×'+Math.floor(+a.qty)):'')); }); if(bkV2MealNoteIsAl(sm)) parts.push(String(sm.allergies).trim()); return parts.join(' · '); }
+/* ชื่อที่พิมพ์ในช่อง "สิ่งที่แพ้" แต่จริง ๆ เป็นประเภทอาหาร · คืน veg / vegan / halal หรือ '' */
+function bkV2DietKeyOf(name){ var t=String(name||''); if(!t.trim()) return ''; if(/แพ้|allerg/i.test(t)) return '';
+  if(/วีแกน|vegan/i.test(t)) return 'vegan';
+  if(/ฮาลาล|halal|มุสลิม|อิสลาม|muslim/i.test(t)) return 'halal';
+  if(/มังสวิรัติ|มังฯ|ทานมัง|กินมัง|^มัง|vegetarian|veggie|(^|[^a-z])veg([^a-z]|$)|อาหารเจ|กินเจ|ทานเจ/i.test(t)) return 'veg';
+  return ''; }
+var BKV2_DIET_LBL={veg:'Vegetarian',vegan:'Vegan',halal:'Halal'};
+/* ย้ายเข้าช่อง Diet · จำนวนไม่เกินหัวที่จอง · ส่วนที่เกินชื่อประเภทอาหาร (เช่น "+ไข่") เก็บลงโน้ตให้ครัวอ่าน */
+function bkV2DietFromText(key,name,qty){ const sm=_bkV2EnsureSM(); if(!sm||!key) return;
+  const room=(typeof _bkV2MealRoom==='function')?_bkV2MealRoom(key):99;
+  let _v=(+sm[key]||0)+Math.max(1,Math.floor(+qty||1)); if(room>0) _v=Math.min(_v,room);   /* ยังไม่ใส่จำนวนคน (room 0) · เก็บตามที่พิมพ์ ไม่ทิ้ง */
+  sm[key]=_v;
+  const rem=String(name||'').replace(/มังสวิรัติ|มังฯ|มัง|vegetarian|veggie|vegan|veg|วีแกน|ฮาลาล|halal|มุสลิม|อิสลาม|muslim|ทาน|กิน|อาหาร|เจ|คน|ท่าน|[\s\d×x+\-·,.]/gi,'');
+  if(rem){ const cur=String(sm.allergies||'').trim(); const nm=String(name).trim(); if(cur.indexOf(nm)<0) sm.allergies=[cur,nm].filter(Boolean).join(' \u00b7 '); }
+  const ne=document.getElementById('bkv2-allerg-name'); if(ne) ne.value='';
+  bkV2Render(); }
+function bkV2AllergyToDiet(i){ const sm=_bkV2.newBooking&&_bkV2.newBooking.specialMeals; if(!sm||!Array.isArray(sm.allergyList)||!sm.allergyList[i]) return;
+  const a=sm.allergyList[i], k=bkV2DietKeyOf(a.name); if(!k) return; sm.allergyList.splice(i,1); bkV2DietFromText(k,a.name,a.qty); }
+/* ตัวอย่างสด · หน้าตาเดียวกับช่อง Add-on ของ By trip date · ผู้กรอกเห็นทันทีว่าพิมพ์แบบนี้แล้วขึ้นแบบไหน */
+function bkV2DietPreviewHtml(){
+  const d=_bkV2.newBooking; if(!d) return '';
+  const sm=d.specialMeals||{}, g=d.guides||{};
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const rb=(t,bg,c)=>`<span style="font-size:10px;border-radius:5px;padding:2px 7px;font-weight:600;white-space:nowrap;background:${bg};color:${c}">${t}</span>`;
+  const B=[];
+  if(+sm.veg) B.push(rb((+sm.veg)+' veg','#EAF3DE','#3B6D11'));
+  if(+sm.vegan) B.push(rb((+sm.vegan)+' vegan','#EAF3DE','#3B6D11'));
+  if(+sm.halal) B.push(rb((+sm.halal)+' halal','#E1F5EE','#0F6E56'));
+  if(+d.largeLuggage) B.push(rb((+d.largeLuggage)+' bag','#FAEEDA','#854F0B'));
+  const gl=[]; if(g.english)gl.push('EN'); if(g.russian)gl.push('RU'); if(g.chinese)gl.push('CN'); if((g.otherLang||'').trim())gl.push(esc(g.otherLang));
+  gl.forEach(code=>{ const lc=(typeof bkV2LangColors==='function')?bkV2LangColors(code):['#EEF2FF','#3730A3']; B.push(rb(code,lc[0],lc[1])); });
+  const al=bkV2AllergyOnlyText(sm), nt=bkV2MealNoteOnly(sm), alN=bkV2AllergyCount(sm);
+  const unk=(!((sm.allergyList||[]).length) && bkV2MealNoteIsAl(sm));
+  const kit=[];
+  if(+sm.veg) kit.push('มังสวิรัติ '+(+sm.veg)); if(+sm.vegan) kit.push('วีแกน '+(+sm.vegan)); if(+sm.halal) kit.push('ฮาลาล '+(+sm.halal));
+  if(alN) kit.push(unk?'แพ้อาหาร · ยังไม่รู้จำนวนคน':('แพ้อาหาร '+alN+' คน'));
+  const empty=!B.length && !al && !nt;
+  return `<div style="margin-top:10px;border:1px dashed #C9CCD6;border-radius:12px;background:#FAFBFD;padding:10px 12px">
+    <div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#3E4658;margin-bottom:7px">ตัวอย่าง · จะขึ้นในหน้า By trip date แบบนี้</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+      <div style="background:#fff;border:1px solid #E4E7EE;border-radius:9px;padding:8px 10px;min-width:150px;max-width:260px">
+        ${empty?'<span style="color:#9AA1AE;font-size:12px">—</span>':''}
+        ${B.length?`<div style="display:flex;flex-wrap:wrap;gap:4px">${B.join('')}</div>`:''}
+        ${al?`<div style="font-size:11px;line-height:1.35;color:#A32D2D;margin-top:4px">Allergy: ${esc(al)}</div>`:''}
+        ${nt?`<div style="font-size:11px;line-height:1.35;color:#5F5E5A;margin-top:4px">&#127860; ${esc(nt)}</div>`:''}
+      </div>
+      <div style="font-size:11.5px;line-height:1.6;color:#3E4658;flex:1;min-width:200px">
+        <b>ครัวจะนับ:</b> ${kit.length?esc(kit.join(' · ')):'ไม่มีอาหารพิเศษ'}
+        ${unk?'<br><span style="color:#A32D2D">ข้อความในโน้ตมีคำเกี่ยวกับการแพ้ แต่ไม่มีจำนวนคน · เพิ่มในช่อง Allergies พร้อมจำนวนคนจะชัดกว่า</span>':''}
+        ${(nt&&!(+sm.veg||+sm.vegan||+sm.halal))?'<br><span style="color:#6B7280">โน้ตอาหารไม่ถูกนับเป็นจำนวน · ถ้าเป็นมังสวิรัติ / วีแกน / ฮาลาล ให้ติ๊กที่ Diet ด้วย</span>':''}
+      </div>
+    </div></div>`;
+}
+function bkV2DietPvRefresh(){ try{ var h=document.getElementById('bkv2-diet-pv'); if(h) h.innerHTML=bkV2DietPreviewHtml(); }catch(_){} }
+function bkV2AllergyCount(sm){ if(!sm) return 0; let n=0; if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(a=>{ n+=Math.max(0,Math.floor(+a.qty||0)); }); if(!n && bkV2MealNoteIsAl(sm)) n=1; return n; }
 function bkV2AllergyText(sm){ if(!sm) return ''; const parts=[]; if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(a=>{ if(a&&a.name) parts.push(a.name+((+a.qty>1)?(' ×'+Math.floor(+a.qty)):'')); }); const note=(sm.allergies||'').trim(); if(note) parts.push(note); return parts.join(' · '); }
 function _bkV2EnsureSM(){ const d=_bkV2.newBooking; if(!d) return null; const sm=d.specialMeals||(d.specialMeals={veg:0,vegan:0,halal:0,allergies:''}); if(!Array.isArray(sm.allergyList)) sm.allergyList=[]; return sm; }
-function bkV2AllergyAdd(){ const sm=_bkV2EnsureSM(); if(!sm) return; const ne=document.getElementById('bkv2-allerg-name'); const qe=document.getElementById('bkv2-allerg-qty'); const name=((ne&&ne.value)||'').trim(); if(!name) return; const qty=Math.max(1,Math.floor(Number(qe&&qe.value)||1)); const ex=sm.allergyList.find(a=>(a.name||'').toLowerCase()===name.toLowerCase()); if(ex) ex.qty=Math.floor(+ex.qty||0)+qty; else sm.allergyList.push({name,qty}); bkV2Render(); }
+function bkV2AllergyAdd(){ const sm=_bkV2EnsureSM(); if(!sm) return; const ne=document.getElementById('bkv2-allerg-name'); const qe=document.getElementById('bkv2-allerg-qty'); const name=((ne&&ne.value)||'').trim(); if(!name) return; const qty=Math.max(1,Math.floor(Number(qe&&qe.value)||1));
+  /* §mealNote · พิมพ์ประเภทอาหารลงช่องสิ่งที่แพ้ · ถามก่อน เพราะจะกลายเป็น "แพ้อาหาร N ราย" และยอดมังสวิรัติไม่ถูกนับ */
+  const _dk=(arguments[0]===true)?'':bkV2DietKeyOf(name);
+  if(_dk && typeof laAskSheet==='function'){ laAskSheet({ title:'นี่คือประเภทอาหาร ไม่ใช่สิ่งที่แพ้',
+      body:'"'+name+'" ดูเป็น '+BKV2_DIET_LBL[_dk]+'\nถ้าใส่ในช่อง Allergies ครัวจะเห็นเป็น "แพ้อาหาร '+qty+' ราย" และยอด '+BKV2_DIET_LBL[_dk]+' จะไม่ถูกนับ',
+      okLabel:'ย้ายไป '+BKV2_DIET_LBL[_dk]+' '+qty+' คน', color:'#0F6E56', noLabel:'แพ้จริง · เพิ่มช่องนี้',
+      onYes:function(){ bkV2DietFromText(_dk,name,qty); }, onNo:function(){ bkV2AllergyAdd(true); } }); return; }
+  const ex=sm.allergyList.find(a=>(a.name||'').toLowerCase()===name.toLowerCase()); if(ex) ex.qty=Math.floor(+ex.qty||0)+qty; else sm.allergyList.push({name,qty}); bkV2Render(); }
 function bkV2AllergyAddPreset(name){ const sm=_bkV2EnsureSM(); if(!sm) return; const ex=sm.allergyList.find(a=>(a.name||'').toLowerCase()===String(name).toLowerCase()); if(ex) ex.qty=Math.floor(+ex.qty||0)+1; else sm.allergyList.push({name:String(name),qty:1}); bkV2Render(); }
 function bkV2AllergyRemove(i){ const sm=_bkV2.newBooking&&_bkV2.newBooking.specialMeals; if(!sm||!Array.isArray(sm.allergyList))return; sm.allergyList.splice(i,1); bkV2Render(); }
 function bkV2AllergySetQty(i,val){ const sm=_bkV2.newBooking&&_bkV2.newBooking.specialMeals; if(!sm||!Array.isArray(sm.allergyList)||!sm.allergyList[i])return; sm.allergyList[i].qty=Math.max(1,Math.floor(Number(val)||1)); bkV2Render(); }
@@ -65824,6 +65904,7 @@ function bkV2SetMealQty(key, elOrVal){
   const v=Math.min(Math.max(0, Math.floor(Number(raw)||0)), room);   // cap at booking pax (headcount − other diets)
   _bkV2.newBooking.specialMeals[key]=v;
   if(el){ if(String(v)!==String(el.value)) el.value=v; el.setAttribute('max', room); el.title='สูงสุด '+room+' (ตามจำนวนที่จอง)'; }
+  if(typeof bkV2DietPvRefresh==='function') bkV2DietPvRefresh();   /* §mealNote */
 }
 function bkV2ToggleLuggageOn(on){
   if(!_bkV2.newBooking) return;
@@ -65833,6 +65914,7 @@ function bkV2ToggleLuggageOn(on){
 function bkV2SetLuggageQty(val){
   if(!_bkV2.newBooking) return;
   _bkV2.newBooking.largeLuggage = Math.max(0, Number(val)||0);
+  if(typeof bkV2DietPvRefresh==='function') bkV2DietPvRefresh();   /* §mealNote */
 }
 function bkV2BumpLuggage(delta){
   if(!_bkV2.newBooking) return;
@@ -67622,12 +67704,13 @@ function bkV2CommitBooking(status){
          ยาวเกินชื่อวัตถุดิบ หรือมีตัวคั่นประโยค → ลงช่องรายละเอียด ซึ่งพิมพ์ออกใบเหมือนกัน
          สั้นแบบชื่อวัตถุดิบ → เข้าชิปเหมือนกดปุ่ม + เพิ่ม เพื่อให้ยังนับจำนวนคนได้
          ทั้งสองทางถูกพิมพ์ลงใบและถูกนับโดย bkV2AllergyText/Count · ไม่มีทางไหนที่ข้อความหาย */
-      var _alLong = _alWas.length>28 || _alWas.indexOf('\u00b7')>=0 || /[.\n]/.test(_alWas);
+      var _alLong = _alWas.length>28 || _alWas.indexOf('\u00b7')>=0 || /[.\n]/.test(_alWas)
+        || !!((typeof bkV2DietKeyOf==='function')&&bkV2DietKeyOf(_alWas));   /* §mealNote */
       if(_alLong){
         var _sm=d.specialMeals||(d.specialMeals={veg:0,vegan:0,halal:0,allergies:''});
         _sm.allergies=[String(_sm.allergies||'').trim(), _alWas].filter(Boolean).join(' \u00b7 ');
       } else if(typeof bkV2AllergyAdd==='function'){
-        bkV2AllergyAdd();
+        bkV2AllergyAdd(true);
       }
       _alN=document.getElementById('bkv2-allerg-name');
       if(_alN) _alN.value='';
@@ -86324,7 +86407,10 @@ function ppRows(){
         if(ppAllPax(_alTxt)){
           var _q=Math.max(1, ad+chd+foc);
           alList.push({name:_alTxt, qty:_q, ft:false, all:true}); alN=_q; }
-        else { alList.push({name:_alTxt, qty:0, ft:true}); alUnk=1; } }
+        else if(typeof bkV2MealNoteIsAl!=='function' || bkV2MealNoteIsAl(sm)){ alList.push({name:_alTxt, qty:0, ft:true}); alUnk=1; } }
+      /* §mealNote · โน้ตอาหารที่ไม่ใช่เรื่องแพ้ · ขึ้นเป็นชิปสีกลาง ไม่ใช่ป้ายแดง */
+      var _mNote=(typeof bkV2MealNoteOnly==='function')?bkV2MealNoteOnly(sm):'';
+      if(alList.some(function(x){ return x.all; })) _mNote='';   /* ใบที่เขียนว่าทั้งใบ ถูกนับไปแล้วข้างบน · ไม่ขึ้นซ้ำ */
       /* §ppMv (2026-10-14) · owner: "เพิ่ม filter ที่เป็นแยกร้านอาหาร" · ร้านของทริป = ที่ตั้งรายลำในใบงานเรือ
          มาก่อนร้านประจำเส้นทาง (mvForTrip ตัวเดียวกับแถบครัว) · ไม่มีร้าน = '-' */
       var _bid=O.boatId||t.charterBoatId||'', _mv=null;
@@ -86332,15 +86418,15 @@ function ppRows(){
       out.push({ b:b, t:t, date:d, routeId:rid, rt:rt,
         boatId:_bid, mvId:(_mv&&_mv.id)||'-', mvName:(_mv&&_mv.name)||'',
         ad:ad, chd:chd, inf:inf, foc:foc, tot:ad+chd+inf+foc, eat:ad+chd+foc,
-        veg:veg, vegan:vegan, halal:halal, allergy:alN, alUnk:alUnk, alList:alList,
+        veg:veg, vegan:vegan, halal:halal, allergy:alN, alUnk:alUnk, alList:alList, mNote:_mNote,
         ovn:!!(t&&t.ovnLeg), chtr:(t.bookingMode==='charter'),
-        sp:(veg+vegan+halal+alN+alUnk)>0 });
+        sp:(veg+vegan+halal+alN+alUnk)>0 || !!_mNote });
     });
   });
   return out;
 }
 function ppBlank(){ return {n:0,ad:0,chd:0,inf:0,foc:0,tot:0,eat:0,veg:0,vegan:0,halal:0,
-  allergy:0,alUnk:0,al:{},sp:[],rows:[],ovn:0,chtr:0}; }
+  allergy:0,alUnk:0,al:{},notes:[],sp:[],rows:[],ovn:0,chtr:0}; }
 function ppAdd(A,r){
   A.n++; A.ad+=r.ad; A.chd+=r.chd; A.inf+=r.inf; A.foc+=r.foc; A.tot+=r.tot; A.eat+=r.eat;
   A.veg+=r.veg; A.vegan+=r.vegan; A.halal+=r.halal;
@@ -86350,6 +86436,7 @@ function ppAdd(A,r){
     var e=A.al[x.name]||(A.al[x.name]={q:0,ft:0,all:false});
     if(x.all) e.all=true;
     if(x.ft) e.ft++; else e.q+=x.qty; });
+  if(r.mNote){ if(!A.notes) A.notes=[]; A.notes.push(r.mNote); }   /* §mealNote */
   if(r.sp) A.sp.push(r);
   A.rows.push(r);   /* ทุกใบ ไม่ใช่เฉพาะใบที่มีอาหารพิเศษ · ใช้ตอนกางรายชื่อ */
   return A;
@@ -86394,6 +86481,8 @@ function ppChips(A){
       +'ยังไม่รู้จำนวน '+A.alUnk+' ใบ</b>';
     out.push(c(lead+(alt?(' · '+alt):''),'#FEF2F2','#F5CFCF','#B91C1C'));
   }
+  /* §mealNote · โน้ตอาหารของใบที่ไม่ได้แพ้ · ครัวต้องอ่าน แต่ไม่ใช่คำเตือน */
+  if(A.notes&&A.notes.length) out.push(c('&#127860; โน้ตอาหาร <b>'+A.notes.length+'</b> ใบ · '+A.notes.map(e).join(' · '),'#F4F3EF','#DDD9CF','#4A4740'));
   /* เขียนเต็มว่าไม่มีอะไร · "ไม่มี" เฉย ๆ ในคอลัมน์นี้อ่านกำกวม
      เพราะแถวข้าง ๆ ก็มีคำว่าไม่มีทัวร์อยู่ด้วย */
   return out.length?out.join(''):'<span class="pp-none">ไม่มีรายการอาหารพิเศษ</span>';
@@ -86419,6 +86508,7 @@ function ppBookingList(A){
       want.push(x.ft
         ? ('⚠ ช่องแพ้อาหารเช็คอินหน้าท่า ระบุว่า : '+x.name)
         : ('⚠ แพ้ '+x.name+' ×'+x.qty+(x.all?' · ทั้งใบ':''))); });
+    if(r.mNote) want.push('โน้ตอาหาร : '+r.mNote);   /* §mealNote */
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var px=[]; if(r.ad) px.push(r.ad+' ผู้ใหญ่'); if(r.chd) px.push(r.chd+' เด็ก');
     if(r.inf) px.push(r.inf+' ทารก'); if(r.foc) px.push(r.foc+' FOC');
