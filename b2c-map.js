@@ -521,9 +521,20 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     const heads = P.ad_fr + P.ad_th + P.chd_fr + P.chd_th + P.inf_fr + P.inf_th + P.foc;
     const feeQty = addOnRows.filter(r => /international[\s_-]*park[\s_-]*fee/i.test(String(r.type) + ' ' + String(r.label)))
       .reduce((n, r) => n + (Number(r.qty) || 0), 0);
-    const named = [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
-      .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
-      .filter(n => n && n !== 'TH').length;
+    // §b2cLoneLead (2026-11-20) · LOV-1809451: 4 lines on one order, the order's traveller list is
+    // "Tresa Kirk (US), David Kirk (US)", lines 3 and 4 are ONE head each — the Thai lead on her own.
+    // The list is order-level (no link to a line), so the two Americans were counted on every line and
+    // the lone Thai head became foreign: the park page seated her name in a foreign slot ("สัญชาติไม่ตรง").
+    // §b2cPaxAllLines already says who is on such a line: a later line shows at most heads − 1 names
+    // after the lead, so with one head the traveller IS the lead. Count the same person here.
+    // Narrow on purpose: later lines only (line 0 keeps the whole list), exactly one head, and no
+    // per-line travellerUids (when B2C does say who is on the line, that is not this rule's call).
+    // The park-fee add-on is a fact about THIS line and still counts.
+    const loneLead = !isFirstLine && heads === 1 && !(det && Array.isArray(det.travellerUids));
+    const named = loneLead ? ((leadNat && leadNat !== 'TH') ? 1 : 0)
+      : [leadNat].concat((Array.isArray(paxRows) ? paxRows : [])
+        .filter(r => r && (r.name || r.nationality)).map(r => r.nationality || ''))
+        .filter(n => n && n !== 'TH').length;
     const foreign = Math.min(heads, Math.max(feeQty, named));
     const byPrice = P.ad_fr + P.chd_fr + P.inf_fr + (P.foc - focThai);   /* §focNat · Thai FOC are not foreign-priced heads */
     if (heads > 0 && foreign > byPrice) {

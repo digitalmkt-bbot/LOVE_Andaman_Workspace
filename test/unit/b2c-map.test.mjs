@@ -120,6 +120,26 @@ test('§b2cParkFee · no park fee and nobody labelled foreign → no nat (fall b
   const [b] = runWith('LOV-7485231', fx => { dropFee(fx); setPax(fx, ['', '']); });
   assert.equal(trip(b).nat, undefined);
 });
+// §b2cLoneLead (2026-11-20) · LOV-1809451: one order, 4 lines, order-level traveller list "2 US".
+// Lines 3–4 are one head each (the Thai lead alone) and were counted foreign because of the two names.
+const addLine = (fx, adults) => { const it = JSON.parse(JSON.stringify(fx.items[0])); it.line_no = fx.items.length + 1;
+  it.travel_date = '2026-10-04'; it.pax_adult = String(adults); it.pax_child = '0'; it.pax_infant = '0'; it.pax_foc = '0'; fx.items.push(it); };
+test('§b2cLoneLead · later line with ONE head, Thai lead, order list has 2 US → no nat (the head is the lead, price fields stand)', () => {
+  const out = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = '2'; setPax(fx, ['US', 'US']); addLine(fx, 1); });
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 }, 'line 0 unchanged: both heads counted foreign');
+  assert.equal(out[1].trips[0].pax.ad_th, 1, 'priced Thai');
+  assert.equal(out[1].trips[0].nat, undefined, 'lone Thai lead is not turned foreign');
+  assert.deepEqual(out[1].passengers, [], 'and the line shows no other name (§b2cPaxAllLines cap)');
+});
+test('§b2cLoneLead · later line with TWO heads keeps the old count (names may fill it)', () => {
+  const out = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = '2'; setPax(fx, ['US', 'US']); addLine(fx, 2); });
+  assert.deepEqual(out[1].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 });
+});
+test('§b2cLoneLead · park fee on the one-head line still makes it foreign', () => {
+  const out = runWith('LOV-7485231', fx => { fx.items[0].pax_adult = '2'; setPax(fx, ['US', 'US']); addLine(fx, 1); setFee(fx, 1); });
+  assert.deepEqual(out[1].trips[0].nat, { ad: 0, chd: 0, inf: 0, foc: 0 });
+});
 // §focNat (2026-10-14) · FOC on a Thai-lead party are Thai unless a name says otherwise (LOV-0660717 / LOV-8099472).
 test('§focNat · LOV-0660717 shape · lead TH, FOC 3 + 1 Thai infant, names blank → 3 Thai FOC', () => {
   const [b] = runWith('LOV-7485231', fx => { dropFee(fx); fx.items[0].pax_adult = 0; fx.items[0].pax_infant = 1; fx.items[0].pax_foc = 3; setPax(fx, ['', '', '']); });
