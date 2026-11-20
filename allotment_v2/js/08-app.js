@@ -57777,8 +57777,10 @@ function bkV2RenderDietaryLuggageSection(){
   `;
   const totalSpecial = (m.veg||0) + (m.vegan||0) + (m.halal||0);
   const luggageWarn = luggage >= 3 ? `<div style="background:#FBEBD3;border-radius:10px;padding:8px 12px;margin-top:8px;font-size:12.5px;font-weight:600;color:#7A4300">&#9888; ${luggage} large bag(s) may require van seat reduction · check with dispatcher</div>` : '';
+  /* §mealNote2 · owner: "แบ่งเป็น 2 คอลัมน์" · ซ้าย = ช่องกรอก · ขวา = ตัวอย่าง By trip date · จอแคบพับลงมาเป็นคอลัมน์เดียวเอง */
   return `
-    <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <div style="flex:1 1 520px;min-width:0;display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start">
       <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Diet</span>
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       ${pill((m.veg||0)>0, m.veg||0, 'Vegetarian', '#246b43', 'veg', "bkV2ToggleMealOn('veg',this.checked)", "bkV2SetMealQty('veg',this)")}
@@ -57818,8 +57820,9 @@ function bkV2RenderDietaryLuggageSection(){
           oninput="bkV2SetMealNote(this.value)"
           style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${bkV2MealNoteIsAl(m)?'#F0C9C9':'var(--border)'};background:${bkV2MealNoteIsAl(m)?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
       </div>
-      <div id="bkv2-diet-pv">${bkV2DietPreviewHtml()}</div>
     </div>
+    </div>
+    <div id="bkv2-diet-pv" style="flex:0 1 320px;min-width:260px">${bkV2DietPreviewHtml()}</div>
     </div>
   `;
 }
@@ -65834,10 +65837,10 @@ function bkV2DietPreviewHtml(){
   if(+sm.veg) kit.push('มังสวิรัติ '+(+sm.veg)); if(+sm.vegan) kit.push('วีแกน '+(+sm.vegan)); if(+sm.halal) kit.push('ฮาลาล '+(+sm.halal));
   if(alN) kit.push(unk?'แพ้อาหาร · ยังไม่รู้จำนวนคน':('แพ้อาหาร '+alN+' คน'));
   const empty=!B.length && !al && !nt;
-  return `<div style="margin-top:10px;border:1px dashed #C9CCD6;border-radius:12px;background:#FAFBFD;padding:10px 12px">
+  return `<div style="border:1px dashed #C9CCD6;border-radius:12px;background:#FAFBFD;padding:10px 12px">
     <div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#3E4658;margin-bottom:7px">ตัวอย่าง · จะขึ้นในหน้า By trip date แบบนี้</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
-      <div style="background:#fff;border:1px solid #E4E7EE;border-radius:9px;padding:8px 10px;min-width:150px;max-width:260px">
+      <div style="background:#fff;border:1px solid #E4E7EE;border-radius:9px;padding:8px 10px;min-width:150px;max-width:260px;flex:1 1 150px">
         ${empty?'<span style="color:#9AA1AE;font-size:12px">—</span>':''}
         ${B.length?`<div style="display:flex;flex-wrap:wrap;gap:4px">${B.join('')}</div>`:''}
         ${al?`<div style="font-size:11px;line-height:1.35;color:#A32D2D;margin-top:4px">Allergy: ${esc(al)}</div>`:''}
