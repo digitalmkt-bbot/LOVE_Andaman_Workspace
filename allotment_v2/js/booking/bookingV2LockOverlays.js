@@ -10,7 +10,7 @@ function bookingV2LockOverlays(){
           <div style="font-size:15px;font-weight:700;color:var(--ink);margin-top:2px">Return held seats to pool</div>
         </div>
         <div style="padding:16px 18px">
-          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:11px">This lock holds <b style="color:var(--ink)">${rm.max}</b> seat(s) · choose how many to release.</div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:11px">This lock holds <b style="color:var(--ink)">${rm.max}</b> seat(s) · choose how many to release.</div>${rm.scopeTxt?`<div style="font-size:11.5px;line-height:1.5;font-weight:600;margin:-3px 0 11px;padding:7px 10px;border-radius:8px;${rm.wide?'background:#FEF3C7;color:#92400E;border:1px solid #F5D98B':'background:#ECFDF5;color:#0F6E56;border:1px solid #B7E2D2'}">${rm.wide?'⚠ ':''}${esc(rm.scopeTxt)}</div>`:''}
           <div style="display:flex;align-items:center;gap:8px">
             <button onclick="bookingV2ReleaseModalSet(${rm.value-1})" style="width:30px;height:30px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;color:#C0392B;font-weight:700;font-size:15px">&minus;</button>
             <input type="number" min="0" max="${rm.max}" value="${rm.value}" onchange="bookingV2ReleaseModalSet(this.value)" style="width:84px;height:34px;text-align:center;font-family:Manrope,sans-serif;font-weight:700;font-size:15px;border:1px solid var(--border);border-radius:8px;font-variant-numeric:tabular-nums">
@@ -26,20 +26,24 @@ function bookingV2LockOverlays(){
     </div>` : '';
   const sm = _bkV2SubModal;
   const subParent = sm ? SB_SEAT_LOCKS.find(x=>x.id===sm.parentId) : null;
-  const subRoom = subParent ? bookingV2LockUnalloc(subParent) : 0;
+  const subBulk = !!(subParent && bookingV2LockSpansDays(subParent));   /* §lkSubDay */
+  const subDates = subBulk ? bookingV2LockSpecDates(subParent).filter(x=>!bookingV2LockRoundReleased(subParent,x)) : [];
+  const subRoom = subParent ? (subBulk ? (sm.date ? bookingV2LockSubRoom(subParent, sm.date) : 0) : bookingV2LockUnalloc(subParent)) : 0;
+  const _sdTh = d => { try{ const x=new Date(d+'T00:00:00'); return ['อา','จ','อ','พ','พฤ','ศ','ส'][x.getDay()]+' '+x.getDate()+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][x.getMonth()]; }catch(_){ return d; } };
   const subModal = (sm && subParent) ? `
     <div onclick="bookingV2SubCancel()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;width:360px;max-width:92vw;box-shadow:0 14px 44px rgba(0,0,0,.28);overflow:hidden">
         <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
           <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#534AB7;text-transform:uppercase">Sub-group · กรุ๊ปย่อย</div>
           <div style="font-size:15px;font-weight:700;color:var(--ink);margin-top:2px">แบ่งที่นั่งใต้ ${esc(bookingV2LockHolderName(subParent))}</div>
-          <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">ยังไม่จัด <b style="color:#A05A1A">${subRoom}</b> ที่ · แบ่งได้ไม่เกินนี้</div>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${subBulk && !sm.date ? 'เลือกวันเดินทางก่อน · กรุ๊ปย่อยกันที่เฉพาะวันนั้น' : `ยังไม่จัด${subBulk?' ('+esc(_sdTh(sm.date))+')':''} <b style="color:#A05A1A">${subRoom}</b> ที่ · แบ่งได้ไม่เกินนี้`}</div>
         </div>
         <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+          ${subBulk?`<div><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">วันเดินทาง *</div><select onchange="bookingV2SubSet('date',this.value);bookingV2Render()" style="width:100%;box-sizing:border-box;height:34px;border:1px solid ${sm.date?'var(--border)':'#534AB7'};border-radius:8px;padding:0 9px;font-family:inherit;font-size:13px;background:#fff"><option value="">— เลือกวัน —</option>${subDates.map(d=>{ const r=bookingV2LockSubRoom(subParent,d); return `<option value="${d}" ${d===sm.date?'selected':''} ${r<=0?'disabled':''}>${esc(_sdTh(d))} · ${r>0?('ว่าง '+r+' ที่'):'เต็ม'}</option>`; }).join('')}</select><div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px">กันที่เฉพาะวันนี้ · คืนก็คืนเฉพาะวันนี้ · วันอื่นไม่กระทบ</div></div>`:''}
           <div><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">ชื่อกรุ๊ป *</div><input value="${esc(sm.name)}" oninput="bookingV2SubSet('name',this.value)" placeholder="เช่น A" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:inherit;font-size:13px"></div>
           <div style="display:flex;gap:10px">
             <div style="flex:1"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">จำนวนที่นั่ง *</div><input type="number" min="1" max="${subRoom}" value="${esc(sm.qty)}" oninput="bookingV2SubSet('qty',this.value)" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:Manrope,sans-serif;font-size:14px;font-variant-numeric:tabular-nums"></div>
-            <div style="flex:1"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">หมดอายุ</div><input type="date" value="${esc(sm.expiry)}" oninput="bookingV2SubSet('expiry',this.value)" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 9px;font-family:inherit;font-size:12px"></div>
+            <div style="flex:1;${subBulk?'display:none':''}"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">หมดอายุ</div><input type="date" value="${esc(sm.expiry)}" oninput="bookingV2SubSet('expiry',this.value)" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 9px;font-family:inherit;font-size:12px"></div>
           </div>
           <div><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">หมายเหตุ</div><input value="${esc(sm.reason)}" oninput="bookingV2SubSet('reason',this.value)" placeholder="เช่น sub-agent A" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:inherit;font-size:13px"></div>
         </div>
@@ -68,7 +72,7 @@ function bookingV2LockOverlays(){
     /* §lkSort · แบ่งกรุ๊ปย่อยเป็นชั้น · ที่ยังใช้ได้อยู่บน ที่ใช้ไปแล้วอยู่ล่าง ที่ปล่อยแล้วยุบท้ายสุด
        เดิมเรียงตามลำดับที่สร้าง · กรุ๊ปว่างกับกรุ๊ปหมดปนกัน หาที่ยังจองได้ต้องไล่อ่านทีละบรรทัด */
     const _kUsed = c => Number(c.used)||0;
-    const _kBkt  = c => _kUsed(c) ? 'used' : (c.status==='active' ? 'free' : 'rel');
+    const _kBkt  = c => _kUsed(c) ? 'used' : (bookingV2LockKidLive(c) ? 'free' : 'rel');
     const kFree = kids.filter(c=>_kBkt(c)==='free').sort((a,b)=> bookingV2LockRemaining(b)-bookingV2LockRemaining(a));
     const kUsed = kids.filter(c=>_kBkt(c)==='used').sort((a,b)=>
       (bookingV2LockRemaining(b)>0) - (bookingV2LockRemaining(a)>0) || _kUsed(b)-_kUsed(a));
@@ -88,9 +92,9 @@ function bookingV2LockOverlays(){
     };
     const kidRow = (c, tint) => `
         <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-top:1px solid var(--border-2);border-left:3px solid ${tint}">
-          <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')}</div><div style="font-size:10px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div>${vcLine(c)}</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')}${(_mBulk&&bookingV2LockKidDated(c))?` <span style="font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;color:#534AB7;background:#EEEDFE;border-radius:5px;padding:1px 6px;margin-left:4px">${esc(c.date)}</span>`:''}</div><div style="font-size:10px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div>${vcLine(c)}</div>
           <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:1px"><b>${c.used}</b>/${c.qty} · <b style="color:${bookingV2LockRemaining(c)>0?'#0F6E56':'#C0392B'}">${bookingV2LockRemaining(c)}</b> เหลือ${(_mShr && _mShr.by[c.id] && _mShr.by[c.id].pend>0)?` <span class="lkpd-sub" data-lkpd-sub="${c.id}" title="กรุ๊ปนี้ยังไม่ได้ที่ ${_mShr.by[c.id].pend} ที่ · ดึงไปจองได้ ${_mShr.by[c.id].held} ที่" style="font-family:inherit;font-size:10px;font-weight:700;color:#64748B;background:#F4F5F7;border:1px dashed #C3CAD5;border-radius:6px;padding:1px 6px;margin-left:4px">&#9203; Pending ${_mShr.by[c.id].pend}</span>`:''}</div>
-          <div style="display:flex;gap:6px;padding-top:1px">${c.status==='active'?`<button onclick="bookingV2LockManageClose();bookingV2LockAddOpen('${c.id}')" style="font-size:11px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ ที่นั่ง</button><button onclick="bookingV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}</div>
+          <div style="display:flex;gap:6px;padding-top:1px">${bookingV2LockKidLive(c)?`<button onclick="bookingV2LockManageClose();bookingV2LockAddOpen('${c.id}')" style="font-size:11px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ ที่นั่ง</button><button onclick="bookingV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}</div>
         </div>`;
     const kidHead = (label, sub, ink, bg, list, seats) => `
         <div style="display:flex;align-items:baseline;gap:8px;margin:14px 0 0;padding:6px 10px;border-radius:8px;background:${bg};border-left:3px solid ${ink}">

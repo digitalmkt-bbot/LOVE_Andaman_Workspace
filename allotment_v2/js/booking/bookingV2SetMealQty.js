@@ -7,4 +7,5 @@ function bookingV2SetMealQty(key, elOrVal){
   const v=Math.min(Math.max(0, Math.floor(Number(raw)||0)), room);   // cap at booking pax (headcount − other diets)
   _bkV2.newBooking.specialMeals[key]=v;
   if(el){ if(String(v)!==String(el.value)) el.value=v; el.setAttribute('max', room); el.title='สูงสุด '+room+' (ตามจำนวนที่จอง)'; }
+  if(typeof bookingV2DietPvRefresh==='function') bookingV2DietPvRefresh();   /* §mealNote */
 }

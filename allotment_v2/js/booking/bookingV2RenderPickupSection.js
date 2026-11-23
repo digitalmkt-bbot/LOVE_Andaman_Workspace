@@ -119,7 +119,7 @@ function bookingV2RenderPickupSection(){
       <input type="checkbox" ${d.dropoffSame?'checked':''} onchange="bookingV2ToggleDropoffSame()" style="accent-color:#16265C;width:16px;height:16px;margin:2px 0 0;flex:none">
       <span style="font-size:13px;color:${d.dropoffSame?'#0B4F7A':'var(--ink)'};font-weight:600">Drop-off same as pickup<span style="display:block;font-size:12px;font-weight:400;color:#5B6170;margin-top:1px">Untick to choose another area and location for the way back</span></span>
     </label>
-    ${(d.pickupSelf && (d.hotelName||'').trim())?`<div style="grid-column:1/-1;padding:8px 12px;background:#FBE3E0;border-radius:10px;font-size:12.5px;color:#8E2019;line-height:1.45">&#9888; ติ๊ก self-arrive (ลูกค้ามาเอง) แต่กรอกโรงแรม "<b>${escapeHTML(d.hotelName)}</b>" ไว้ — booking นี้จะ<b>ไม่ขึ้นในใบงานรถขาไป</b> · ถ้าลูกค้าให้ไปรับที่โรงแรม อย่าติ๊กช่องนี้</div>`:''}
+    ${(d.pickupSelf && (d.hotelName||'').trim())?`<div style="grid-column:1/-1;padding:8px 12px;background:#FBE3E0;border-radius:10px;font-size:12.5px;color:#8E2019;line-height:1.45">&#9888; ติ๊ก self-arrive (ลูกค้ามาเอง) แต่กรอกโรงแรม "<b>${escapeHTML(d.hotelName)}</b>" ไว้ — <b>ขาไปลูกค้ามาเอง ไม่มีรถไปรับ</b> · ขากลับรถยังส่งที่โรงแรมนี้ · ถ้าต้องให้รถไปรับที่โรงแรม เอาติ๊กออก</div>`:''}
     </div>
     ${!d.dropoffSame ? `
       <div class="bkv2-nb-row" style="margin-top:10px;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">

@@ -210,6 +210,7 @@ async function readDays(pool, { fqt, qic, capOvrTable }, routes, from, to, exclu
        ) ch ON true
        WHERE sl.routeid = ANY($1) AND left(sl.date, 10) >= $2 AND left(sl.date, 10) <= $3 AND sl.status = 'active'
          AND (sl.parentid IS NULL OR sl.parentid = '')
+         AND ${lockRoundLiveSql('sl')}
          AND ($4::text IS NULL OR sl.id <> $4)
        GROUP BY 1, 2`,
       [routeIds, from, to, excludeLockId]),
@@ -301,7 +302,18 @@ function handle(req, res, query, ctx) {
     });
 }
 
+/**
+ * §lkRelApi (2026-11-20) · a lock whose round was handed back in the staff app ("ปล่อยที่นั่งคืน") keeps
+ * status='active'; the released trip dates are written to releaseddates instead. The staff app skips such a
+ * round (bookingV2LockRoundReleased), but every server-side reader looked at status alone and kept the seats held:
+ * r6 / 21 Nov 2026, an office hold of 2 released at 16:17, the webshop still answered "65 + 2 held / 67".
+ * The date is matched as plain text so the JSON list and the older map form both read the same.
+ */
+const lockRoundLiveSql = (alias) => { const a = alias ? alias + '.' : '';
+  return `position(left(${a}date, 10) in COALESCE(${a}releaseddates, '')) = 0`; };
+
 module.exports = {
+  lockRoundLiveSql,
   matches, handle,
   // exported for tests
   buildDays, charterBoatsOf, boatSeats, calendarOf, deploymentsOf, isIsoDate,

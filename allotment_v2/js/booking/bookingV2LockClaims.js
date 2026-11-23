@@ -1,10 +1,14 @@
-function bookingV2LockClaims(lockId){
+function bookingV2LockClaims(lockId, idx){
   const out = [];
-  const _L=(typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS.find(y=>y.id===lockId):null;
+  const _L=idx ? (idx.lockOf.get(lockId)||null) : ((typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS.find(y=>y.id===lockId):null);
   const _ld=bookingV2LockDateOf(_L);   /* ว่าง = ล็อคแบบช่วง ข้ามการเช็ควัน */
-  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b => {
-    const gone = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
-    (b.trips||[]).forEach(t => { (t.lockDraws||[]).forEach(x => {
+  const _src = idx ? [null] : (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]);
+  const _hits = idx ? (idx.by.get(lockId)||[]) : null;
+  _src.forEach(b0 => {
+    const _trips = idx ? _hits : (b0.trips||[]);
+    _trips.forEach(t0 => { const b = idx ? t0.b : b0, t = idx ? t0.t : t0;
+     const gone = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
+     (idx ? [t0.x] : (t.lockDraws||[])).forEach(x => {
       if(x.lockId!==lockId) return;
       /* §lkStale · ใบย้ายวันไปแล้ว แต่ที่นั่งยังชี้ล็อคของวันเดิม
          ไม่ใช่ใบจองของวันนี้แล้ว จึงไม่ใช่ของจริงเท่ากับใบที่ยกเลิก */

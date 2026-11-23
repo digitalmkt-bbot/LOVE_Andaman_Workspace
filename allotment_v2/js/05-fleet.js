@@ -7954,6 +7954,24 @@ function flBoardPopClose(){ var p=document.getElementById('fl-board-pop'); if(p)
 function _flBoardCur(){
   return (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).filter(function(x){ return x.id===_flBoardPopId; })[0]||null;
 }
+/* §fjOwnDue (2026-11-16) · owner: "ตรงไหน" · หน้าใบงานเต็มไม่มีช่อง Owner / Due ให้แก้ · เดิมแก้ได้ที่การ์ดบนบอร์ดอย่างเดียว
+   ช่องเดียวกับ flBoardSaveCard · บันทึกการเปลี่ยนลง progress log แบบเดียวกัน */
+function flJobSaveOwnDue(id){
+  if(typeof flBoardCanEdit==='function' && !flBoardCanEdit()) return;
+  var m=(FL_MAINT||[]).filter(function(x){ return x.id===id; })[0]; if(!m) return;
+  var own=String((document.getElementById('fj-own-'+id)||{}).value||'').trim();
+  var due=String((document.getElementById('fj-due-'+id)||{}).value||'');
+  var chg=[];
+  if(String(m.owner||'')!==own){ m.owner=own; chg.push('ผู้รับผิดชอบ '+(own||'—')); }
+  if(String(m.dueDate||'')!==due){ m.dueDate=due; chg.push('กำหนดเสร็จ '+(due||'—')); }
+  if(!chg.length) return;
+  if(typeof flBoardLog==='function') flBoardLog(m, chg.join(' · '));
+  flSave();
+  if(typeof flRenderMaintDetailPink==='function') flRenderMaintDetailPink();
+  if(typeof flBoardRefresh==='function') try{ flBoardRefresh(); }catch(_){}
+  if(typeof renderBoats==='function') try{ renderBoats(); }catch(_){}
+  if(typeof flShowToast==='function') flShowToast((m.no||'')+' · อัปเดตแล้ว');
+}
 function flBoardSaveCard(){
   var m=_flBoardCur(); if(!m || !flBoardCanEdit()) return;
   var own=(document.getElementById('fl-bd-own')||{}).value||'';
@@ -20593,6 +20611,18 @@ function flRenderMaintDetailPink(){
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:18px;font-weight:700;line-height:1.25">${fjE(m.title||'—')}</span><span class="fj-pill" style="background:${_stPill[0]};color:${_stPill[1]}">${_stPill[2]}</span><span class="fj-pill" style="background:${_tyPill[0]};color:${_tyPill[1]}">${_tyPill[2]}</span>${_outPill}</div>
         <div style="margin-top:3px;font-size:12.5px;color:#5B6170">${b?fjE(b.name)+' · '+fjE(b.type||'')+' · ':''}${m.startDate?fjE(fmtD(m.startDate)):'—'}${m.endDate?' → '+fjE(fmtD(m.endDate)):' → ongoing'}${m.location?' · '+fjE(m.location):''}${inc?` · from <span class="mono" style="color:#0F6CA6">${fjE(inc.no)}</span>`:''}${m.status!=='done'?(m.owner?' · '+fjE(m.owner):' · <b style="color:#8E2019">No owner</b>')+` · silent <b class="mono" style="font-weight:500;color:${_sil>60?'#8E2019':_sil>30?'#7A4300':'#0F1B3D'}">${_sil} d</b>`:''}</div>
         ${m.closeNote?`<div style="margin-top:6px;font-size:12px;color:#3E4658"><b>Close note:</b> ${fjE(m.closeNote)}</div>`:''}
+        ${(m.status!=='done' && (typeof flBoardCanEdit!=='function' || flBoardCanEdit()))?(()=>{   /* §fjOwnDue */
+          const _ow={}; (FL_MAINT||[]).forEach(x=>{ const o=String(x.owner||'').trim(); if(o) _ow[o]=1; });
+          const _in='height:30px;border:1px solid #D5DAE3;border-radius:7px;padding:0 9px;font:500 12.5px inherit;color:#0F1B3D;background:#fff;box-sizing:border-box';
+          return `<div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:#5B6170">
+            <span style="font-weight:600">Owner</span>
+            <input id="fj-own-${m.id}" list="fj-own-dl" value="${fjE(m.owner||'')}" placeholder="who follows this job" style="${_in};width:180px">
+            <datalist id="fj-own-dl">${Object.keys(_ow).map(o=>`<option value="${fjE(o)}">`).join('')}</datalist>
+            <span style="font-weight:600;margin-left:6px">Due</span>
+            <input id="fj-due-${m.id}" type="date" value="${fjE(m.dueDate||'')}" style="${_in}">
+            <button type="button" class="fj-btn" style="height:30px;padding:0 12px" onclick="flJobSaveOwnDue('${m.id}')">Save</button>
+            ${(m.status==='pending'&&m.startDate&&!m.dueDate&&m.boatStatus!=='available')?'<span style="color:#7A4300">no due date · the boat stays blocked from the start date until the job is started</span>':''}
+          </div>`; })():''}
       </div>
       <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end">
         ${m.status==='pending'?`<button type="button" class="fj-btn pri" onclick="flMaintStart('${m.id}')">▶ Start</button>`:''}

@@ -16,6 +16,8 @@ function bookingV2LockExpireSweep(){
       if(l.status==='active' && to && today > to){ l.status='expired'; (l.log=l.log||[]).push({date:today,type:'expire',note:'range ended'}); changed=true; }
     } else {
       if(l.status==='active' && l.expiry && l.expiry < today){ l.status='expired'; (l.log=l.log||[]).push({date:today,type:'expire'}); changed=true; }
+      /* §lkRelClose · ใบที่กดปล่อยไปก่อนหน้านี้แล้วสถานะยังค้าง active · ปิดให้ตรงกับที่กดไว้ */
+      else if(typeof bookingV2LockCloseIfReleased==='function' && bookingV2LockCloseIfReleased(l, 'system')) changed=true;
     }
   });
   if(changed) sbSeatLocksPersist();
