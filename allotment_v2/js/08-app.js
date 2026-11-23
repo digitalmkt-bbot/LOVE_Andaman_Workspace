@@ -82657,7 +82657,9 @@ function pjBoatSt(date, boat, op){
   var _ovnAny=!!_ovnH, _ovnMid=!!(_ovnH && _ovnH.from!==date && _ovnH.to!==date);
   var rsn=String((st&&st.reason)||'').toLowerCase();
   // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
-  if(!rsn) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
+  /* §pjMjDate · ใบซ่อมที่เปิดอยู่ไม่มีวันที่ · ถ้ายืมเหตุผลมาทุกวัน เรือจะกลายเป็น "ขึ้นคาน" ย้อนหลังทั้งรอบ
+     (Tadeo MJ-412 เปิด 23 พ.ย. → ตารางการทำงานลง MT ให้ลูกเรือทุกวันในเดือน) · ยืมได้เฉพาะวันที่ log บอกว่าเรือไม่พร้อม */
+  if(!rsn && (s==='fixing'||s==='unavailable')) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
   /* §pjStWin · สถานะจริงมาก่อน · โปรแกรมที่ค้างบนกระดานไม่ทำให้เรือกลายเป็นเรือที่วิ่ง */
   var k;
   if(/dry.?dock|คาน/.test(rsn)) k='dd';
