@@ -24135,7 +24135,8 @@ function pckBoatMeta(rows, date){
     return '<span class="pck-mv" style="color:'+(lc[1]||'#5F5E5A')+'">'+e(c)+' '+lang[c]+'</span>'; }).join(J);
   var mono=' style="font-family:\'DM Mono\',monospace"';
   var ml=[];
-  if(meal.veg+meal.vegan) ml.push('<span class="pck-mk" style="color:#3B6D11">มังสวิรัติ <b'+mono+'>'+(meal.veg+meal.vegan)+'</b></span>');
+  if(meal.veg)            ml.push('<span class="pck-mk" style="color:#3B6D11">มังสวิรัติ <b'+mono+'>'+meal.veg+'</b></span>');   /* §gdVegan */
+  if(meal.vegan)          ml.push('<span class="pck-mk" style="color:#3B6D11">วีแกน <b'+mono+'>'+meal.vegan+'</b></span>');
   if(meal.halal)          ml.push('<span class="pck-mk" style="color:#0F6E56">ฮาลาล <b'+mono+'>'+meal.halal+'</b></span>');
   if(meal.allergy)        ml.push('<span class="pck-mk" style="color:#C0392B">&#9888; แพ้อาหาร <b'+mono+'>'+meal.allergy+'</b></span>');
   var lt=[];
@@ -24416,7 +24417,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
   var langs=Object.keys(S.lang).sort(function(a,b){ return S.lang[b]-S.lang[a]; })
     .map(function(c){ return pckGuideBadge([c])+' '+S.lang[c]; }).join(J);
   var M=S.meal, ml=[];
-  if(M.veg+M.vegan) ml.push('มังสวิรัติ '+(M.veg+M.vegan));
+  if(M.veg)   ml.push('มังสวิรัติ '+M.veg);   /* §gdVegan */
+  if(M.vegan) ml.push('วีแกน '+M.vegan);
   if(M.halal) ml.push('ฮาลาล '+M.halal);
   var lt=[];
   if(S.ltJoin) lt.push('Join '+S.ltJoin+' คน');
@@ -25000,8 +25002,10 @@ function pckJobService(r, date){
 //   อาหารเคยอยู่แต่ยอดรวมหัวใบ ซึ่งบอกว่า "มี 2 คน" แต่ไม่บอกว่าคนไหน
 function pckJobNote(b, date){
   var mm=b.specialMeals||{}, out=[];
-  var veg=(+mm.veg||0)+(+mm.vegan||0);
-  if(veg) out.push({w:1, t:'มังสวิรัติ '+veg});
+  /* §gdVegan (2026-11-23) · ผู้ใช้แจ้ง vc.002/0094 "ใบจองจองวีแกน หน้าเช็คอินวีแกน ใบงานไกด์ขึ้นมังสวิรัติ"
+     ของเดิมบวกมังสวิรัติกับวีแกนแล้วเรียกรวมว่า "มังสวิรัติ" · วีแกนไม่ทานไข่ นม เนย · ไกด์กับร้านต้องเห็นแยก */
+  if(+mm.veg)   out.push({w:1, t:'มังสวิรัติ '+(+mm.veg)});
+  if(+mm.vegan) out.push({w:1, t:'วีแกน '+(+mm.vegan)});
   if(+mm.halal) out.push({w:1, t:'ฮาลาล '+(+mm.halal)});
   /* §gdAlList (2026-09-14) · "จะโผล่ในใบงานไกด์ไหม"
      ของเดิมอ่านแต่ mm.allergies (ข้อความอิสระ) · ไม่อ่าน allergyList เลย
@@ -60848,7 +60852,7 @@ function bkV2RenderTab2(){
         const dep2=route2?.times?.[0]||'';
         const rows=_bOrder.map(bid=>{ const o=ag[bid]; const cap=laCapOn(o.boat,date); const over=(cap-o.tot)<0; const bnm=(o.boat&&o.boat.name)||bid;
           const langCh=Object.keys(o.lang).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
-          const foodCh=[]; if(o.veg||o.vegan)foodCh.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.veg+o.vegan} veg</span>`); if(o.halal)foodCh.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg)foodCh.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`);
+          const foodCh=[]; if(o.veg)foodCh.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.veg} veg</span>`); if(o.vegan)foodCh.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.vegan} vegan</span>`);   /* §gdVegan */ if(o.halal)foodCh.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg)foodCh.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`);
           const addCh=[]; if(o.ltJoin)addCh.push(`<span class="t2-dchip" style="background:#E6F1FB;color:#1565A8">Longtail Join ${o.ltJoin} คน</span>`); if(o.ltChtr)addCh.push(`<span class="t2-dchip" style="background:#EFEAFB;color:#5B289A">Longtail เหมา ${o.ltChtr} ลำ</span>`); if(o.pt)addCh.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">Transfer ${o.pt} คน</span>`);
           const chtrTag=o.charter?[`<span class="t2-dchip" style="background:#E7DEF8;color:#5B289A;font-weight:800">&#128676; เหมาลำ</span>`]:[];
           const ch=[].concat(chtrTag,langCh,foodCh,addCh);
@@ -62080,7 +62084,7 @@ function bkV2RenderTab2(){
           return `<span class="t2-mchip${over?' t2-mchip-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]}">${initials(x.boat.name||x.boatId)}</span>${esc(x.boat.name||x.boatId)} <b${over?' style="color:#A32D2D"':''}>${g.tot}/${cap}</b></span>`; }).join('');
         const _miniUn = uTot>0 ? `<span class="t2-mchip t2-mchip-un"><span class="t2-mav" style="background:#9A5B00">&#9888;</span>ยังไม่ assign <b>${uTot}</b></span>` : '';
         const _langOf=(o)=>Object.keys(o.lang||{}).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
-        const _foodOf=(o)=>{ const out=[]; if(o.veg||o.vegan) out.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${(o.veg||0)+(o.vegan||0)} veg</span>`); if(o.halal) out.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg) out.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`); return out; };
+        const _foodOf=(o)=>{ const out=[]; if(o.veg) out.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.veg} veg</span>`); if(o.vegan) out.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${o.vegan} vegan</span>`);   /* §gdVegan */ if(o.halal) out.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg) out.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`); return out; };
         const _gridCells = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,date):(x.boat.cap||0); const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5']; const ch=[].concat(_langOf(g),_foodOf(g));
           const _capB=(typeof boatCapBadge==='function')?boatCapBadge(x.boatId,date,'sm'):'';   // §cap override รายวัน · คลิกที่ตัวเลขเพื่อแก้
           return `<div class="t2-bcell${over?' t2-bcell-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]};flex:none">${initials(x.boat.name||x.boatId)}</span><span class="t2-bcell-nm">${esc(x.boat.name||x.boatId)}</span><span class="t2-bcell-cap" onclick="event.stopPropagation();boatCapModalOpen('${x.boatId}','${date}',function(){ if(typeof bkV2Render==='function') bkV2Render(); })" title="คลิกเพื่อปรับที่นั่งของลำนี้ เฉพาะวันนี้"${over?' style="color:#A32D2D;cursor:pointer"':' style="cursor:pointer"'}>${g.tot}/${cap}${_capB}</span><span class="t2-bcell-chips">${ch.join('')||'<span style="color:#b0b0a8;font-size:10px">&mdash;</span>'}</span></div>`; }).join('');
