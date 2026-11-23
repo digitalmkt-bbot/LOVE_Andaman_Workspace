@@ -1053,6 +1053,28 @@
     }).catch(function(e){ O.fail('Could not save the board card', e); redrawJobs(); return null; });
   });
 
+  /* §fjOwnDue (sync 11-16) · the job page's header edits owner and due date. Legacy set m.owner / m.dueDate and called
+     flSave (nothing leaves the browser here). Server first, as the board card: PATCH …/jobs/{id} {owner, due_date} for
+     what changed; the server writes legacy's change line ("ผู้รับผิดชอบ …", "กำหนดเสร็จ …"). */
+  wrap('flJobSaveOwnDue', function(orig, id){
+    if(typeof window.flBoardCanEdit === 'function' && !window.flBoardCanEdit()) return null;
+    var m = listJobs().find(function(x){ return x && x.id === id; }); if(!m) return null;
+    var own = String((document.getElementById('fj-own-' + id) || {}).value || '').trim();
+    var due = String((document.getElementById('fj-due-' + id) || {}).value || '');
+    var patch = {};
+    if(String(m.owner || '') !== own) patch.owner = own;
+    if(String(m.dueDate || '') !== due) patch.due_date = due || null;
+    if(!Object.keys(patch).length) return null;
+    return O.queue(function(){ return O.patch('/v1/fleet/jobs/' + enc(m.id), patch); }).then(function(res){
+      upsertJob(res);
+      O.wrote('fleet-job-owner-due');
+      if(typeof window.flRenderMaintDetailPink === 'function') try{ window.flRenderMaintDetailPink(); }catch(_){}
+      redrawJobs();
+      if(typeof window.flShowToast === 'function') window.flShowToast((m.no || '') + ' · อัปเดตแล้ว');
+      return res;
+    }).catch(function(e){ O.fail('Could not save the owner / due date', e); redrawJobs(); return null; });
+  });
+
   wrap('flBoardPark', function(orig){
     var m = window._flBoardCur ? window._flBoardCur() : null;
     if(!m || !window.flBoardCanEdit()) return null;

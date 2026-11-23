@@ -331,21 +331,43 @@
       return refreshUpgDay(U.date, U.from, U.to);
     }, function(e){ O.fail('Upgrade refused · ' + failCode(e), e); return null; });
   });
-  wrap('bookingV2VanUpgUndo', function(date, rid, zone, gid){
+  /* §upgUndoUi (sync 11-19) · legacy's app dialogs (bkUpgUndoBlocked, bkUpgSheet), not the browser's; the server's
+     409 route_closed / not_enough_seats ({needed, free}) opens the same blocked dialog */
+  wrap('bookingV2VanUpgUndo', function(date, rid, zone, gid, _ok){
     if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return null;
     var U = (typeof bkUpgVanOf === 'function') ? bkUpgVanOf(date, rid, gid) : null;
     if(!U){ alert('This van group did not come from a whole-van upgrade.'); return null; }
     var sid = serverIdOf(date, rid, +gid);
     if(!sid) return O.fail('Undo refused', new Error('van group has no server id'));
     var m = bkUpgVanMembers(date, rid, gid), pax = m.reduce(function(s, x){ return s + x.pax; }, 0), uncol = 0, col = 0;
+    var from = U.from, fromNm = bkUpgRouteName(from), toNm = bkUpgRouteName(rid);
+    var blocked = function(al, n){
+      if(typeof bkUpgUndoBlocked === 'function') bkUpgUndoBlocked({ al: al, fromNm: fromNm, toNm: toNm, toRid: rid, fromRid: from, pax: n != null ? n : pax, n: m.length, date: date });
+      else alert('Cannot undo: ' + fromNm + (al ? ' has not enough free seats' : ' is not running') + ' on ' + date + '.');
+      return null;
+    };
+    if(typeof bookingV2IsRouteOpenOn === 'function' && !bookingV2IsRouteOpenOn(from, date)) return blocked(null);
+    var al = (typeof getAllotment === 'function') ? getAllotment(from, date, null) : null;
+    if(al && al.hasAllotment && pax > al.seatsAvailable) return blocked(al);
     m.forEach(function(x){ var u = x.t.upg; var it = (u && u.upgId && Array.isArray(x.b.upgrades)) ? x.b.upgrades.find(function(y){ return y.id === u.upgId; }) : null;
       if(it){ if(it.collected) col += (+it.sellPrice || 0); else uncol += (+it.sellPrice || 0); } });
-    if(!confirm('Undo the whole-van upgrade? (' + m.length + ' bookings, ' + pax + ' pax)\n' + bkUpgRouteName(rid) + ' > back to ' + bkUpgRouteName(U.from) + '\n' +
-      (uncol ? ('Uncollected extra charges (THB ' + uncol.toLocaleString() + ') will be removed.\n') : '') +
-      (col ? ('Collected charges (THB ' + col.toLocaleString() + ') stay on the bookings.\n') : '') + 'Boats must be assigned again.')) return null;
+    if(!_ok && typeof bkUpgSheet === 'function'){
+      var _T = function(x){ return (typeof laT === 'function') ? laT(x) : x; }, rw = [];
+      if(uncol) rw.push([_T('ค่า Upgrade'), '<span style="color:#7A4A00">&#3647;' + uncol.toLocaleString() + '</span> ' + _T('ยังไม่เก็บ · จะถูกลบออก')]);
+      if(col) rw.push([_T('เก็บแล้ว'), '&#3647;' + col.toLocaleString() + ' ' + _T('คงไว้ในบุคกิ้ง')]);
+      bkUpgSheet({ mode: 'ask', title: _T('ย้ายทั้งคันกลับโปรแกรมเดิม?'), toNm: toNm, fromNm: fromNm, toRid: rid, fromRid: from, whoSub: m.length + ' booking · ' + pax + ' pax', pax: pax, date: date, rows: rw,
+        tip: _T('ย้ายกลับแล้วเรือที่จัดไว้จะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมเดิม'), okLabel: _T('ยืนยันยกเลิกทั้งคัน'),
+        onYes: function(){ window.bookingV2VanUpgUndo(date, rid, zone, gid, true); } });
+      return null;
+    }
     return O.queue(function(){ return O.post(BASE + '/' + enc(sid) + '/upgrade/undo', {}); }).then(function(){
-      return refreshUpgDay(date, U.from, rid);
-    }, function(e){ O.fail('Undo refused · ' + failCode(e), e); return null; });
+      return refreshUpgDay(date, from, rid);
+    }, function(e){
+      var bd = (e && e.body) || {};
+      if(e && e.status === 409 && e.code === 'route_closed') return blocked(null);
+      if(e && e.status === 409 && e.code === 'not_enough_seats') return blocked({ hasAllotment: true, seatsAvailable: Math.max(0, +bd.free || 0) }, +bd.needed || pax);
+      O.fail('Undo refused · ' + failCode(e), e); return null;
+    });
   });
   wrap('bkUpgVanMoveStops', function(){ return 0; });
   function refreshUpgDay(date, from, to){
@@ -374,10 +396,28 @@
   });
 
   // ticked rows → one group (or into an existing group of the server) · members only, in tick order
-  wrap('bookingV2VanGroupSelected', function(date, routeId, zone, groupId){
+  wrap('bookingV2VanGroupSelected', function(date, routeId, zone, groupId, selfArrive){
     var sel = window._bkV2VanSel || {};
     var keys = Object.keys(sel).filter(function(k){ return sel[k]; });
     if(!keys.length) return null;
+    /* §selfAsk (sync 11-19) · a booking ticked "ลูกค้ามาเอง" asks first, in legacy's words (bookingV2VanGroupSelected):
+       this van takes them back only, or untick so the van picks them up. The server needs the answer
+       (409 self_arrive_ticked otherwise): self_arrive "return_only" or "clear" (it writes legacy's history line).
+       Cancel sends nothing. */
+    if(!selfArrive && typeof laAskSheet === 'function'){
+      var sf = [];
+      keys.forEach(function(k){ var b = byClientId(String(k).split('@')[0]); if(b && b.pickupSelf && sf.indexOf(b) < 0 && tripOn(b, date, routeId, zone)) sf.push(b); });
+      if(sf.length){
+        var nm = sf.map(function(b){ var h = (b.hotelName || '').trim(); return '• ' + (b.leadPax || '-') + ' (' + (b.voucherRef || b.id) + ')' + (h ? (' · ' + h) : ''); }).join('\n');
+        laAskSheet({ title: 'มีลูกค้าติ๊ก "มาเอง" ' + sf.length + ' ราย',
+          body: nm + '\n\nขาไปลูกค้ามาเองที่ท่าเรือ รถจะไม่ไปรับ และไม่ขึ้นในใบงานรถขาไป\nจับเข้ากรุ๊ปนี้ = ใช้รถคันนี้ส่งกลับอย่างเดียว\n\nถ้าต้องให้รถไปรับที่โรงแรมด้วย เลือก "เอาติ๊กออก"',
+          okLabel: 'ส่งกลับอย่างเดียว', color: '#5B289A', noLabel: 'เอาติ๊กออก · ให้รถไปรับ', cancelLabel: 'ยกเลิก ไม่จับกรุ๊ป',
+          onYes: function(){ window.bookingV2VanGroupSelected(date, routeId, zone, groupId, 'return_only'); },
+          onNo: function(){ window.bookingV2VanGroupSelected(date, routeId, zone, groupId, 'clear'); } });
+        return null;
+      }
+    }
+    var selfBody = (selfArrive === 'return_only' || selfArrive === 'clear') ? { self_arrive: selfArrive } : {};
     var ordered = keys.slice().sort(function(a, b){ return (sel[a] || 0) - (sel[b] || 0); });
     var members = [];
     for(var i = 0; i < ordered.length; i++){
@@ -398,9 +438,11 @@
     var sid = serverIdOf(date, routeId, num);
     return O.queue(function(){
       var p = sid
-        ? O.post(BASE + '/' + enc(sid) + '/members', { members: members })
-        : O.post(BASE, { service_date: date, route_id: routeId, zone: zone, members: members });
+        ? O.post(BASE + '/' + enc(sid) + '/members', Object.assign({ members: members }, selfBody))
+        : O.post(BASE, Object.assign({ service_date: date, route_id: routeId, zone: zone, members: members }, selfBody));
       return p.then(function(g){
+        /* "clear" unticked them on the server, which wrote the history: the screen follows */
+        if(selfBody.self_arrive === 'clear') keys.forEach(function(k){ var b = byClientId(String(k).split('@')[0]); if(b) b.pickupSelf = false; });
         applyGroup(date, routeId, g); warn(g);
         // members may have moved out of other groups on the server · re-read the day
         return fetchDay(date, routeId).catch(function(e){
