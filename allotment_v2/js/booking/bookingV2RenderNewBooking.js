@@ -280,6 +280,7 @@ function bookingV2RenderNewBooking(){
              ${bookingV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
              ${bookingV2RenderAttachSection()}
+             <div id="nbf-diff-slot" style="display:contents">${(typeof bookingV2EditDiffHtml==='function')?bookingV2EditDiffHtml():''}</div>
              <div id="nbf-checks-slot" style="display:contents">${(typeof bkNbfChecksHtml==='function')?bkNbfChecksHtml():''}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                <div id="nbf-submit-slot" style="display:contents">${bookingV2RenderSubmitButton()}</div>

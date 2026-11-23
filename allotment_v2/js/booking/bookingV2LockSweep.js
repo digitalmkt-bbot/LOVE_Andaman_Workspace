@@ -8,9 +8,11 @@ function bookingV2LockSweep(){
   const L=(typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]);
   const rows=[], over=[];
   let seatsMoved=0, seatsDead=0, seatsOver=0;
+  const _idx=bookingV2LockClaimsIndex();                                   /* §lkSweepFast · ไล่ใบจองรอบเดียว */
+  const _hasKid=new Set(L.filter(x=>x&&x.parentId).map(x=>x.parentId));   /* แม่ที่ไม่มีลูก ไม่ต้องไล่หาลูก */
   L.forEach(l=>{
     if(bookingV2IsBoatLock(l)) return;   /* §bkLock · ไม่มีที่นั่งให้ตามหา · qty เป็นขนาดที่สัญญาไว้ ไม่ใช่โควตา */
-    const A=bookingV2LockAudit(l);
+    const A=bookingV2LockAudit(l, _idx);
     if(A.diff>0){
       const mv=A.claims.filter(c=>c.moved).reduce((n,c)=>n+c.qty,0);
       const dd=A.claims.filter(c=>c.dead&&!c.moved).reduce((n,c)=>n+c.qty,0);
@@ -20,7 +22,7 @@ function bookingV2LockSweep(){
         qty:l.qty||0, used:A.used, live:A.live, diff:A.diff, moved:mv, dead:dd,
         vcs:A.claims.filter(c=>c.dead).map(c=>c.vc+(c.qty>1?(' ×'+c.qty):'')+(c.moved?' (ย้ายวัน)':' (ยกเลิก)')) });
     }
-    if(!l.parentId){
+    if(!l.parentId && _hasKid.has(l.id)){
       const kids=bookingV2LockChildren(l.id);
       if(kids.length){
         const un=bookingV2LockUnalloc(l), pu=Number(l.used)||0;

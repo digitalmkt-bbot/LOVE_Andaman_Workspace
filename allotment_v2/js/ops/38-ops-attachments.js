@@ -204,7 +204,7 @@
   wrapGlobal('pfmViewSlips',function(orig){ return function(bkId){ if(on()) syncSlipView(bkId); return orig.apply(this,arguments); }; });
   function slipFrom(r){ return { id:r.id, attachmentId:r.attachment_id||r.attachmentId, addedAt:r.added_at||r.addedAt||'', addedBy:r.added_by||r.addedBy||'' }; }
   /* upload, then link to the booking; a refused link removes the upload again */
-  function attachSlip(bkId, blobData, mime, name){
+  function attachSlip(bkId, blobData, mime, name, done){
     var b=bkOf(bkId);
     if(!b||!b.opsId){ alert('This booking is not on the server yet, so a slip cannot be attached.'); return; }
     var fr=new FileReader();
@@ -216,6 +216,7 @@
           var s=slipFrom(row||{}); if(!s.attachmentId) s.attachmentId=meta.id;
           b.slips=(b.slips||[]).filter(function(x){ return x.id!==s.id&&x.attachmentId!==s.attachmentId; }).concat([s]);
           rerenderSlips(bkId);
+          if(typeof done==='function') try{ done({ id:meta.id, name:slipMeta[meta.id].name, mime:slipMeta[meta.id].mime, size:slipMeta[meta.id].size, slipId:s.id }); }catch(_){}
         },function(e){
           O.fail('Slip was not attached',e);
           return remove(meta.id).then(null,function(){});
@@ -236,6 +237,41 @@
       dn(file,1600,function(bl,mi){ if(bl) post(bl,mi,((file.name||'slip').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'slip'); });
     } else post(file,file.type||'application/octet-stream',file.name||'file');
   }; });
+  /* §paySlip (sync 11-16) · the By trip payment window's slip button. Legacy uploaded through pckSlipUpload (a pier slip),
+     relabelled it a payment slip of the booking and saved the blob. Here it is a booking slip on the server from the start
+     (POST /v1/bookings/:id/slips, as pfmSlipsAttach), so Travel Summary sees it at once. When a payment is then recorded in
+     the same window, ops/30 sends these files as the payment's slip_ids and takes the booking-level link off again
+     (laOps.paySlips.unlink), so the slip shows once, tied to that payment, as legacy's does. */
+  function putPaySlip(bkId, s){
+    var M=(typeof _bkV2PaySlips!=='undefined')?_bkV2PaySlips:null; if(!M) return;
+    (M[bkId]=M[bkId]||[]).push(s);
+    var el=document.getElementById('bkv2-pay-slips'); if(el && typeof window.bookingV2PaySlipList==='function') el.innerHTML=window.bookingV2PaySlipList(bkId);
+  }
+  wrapGlobal('bookingV2PaySlipPick',function(orig){ return function(bkId, inp){
+    if(!on()) return orig.apply(this,arguments);
+    var fs=Array.prototype.slice.call((inp&&inp.files)||[]); if(!fs.length) return;
+    var el=document.getElementById('bkv2-pay-slips'); if(el) el.textContent='กำลังอัปโหลด…';
+    fs.forEach(function(file){
+      var post=function(bl,mime,name){
+        if(bl&&bl.size>6*1024*1024){ alert('File "'+name+'" is over 6MB'); return; }
+        attachSlip(bkId,bl,mime,name,function(s){ putPaySlip(bkId,s); });
+      };
+      if(/^image\//.test(file.type||'')){
+        var dn=(typeof window._bkV2DownscaleImage==='function')?window._bkV2DownscaleImage:function(f,m,cb){ cb(f,f.type); };
+        dn(file,1600,function(bl,mi){ if(bl) post(bl,mi,((file.name||'slip').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'slip'); });
+      } else post(file,file.type||'application/octet-stream',file.name||'file');
+    });
+    if(inp) inp.value='';
+  }; });
+  O.paySlips={
+    /* the booking-level link of a slip that has just become a payment's slip */
+    unlink:function(bkId, slipId){
+      var b=bkOf(bkId); if(!b||!b.opsId||!slipId) return Promise.resolve(null);
+      return O.del('/v1/bookings/'+encodeURIComponent(b.opsId)+'/slips/'+encodeURIComponent(slipId)).then(function(){
+        b.slips=(b.slips||[]).filter(function(x){ return x.id!==slipId; }); syncSlipView(bkId);
+      });
+    }
+  };
   wrapGlobal('pfmSlipDelete',function(orig){ return function(id){
     if(!on()) return orig.apply(this,arguments);
     var bkId=(typeof _pfmSlipBk!=='undefined'?_pfmSlipBk:null); if(!bkId) return;

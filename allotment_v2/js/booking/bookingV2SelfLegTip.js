@@ -1,0 +1,1 @@
+function bookingV2SelfLegTip(bk,date){ return bookingV2SelfRetToo(bk,date)?'ติ๊กลูกค้ามาเอง (self-arrive) และกลับเอง · ไม่ขึ้นในใบงานรถทั้งสองขา':'ติ๊กลูกค้ามาเอง (self-arrive) · ขาไปไม่มีรถไปรับ จึงไม่ขึ้นในใบงานรถขาไป · ขากลับรถยังส่ง · ถ้าต้องให้รถไปรับ เอาติ๊กออกในหน้าแก้ไข booking'; }

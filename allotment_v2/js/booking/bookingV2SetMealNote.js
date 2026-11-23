@@ -4,4 +4,5 @@ function bookingV2SetMealNote(v){
   const d=_bkV2.newBooking; if(!d) return;
   const sm=d.specialMeals||(d.specialMeals={veg:0,vegan:0,halal:0,allergies:''});
   sm.allergies=String(v==null?'':v);
+  if(typeof bookingV2DietPvRefresh==='function') bookingV2DietPvRefresh();   /* §mealNote */
 }

@@ -3,8 +3,8 @@ function bookingV2VanAutoAssign(date, routeId){
   const rows=baSeatBookingsForRoute(date,routeId).filter(({b,t})=>{ const z=t.zone||b.pickupZone||'NoTransfer'; return z!=='NoTransfer'&&z!=='NT'; });
   if(!rows.length){ alert('No transfer bookings to group on this program (all self-arrive or none).'); return; }
   const z=(typeof _vehRouteZone==='function')?_vehRouteZone(routeId):null;
-  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId));
-  const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]);
+  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId) && laVehFitsRoute(v,routeId));   /* §rnVan2 */
+  const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
   if(!pool.length){ alert('No van available for this program today.\nAssign vans to this program in Transfer Fleet > month matrix, or add a vehicle in the zone.'); return; }
   const load={}; pool.forEach(v=>load[v.id]=0);
   rows.forEach(({b,t})=>{ const vid=bkOpsRead(b,date).vanId; if(vid&&load[vid]!==undefined) load[vid]+=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; });

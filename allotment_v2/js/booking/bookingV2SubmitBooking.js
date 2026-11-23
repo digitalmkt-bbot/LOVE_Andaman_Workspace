@@ -22,5 +22,9 @@ function bookingV2SubmitBooking(){
     if(_was !== _now && !confirm('Saved total: THB '+_was.toLocaleString()+'\nTotal at current rates: THB '+_now.toLocaleString()
         +'\n\nPrices in this rate type changed after the booking was saved.\nSave with the new total?')) return;
   }
-  bookingV2CommitBooking(hasFoc ? 'pending_foc' : 'confirmed');
+  /* §nbDiffAsk · ผู้ใช้ขอ 19 พ.ย. "ขึ้น Popup ด้วย ว่ามีการแก้ไขอะไรไป หลังจากกด Update และก็ confirm"
+     แก้ใบเดิมและมีอะไรเปลี่ยนจริง → ขึ้นรายการให้ดูก่อน กดยืนยันถึงจะบันทึก · ใบใหม่/ไม่ได้แก้อะไร ผ่านตามเดิม */
+  const _st = hasFoc ? 'pending_foc' : 'confirmed';
+  if(typeof bookingV2EditDiffAsk==='function' && bookingV2EditDiffAsk(function(){ bookingV2CommitBooking(_st); })) return;
+  bookingV2CommitBooking(_st);
 }

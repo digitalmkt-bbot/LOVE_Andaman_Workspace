@@ -6,7 +6,7 @@ function bookingV2RowPayAction(bkId){
   const isPF=a&&a.payType==='proforma';
   let body;
   if(!bk.agentId){
-    body=`<div style="font-size:12px;color:var(--fd-ink-soft)">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>`;
+    body=`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>${bookingV2PaySlipBtn(bkId)}`;
   } else if(!inv){
     // B2C carries its own settled amount from the webshop (payments + credits, synced server-side).
     // Show it here, otherwise this modal reads "no invoice yet" on a booking the customer already paid.
@@ -21,10 +21,15 @@ function bookingV2RowPayAction(bkId){
       ${bal>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div><label style="font-size:10.5px;color:var(--fd-ink-soft);display:block;margin-bottom:4px">จำนวนเงิน</label><input id="bkv2-pay-amt" type="number" min="0" value="${Math.round(bal)}" style="width:100%;height:34px;font-size:13px;text-align:right;border:1px solid var(--fd-line);border-radius:8px;padding:2px 9px"></div>
         <div><label style="font-size:10.5px;color:var(--fd-ink-soft);display:block;margin-bottom:4px">วิธี</label><select id="bkv2-pay-method" style="width:100%;height:34px;font-size:12px;font-family:inherit;border:1px solid var(--fd-line);border-radius:8px;padding:2px 6px;background:#fff"><option value="transfer">โอน</option><option value="cash">เงินสด</option><option value="card">บัตร</option></select></div>
+      </div>
+      <div style="margin:-2px 0 12px;font-size:11.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="border:1px dashed #CFE0EF;background:#F6FAFE;color:#185FA5;border-radius:8px;padding:6px 11px;cursor:pointer;font-weight:600">&#128206; แนบสลิปการรับเงินนี้<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bookingV2PaySlipPick('${bkId}',this)"></label>
+        <span id="bkv2-pay-slips" style="color:var(--fd-ink-soft)">${bookingV2PaySlipList(bkId)}</span>
       </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${bal>0?`<button onclick="bookingV2PayDoRecord('${inv.id}','${bkId}')" style="background:#0F7A5A;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer">บันทึกรับเงิน</button>`:''}
         <button onclick="acctOpenDoc('${inv.id}','invoice')" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 14px;border-radius:9px;cursor:pointer">ดูเอกสาร</button>
+        ${bookingV2PaySlipBtn(bkId)}
       </div>`;
   }
   acctModal(`<div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">การชำระเงิน · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">${a?a.name:'—'}${a?` · ${bookingV2PayLabel(a.payType)}`:''}</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div><div style="padding:16px 20px">${body}</div>`);

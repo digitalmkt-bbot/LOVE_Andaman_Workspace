@@ -12,14 +12,14 @@ function bookingV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, all
   const gc=g&&groupColor?groupColor[g]:null;
   const myVan = isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanId)||'') : (_O.vanId||'');
   const vn = myVan ? ((vehGet(myVan)||{}).name||'') : '';
-  const chk=`<span onclick="event.stopPropagation();bookingV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
+  const chk=`<span onclick="event.stopPropagation();bookingV2VanSelToggle('${key}',this)" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
   const gchip=g
     ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:88px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
     : '<span style="font-size:10px;color:#c4c2ba">—</span>';
   let retSel='';
   if(g){
     const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, zone):[];
-    const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
+    const _zPool=((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[]).filter(v=>laVehFitsRoute(v,routeId));   /* §rnVan2 */
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
     let ropts='<option value="">&#8617;</option>';

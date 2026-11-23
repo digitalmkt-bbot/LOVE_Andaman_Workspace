@@ -1,0 +1,1 @@
+function bookingV2AllergyOnlyText(sm){ if(!sm) return ''; var parts=[]; if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(function(a){ if(a&&a.name) parts.push(a.name+((+a.qty>1)?(' ×'+Math.floor(+a.qty)):'')); }); if(bookingV2MealNoteIsAl(sm)) parts.push(String(sm.allergies).trim()); return parts.join(' · '); }

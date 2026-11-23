@@ -334,7 +334,7 @@ function bookingV2RenderLocks(){
     const acts = `<div style="display:flex;gap:5px;justify-content:flex-end;white-space:nowrap">`
       + (_pd1Can>0 ? btn(`bookingV2LockPendConfirmGo('${l.id}','${_pd1.date}')`,'ยืนยัน '+_pd1Can+' ที่','#fff','#0F6E56','#0F6E56') : '')
       + (l.status==='active'? btn(`bookingV2LockAddOpen('${l.id}')`,'+ ที่นั่ง','#0F6E56','#E1F5EE','#B7E2D2') : '')
-      + (l.status==='active' && bookingV2LockUnalloc(l)>0 ? btn(`bookingV2SubOpen('${l.id}')`,'+ ย่อย','#534AB7','#EEEDFE','#CECBF6') : '')
+      + (l.status==='active' && (isBulk ? bookingV2LockSubRoom(l) : bookingV2LockUnalloc(l))>0 ? btn(`bookingV2SubOpen('${l.id}')`,'+ ย่อย','#534AB7','#EEEDFE','#CECBF6') : '')
       + (l.status==='active'? btn(`bookingV2LockReleaseConfirm('${l.id}')`,'คืน','#A32D2D','#FDECEA','#F5C9C4') : '')
       /* §lkEdit · ปุ่มแก้ไข · เคสจริงคือตั้งช่วงวันผิดแล้วไม่มีทางแก้นอกจากลบทิ้งสร้างใหม่ */
       + (l.status==='active'? btn(`bookingV2LockEditOpen('${l.id}')`,'แก้ไข','#2A5EA8','#EAF1FB','#C3D8F2') : '')
@@ -362,14 +362,14 @@ function bookingV2RenderLocks(){
         <td style="${td}"></td>
         ${showHolder?`<td style="${td};padding-left:26px;font-size:12px;font-weight:600">&#8627; ${esc(c.subName||'ย่อย')}</td>`:''}
         <td style="${td};${showHolder?'':'padding-left:32px'};font-size:11.5px;color:var(--ink-soft)">${showHolder?'':`<b style="color:var(--ink);font-size:12px">&#8627; ${esc(c.subName||'ย่อย')}</b> · `}แบ่งจาก ${esc(bookingV2LockHolderName(l))}</td>
-        <td style="${td};font-size:11px;color:var(--ink-faint)">ตามล็อกหลัก</td>
+        <td style="${td};font-size:11px;color:${bookingV2LockKidDated(c)&&isBulk?'#534AB7':'var(--ink-faint)'};${bookingV2LockKidDated(c)&&isBulk?'font-weight:700;font-family:\'DM Mono\',monospace':''}">${bookingV2LockKidDated(c)&&isBulk?esc(c.date):'ตามล็อกหลัก'}</td>
         <td style="${td}"><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center;color:#534AB7">${c.qty||0}</div></td>
         <td style="${td}"><div style="font-family:'DM Mono',monospace;font-size:11.5px"><b style="font-size:13px">${c.used||0}</b>/${c.qty||0}</div>${bar6(cPct)}</td>
         <td style="${td}"><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center">${Math.max(0,(c.qty||0)-(c.used||0))}</div></td>
         <td style="${td}"></td>
         <td style="${td}"><div style="display:flex;gap:5px;justify-content:flex-end">
-          ${c.status==='active'?btn(`bookingV2LockAddOpen('${c.id}')`,'+ ที่นั่ง','#0F6E56','#E1F5EE','#B7E2D2'):''}
-          ${c.status==='active'?btn(`bookingV2LockReleaseConfirm('${c.id}')`,'คืน','#A32D2D','#FDECEA','#F5C9C4'):''}
+          ${bookingV2LockKidLive(c)?btn(`bookingV2LockAddOpen('${c.id}')`,'+ ที่นั่ง','#0F6E56','#E1F5EE','#B7E2D2'):''}
+          ${bookingV2LockKidLive(c)?btn(`bookingV2LockReleaseConfirm('${c.id}')`,'คืน','#A32D2D','#FDECEA','#F5C9C4'):''}
         </div></td>
       </tr>`;
     });

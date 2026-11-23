@@ -1,7 +1,21 @@
-function bookingV2VanGroupSelected(date, routeId, zone, groupId){
+function bookingV2VanGroupSelected(date, routeId, zone, groupId, _selfOk){
   const sel=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
   const keys=sel.filter(key=>{ const b=SB_BOOKINGS.find(x=>x.id===String(key).split('@')[0]); return b && _bkV2InZone(b,date,routeId,zone); });
   if(!keys.length) return;
+  /* §selfAsk · ผู้ใช้ถาม 19 พ.ย. "จะมีเตือน เผื่อ User เผลอกดผิดไหม" · เคส NMH507214: RSVN ติ๊กมาเอง แล้วคนจัดรถจับเข้ากรุ๊ปต่อ ไม่มีอะไรถาม
+     จับบุคกิ้งที่ติ๊ก "มาเอง" เข้ากรุ๊ปรถ → ถามก่อนว่ารถคันนี้ส่งกลับอย่างเดียว หรือเอาติ๊กออกให้รถไปรับ */
+  if(!_selfOk && typeof laAskSheet==='function'){
+    const _sf=[]; keys.forEach(key=>{ const b=SB_BOOKINGS.find(x=>x.id===String(key).split('@')[0]); if(b && b.pickupSelf && _sf.indexOf(b)<0) _sf.push(b); });
+    if(_sf.length){
+      const _nm=_sf.map(b=>'• '+(b.leadPax||'-')+' ('+(b.voucherRef||b.id)+')'+((b.hotelName||'').trim()?(' · '+(b.hotelName||'').trim()):'')).join('\n');
+      laAskSheet({ title:'มีลูกค้าติ๊ก "มาเอง" '+_sf.length+' ราย',
+        body:_nm+'\n\nขาไปลูกค้ามาเองที่ท่าเรือ รถจะไม่ไปรับ และไม่ขึ้นในใบงานรถขาไป\nจับเข้ากรุ๊ปนี้ = ใช้รถคันนี้ส่งกลับอย่างเดียว\n\nถ้าต้องให้รถไปรับที่โรงแรมด้วย เลือก "เอาติ๊กออก"',
+        okLabel:'ส่งกลับอย่างเดียว', color:'#5B289A', noLabel:'เอาติ๊กออก · ให้รถไปรับ', cancelLabel:'ยกเลิก ไม่จับกรุ๊ป',
+        onYes:function(){ bookingV2VanGroupSelected(date, routeId, zone, groupId, true); },
+        onNo:function(){ _sf.forEach(b=>{ b.pickupSelf=false; if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','เอาติ๊ก "ลูกค้ามาเอง" ออกตอนจัดรถ · ให้รถไปรับที่จุดรับ','Edited'); }); bookingV2VanGroupSelected(date, routeId, zone, groupId, true); } });
+      return;
+    }
+  }
   const gid=(groupId==='new')?_bkV2VanNextGroup(date,routeId,zone):(+groupId);
   // current max pickup-seq + the group's existing van/return-van (so rows added to a group that already has a van INHERIT it immediately)
   let _maxSeq=0, _gVan=null, _gRet=null;

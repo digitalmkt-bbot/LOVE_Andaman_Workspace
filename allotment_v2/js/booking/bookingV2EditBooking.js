@@ -29,6 +29,7 @@ function bookingV2EditBooking(bookingId){
   bookingV2RtKeepInit(clone, bk);   /* §rtKeep */
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
+  try{ _bkV2.editSnap = { id:bk.id, bk:JSON.parse(JSON.stringify(bk)) }; }catch(_){ _bkV2.editSnap = null; }   /* §nbDiff · ภาพก่อนแก้ ไว้เทียบว่าแก้อะไรไปบ้าง */
   _bkV2.detailId = null;
   /* §rtKeep · ยังไม่ได้แก้อะไรเลย ยอดก็ไม่เท่าที่บันทึกไว้แล้ว = ราคาในชุดถูกแก้หลังใบนี้บันทึก */
   if(clone._rtKeep){ try{

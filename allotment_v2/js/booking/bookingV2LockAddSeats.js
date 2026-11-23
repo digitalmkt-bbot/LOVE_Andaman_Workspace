@@ -5,7 +5,7 @@ function bookingV2LockAddSeats(lockId, add, note){
   const today = (typeof bookingV2LocalYMD==='function') ? bookingV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   if(l.parentId){                                   // กรุ๊ปย่อย · ต้องมีที่ว่างในล็อกแม่พอ
     const p = SB_SEAT_LOCKS.find(x=>x.id===l.parentId);
-    if(p){ const room = bookingV2LockUnalloc(p); if(n > room){ alert('ล็อกแม่เหลือแบ่งได้แค่ '+room+' ที่'); return false; } }
+    if(p){ const room = bookingV2LockKidDated(l) && bookingV2LockSpansDays(p) ? bookingV2LockSubRoom(p, l.date) : bookingV2LockUnalloc(p); if(n > room){ alert('ล็อกแม่เหลือแบ่งได้แค่ '+room+' ที่'); return false; } }
   }
   l.qty = (l.qty||0) + n;
   if(l.status==='depleted' || l.status==='released') l.status='active';   // มีที่ว่างแล้วกลับมาใช้ได้

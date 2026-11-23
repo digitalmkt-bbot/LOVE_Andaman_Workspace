@@ -9,6 +9,7 @@ function bookingV2LockReleaseRound(lockId, tripDate, by){
   const today = (typeof bookingV2LocalYMD==='function') ? bookingV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   (l.log = l.log||[]).push({ date:today, at:new Date().toISOString(), type:'release-round',
                              tripDate:tripDate, qty:seats, by:(by || ((typeof laBy==='function')?laBy():'')) });
+  bookingV2LockCloseIfReleased(l, by);   /* §lkRelClose */
   sbSeatLocksPersist();
   return seats;
 }
