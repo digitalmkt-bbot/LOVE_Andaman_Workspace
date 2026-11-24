@@ -107,39 +107,13 @@
        '07:30-07:45'          → pickupTime 07:30 · pickupTimeEnd 07:45
        '08:20-'               → pickupTime 08:20 (a window with no end yet)
        'Before 08:30 at pier' → pickupTimeEnd 08:30 · pickupAtPier
-     Also read: '7:30', '07.30', '07:30:00', '08.00 a.m.' (normalised to HH:MM). Same shapes and rules
-     as the server's importer (operation-backend src/tools/legacy-pickup.ts), its typing slips included
-     (2026-11-24): '07.40 a.m..', '04:00 s.m.' (s for a), '07:45+08:00' (+ for -). */
-  var PK_T = '(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*([as]\\.?m\\.{0,2}|p\\.?m\\.{0,2})?';
-  var PK_ONE = new RegExp('^' + PK_T + '$', 'i');
-  var PK_WIN = new RegExp('^' + PK_T + '\\s*[-\u2013+]\\s*(?:' + PK_T + ')?$', 'i');
-  var PK_PIER = new RegExp('^before\\s+' + PK_T + '\\s+at\\s+(?:the\\s+)?pier$', 'i');
-  function pkClock(hour, minute, half){
-    if(hour === undefined || minute === undefined) return undefined;
-    var h = Number(hour), m = Number(minute);
-    if(half){ if(h < 1 || h > 12) return undefined; h = /^p/i.test(half) ? (h % 12) + 12 : h % 12; }
-    if(h > 23 || m > 59) return undefined;
-    return String(h).padStart(2, '0') + ':' + minute;
-  }
+     Also read: '7:30', '07.30', '07:30:00', '08.00 a.m.' (normalised to HH:MM) and legacy's typing slips.
+     §pickupOneParser (2026-11-24): the reader is 00-ops-pickup.js, the one copy laOps.pickupWindow uses
+     too (it was written twice, here and in 00-ops-core.js). Looked up when called; a unit test that loads
+     this file without the core loads 00-ops-pickup.js first. */
   /* {} for no pickup · null when the text is none of legacy's shapes, or a window ending before it starts */
-  function pickupSplit(text){
-    text = text == null ? '' : String(text).trim();
-    if(!text) return {};
-    var m, s, e;
-    if((m = PK_ONE.exec(text))){ s = pkClock(m[1], m[2], m[3]); return s ? { pickupTime: s } : null; }
-    if((m = PK_WIN.exec(text))){
-      s = pkClock(m[1], m[2], m[3]); e = m[4] === undefined ? undefined : pkClock(m[4], m[5], m[6]);
-      if(!s || (m[4] !== undefined && !e) || (e && e <= s)) return null;
-      return e ? { pickupTime: s, pickupTimeEnd: e } : { pickupTime: s };
-    }
-    if((m = PK_PIER.exec(text))){ e = pkClock(m[1], m[2], m[3]); return e ? { pickupTimeEnd: e, pickupAtPier: true } : null; }
-    return null;
-  }
-  function pickupJoin(start, end, atPier){
-    if(atPier && end) return 'Before ' + end + ' at pier';
-    if(start && end) return start + '-' + end;
-    return start || '';
-  }
+  function pickupSplit(text){ return window.laOpsPickup.pickupWindow(text); }
+  function pickupJoin(start, end, atPier){ return window.laOpsPickup.pickupText(start, end, atPier); }
 
   /* ── client booking → request body · `create` for POST, else PATCH ── */
   function toServer(bk, create){
@@ -601,7 +575,11 @@
 
   var busyIds = {};               // booking id → a write is in flight (see upsert)
   function hold(id){ busyIds[id] = (busyIds[id] || 0) + 1; }
-  function free(id){ if(busyIds[id] > 1) busyIds[id]--; else delete busyIds[id]; }
+  /* §detailAfterWrite (2026-11-24) · a write of this booking just finished, so its open detail's copy and History are behind:
+     the render that follows asks again (refreshDetail). The change feed's own refresh is skipped while the write is in flight
+     (busyIds), and it often lands then, before the answer; without this the History card missed the action just made for up
+     to 30 s (the flaky t_ops "detail open → history from the server" check). */
+  function free(id){ if(busyIds[id] > 1) busyIds[id]--; else delete busyIds[id]; if(!busyIds[id]) detailAt[id] = 0; }
   function persist(){ try{ if(typeof bookingV2PersistBookings === 'function') bookingV2PersistBookings(); }catch(_){} }
   function find(id){ return (typeof SB_BOOKINGS !== 'undefined' ? SB_BOOKINGS : []).find(function(b){ return b && b.id === id; }); }
   function render(){ try{ if(typeof bookingV2Render === 'function') bookingV2Render(); }catch(_){} }
@@ -935,9 +913,12 @@
 
   /* ── detail open → fresh copy + server history ── */
   var detailAt = {};
+  var detailAsk = {};
   function refreshDetail(bk){
     detailAt[bk.id] = Date.now();
+    var ask = detailAsk[bk.id] = (detailAsk[bk.id] || 0) + 1;
     Promise.all([ O.get(B(bk)), O.get(B(bk) + '/history') ]).then(function(r){
+      if(ask !== detailAsk[bk.id]) return;                        // §detailAfterWrite · a later ask (after a write) is the one that counts
       if(busyIds[bk.id]){ detailAt[bk.id] = 0; return; }        // a write is in flight · ask again on the next render
       mergeInto(bk, r[0]);
       bk.history = ((r[1] && r[1].history) || []).map(function(h){ return { at: h.at, by: h.by || '—', kind: h.kind, tag: h.tag, text: h.text }; });
@@ -980,7 +961,10 @@
     var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
     if(st.detailId){
       var open = find(st.detailId);
-      if(open && open.opsId === change.entity_id && !busyIds[open.id]) refreshDetail(open);
+      if(open && open.opsId === change.entity_id){
+        if(!busyIds[open.id]) refreshDetail(open);
+        else detailAt[open.id] = 0;      // §detailAfterWrite · a write is in flight: the render after it asks again
+      }
     }
     if(st.tab === 'bytrip' && st.filterDate && Array.isArray(change.route_days)
        && change.route_days.some(function(day){ return day && day.service_date === st.filterDate; })){
@@ -1187,7 +1171,7 @@
 
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
-  O.bookings = { pickupSplit: pickupSplit, pierNoteFrom: pierNoteFrom, turnBackFrom: turnBackFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
+  O.bookings = { pierNoteFrom: pierNoteFrom, turnBackFrom: turnBackFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
                  reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
 
   /* The cancel dialog's reasons (BKV2_CANCEL_REASONS) are the server's list: GET /v1/cancel-categories

@@ -955,17 +955,12 @@
   function opsBlock(b, date){
     return typeof bkOpsFor === 'function' ? bkOpsFor(b, typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date) : (b.ops = b.ops || {});
   }
-  function pickupJoinText(start, end, atPier){
-    if(atPier && end) return 'Before ' + end + ' at pier';
-    if(start && end) return start + '-' + end;
-    return start || '';
-  }
-
   // bookingV2SetPickupFinal (booking/bookingV2SetPickupFinal.js): the final pickup time typed on the By-trip row
+  // §pickupOneParser: read and joined by the one pickup reader (00-ops-pickup.js, through laOps).
   wrap('bookingV2SetPickupFinal', function(orig, bkId, val, date){
     var b = findBooking(bkId); if(!b) return null;
     var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
-    var split = O.bookings && O.bookings.pickupSplit ? O.bookings.pickupSplit(val) : {};
+    var split = O.pickupWindow(val);
     if(split === null){
       /* §pickupTyped (2026-11-24) · By-trip's box calls this oninput, on every key: '0', '07', '07:' are a time half typed,
          not a mistake. Nothing is sent and nothing is said until the text is a pickup; the alert stays for a box that
@@ -979,7 +974,7 @@
     var body = { pickup_time_final: split.pickupTime || null, pickup_time_final_end: split.pickupTimeEnd || null, pickup_final_at_pier: !!split.pickupAtPier };
     return patchTripOps(b, d, body).then(function(res){
       var op = res && res.trip && res.trip.operations;
-      opsBlock(b, d).pickupTimeFinal = op ? pickupJoinText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier) : pickupJoinText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier);
+      opsBlock(b, d).pickupTimeFinal = op ? O.pickupText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier) : O.pickupText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier);
       O.wrote('trip-ops');
       return res;
     }, function(e){

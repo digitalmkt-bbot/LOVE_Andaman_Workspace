@@ -56,9 +56,9 @@
     var vid = r.van_id || '';
     return {
       b: b,
-      t: { routeId: r.route_id || '', date: date, zone: r.zone || '', pax: pax(r.pax), pickupTime: r.pickup_time || '' },
+      t: { routeId: r.route_id || '', date: date, zone: r.zone || '', pax: pax(r.pax), pickupTime: r.pickup_text || '' },   /* §pickupWindowWhole: the old departure's pickup whole, legacy's text (migration 607) */
       O: { vanId: vid, vanReturnId: r.return_van_id || '', vanGroup: +r.group_number || 0, vanSeq: +r.sequence || 0,
-           boatId: r.boat_id || '', pickupTimeFinal: r.pickup_time || '' },
+           boatId: r.boat_id || '', pickupTimeFinal: r.pickup_text || '' },
       booked: 0, expect: 0, ck: null, van: null, _vd: null,
       vanId: vid, vanIds: vid ? [vid] : [], bid: r.boat_id || '',
       strand: 'mv', strandWhy: r.why_text || '', mvTo: r.to_date || '', _mvKey: b.id + '|' + date

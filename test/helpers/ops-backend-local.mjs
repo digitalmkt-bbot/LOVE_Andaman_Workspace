@@ -20,7 +20,9 @@ const { OperationsStore } = await imp('src/domain/operations.ts');
 const { hashPassword } = await imp('src/domain/users.ts');
 const { parseRateTypeCreate } = await imp('src/domain/rate-types.ts');
 
-const today = new Date(); const ymd = (d) => d.toISOString().slice(0, 10);
+// local days, as t_ops.mjs's day(n): toISOString() is the UTC day, one day behind between 00:00 and 07:00 in Bangkok, which put
+// the closed r10 day (and every seeded date) one day early and failed "route calendar · server-closed day is closed" at night
+const today = new Date(); const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const day = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return ymd(d); };
 
 const SEED = {

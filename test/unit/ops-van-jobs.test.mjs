@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const PICKUP = fs.readFileSync('allotment_v2/js/ops/00-ops-pickup.js', 'utf8');   // the one pickup reader the core exposes (§pickupOneParser)
 const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
 const VANS = fs.readFileSync('allotment_v2/js/ops/34-ops-vans.js', 'utf8');
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/35-ops-van-jobs.js', 'utf8');
@@ -88,6 +89,7 @@ function runtime({ enabled = true, handlers = handlersBase(), bks, confirmAnswer
   ctx.bkOpsFor = (b) => (b.ops = b.ops || {});
   ctx.bookingV2EffZone = () => 'PK';
   vm.createContext(ctx);
+  vm.runInContext(PICKUP, ctx);
   vm.runInContext(CORE, ctx);
   vm.runInContext(VANS, ctx);
   vm.runInContext(SOURCE, ctx);

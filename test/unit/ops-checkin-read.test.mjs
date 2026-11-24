@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const PICKUP = fs.readFileSync('allotment_v2/js/ops/00-ops-pickup.js', 'utf8');   // the one pickup reader (§pickupOneParser)
 const B = fs.readFileSync('allotment_v2/js/ops/40-ops-bookings.js', 'utf8');
 const D = fs.readFileSync('allotment_v2/js/ops/36-ops-day-actions.js', 'utf8');
 
@@ -19,6 +20,7 @@ function load() {
   const base = { enabled: () => true, clone: (x) => (x == null ? x : JSON.parse(JSON.stringify(x))) };
   ctx.laOps = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => null), set: (t, k, v) => { t[k] = v; return true; } });
   vm.createContext(ctx);
+  vm.runInContext(PICKUP, ctx);
   vm.runInContext(B, ctx);   // load order in the page: 40 before 36
   vm.runInContext(D, ctx);
   return ctx;
