@@ -260,7 +260,7 @@ test('pickup time: PATCH pickup_time, local follows the answer', async () => {
   rt.requests.length = 0;
   rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, ' 07:15 ');
   await rt.flush(); await rt.flush();
-  assert.deepEqual(plain(rt.requests), [{ method: 'PATCH', path: '/operations/van-groups/vgrp_3', body: { pickup_time: '07:15' } }]);
+  assert.deepEqual(plain(rt.requests), [{ method: 'PATCH', path: '/operations/van-groups/vgrp_3', body: { pickup_time: '07:15', pickup_time_end: null, pickup_at_pier: false } }]);
   assert.equal(byId(rt.bks, 'b2').ops.pickupTimeFinal, '07:15');
 });
 
@@ -637,4 +637,58 @@ test('O.clock reads one typed time as HH:MM and nothing else', () => {
     ['07:30', '07:30', '07:30', '07:30', '08:00', '04:00', '07:40', '00:15', '06:05']);
   assert.equal(c(''), '');
   for (const t of ['07:', '0', '07:15-07:30', 'Before 08:30 at pier', '25:00', '13:00 p.m.', 'เช้า']) assert.equal(c(t), null, t);
+});
+
+// §pickupWindowWhole (operation-backend migration 606): a typed window or pier deadline is sent whole, as legacy keeps the text.
+test('pickup time: a window and a pier deadline go whole as three fields; the members show the group window', async () => {
+  const rt = runtime({ handlers: {
+    'GET /operations/van-groups': { body: { groups: [group()] } },
+    'PATCH /operations/van-groups/vgrp_3': (body) => ({ body: group({ pickup_time: body.pickup_time, pickup_time_end: body.pickup_time_end, pickup_at_pier: body.pickup_at_pier }) }),
+  } });
+  await rt.O.vans.load(D, R);
+  rt.requests.length = 0;
+  for (const key of ['07:15-', '07:15-0', '07:15-07:3', 'Before 08', 'Before 08:30 at']) rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, key);
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests).map((r) => r.body), [{ pickup_time: '07:15', pickup_time_end: null, pickup_at_pier: false }], 'only "07:15-" is whole on the way');
+  rt.requests.length = 0;
+  rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, '07:15-07:30');
+  await rt.flush(); await rt.flush();
+  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, '07:15-07:30', 'the member shows the window whole');
+  rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, 'Before 08:30 at pier');
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests).map((r) => r.body), [
+    { pickup_time: '07:15', pickup_time_end: '07:30', pickup_at_pier: false }, { pickup_time: null, pickup_time_end: '08:30', pickup_at_pier: true }]);
+  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, 'Before 08:30 at pier');
+});
+
+test('O.pickupWindow splits a typed pickup like pickupSplit, and O.pickupText joins it back', () => {
+  const rt = runtime();
+  const w = rt.O.pickupWindow;
+  assert.deepEqual(plain(['07:30', '7:15-7:30', '07.45+08.00', '05.10-05.20 a.m.', 'Before 08:30 at pier', 'before 8.30 at the pier', '08:20-', ''].map(w)), [
+    { pickupTime: '07:30' }, { pickupTime: '07:15', pickupTimeEnd: '07:30' }, { pickupTime: '07:45', pickupTimeEnd: '08:00' }, { pickupTime: '05:10', pickupTimeEnd: '05:20' },
+    { pickupTimeEnd: '08:30', pickupAtPier: true }, { pickupTimeEnd: '08:30', pickupAtPier: true }, { pickupTime: '08:20' }, {}]);
+  for (const t of ['07:30-07:15', '07:30-07:30', '07:15-0', 'Before 08 at pier', 'after lunch', '-07:30']) assert.equal(w(t), null, t);
+  assert.deepEqual([rt.O.pickupText('07:15', '07:30', false), rt.O.pickupText(null, '08:30', true), rt.O.pickupText('07:15', null, false), rt.O.pickupText(null, null, false)],
+    ['07:15-07:30', 'Before 08:30 at pier', '07:15', '']);
+});
+
+test('split part time: a typed window goes whole as pick_time / pick_time_end / pick_at_pier; the row shows the server\'s window', async () => {
+  const alt = (o = {}) => ({ pick_area_id: 'pk-kata', pick_hotel: 'Kata Palm', pick_zone: 'PK', drop_area_id: null, drop_hotel: null, drop_zone: null, pick_time: null, pick_time_end: null, pick_at_pier: false, alt_who: 'Ms K', ...o });
+  const parts = () => [partOf({ idx: 0, ad: 1 }), partOf({ idx: 1, ad: 1, source: 'alt_pickup', group: null, sequence: null, alt: alt() })];
+  const bks = bookings().map((b) => (b.id === 'b1' ? { ...b, ops: { vanSplits: [{ opsIdx: 0, ad: 1, pax: 1, main: true }, { opsIdx: 1, ad: 1, pax: 1, fromAlt: true, pickHotel: 'Kata Palm', pickAreaId: 'pk-kata' }] } } : b));
+  const rt = runtime({ bks, handlers: {
+    'GET /v1/bookings/lg_1': { body: bookingRead(parts()) },
+    'PATCH /operations/trip-ops/trip_1': (body) => ({ body: { trip: { operations: { van_parts: [partOf({ idx: 0, ad: 1 }),
+      partOf({ idx: 1, ad: 1, source: 'alt_pickup', group: null, alt: alt({ pick_time: body.van_parts[1].pick_time, pick_time_end: body.van_parts[1].pick_time_end, pick_at_pier: body.van_parts[1].pick_at_pier }) })] } }, warnings: [] } }),
+  } });
+  rt.ctx.bkSplitOwnPick = (s) => !!(s && s.fromAlt && (s.pickHotel || s.pickAreaId));
+  for (const key of ['06:10-', '06:10-06:2']) rt.ctx.bookingV2SetSplitPickTime('b1', 1, key, D);
+  await rt.flush(); await rt.flush(); await rt.flush();
+  rt.requests.length = 0;
+  rt.ctx.bookingV2SetSplitPickTime('b1', 1, '06:10-06:25', D);
+  await rt.flush(); await rt.flush(); await rt.flush();
+  const patch = plain(rt.requests).find((r) => r.method === 'PATCH');
+  assert.deepEqual([patch.body.van_parts[1].pick_time, patch.body.van_parts[1].pick_time_end, patch.body.van_parts[1].pick_at_pier], ['06:10', '06:25', false]);
+  assert.equal(patch.body.van_parts[0].pick_time, undefined, 'only the part being timed carries a time');
+  assert.equal(byId(rt.bks, 'b1').ops.vanSplits[1].pickTime, '06:10-06:25');
 });
