@@ -274,8 +274,11 @@ test('§vanPickFinal: a group with no time keeps each member\'s own final pickup
   byId(bks, 'b2').ops = { pickupTimeFinal: '06:00' };
   const rt = runtime({ bks, handlers: { 'GET /operations/van-groups': { body: { groups: [g] } } } });
   await rt.O.vans.load(D, R);
-  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, '05:00-05:10');   // a window starting with the member's time stays whole
-  assert.equal(byId(rt.bks, 'b2').ops.pickupTimeFinal, '');              // the server says this part has no final pickup
+  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, '05:00-05:10');
+  assert.equal(byId(rt.bks, 'b2').ops.pickupTimeFinal, '06:00');
+  byId(rt.bks, 'b1').ops.pickupTimeFinal = '';
+  await rt.O.vans.load(D, R);
+  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, '', 'no final on the booking: the trip window shows, as legacy');
 });
 
 test('disband: DELETE, then the members lose the group and their van, keep their pickup time', async () => {

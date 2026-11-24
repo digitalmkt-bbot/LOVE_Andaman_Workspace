@@ -180,15 +180,15 @@
       o.pickupTimeFinal = memberPickup(o.pickupTimeFinal, m, g);
     });
   }
-  /* §vanPickFinal (2026-11-24) · the member's own final pickup, not the group's. A group read lists each member with
-     `pickup_time` (the trip's final pickup); the group's `pickup_time` is only set when the dispatcher typed one for the
-     whole van, so it is null on most imported groups. Taking the group's wiped the booking's own time (Naiyang Beach
-     Hotel 05:00) and the check-in pages fell back to the area's window (04:40-04:50). A final with an end or "at pier"
-     text that starts with the member's time is kept whole (the member carries only the start). */
+  /* §vanPickFinal (2026-11-24) · the final pickup is the booking's own (its read carries pickup_time_final, Naiyang Beach
+     Hotel 05:00). Only a time the dispatcher set for the whole van (the group's pickup_time, which the server also writes as
+     every member's final) replaces it; a window or "at pier" text that starts with that time is kept whole. Taking the
+     group's empty time used to wipe the booking's own final, and the check-in pages fell back to the area window
+     (04:40-04:50); a member's pickup_time is not used, since with no final it is the trip's start (07:15 for 07:15-07:30). */
   function memberPickup(cur, m, g){
-    var t = m && m.pickup_time != null ? m.pickup_time : (g && g.pickup_time) || '';
+    var t = (g && g.pickup_time) || '';
     cur = String(cur || '');
-    if(!t) return /at pier/i.test(cur) ? cur : '';
+    if(!t) return cur;
     return cur.indexOf(t) === 0 ? cur : t;
   }
 
