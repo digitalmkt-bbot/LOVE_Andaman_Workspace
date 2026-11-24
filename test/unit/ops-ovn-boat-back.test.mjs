@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const PICKUP = fs.readFileSync('allotment_v2/js/ops/00-ops-pickup.js', 'utf8');   // the one pickup reader 40-ops-bookings.js calls (§pickupOneParser)
 const SRC = fs.readFileSync(process.env.BOOKINGS_SRC || 'allotment_v2/js/ops/40-ops-bookings.js', 'utf8');
 // legacy's own reader, as shipped (08-app.js), so the shape fromServer builds is checked against what the hold/heal code reads
 const APP = fs.readFileSync('allotment_v2/js/08-app.js', 'utf8');
@@ -20,6 +21,7 @@ function load() {
   ctx.window = ctx;
   ctx.laOps = new Proxy({ enabled: () => true }, { get: (t, k) => (k in t ? t[k] : () => null) });
   vm.createContext(ctx);
+  vm.runInContext(PICKUP, ctx);
   vm.runInContext(SRC, ctx);
   return ctx;
 }

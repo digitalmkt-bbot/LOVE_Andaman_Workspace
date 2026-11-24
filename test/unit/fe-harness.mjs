@@ -33,6 +33,7 @@ export function runtime({ files = [], handlers = {}, globals = {}, pre = '', ena
   };
   vm.createContext(ctx);
   if (pre) vm.runInContext(pre, ctx);
+  vm.runInContext(read('allotment_v2/js/ops/00-ops-pickup.js'), ctx);   // the one pickup reader, loaded before the core as in allotment_v2.html
   vm.runInContext(read('allotment_v2/js/ops/00-ops-core.js'), ctx);
   for (const f of files) vm.runInContext(read('allotment_v2/js/ops/' + f), ctx);
   const settle = async () => { for (let i = 0; i < 60; i++) await new Promise((r) => setImmediate(r)); };

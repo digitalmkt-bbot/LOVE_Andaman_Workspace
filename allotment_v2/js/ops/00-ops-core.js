@@ -307,42 +307,14 @@
   function shift(ds, days){ var d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + days); return ymd(d); }
   function today(){ return ymd(new Date()); }
 
-  /* §pickupClock (2026-11-24, operation-backend todo/pickup-time-audit.md) · one typed time of day as the server's HH:MM:
-     '7:30', '07.30', '07:30:00', '08.00 a.m.', '1:30 p.m.' → '07:30'…'13:30'; '' → '' (clear); null for anything else
-     (a window, a pier deadline, a half-typed '07:', text). Same shapes as the importer's (src/tools/legacy-pickup.ts),
-     so a time the dispatcher types the way legacy let them is saved instead of refused as "must be HH:MM". */
-  var CLOCK_RE = /^(\d{1,2})[:.](\d{2})(?::\d{2})?\s*([as]\.?m\.{0,2}|p\.?m\.{0,2})?$/i;
-  function clock(text){
-    var t = String(text == null ? '' : text).trim(), m;
-    if(!t) return '';
-    if(!(m = CLOCK_RE.exec(t))) return null;
-    var h = Number(m[1]), min = Number(m[2]);
-    if(m[3]){ if(h < 1 || h > 12) return null; h = /^p/i.test(m[3]) ? (h % 12) + 12 : h % 12; }
-    if(h > 23 || min > 59) return null;
-    return String(h).padStart(2, '0') + ':' + m[2];
-  }
-  /* §pickupWindow (2026-11-24, operation-backend migration 606) · a typed pickup as the server's three fields, the same
-     shapes as 40-ops-bookings' pickupSplit and the importer: '07:30' → {pickupTime}; '07:15-07:30' (or '+', '–') →
-     {pickupTime, pickupTimeEnd}; '07:15-' → {pickupTime} (no end yet); 'Before 08:30 at pier' → {pickupTimeEnd,
-     pickupAtPier}; '' → {} (clear); null for anything else, a half-typed '07:15-0' included, or an end not after its start. */
-  function pickupWindow(text){
-    var t = String(text == null ? '' : text).trim(), m, s, e;
-    if(!t) return {};
-    if((s = clock(t))) return { pickupTime: s };
-    if((m = /^before\s+(.+?)\s+at\s+(?:the\s+)?pier$/i.exec(t))){ e = clock(m[1]); return e ? { pickupTimeEnd: e, pickupAtPier: true } : null; }
-    if((m = /^(.+?)\s*[-–+]\s*(.*)$/.exec(t))){
-      s = clock(m[1]); if(!s) return null;
-      if(!m[2]) return { pickupTime: s };
-      e = clock(m[2]); return e && e > s ? { pickupTime: s, pickupTimeEnd: e } : null;
-    }
-    return null;
-  }
-  /* The three fields as legacy's text: '07:30', '07:15-07:30', 'Before 08:30 at pier'; '' with none. */
-  function pickupText(start, end, atPier){
-    if(atPier && end) return 'Before ' + end + ' at pier';
-    if(start && end) return start + '-' + end;
-    return start || '';
-  }
+  /* §pickupOneParser (2026-11-24) · laOps.clock / pickupWindow / pickupText are the one pickup reader in
+     00-ops-pickup.js (loaded just before this file): a typed time as HH:MM, a typed pickup as the server's three
+     fields, the three fields back as legacy's text. Looked up when called, so a test that loads this file alone and
+     never reads a pickup does not need it; one that does loads 00-ops-pickup.js first. */
+  function pickupLib(){ return window.laOpsPickup; }
+  function clock(text){ return pickupLib().clock(text); }
+  function pickupWindow(text){ return pickupLib().pickupWindow(text); }
+  function pickupText(start, end, atPier){ return pickupLib().pickupText(start, end, atPier); }
 
   /* Write listeners invalidate local caches after this tab saves. Change listeners receive
      the durable server event first, then the feed client invokes wrote('remote:…') so

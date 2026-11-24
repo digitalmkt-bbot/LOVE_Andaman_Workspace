@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const PICKUP = fs.readFileSync('allotment_v2/js/ops/00-ops-pickup.js', 'utf8');   // the one pickup reader the core exposes (§pickupOneParser)
 const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
 const SOURCE = fs.readFileSync('allotment_v2/js/ops/34-ops-vans.js', 'utf8');
 const D = '2026-10-02';
@@ -78,6 +79,7 @@ function runtime({ enabled = true, handlers = {}, bks = bookings(), sel = {} } =
   ctx.bkOpsDate = (b, date) => date || ((b.trips || [])[0] || {}).date || '';
   ctx.bookingV2EffZone = (b, t) => (t && t.zone) || (b && b.pickupZone) || '';
   vm.createContext(ctx);
+  vm.runInContext(PICKUP, ctx);
   vm.runInContext(CORE, ctx);
   vm.runInContext(SOURCE, ctx);
   const flush = () => new Promise((r) => setTimeout(r, 0));
