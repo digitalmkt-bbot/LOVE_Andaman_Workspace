@@ -186,7 +186,8 @@
      group's empty time used to wipe the booking's own final, and the check-in pages fell back to the area window
      (04:40-04:50); a member's pickup_time is not used, since with no final it is the trip's start (07:15 for 07:15-07:30). */
   function memberPickup(cur, m, g){
-    var t = (g && g.pickup_time) || '';
+    // §pickupWindowWhole (migration 606): the group's window as legacy's text, '07:15-07:30' or 'Before 08:30 at pier'
+    var t = g ? (O.pickupText ? O.pickupText(g.pickup_time, g.pickup_time_end, g.pickup_at_pier) : (g.pickup_time || '')) : '';
     cur = String(cur || '');
     if(!t) return cur;
     return cur.indexOf(t) === 0 ? cur : t;
@@ -313,17 +314,26 @@
   });
 
   /* §pickupTyped (2026-11-24) · the van's and a split part's time boxes are legacy text inputs wired to oninput, so this
-     runs on every keystroke. Only a whole time is written, as HH:MM ('7:30', '08.00 a.m.' → O.clock); a half-typed
-     '07:' or '0' is not sent (it used to go out and come back "must be HH:MM", one error per key). The server keeps one
-     time here: '07:15-07:30' passes through '07:15', which is saved; the rest of a window is not. */
-  function typedTime(val){ return O.clock ? O.clock(val) : (String(val == null ? '' : val).trim()); }
+     runs on every keystroke. Only a whole pickup is written: a time ('7:30', '08.00 a.m.' → HH:MM), a window
+     ('07:15-07:30') or a pier deadline ('Before 08:30 at pier'), kept whole as legacy keeps the text (§pickupWindowWhole,
+     operation-backend migration 606). A half-typed '07:', '07:15-0' or 'Before 08' is not sent (null). */
+  function typedWindow(val){
+    var w = O.pickupWindow ? O.pickupWindow(val) : null;
+    if(!w) return null;
+    return { start: w.pickupTime || null, end: w.pickupTimeEnd || null, pier: !!w.pickupAtPier };
+  }
+  /* The typed text as the server's three fields, named for the endpoint (pickup_time… on a group, pick_time… on a part). */
+  function windowBody(w, prefix){
+    var b = {}; b[prefix] = w.start; b[prefix + '_end'] = w.end; b[prefix === 'pick_time' ? 'pick_at_pier' : 'pickup_at_pier'] = w.pier;
+    return b;
+  }
   wrap('bookingV2VanGroupSetTime', function(date, routeId, zone, gid, val){
     var num = +gid;
     var sid = serverIdOf(date, routeId, num);
     if(!sid) return refuse('Pickup time not saved', 'The van group is not on operation-backend yet · reload the day');
-    var t = typedTime(val);
-    if(t === null) return null;
-    return O.queue(function(){ return O.patch(BASE + '/' + enc(sid), { pickup_time: t || null }); }).then(function(g){
+    var w = typedWindow(val);
+    if(w === null) return null;
+    return O.queue(function(){ return O.patch(BASE + '/' + enc(sid), windowBody(w, 'pickup_time')); }).then(function(g){
       applyGroup(date, routeId, g); warn(g);
       return g;
     }, function(e){
@@ -343,7 +353,8 @@
     var body = { to_route_id: U.to, reason: String(U.reason || '').trim(),
       charge: Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g, '')) || 0) * 100) / 100) };
     // a typed '7:30' / '08.00 a.m.' goes as HH:MM; anything else goes as typed, and the server's refusal says why
-    if(pickChanged){ var pk = typedTime(pick); body.pickup_time = pk === null ? pick : (pk || null); }
+    // a typed time, window or pier deadline goes as the three fields; anything else goes as typed, and the server's refusal says why
+    if(pickChanged){ var pk = typedWindow(pick); if(pk === null) body.pickup_time = pick; else { var wb = windowBody(pk, 'pickup_time'); Object.keys(wb).forEach(function(k){ body[k] = wb[k]; }); } }
     return O.queue(function(){ return O.post(BASE + '/' + enc(sid) + '/upgrade', body); }).then(function(){
       if(typeof bookingV2UpgVanClose === 'function') bookingV2UpgVanClose();
       return refreshUpgDay(U.date, U.from, U.to);
@@ -612,7 +623,7 @@
       var changes = {};
       var picks = {};
       body.van_parts.forEach(function(x){
-        if(Object.prototype.hasOwnProperty.call(x, 'pick_time')) picks[+x.idx] = x.pick_time;
+        if(Object.prototype.hasOwnProperty.call(x, 'pick_time')) picks[+x.idx] = { pick_time: x.pick_time, pick_time_end: x.pick_time_end == null ? null : x.pick_time_end, pick_at_pier: !!x.pick_at_pier };
         else changes[+x.idx] = x.return_van_id || null;
       });
       return O.get('/v1/bookings/' + enc(b.opsId)).then(function(bk){
@@ -624,7 +635,7 @@
           var row = { idx: idx, ad: p.ad, chd: p.chd, inf: p.inf, foc: p.foc,
             group_id: p.group ? p.group.id : null, sequence: p.sequence == null ? null : p.sequence,
             return_van_id: Object.prototype.hasOwnProperty.call(changes, idx) ? changes[idx] : (p.return_van_id || null) };
-          if(Object.prototype.hasOwnProperty.call(picks, idx)) row.pick_time = picks[idx];   // only the part being timed; the server refuses a part with no pickup of its own
+          if(Object.prototype.hasOwnProperty.call(picks, idx)){ row.pick_time = picks[idx].pick_time; row.pick_time_end = picks[idx].pick_time_end; row.pick_at_pier = picks[idx].pick_at_pier; }   // only the part being timed; the server refuses a part with no pickup of its own
           return row;
         });
         if(Object.keys(changes).concat(Object.keys(picks)).some(function(idx){ return !seen[idx]; })){ var e = new Error('The selected split part no longer exists'); e.code = 'part_missing'; throw e; }
@@ -671,13 +682,15 @@
     var sp = Array.isArray(o.vanSplits) ? o.vanSplits[+idx] : null;
     if(typeof bkSplitOwnPick === 'function' && !bkSplitOwnPick(sp)) return window.bookingV2SetPickupFinal(bkId, val, date);
     if(isClosed(b)) return refuse('Pickup time not saved', 'This booking is ' + b.status);
-    var t = typedTime(val);            // §pickupTyped: oninput, so only a whole time is written
-    if(t === null) return null;
+    var w = typedWindow(val);          // §pickupTyped: oninput, so only a whole pickup is written, a window kept whole
+    if(w === null) return null;
     var pidx = idxOfSplit(sp, idx);
-    return tripPatch(b, d, { van_parts: [{ idx: pidx, pick_time: t || null }] }, function(j){
+    var row = windowBody(w, 'pick_time'); row.idx = pidx;
+    return tripPatch(b, d, { van_parts: [row] }, function(j){
       var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];
       var p = parts.find(function(x){ return +x.idx === pidx; });
-      if(sp) sp.pickTime = p && p.alt && p.alt.pick_time != null ? p.alt.pick_time : t;
+      var a = p && p.alt;
+      if(sp) sp.pickTime = a ? O.pickupText(a.pick_time, a.pick_time_end, a.pick_at_pier) : O.pickupText(w.start, w.end, w.pier);
     }, 'Pickup time not saved');
   });
   wrap('bookingV2SetReturnSameVan', function(bkId, val, date){

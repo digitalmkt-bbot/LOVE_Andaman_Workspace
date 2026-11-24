@@ -350,7 +350,7 @@
         s.fromAlt = true;
         s.pickAreaId = a.pick_area_id || ''; s.pickHotel = a.pick_hotel || ''; s.pickZone = a.pick_zone || '';
         s.dropAreaId = a.drop_area_id || ''; s.dropHotel = a.drop_hotel || ''; s.dropZone = a.drop_zone || '';
-        s.pickTime = a.pick_time || ''; s.altWho = a.alt_who || '';
+        s.pickTime = pickupJoin(a.pick_time, a.pick_time_end, a.pick_at_pier);   /* §pickupWindowWhole: the part's own window, whole */ s.altWho = a.alt_who || '';
       }
       return s;
     });

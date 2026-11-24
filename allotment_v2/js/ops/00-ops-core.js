@@ -321,6 +321,28 @@
     if(h > 23 || min > 59) return null;
     return String(h).padStart(2, '0') + ':' + m[2];
   }
+  /* §pickupWindow (2026-11-24, operation-backend migration 606) · a typed pickup as the server's three fields, the same
+     shapes as 40-ops-bookings' pickupSplit and the importer: '07:30' → {pickupTime}; '07:15-07:30' (or '+', '–') →
+     {pickupTime, pickupTimeEnd}; '07:15-' → {pickupTime} (no end yet); 'Before 08:30 at pier' → {pickupTimeEnd,
+     pickupAtPier}; '' → {} (clear); null for anything else, a half-typed '07:15-0' included, or an end not after its start. */
+  function pickupWindow(text){
+    var t = String(text == null ? '' : text).trim(), m, s, e;
+    if(!t) return {};
+    if((s = clock(t))) return { pickupTime: s };
+    if((m = /^before\s+(.+?)\s+at\s+(?:the\s+)?pier$/i.exec(t))){ e = clock(m[1]); return e ? { pickupTimeEnd: e, pickupAtPier: true } : null; }
+    if((m = /^(.+?)\s*[-–+]\s*(.*)$/.exec(t))){
+      s = clock(m[1]); if(!s) return null;
+      if(!m[2]) return { pickupTime: s };
+      e = clock(m[2]); return e && e > s ? { pickupTime: s, pickupTimeEnd: e } : null;
+    }
+    return null;
+  }
+  /* The three fields as legacy's text: '07:30', '07:15-07:30', 'Before 08:30 at pier'; '' with none. */
+  function pickupText(start, end, atPier){
+    if(atPier && end) return 'Before ' + end + ' at pier';
+    if(start && end) return start + '-' + end;
+    return start || '';
+  }
 
   /* Write listeners invalidate local caches after this tab saves. Change listeners receive
      the durable server event first, then the feed client invokes wrote('remote:…') so
@@ -341,7 +363,7 @@
     queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
-    ymd: ymd, shift: shift, today: today, clock: clock,
+    ymd: ymd, shift: shift, today: today, clock: clock, pickupWindow: pickupWindow, pickupText: pickupText,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }
   };
