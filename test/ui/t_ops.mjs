@@ -280,22 +280,34 @@ await ev((id) => bookingV2RestoreBooking(id), bk.id);
 await settle(1200); await idle();
 sb = await api('/v1/bookings/' + bk.opsId);
 ok('restore · server back to confirmed', sb.status === 'confirmed' && !sb.cancellation, { s: sb.status });
+// The History card must hold everything the server has, the restore included. It was flaky: the detail stayed open since
+// the save in [4], and a refresh came only from the change feed (a 20 s poll, skipped while a write was in flight) or after
+// 30 s, so whether the History had caught up depended on where the poll fell. Now the render after each write of the
+// booking asks again (40-ops-bookings.js §detailAfterWrite), and this waits for that answer rather than a fixed 1.5 s.
+const srvHistory = (await api('/v1/bookings/' + bk.opsId + '/history')).history;
 await ev((id) => { _bkV2.newBooking = null; _bkV2.detailId = id; bookingV2Render(); }, bk.id);
-await settle(1500);
+await waitScreen((a) => { const b = SB_BOOKINGS.find((x) => x.id === a.id); return b && b._historyFromServer && b.history.length === a.n; }, { id: bk.id, n: srvHistory.length }, 8000);
 bk = await ev((id) => SB_BOOKINGS.find((b) => b.id === id), bk.id);
-ok('detail open → history from the server (create … restore)', bk._historyFromServer && bk.history.length >= 5 && bk.history[0].tag === 'Created', bk.history && bk.history.map((h) => h.tag));
+ok('detail open → history from the server (create … restore)', bk._historyFromServer && bk.history.length >= 5 && bk.history.length === srvHistory.length && bk.history[0].tag === 'Created',
+  { screen: bk.history && bk.history.map((h) => h.tag), server: srvHistory.map((h) => h.tag) });
 await ev(() => { _bkV2.detailId = null; bookingV2Render(); });
 
 console.log('\n[6] refused booking → rolled back');
-const before6 = await ev(() => ({ n: SB_BOOKINGS.length, locks: JSON.stringify(SB_SEAT_LOCKS) }));
+// The locks as data: `srv.at` is when the screen last read the server's numbers (30-ops-locks.js), not part of a lock. It was
+// the flaky part of "locks untouched": the change feed polls every 20 s, and a poll landing during this step re-reads the
+// same locks with a new `srv.at` (reproduced by forcing laOps.changes.pull() here: the only difference was srv.at). Every
+// other field is still compared.
+const locksNow = () => ev(() => JSON.stringify(SB_SEAT_LOCKS, (k, v) => (k === 'srv' && v && typeof v === 'object' ? Object.assign({}, v, { at: undefined }) : v)));
+const before6 = { n: await ev(() => SB_BOOKINGS.length), locks: await locksNow() };
 await mk({ lead: 'ZZ TOO BIG', date: D2, pax: 50 });
 await settle(1500); await idle(); await settle(300);
-s = await ev(() => ({ n: SB_BOOKINGS.length, found: !!SB_BOOKINGS.find((b) => b.leadPax === 'ZZ TOO BIG'), form: !!(_bkV2.newBooking && _bkV2.newBooking.leadPax === 'ZZ TOO BIG'), locks: JSON.stringify(SB_SEAT_LOCKS) }));
+s = await ev(() => ({ n: SB_BOOKINGS.length, found: !!SB_BOOKINGS.find((b) => b.leadPax === 'ZZ TOO BIG'), form: !!(_bkV2.newBooking && _bkV2.newBooking.leadPax === 'ZZ TOO BIG') }));
+s.locks = await locksNow();
 const srvBig = (await api('/v1/bookings?q=ZZ%20TOO%20BIG')).bookings;
 ok('server said no (409) and has nothing', srvBig.length === 0, srvBig);
 ok('booking taken back off the screen', !s.found && s.n === before6.n, s);
 ok('form reopened with what was typed', s.form, s);
-ok('locks untouched', s.locks === before6.locks);
+ok('locks untouched', s.locks === before6.locks, { before: before6.locks.slice(0, 300), after: s.locks.slice(0, 300) });
 await ev(() => { _bkV2.newBooking = null; bookingV2Render(); });
 
 console.log('\n[7] lock bigger than the free seats → 409 seats_short → legacy\'s split / all question');
