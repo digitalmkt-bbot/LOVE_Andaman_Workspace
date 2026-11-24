@@ -220,9 +220,48 @@
     if(!enabled()) return L.pjWbOf.apply(this, arguments);
     var v = st.views[jkey(date, bid)], raw = typeof window.pjRaw === 'function' ? window.pjRaw(date, bid) : null;
     if(raw && (String(raw.wbc || '').trim() || String(raw.wb || '').trim())) return { c: String(raw.wbc || ''), t: String(raw.wb || ''), from: '' };
-    var c = v && v.wristband_carried;
+    var c = v ? v.wristband_carried : carryOf(date, bid);
     return c ? { c: c.colour || '', t: c.text || '', from: c.from_date || '' } : { c: '', t: '', from: '' };
   };
+  /* §wbCarryRead (2026-11-24) · screens other than the job sheet (Pier check-in's boat band, pckWb) ask pjWbOf for a
+     boat whose job this page never opened (answered with the day's own colour, else the carried one). Legacy walks the previous 14 days of PIER_JOB; here the job read answers
+     `wristband_carried`, so the first ask reads that boat's job once (kept apart from the job sheet's state: nothing is
+     put into PIER_JOB and nothing can be sent back) and redraws Pier check-in when it lands. The pier in the path is
+     the boat's that day (its route's pier), else the pier office's; the carry itself does not depend on it. */
+  var carry = {};      // date::bid -> { v: wristband_carried|null } (v undefined while the read is out)
+  function pierOfBoat(date, bid){
+    var list = Array.isArray(window.SB_BOOKINGS) ? window.SB_BOOKINGS : [];
+    for(var i = 0; i < list.length; i++){
+      var b = list[i]; if(!b || !Array.isArray(b.trips)) continue;
+      for(var k = 0; k < b.trips.length; k++){
+        var t = b.trips[k]; if(!t || t.date !== date) continue;
+        var o = typeof window.bkOpsRead === 'function' ? (window.bkOpsRead(b, date) || {}) : (b.ops || {});
+        var on = o.boatId === bid || (Array.isArray(o.boatSplits) && o.boatSplits.some(function(s){ return s && s.boatId === bid; }));
+        if(on){ var p = typeof window.pckPierOf === 'function' ? window.pckPierOf(t.routeId) : ''; if(p) return p; }
+      }
+    }
+    return window._poPier || '';
+  }
+  function carryOf(date, bid){
+    if(!date || !bid) return null;
+    var key = jkey(date, bid), c = carry[key];
+    if(c) return c.v || null;
+    if(st.loading && st.loading.slice(-date.length - 1) === '|' + date) return null;   // the job sheet is reading this day: its views answer
+    var pier = pierOfBoat(date, bid);
+    if(!pier) return null;
+    carry[key] = {};
+    O.get(jobPath(pier, date, bid)).then(function(v){
+      // the day's own colour first (the server carries one only when the day has none)
+      var own = v && (String(v.wristband_colour || '').trim() || String(v.wristband_text || '').trim()) ? { colour: v.wristband_colour || '', text: v.wristband_text || '', from_date: '' } : null;
+      carry[key] = { v: own || (v && v.wristband_carried) || null };
+      if(!carry[key].v || typeof window.renderPierCheckin !== 'function') return;
+      var h = typeof window.pckHostEl === 'function' ? window.pckHostEl() : null;
+      if(h && h.offsetParent) try{ window.renderPierCheckin(); }catch(_){}
+    }, function(){ carry[key] = { v: null }; });
+    return null;
+  }
+  O.onWrite(function(kind){ if(String(kind || '').indexOf('pier') >= 0) carry = {}; });
+  O.pierJobCarry = { of: carryOf, reset: function(){ carry = {}; } };   // for tests
   window.pjSubList = function(date, bid){
     if(!enabled()) return L.pjSubList.apply(this, arguments);
     var v = st.views[jkey(date, bid)]; if(!v) return L.pjSubList.apply(this, arguments);
