@@ -108,10 +108,11 @@
        '08:20-'               → pickupTime 08:20 (a window with no end yet)
        'Before 08:30 at pier' → pickupTimeEnd 08:30 · pickupAtPier
      Also read: '7:30', '07.30', '07:30:00', '08.00 a.m.' (normalised to HH:MM). Same shapes and rules
-     as the server's importer (operation-backend src/tools/legacy-pickup.ts). */
-  var PK_T = '(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*(a\\.?m\\.?|p\\.?m\\.?)?';
+     as the server's importer (operation-backend src/tools/legacy-pickup.ts), its typing slips included
+     (2026-11-24): '07.40 a.m..', '04:00 s.m.' (s for a), '07:45+08:00' (+ for -). */
+  var PK_T = '(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*([as]\\.?m\\.{0,2}|p\\.?m\\.{0,2})?';
   var PK_ONE = new RegExp('^' + PK_T + '$', 'i');
-  var PK_WIN = new RegExp('^' + PK_T + '\\s*[-\u2013]\\s*(?:' + PK_T + ')?$', 'i');
+  var PK_WIN = new RegExp('^' + PK_T + '\\s*[-\u2013+]\\s*(?:' + PK_T + ')?$', 'i');
   var PK_PIER = new RegExp('^before\\s+' + PK_T + '\\s+at\\s+(?:the\\s+)?pier$', 'i');
   function pkClock(hour, minute, half){
     if(hour === undefined || minute === undefined) return undefined;

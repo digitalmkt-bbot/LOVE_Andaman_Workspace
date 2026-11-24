@@ -967,6 +967,11 @@
     var d = typeof bkOpsDate === 'function' ? bkOpsDate(b, date) : date;
     var split = O.bookings && O.bookings.pickupSplit ? O.bookings.pickupSplit(val) : {};
     if(split === null){
+      /* §pickupTyped (2026-11-24) · By-trip's box calls this oninput, on every key: '0', '07', '07:' are a time half typed,
+         not a mistake. Nothing is sent and nothing is said until the text is a pickup; the alert stays for a box that
+         saves on change (Booking tab), where the text is final. */
+      var ev = window.event;
+      if(ev && ev.type === 'input') return null;
       alert('Pickup time "' + text(val) + '" is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
       if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
       return null;
