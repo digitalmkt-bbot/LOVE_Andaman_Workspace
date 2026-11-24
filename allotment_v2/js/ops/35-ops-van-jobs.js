@@ -322,11 +322,14 @@
     });
   }
   function stopIdOf(k){ var p = str(k).split('::'); return p[2] || ''; }
+  /* §pickupClock · a stop's time as typed in legacy's form ('05:00 a.m.', '7:30') goes as HH:MM; anything else (a window
+     '05:15-05:30') goes as typed and the server's "time must be HH:MM" is shown, as before. */
+  function stopTime(v){ var t = O.clock ? O.clock(v) : null; return t === null ? (str(v).trim() || null) : (t || null); }
   function stopBody(rec){
     var body = {
       kind: rec.kind === 'cargo' ? 'cargo' : 'staff', label: str(rec.label).trim(),
       pax: rec.kind === 'cargo' ? 0 : (parseInt(rec.pax, 10) || 0),
-      time: str(rec.time).trim() || null, place: str(rec.place).trim(),
+      time: stopTime(rec.time), place: str(rec.place).trim(),
       area_id: str(rec.areaId).trim() || null, area: str(rec.zone).trim() || null,
       leg: (rec.leg === 'ret' || rec.leg === 'both') ? rec.leg : 'out',
       phone: str(rec.phone).trim() || null, note: str(rec.note).trim() || null

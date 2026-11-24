@@ -312,11 +312,17 @@
     return saveVan(d, routeId, zone, 0, [m.member], vanId);
   });
 
+  /* §pickupTyped (2026-11-24) · the van's and a split part's time boxes are legacy text inputs wired to oninput, so this
+     runs on every keystroke. Only a whole time is written, as HH:MM ('7:30', '08.00 a.m.' → O.clock); a half-typed
+     '07:' or '0' is not sent (it used to go out and come back "must be HH:MM", one error per key). The server keeps one
+     time here: '07:15-07:30' passes through '07:15', which is saved; the rest of a window is not. */
+  function typedTime(val){ return O.clock ? O.clock(val) : (String(val == null ? '' : val).trim()); }
   wrap('bookingV2VanGroupSetTime', function(date, routeId, zone, gid, val){
     var num = +gid;
     var sid = serverIdOf(date, routeId, num);
     if(!sid) return refuse('Pickup time not saved', 'The van group is not on operation-backend yet · reload the day');
-    var t = (val || '').trim();
+    var t = typedTime(val);
+    if(t === null) return null;
     return O.queue(function(){ return O.patch(BASE + '/' + enc(sid), { pickup_time: t || null }); }).then(function(g){
       applyGroup(date, routeId, g); warn(g);
       return g;
@@ -336,7 +342,8 @@
     var pick = String(U.pick || '').trim(), pickChanged = (pick !== String(U.pick0 || '').trim());
     var body = { to_route_id: U.to, reason: String(U.reason || '').trim(),
       charge: Math.max(0, Math.round((parseFloat(String(U.charge).replace(/[^0-9.]/g, '')) || 0) * 100) / 100) };
-    if(pickChanged) body.pickup_time = pick || null;
+    // a typed '7:30' / '08.00 a.m.' goes as HH:MM; anything else goes as typed, and the server's refusal says why
+    if(pickChanged){ var pk = typedTime(pick); body.pickup_time = pk === null ? pick : (pk || null); }
     return O.queue(function(){ return O.post(BASE + '/' + enc(sid) + '/upgrade', body); }).then(function(){
       if(typeof bookingV2UpgVanClose === 'function') bookingV2UpgVanClose();
       return refreshUpgDay(U.date, U.from, U.to);
@@ -664,7 +671,8 @@
     var sp = Array.isArray(o.vanSplits) ? o.vanSplits[+idx] : null;
     if(typeof bkSplitOwnPick === 'function' && !bkSplitOwnPick(sp)) return window.bookingV2SetPickupFinal(bkId, val, date);
     if(isClosed(b)) return refuse('Pickup time not saved', 'This booking is ' + b.status);
-    var t = String(val == null ? '' : val).trim();
+    var t = typedTime(val);            // §pickupTyped: oninput, so only a whole time is written
+    if(t === null) return null;
     var pidx = idxOfSplit(sp, idx);
     return tripPatch(b, d, { van_parts: [{ idx: pidx, pick_time: t || null }] }, function(j){
       var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];

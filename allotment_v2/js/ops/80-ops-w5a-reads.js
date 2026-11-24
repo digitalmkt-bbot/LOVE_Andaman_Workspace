@@ -102,7 +102,7 @@
     var out = orig.apply(self, [].slice.call(arguments, 2));
     if(!O.fleetViews || !Array.isArray(dates) || !dates.length) return out;
     var ds = dates.slice().sort(), from = ds[0], to = ds[ds.length - 1];
-    if(O.shift(from, 92) < to) return out;                           // the server reads at most 93 days
+    if(O.shift(from, 399) < to) return out;                          // the server reads at most 400 days (operation-backend fix/daily-log-range)
     var j = O.fleetViews.read('/v1/fleet/daily-log', { from: from, to: to }, fcRedraw);
     if(!j || !Array.isArray(j.days)) return out;
     var res = {}; dates.forEach(function(d){ res[d] = {}; });
