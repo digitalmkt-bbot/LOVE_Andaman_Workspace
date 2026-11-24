@@ -96,3 +96,14 @@ test('with ops off the legacy functions are called', async () => {
   rt.ctx.ebRender(); rt.ctx.ebSet('tab', 'gap');
   assert.deepEqual(calls, ['render', 'set']);
 });
+
+test('§ebVarLbl: the variant table names a variant as legacy (pckVarLbl: "by Catamaran"), the server label only without it', async () => {
+  const m = board(H);
+  m.rt.ctx.pckVarLbl = (f, rid) => (rid === 'r1' ? 'by Speedboat' : rid === 'r4' ? 'by Charter' : f.name);
+  const html = await draw(m, { tab: 'move' });
+  assert.match(html, /<td>by Speedboat</);
+  assert.match(html, /<td>by Charter</);
+  const n = board(H);
+  const plain = await draw(n, { tab: 'move' });
+  assert.match(plain, /<td>Speedboat</);
+});

@@ -533,12 +533,13 @@
   };
 
   /* ════ stock · balances, commands, boat close ═════════════════════════ */
-  var stock = {}, stages = {}, towelsRaw = {}, xfers = {};
+  var stock = {}, stages = {}, towelsRaw = {}, xfers = {}, fleetItems = {};
   function balOf(r){ return { ready: r.ready, onboat: r.on_boat, onship: r.on_ship, dirty: r.dirty, laundry: r.laundry, repair: r.repair, gone: r.gone, inhand: r.inhand }; }
   function itemOf(id){ return arr('PIER_ITEMS').filter(function(i){ return i.id === id; })[0] || null; }
   function loadStock(pier){
     return O.get('/v1/pier-office/' + enc(pier) + '/stock').then(function(j){
       var m = {}; (j.items || []).forEach(function(r){ m[r.id] = balOf(r); }); stock[pier] = m;
+      var fi = {}; (j.items || []).forEach(function(r){ if(r.fleet_item !== undefined) fi[r.id] = r.fleet_item || null; }); fleetItems[pier] = fi;   // §poRpFleetItem
       if(j.transfers) xfers[pier] = { incoming: j.transfers.incoming || [], outgoing: j.transfers.outgoing || [] };   // §poXfer: in transit to / from the pier
       var tw = { today: j.today || '', towels: j.towels || null, queue: {} };   // w5-f: the towel batches (legacy poTowelQ), per pier and per item
       (j.items || []).forEach(function(r){ if(r.queue) tw.queue[r.id] = r.queue; });
@@ -550,6 +551,22 @@
   function putBalances(pier, rows){
     var m = stock[pier] = stock[pier] || {};
     (rows || []).forEach(function(r){ m[r.item_id] = balOf(r); });
+  }
+  /* §poRpFleetItem (2026-11-24) · the repair-parts list (poRepPartBlock) prices a part by the Fleet stock item its name
+     matches (legacy poRpInvOf, over FL_INVENTORY). The Fleet store is not loaded on the pier office page, so every part
+     read "ยังไม่มีราคา · ไม่พบในคลัง Fleet". The stock read answers that match per item as fleet_item {item_id, name,
+     part_no, cost} or null (the server's poRpInvOf); it is returned in legacy's FL_INVENTORY shape. An item the read did
+     not cover (an older server, a new item) is left to legacy's walk. */
+  if(typeof window.poRpInvOf === 'function'){
+    L.poRpInvOf = window.poRpInvOf;
+    window.poRpInvOf = function(it){
+      var m = it && ready() && fleetItems[it.pier];
+      if(m && Object.prototype.hasOwnProperty.call(m, it.id)){
+        var x = m[it.id];
+        return x ? { id: x.item_id, name: x.name || '', partNo: x.part_no || '', cost: x.cost != null ? +x.cost : 0 } : null;
+      }
+      return L.poRpInvOf.apply(this, arguments);
+    };
   }
   window.poBal = function(itemId){
     var it = itemOf(itemId);

@@ -46,27 +46,23 @@
     return '<td style="padding:8px 10px;font-size:11.5px;text-align:'+(i && c && c.right?'right':'left')+';font-variant-numeric:tabular-nums">'+(c && c.html!=null ? c.html : esc(c && c.value!=null ? c.value : c))+'</td>';
   }).join('')+'</tr>'; }
 
+  /* §acctDashLegacy (2026-11-24) · the money dashboard drawn with legacy's markup (acctDashboardHtml): three cards, aging bars,
+     a six-month collection bar chart labelled by month number, and the top five agents as rows that open their statement.
+     Every figure is the server's (GET /v1/reports/accounting aging, collections, top_outstanding); the layout is legacy's. */
   function accountingHtml(d){
     d=d||{};
-    var a=d.aging||{}, refunds=d.refunds_to_pay||{};
-    var kpis='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
-      +card('Outstanding',money(d.outstanding),'#A05A1A')
-      +card('Paid this month',money(d.paid_this_month),'#0F6E56')
-      +card('Credit exposure',money(d.credit_exposure),'#185FA5')
-      +card('Overdue invoices',String(n(d.overdue_invoices)),n(d.overdue_invoices)>0?'#A32D2D':'var(--fd-ink)')
-      +card('Deposits held',money(d.deposits_held),'#5B289A')
-      +card('Extras · cash · mo',money(d.extras_this_month),'#0F6E56')+'</div>';
-    var ageMax=Math.max(1,n(a.not_due),n(a.days_1_30),n(a.days_31_60),n(a.days_60_plus));
-    var age=[['Not due',a.not_due,'#1D9E75'],['1–30d',a.days_1_30,'#D4A017'],['31–60d',a.days_31_60,'#D87A30'],['60d+',a.days_60_plus,'#A32D2D']].map(function(x){
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:64px;font-size:10.5px;color:var(--fd-ink-soft)">'+x[0]+'</span><div style="flex:1;height:13px;background:#f1efe9;border-radius:4px;overflow:hidden"><div style="width:'+Math.round(n(x[1])/ageMax*100)+'%;height:100%;background:'+x[2]+'"></div></div><span style="width:74px;text-align:right;font-size:10.5px">'+money(x[1])+'</span></div>';
-    }).join('');
-    var collections=(d.collections||[]).map(function(x){ return row([{value:x.month},{value:money(x.amount),right:true}]); }).join('');
-    var top=(d.top_outstanding||[]).map(function(x){ return row([{value:x.name||x.agent_id||'—'},{value:money(x.balance),right:true}]); }).join('');
-    var refundsHtml='<div style="margin-top:12px;font-size:11px;color:var(--fd-ink-soft)">Refunds to pay: <b>'+String(n(refunds.count))+'</b> · '+money(refunds.amount)+'</div>';
+    var a=d.aging||{}, fmt=money;
+    var agMax=Math.max(1,n(a.not_due),n(a.days_1_30),n(a.days_31_60),n(a.days_60_plus));
+    var agRow=function(lab,val,col){ return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:64px;font-size:10.5px;color:var(--fd-ink-soft)">'+lab+'</span><div style="flex:1;height:13px;background:#f1efe9;border-radius:4px;overflow:hidden"><div style="width:'+Math.round(n(val)/agMax*100)+'%;height:100%;background:'+col+'"></div></div><span style="width:74px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums">'+fmt(val)+'</span></div>'; };
+    var col=(d.collections||[]).slice(-6), cMax=Math.max(1,Math.max.apply(null,col.map(function(x){ return n(x.amount); }).concat([1])));
+    var bars=col.map(function(x){ var v=n(x.amount); return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;display:flex;align-items:flex-end;justify-content:center;height:68px"><div title="'+fmt(v)+'" style="width:62%;background:#1683C7;border-radius:3px 3px 0 0;height:'+Math.max(2,Math.round(v/cMax*68))+'px"></div></div><span style="font-size:8.5px;color:var(--fd-ink-soft)">'+esc(text(x.month).slice(5))+'</span></div>'; }).join('');
+    var top=(d.top_outstanding||[]).slice(0,5), tMax=Math.max(1,Math.max.apply(null,top.map(function(t){ return n(t.balance); }).concat([1])));
+    var topRows=top.length?top.map(function(t){ var id=text(t.agent_id); return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer" onclick="acctStatementOpen(\''+esc(id).replace(/'/g,'&#39;')+'\')"><span style="width:96px;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.name||id)+'</span><div style="flex:1;height:12px;background:#f1efe9;border-radius:4px;overflow:hidden"><div style="width:'+Math.round(n(t.balance)/tMax*100)+'%;height:100%;background:#A05A1A"></div></div><span style="width:70px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums">'+fmt(t.balance)+'</span></div>'; }).join(''):'<div style="font-size:11px;color:var(--fd-ink-soft);font-style:italic">ไม่มียอดค้าง</div>';
+    var card=function(title,inner){ return '<div style="flex:1;min-width:250px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px 16px"><div style="font-size:12px;font-weight:600;margin-bottom:11px">'+title+'</div>'+inner+'</div>'; };
     return '<div data-ops-money-dashboard="1" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
-      +'<div style="flex:1;min-width:250px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px 16px"><div style="font-size:12px;font-weight:600;margin-bottom:11px">Receivables aging · server snapshot</div>'+age+'</div>'
-      +'<div style="flex:1;min-width:250px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px 16px"><div style="font-size:12px;font-weight:600;margin-bottom:11px">Collection · last 6 mo</div>'+table([{label:'Month'},{label:'Amount',right:true}],collections,'No collections')+'</div>'
-      +'<div style="flex:1;min-width:250px;background:#fff;border:0.5px solid var(--fd-line-soft);border-radius:12px;padding:14px 16px"><div style="font-size:12px;font-weight:600;margin-bottom:11px">Top outstanding · agents</div>'+table([{label:'Agent'},{label:'Balance',right:true}],top,'No outstanding balance')+refundsHtml+'</div>'
+      +card('Receivables aging', agRow('Not due',a.not_due,'#1D9E75')+agRow('1–30d',a.days_1_30,'#D4A017')+agRow('31–60d',a.days_31_60,'#D87A30')+agRow('60d+',a.days_60_plus,'#A32D2D'))
+      +card('Collection · last 6 mo', '<div style="display:flex;gap:5px;align-items:flex-end">'+bars+'</div>')
+      +card('Top outstanding · agents', topRows)
       +'</div>';
   }
   function renderAccountingFromServer(){

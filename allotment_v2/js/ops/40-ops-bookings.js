@@ -322,6 +322,15 @@
     if(O.applyCheckins) O.applyCheckins(r, x);
     var vs = vanSplitsFrom(r.vanParts);
     if(vs) r.vanSplits = vs;
+    /* §opsVanMain (2026-11-24) · the main part's van group is legacy's ops.vanGroup / vanId / vanSeq / vanReturnId. Only
+       34-ops-vans' day read (a screen that opens the van groups of one route and day) used to set them, so Re-confirm and
+       the check-in pages showed no van and no plate ("—" where legacy shows 31-6675) until that screen was opened. The
+       booking read carries the same group on its van_parts; the day read, when it comes, writes the same values. */
+    var main = (r.vanParts || []).filter(function(p){ return p && (+p.idx || 0) === 0; })[0];
+    if(main && main.group){
+      r.vanGroup = +main.group.number || 0; r.vanId = main.group.van_id || null; r.vanSeq = +main.sequence || 0;
+      r.vanReturnId = main.return_van_id || main.group.return_van_id || null;
+    }
     return r;
   }
   /* §opsVanSplits (Q40) · the server's van_parts → legacy's ops.vanSplits, only when the trip is split (more than one part,

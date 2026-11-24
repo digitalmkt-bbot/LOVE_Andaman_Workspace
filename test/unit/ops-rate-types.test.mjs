@@ -96,3 +96,16 @@ test('deleting a rate type agents use says how many it unbinds, and clears them 
   await ctx.rtDeleteRT('rt-b');
   assert.equal(asked[1], 'Delete this rate type?', 'an unused one gets the plain question');
 });
+
+test('§rtLegacyOrder: the rate types are kept in id order (legacy ORDER BY id), not the server\'s A–Z by name', async () => {
+  const ctx = {
+    console, Number, JSON, Date, Promise, SB_RATE_TYPES: [],
+    laOps: { enabled: () => true, get: async () => ({ rate_types: [
+      { id: 'rt003', code: 'B', name: 'Alpha', routes: [] }, { id: 'rt001', code: 'RT-RU-STD', name: 'Russian', routes: [] }, { id: 'rt002', code: 'A', name: 'Beta', routes: [] },
+    ] }), queue: (fn) => fn(), wrote: () => {}, fail: (t, e) => { throw e; } },
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(SOURCE, ctx);
+  await ctx.laOps.rateTypes.ready();
+  assert.deepEqual(ctx.SB_RATE_TYPES.map((r) => r.id), ['rt001', 'rt002', 'rt003']);
+});

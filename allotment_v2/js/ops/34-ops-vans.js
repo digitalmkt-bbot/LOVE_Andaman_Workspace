@@ -177,8 +177,19 @@
       o.vanId = g.van_id || null;
       o.vanSeq = +m.sequence || 0;
       o.vanReturnId = m.return_van_id || g.return_van_id || null;   // the part's own return van, else the group's (PATCH van-groups return_van_id sets the group's)
-      o.pickupTimeFinal = g.pickup_time || '';
+      o.pickupTimeFinal = memberPickup(o.pickupTimeFinal, m, g);
     });
+  }
+  /* §vanPickFinal (2026-11-24) · the final pickup is the booking's own (its read carries pickup_time_final, Naiyang Beach
+     Hotel 05:00). Only a time the dispatcher set for the whole van (the group's pickup_time, which the server also writes as
+     every member's final) replaces it; a window or "at pier" text that starts with that time is kept whole. Taking the
+     group's empty time used to wipe the booking's own final, and the check-in pages fell back to the area window
+     (04:40-04:50); a member's pickup_time is not used, since with no final it is the trip's start (07:15 for 07:15-07:30). */
+  function memberPickup(cur, m, g){
+    var t = (g && g.pickup_time) || '';
+    cur = String(cur || '');
+    if(!t) return cur;
+    return cur.indexOf(t) === 0 ? cur : t;
   }
 
   /* GET the day's groups and replace the route's van fields with them · no write */
@@ -189,7 +200,7 @@
       Object.keys(serverIds).forEach(function(k){ if(k.indexOf(prefix) === 0) delete serverIds[k]; });
       allBookings().forEach(function(b){
         if(!b || !routeOn(b, date, routeId)) return;
-        clearVan(bkOpsRead(b, date) || {}, false);
+        clearVan(bkOpsRead(b, date) || {}, true);    // §vanPickFinal · the final pickup is the booking's (its read carries it), not the group's: a booking in no group keeps it
         var sps = splitsOf(b, date);   // the parts: group, van and order come back with the groups; a part's own return van stays as the booking read gave it
         if(sps) sps.forEach(function(s){ if(s){ var rv = s.vanReturnId; clearVan(s, true); s.vanReturnId = rv || null; } });
       });

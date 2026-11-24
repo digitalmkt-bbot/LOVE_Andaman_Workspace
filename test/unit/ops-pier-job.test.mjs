@@ -281,3 +281,32 @@ test('typed names: the usual team is PUT with typed names beside the staff ids',
     captain_id: null, captain_name: 'Typed Captain', assistant_id: 'ps_a', assistant_name: null, crew_ids: ['ps_c1', null], crew_names: [null, 'Typed Crew'],
   }]]);
 });
+
+test('§wbCarryRead: Pier check-in asks pjWbOf for a boat the job sheet never opened: one job read, the carried colour, then a redraw', async () => {
+  const rt = runtime();
+  let draws = 0;
+  rt.w.renderPierCheckin = () => { draws++; };
+  rt.w.pckHostEl = () => ({ offsetParent: {} });
+  rt.w.pckPierOf = (rid) => (rid === 'r1' ? PIER : '');
+  rt.w.SB_BOOKINGS = [{ id: 'x', trips: [{ date: DATE, routeId: 'r1' }], ops: { boatId: 'b1' } }];
+  assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '', t: '', from: '' }, 'nothing until the read lands');
+  await rt.flush();
+  assert.deepEqual(rt.calls.map((c) => c.path), [JOB('b1')]);
+  assert.equal(draws, 1);
+  assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '#7C3AED', t: 'purple', from: '2026-10-10' });
+  await rt.flush();
+  assert.equal(rt.calls.length, 1, 'read once');
+  assert.deepEqual(rt.w.PIER_JOB, {}, 'the job sheet state is untouched');
+});
+
+test('§wbCarryRead: the day\'s own colour wins over the carried one; a boat on no route of the day and no pier office is not read', async () => {
+  const rt = runtime();
+  rt.state.b1 = view({ wristband_colour: '#000000', wristband_text: 'ดำ', wristband_carried: null });
+  rt.w.pckPierOf = () => PIER;
+  rt.w.SB_BOOKINGS = [{ id: 'x', trips: [{ date: DATE, routeId: 'r1' }], ops: { boatSplits: [{ boatId: 'b1' }] } }];
+  rt.w.pjWbOf(DATE, 'b1'); await rt.flush();
+  assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '#000000', t: 'ดำ', from: '' });
+  rt.w._poPier = '';
+  rt.w.pjWbOf(DATE, 'b9'); await rt.flush();
+  assert.equal(rt.calls.filter((c) => c.path.includes('/b9/')).length, 0);
+});

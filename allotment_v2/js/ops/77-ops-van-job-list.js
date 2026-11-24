@@ -3,13 +3,14 @@
    ────────────────────────────────────────────────────────────────────────
    Reads:  GET /operations/van-jobs?date=   (the day read 35-ops-van-jobs.js keeps: jobs, unassigned, return_unarranged,
            self_arrive, struck)
-           GET /operations/van-jobs/{date}/{key}  (a sheet, only for the expanded edit panel and the return badge,
+           GET /operations/van-jobs/{date}/{key}  (a sheet, only for the expanded edit panel,
            through ops/35-ops-van-job-sheet.js)
    Writes: none.
 
    renderVanJobs (08-app.js) stays legacy's markup. In ops mode three of its numbers no longer come from a walk over the
    bookings in the browser: it asks window.opsVanJobsList(date) (the small marked edit in 08-app.js) and takes
-     agg / aggRet   the jobs: van, programme, pax, bookings, zones, pickups, round, struck count   <- jobs[]
+     agg / aggRet   the jobs: van, programme, pax, bookings, zones, pickups, round, struck count,
+                    the "↩ ขากลับ N" badge (ret_extra_pax / ret_extra_bookings)                <- jobs[]
      unTot, unByRoute  the red hero number and its programme line                                  <- unassigned
      unRet, unRetList  the amber hero number and the names                                         <- return_unarranged
      selfWarn          the purple self-arrive warning                                              <- self_arrive
@@ -32,10 +33,6 @@
     var base = job.van_id + '~' + (job.route_id || '');
     return (job.round && job.round.of > 1) ? base + '~' + job.group_number : base;
   }
-  function sheetOf(date, job){
-    var c = V.sheet && V.sheet.cache && V.sheet.cache[date + '::' + job.key];
-    return (c && c.s) || null;
-  }
 
   window.opsVanJobsList = function(date){
     if(!O.enabled()) return null;
@@ -54,13 +51,9 @@
       if(job.has_out || !job.has_ret){
         /* job.pax = the outbound load: customers plus guides riding along (the server's over_capacity compares it with the seats) */
         agg[k] = base(job.pax != null ? job.pax : (job.out_pax || 0), job.bookings || 0, job.struck || 0);
-        /* the "↩ ขากลับ N" badge counts people who go back on this van but went out on another: the server's job has no
-           count for them (MISSING-SERVER-FIELD ret_extra_*), so it is read off the sheet when the sheet is in hand */
-        var S = sheetOf(date, job), rows = S && S.ret && S.ret.rows;
-        if(rows){
-          var ex = rows.filter(function(r){ return r.kind === 'booking' && r.extra && !r.struck; });
-          if(ex.length) aggRet[k] = base(ex.reduce(function(s, r){ return s + (r.pax || 0); }, 0), ex.length, 0);
-        }
+        /* the "↩ ขากลับ N" badge (legacy aggRet): the people who go back on this van but went out on another. The server
+           counts them on the job: ret_extra_pax heads in ret_extra_bookings bookings (struck rows left out) */
+        if(+job.ret_extra_pax > 0) aggRet[k] = base(+job.ret_extra_pax, +job.ret_extra_bookings || 0, 0);
       } else {
         aggRet[k] = base(job.ret_pax || 0, job.bookings || 0, job.struck || 0);
       }

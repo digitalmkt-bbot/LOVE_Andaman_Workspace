@@ -734,3 +734,17 @@ test('transfers: cancel asks, then sends the day on screen; only a transfer this
   assert.deepEqual(refused.fails.map((f) => f.code), ['transfer_closed']);
   assert.ok(refused.w.poXferPendOut(PIER).some((o) => o.id === 'px_2'), 'still listed: nothing changed');
 });
+test('§poRpFleetItem: poRpInvOf answers the stock read\'s fleet_item (legacy FL_INVENTORY shape); null stays null; an item the read did not cover is legacy\'s', async () => {
+  const rt = runtime({
+    answers: { 'GET /v1/pier-office/panwa/stock': { pier: 'panwa', items: [
+      { id: 'pi_a', ...BAL(), fleet_item: { item_id: 'inv_1', name: 'mask strap retainer', part_no: 'DBZ01', cost: 8.46 } },
+      { id: 'pi_t', ...BAL(), fleet_item: null },
+    ] } },
+    over: () => ({ poRpInvOf: () => ({ legacy: 1 }) }),
+  });
+  await boot(rt);
+  rt.w.renderPierOffice(); await rt.flush();
+  assert.deepEqual(J(rt.w.poRpInvOf({ id: 'pi_a', pier: PIER })), { id: 'inv_1', name: 'mask strap retainer', partNo: 'DBZ01', cost: 8.46 });
+  assert.equal(rt.w.poRpInvOf({ id: 'pi_t', pier: PIER }), null);
+  assert.deepEqual(J(rt.w.poRpInvOf({ id: 'pi_new', pier: PIER })), { legacy: 1 });
+});
