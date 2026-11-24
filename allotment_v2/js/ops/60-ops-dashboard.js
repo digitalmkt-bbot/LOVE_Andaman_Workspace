@@ -167,7 +167,8 @@
           out = out.slice(0, f) + '<div class="dv-calft">'
             + '<span class="t">' + tr('วันนี้') + (has ? ' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">' + t.booked + ' pax</span>' : '') + '</span>'
             + '<span class="r"><b>' + t.free + '</b> / ' + t.cap + ' ' + tr('ที่นั่งว่าง') + '</span>'
-            + '<button onclick="bookingV2OpenFiltered(\'\',\'' + today + '\')">' + tr('เปิดวันนี้') + '</button>'
+            /* legacy's button: today's programme (dashProgOpen), not the booking list (UI parity 2026-11-23, F3) */
+            + '<button onclick="dashProgOpen(TODAY_STR)">' + tr('ดูโปรแกรมวันนี้') + ' &rsaquo;</button>'
             + '</div></div>';
         }
         return out;

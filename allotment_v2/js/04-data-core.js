@@ -3804,7 +3804,16 @@ function _renderDashRaw(){
         const n=+r.booked_pax||0, c=+r.capacity||0, ch=+r.charter_pax||0;
         routeBooked[r.route_id]=n; booked+=n; capacity+=c; charter+=ch;
       });
-      return {ds,booked,capacity,routeBooked,charter,charterBoats,wx:(_opsDash.alerts||[]).filter(a=>a.code==='closed_route').length};
+      /* §dashDayBucket (2026-11-23) · the day answer carries no per-boat charter split and no weather count, but the
+         rolling 30-day series that comes with it has both for this day (server: legacy §dashChBoat, weather_routes).
+         Without them the plot drew one "เหมาลำ Charter" bar where legacy draws "เหมา · Verona", and the weather chip
+         counted closed_route alerts (a route closed for any reason) where legacy counts weather cancellations
+         (UI parity run 2026-11-23, finding F3). No series yet = the old fallbacks. */
+      const _rs=(window.laOps&&laOps.dashboard&&laOps.dashboard.get)?laOps.dashboard.get(ds,'rolling_month'):null;
+      const _bk=_rs&&Array.isArray(_rs.series)?_rs.series.find(x=>x&&x.bucket===ds):null;
+      if(_bk&&Array.isArray(_bk.charter_boats)) _bk.charter_boats.forEach(x=>{ const n=+x.pax||0; if(n>0) charterBoats[x.boat_id||'']=(charterBoats[x.boat_id||'']||0)+n; });
+      const wx=_bk&&_bk.weather_routes!=null ? (+_bk.weather_routes||0) : (_opsDash.alerts||[]).filter(a=>a.code==='closed_route').length;
+      return {ds,booked,capacity,routeBooked,charter,charterBoats,wx};
     }
     const dOps=TRIPS[ds]||{};
     let booked=0, capacity=0, charter=0;
@@ -4403,8 +4412,10 @@ function _renderDashRaw(){
   const rightCol=`<div class="dv-col">${ai}${_dashLiveB2BHtml(dx,F)}</div>`;
   const midCol=`<div class="dv-col">${_dashSeatCalHtml(dx,F)}${proj}</div>`;
 
+  /* ready = no banner, as legacy (same screens · UI parity 2026-11-23, F3): the green "Server dashboard · HH:MM" strip
+     was new. Loading and failed keep theirs: they say the numbers on screen are not the server's yet. */
   const _opsDashNote=!_opsDashApi?'':_opsDashState==='ready'
-    ? `<div style="padding:6px 16px;background:#E8F5ED;color:#0C6B47;font-size:11px;font-weight:700">Server dashboard · ${new Date(_opsDash.generated_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`
+    ? ''
     : _opsDashState==='failed'
       ? '<div style="padding:6px 16px;background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:700">Dashboard server data unavailable · local values may be stale</div>'
       : '<div style="padding:6px 16px;background:#FFF4D6;color:#8A5A00;font-size:11px;font-weight:700">Loading current Dashboard data from server…</div>';
