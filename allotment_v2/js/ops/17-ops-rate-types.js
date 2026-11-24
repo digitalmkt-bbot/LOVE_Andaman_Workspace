@@ -262,6 +262,12 @@
       if(active && active.dataset.view === 'rate-types' && typeof window.renderRateTypes === 'function') window.renderRateTypes();
     }catch(_){ }
   }
+  /* §rtLegacyOrder (2026-11-24) · legacy's server loads sb_rate_types ORDER BY id, so SB_RATE_TYPES is in id order and the
+     page opens on SB_RATE_TYPES[0] (rt001 RT-RU-STD, a Thai + foreigner rate). The server lists A–Z by name, which opened
+     the page on another rate (OTATRI, foreigner only: no THAI column). Same order as legacy: by id. */
+  function legacyOrder(rows){
+    return (rows || []).slice().sort(function(a, b){ var x = String((a && a.id) || ''), y = String((b && b.id) || ''); return x < y ? -1 : x > y ? 1 : 0; });
+  }
   function load(){
     if(!O.enabled()) return Promise.resolve(false);
     if(state.loading) return state.loading;
@@ -272,7 +278,7 @@
       if(rows.every(function(r){ return Array.isArray(r.routes); })) return rows;
       return Promise.all(rows.map(function(summary){ return O.get('/v1/rate-types/' + encodeURIComponent(summary.id)); }));
     }).then(function(rows){
-      replaceAll(rows); state.loaded = true; state.failed = false; redraw(); return true;
+      replaceAll(legacyOrder(rows)); state.loaded = true; state.failed = false; redraw(); return true;
     }).catch(function(error){
       state.loaded = false; state.failed = true;
       if(typeof SB_RATE_TYPES !== 'undefined') SB_RATE_TYPES.length = 0;
