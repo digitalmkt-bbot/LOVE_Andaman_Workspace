@@ -65,3 +65,6 @@ _to_delete/
 *.png
 !allotment_v2/assets/**/*.png
 .build/
+
+# UI parity run output (test/uiparity/run.mjs) · the report worth keeping is copied to docs/ui-parity/
+test/uiparity/out/
