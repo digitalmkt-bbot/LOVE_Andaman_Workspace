@@ -458,6 +458,13 @@
     var groups = Promise.resolve(books).catch(function(){}).then(function(){
       return (O.vans && O.vans.loadDay) ? O.vans.loadDay(date) : null;
     });
+    /* §vjFirstPaint (2026-11-23) · the job list is the server's own day read and needs nothing else, so it is asked
+       first and drawn the moment it lands. Before, it waited for the vans' 63-day window (/operations/van-days, ~11 s
+       on the parity copy), the Thai names and one van-group read per route: for that whole time the screen drew
+       legacy's walk over bookings that have no van yet, "1 job · 436 pax ยังไม่จัด" against the server's 57 jobs
+       (UI parity run 2026-11-23, docs/ui-parity/findings-2026-11-23.md F1). The later stage reuses this answer. */
+    var jobs = loadJobs(date).then(function(j){ seedVans(j); redraw(); return j; })
+      .catch(function(e){ console.warn('[ops] van jobs did not load · ' + (e && e.message)); });
     dayLoading[date] = Promise.all([
       loadVans(date).catch(function(e){ console.warn('[ops] vans did not load · ' + (e && e.message)); }),
       loadNames().catch(function(e){ console.warn('[ops] Thai pickup names did not load · ' + (e && e.message)); }),
@@ -465,11 +472,35 @@
     ]).then(function(){
       return Promise.all([
         loadStops(date).catch(function(e){ console.warn('[ops] van stops did not load · ' + (e && e.message)); }),
-        loadJobs(date).catch(function(e){ console.warn('[ops] van jobs did not load · ' + (e && e.message)); }),
+        jobs,
         loadArrivals(date).catch(function(e){ console.warn('[ops] van arrivals did not load · ' + (e && e.message)); })
       ]);
     }).then(function(){ syncSreq(); redraw(); });
     return dayLoading[date];
+  }
+  /* until the vans' window lands, a job's van is known only by the job (name, plate, seats, colour, owner, the day's
+     driver): SB_VEHICLES then holds legacy's 6 demo vans, which drew as empty cards ("Minibus 1", "Partner Van A").
+     Replace them with the jobs' vans so the cards read "VAN1 · พี่เอก · 066-… · 7/13", not "veh11 — — 7/?".
+     applyVans replaces the whole list (and the drivers) when the window lands, so nothing seeded here outlives it. */
+  var seeded = false;
+  function seedVans(j){
+    if(vansEver) return;
+    var list = store('SB_VEHICLES'), jobs = (j && j.jobs) || [];
+    if(!list || !jobs.length) return;
+    if(!seeded){ list.length = 0; seeded = true; }      // the demo vans go: the server's vans are the only ones in ops mode
+    var have = {}; list.forEach(function(v){ if(v && v.id) have[v.id] = 1; });
+    var drivers = store('VANJOB_DRIVER');
+    jobs.forEach(function(job){
+      if(!job || !job.van_id) return;
+      var d = job.driver || {}, own = !d.override;    // not overridden for the day = the van's usual driver
+      if(!have[job.van_id] && job.van){
+        have[job.van_id] = 1;
+        list.push(vehicleOf(Object.assign({ id: job.van_id }, job.van, own ? { driver: d.name || '', driver_phone: d.phone || '' } : {})));
+      }
+      /* only a day override goes to VANJOB_DRIVER: that is where legacy draws its 📌 from (applyVans does the same) */
+      var k = (job.service_date || j.date) + '::' + job.van_id;
+      if(drivers && !own && !drivers[k]) drivers[k] = { driver: d.name || '', phone: d.phone || '', plate: d.plate_override ? (d.plate || '') : '' };
+    });
   }
 
   wrap('renderVanJobs', function(){
