@@ -40,6 +40,9 @@
   function dateLblEn(ds){ var t0 = X.today(); if(ds === t0) return 'Today'; if(ds === X.addDays(t0, 1)) return 'Tomorrow'; var d = X.dt(ds); return d.getDate() + ' ' + MON_EN[d.getMonth()]; }
   function nameOf(o){ return o.family + (o.variant ? ' ' + o.variant : ''); }
 
+  /* §ebVarLbl (2026-11-24) · the variant's name as legacy writes it (mvVarLbl -> pckVarLbl: the route name less the family
+     name, "by Catamaran"); the server's label also drops a leading "by" ("Catamaran"). Its own label when legacy's helper is absent. */
+  function varLbl(A, o){ try{ if(typeof window.pckVarLbl === 'function') return window.pckVarLbl({ id: A.family_id, name: A.name }, o.route_id); }catch(_){} return o.label || ''; }
   function mvVarTable(V, totals){
     var K = ['ad', 'chd', 'inf', 'foc'], sum = function(P){ return P.ad + P.chd + P.inf + P.foc; };
     if(!V.length) return '';
@@ -49,13 +52,13 @@
       + '<td class="sum">' + num(sum(P)) + '</td><td class="add' + (add ? '' : ' z') + '">' + (add ? '+' + num(add) : '0') + '</td>'; };
     var nV = 0;
     var body = V.map(function(A){ var c = A.color || '#8b909c', one = A.variants.length === 1, fold = !one && !!FD[A.family_id]; nV += A.variants.length;
-      var o0 = A.variants[0], sub = one ? ((o0.label || '') + (o0.departure ? ' · ' + o0.departure : '') + (o0.charter ? ' · เหมาลำ' : '')) : (A.variants.length + ' variant');
-      if(one && o0.label === A.name) sub = (o0.departure || '') + (o0.charter ? ' · เหมาลำ' : '');
+      var o0 = A.variants[0], sub = one ? (varLbl(A, o0) + (o0.departure ? ' · ' + o0.departure : '') + (o0.charter ? ' · เหมาลำ' : '')) : (A.variants.length + ' variant');
+      if(one && varLbl(A, o0) === A.name) sub = (o0.departure || '') + (o0.charter ? ' · เหมาลำ' : '');
       var h = '<tr class="fam' + (one ? '' : ' tg') + (fold ? ' fold' : '') + '" data-fam="' + E(A.family_id) + '" style="background:' + mvTint(c, .9) + ';color:' + mvShade(c, .62) + '"'
         + (one ? '' : ' onclick="ebMvFold(\'' + E(A.family_id) + '\')" title="' + (fold ? 'กางดู variant' : 'ยุบ') + '"') + '>'
         + '<td>' + (one ? '<span class="cv"></span>' : '<span class="cv">' + (fold ? '▸' : '▾') + '</span>') + '<span class="sw" style="background:' + E(c) + '"></span>' + E(A.name) + (sub ? '<span class="vn">' + E(sub) + '</span>' : '') + '</td>' + cells(A.px, A.added) + '</tr>';
       if(!one && !fold) h += A.variants.map(function(o){
-        return '<tr class="var" data-rid="' + E(o.route_id) + '"><td>' + E(o.label) + (o.departure ? '<span class="dep">' + E(o.departure) + '</span>' : '') + (o.charter ? '<span class="tag">เหมาลำ</span>' : '') + '</td>' + cells(o.px, o.added) + '</tr>'; }).join('');
+        return '<tr class="var" data-rid="' + E(o.route_id) + '"><td>' + E(varLbl(A, o)) + (o.departure ? '<span class="dep">' + E(o.departure) + '</span>' : '') + (o.charter ? '<span class="tag">เหมาลำ</span>' : '') + '</td>' + cells(o.px, o.added) + '</tr>'; }).join('');
       return h + '<tr class="gap"><td colspan="7"></td></tr>'; }).join('');
     var tAdd = sum(totals.added_px);
     return '<div class="ebm-vt"><div class="hh"><b>ผู้โดยสารแยก Variant</b><span>ตามใบจอง · ' + num(V.length) + ' โปรแกรม · ' + num(nV) + ' variant</span><i></i>'
