@@ -307,6 +307,21 @@
   function shift(ds, days){ var d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + days); return ymd(d); }
   function today(){ return ymd(new Date()); }
 
+  /* §pickupClock (2026-11-24, operation-backend todo/pickup-time-audit.md) · one typed time of day as the server's HH:MM:
+     '7:30', '07.30', '07:30:00', '08.00 a.m.', '1:30 p.m.' → '07:30'…'13:30'; '' → '' (clear); null for anything else
+     (a window, a pier deadline, a half-typed '07:', text). Same shapes as the importer's (src/tools/legacy-pickup.ts),
+     so a time the dispatcher types the way legacy let them is saved instead of refused as "must be HH:MM". */
+  var CLOCK_RE = /^(\d{1,2})[:.](\d{2})(?::\d{2})?\s*([as]\.?m\.{0,2}|p\.?m\.{0,2})?$/i;
+  function clock(text){
+    var t = String(text == null ? '' : text).trim(), m;
+    if(!t) return '';
+    if(!(m = CLOCK_RE.exec(t))) return null;
+    var h = Number(m[1]), min = Number(m[2]);
+    if(m[3]){ if(h < 1 || h > 12) return null; h = /^p/i.test(m[3]) ? (h % 12) + 12 : h % 12; }
+    if(h > 23 || min > 59) return null;
+    return String(h).padStart(2, '0') + ':' + m[2];
+  }
+
   /* Write listeners invalidate local caches after this tab saves. Change listeners receive
      the durable server event first, then the feed client invokes wrote('remote:…') so
      existing cache invalidators also refresh after someone else's save. */
@@ -326,7 +341,7 @@
     queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
-    ymd: ymd, shift: shift, today: today,
+    ymd: ymd, shift: shift, today: today, clock: clock,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }
   };

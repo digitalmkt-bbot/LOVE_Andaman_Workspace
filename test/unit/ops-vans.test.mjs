@@ -613,3 +613,28 @@ test('ops mode: the browser does not build or heal splits; legacy mode reaches t
   const off = runtime({ enabled: false });
   names.forEach((n) => assert.equal(off.ctx[n](), undefined));
 });
+
+// §pickupTyped / §pickupClock (operation-backend todo/pickup-time-audit.md): the time box is oninput, so it runs per key.
+test('pickup time: a half-typed time is not sent; a whole one goes as HH:MM, legacy shapes included', async () => {
+  const rt = runtime({ handlers: {
+    'GET /operations/van-groups': { body: { groups: [group()] } },
+    'PATCH /operations/van-groups/vgrp_3': (body) => ({ body: group({ pickup_time: body.pickup_time }) }),
+  } });
+  await rt.O.vans.load(D, R);
+  rt.requests.length = 0;
+  for (const key of ['0', '07', '07:', '07:3']) rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, key);
+  await rt.flush(); await rt.flush();
+  assert.deepEqual(plain(rt.requests), [], 'nothing goes out while the time is half typed');
+  assert.equal(rt.toasts.length, 0, 'and nothing is refused');
+  for (const typed of ['7:30', '08.00 a.m.', '1:30 p.m.', '']) { rt.ctx.bookingV2VanGroupSetTime(D, R, 'PK', 3, typed); await rt.flush(); await rt.flush(); }
+  assert.deepEqual(plain(rt.requests).map((r) => r.body.pickup_time), ['07:30', '08:00', '13:30', null]);
+});
+
+test('O.clock reads one typed time as HH:MM and nothing else', () => {
+  const rt = runtime();
+  const c = rt.O.clock;
+  assert.deepEqual(['07:30', '7:30', '07.30', '07:30:00', '08.00 a.m.', '04:00 s.m.', '07.40 a.m..', '12:15 a.m.', ' 06:05 '].map(c),
+    ['07:30', '07:30', '07:30', '07:30', '08:00', '04:00', '07:40', '00:15', '06:05']);
+  assert.equal(c(''), '');
+  for (const t of ['07:', '0', '07:15-07:30', 'Before 08:30 at pier', '25:00', '13:00 p.m.', 'เช้า']) assert.equal(c(t), null, t);
+});
