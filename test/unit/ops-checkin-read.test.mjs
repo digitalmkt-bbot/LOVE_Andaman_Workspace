@@ -57,3 +57,14 @@ test('a later service day keeps its check-ins on trip.ops; no records -> null', 
   assert.equal(bk.ops.vanCheckin, null);
   assert.equal(bk.trips[1].ops.vanCheckin.expected, 4);
 });
+
+test('§opsVanMain: the main van part\'s group fills ops.vanGroup / vanId / vanSeq / vanReturnId on load (Re-confirm plate, check-in vans)', () => {
+  const ctx = load();
+  const ops = { van_parts: [{ idx: 0, source: 'main', ad: 1, chd: 0, inf: 0, foc: 0, sequence: 13, return_van_id: null,
+    group: { id: 'vg4', number: 4, van_id: 'veh80', return_van_id: 'veh81', pickup_time: null } }], pickup_time_final: '05:00' };
+  const bk = ctx.laOps.bookings.fromServer(server([{ id: 't1', route_id: 'r2', service_date: '2026-11-23', booking_mode: 'seat', pax: { ad_fr: 1 }, operations: ops }]));
+  assert.deepEqual([bk.ops.vanGroup, bk.ops.vanId, bk.ops.vanSeq, bk.ops.vanReturnId, bk.ops.pickupTimeFinal], [4, 'veh80', 13, 'veh81', '05:00']);
+  assert.equal(bk.ops.vanSplits, undefined, 'one main part is not a split');
+  const none = ctx.laOps.bookings.fromServer(server([{ id: 't2', route_id: 'r2', service_date: '2026-11-23', booking_mode: 'seat', pax: { ad_fr: 1 }, operations: { van_parts: [{ idx: 0, source: 'main', ad: 1, group: null }] } }]));
+  assert.equal(none.ops.vanId, undefined, 'no group: nothing set');
+});
