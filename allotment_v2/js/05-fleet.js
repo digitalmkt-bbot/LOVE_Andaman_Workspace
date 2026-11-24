@@ -28736,11 +28736,13 @@ function flAssetChips(rec, kind, max){
   var e=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
   max=max||4;
   var h=L.slice(0,max).map(function(a){
-    var T=FL_ASSET_T[a.type]||[a.type||'ชิ้นส่วน','#3E4658','#EEF0F3'];
+    /* §flAscEarly · flLoad() seeds MJ-019 while this file is still being read, before FL_ASSET_T below is set: the chips drawn then use the plain style */
+    var AT=(typeof FL_ASSET_T!=='undefined'&&FL_ASSET_T)||{};
+    var T=AT[a.type]||[a.type||'ชิ้นส่วน','#3E4658','#EEF0F3'];
     var parts=String(a.label||a.id||'').split(' · ').map(function(x){ return x.trim(); }).filter(Boolean);
     var main, sub='';
     if((a.type==='engine'||a.type==='gearbox'||a.type==='propeller') && parts.length>=2){ main=T[0]+' '+parts[parts.length-1]; sub=parts.slice(0,-1).join(' · '); }
-    else { main=(a.type==='hull'||!FL_ASSET_T[a.type])?parts.join(' · '):(T[0]+' · '+parts.join(' · ')); }
+    else { main=(a.type==='hull'||!AT[a.type])?parts.join(' · '):(T[0]+' · '+parts.join(' · ')); }
     var sw=a.swapped?(' → '+e(a.swappedTo||'สลับแล้ว')):'';
     return '<span class="fl-asc" style="background:'+T[2]+';color:'+T[1]+'" title="'+e(T[0]+' · '+(a.label||a.id||''))+(a.detail?(' · '+e(a.detail)):'')+'">'
       +'<b>'+e(main)+'</b>'+(sub?('<i>'+e(sub)+'</i>'):'')+sw+'</span>';
