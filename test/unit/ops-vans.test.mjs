@@ -103,7 +103,7 @@ test('loader maps group members onto bookings by opsId and clears what the serve
   const b3 = byId(rt.bks, 'b3').ops;
   assert.deepEqual(plain({ vanGroup: b3.vanGroup, vanId: b3.vanId }), { vanGroup: 0, vanId: null });
   const b4 = byId(rt.bks, 'b4').ops;
-  assert.deepEqual(plain({ vanGroup: b4.vanGroup, vanId: b4.vanId, pickupTimeFinal: b4.pickupTimeFinal }), { vanGroup: 0, vanId: null, pickupTimeFinal: '' });
+  assert.deepEqual(plain({ vanGroup: b4.vanGroup, vanId: b4.vanId, pickupTimeFinal: b4.pickupTimeFinal }), { vanGroup: 0, vanId: null, pickupTimeFinal: '07:00' });   // §vanPickFinal: the final pickup is the booking's, it outlives the group (server disband keeps it)
   // other date untouched
   assert.equal(byId(rt.bks, 'b9').ops.vanGroup, undefined);
   // cancelled booking keeps nothing it was given (not listed)
@@ -253,7 +253,8 @@ test('a booking without an opsId is refused with no request', async () => {
 test('pickup time: PATCH pickup_time, local follows the answer', async () => {
   const rt = runtime({ handlers: {
     'GET /operations/van-groups': { body: { groups: [group()] } },
-    'PATCH /operations/van-groups/vgrp_3': (body) => ({ body: group({ pickup_time: body.pickup_time }) }),
+    // the server writes the group's time as every member's final pickup, and lists it on each member
+    'PATCH /operations/van-groups/vgrp_3': (body) => ({ body: group({ pickup_time: body.pickup_time, members: group().members.map((m) => ({ ...m, pickup_time: body.pickup_time })) }) }),
   } });
   await rt.O.vans.load(D, R);
   rt.requests.length = 0;
@@ -261,6 +262,20 @@ test('pickup time: PATCH pickup_time, local follows the answer', async () => {
   await rt.flush(); await rt.flush();
   assert.deepEqual(plain(rt.requests), [{ method: 'PATCH', path: '/operations/van-groups/vgrp_3', body: { pickup_time: '07:15' } }]);
   assert.equal(byId(rt.bks, 'b2').ops.pickupTimeFinal, '07:15');
+});
+
+test('§vanPickFinal: a group with no time keeps each member\'s own final pickup (not wiped to the area window)', async () => {
+  const g = group({ pickup_time: null, members: [
+    { trip_id: 'trip_1', booking_id: 'lg_1', idx: 0, sequence: 1, return_van_id: null, pickup_time: '05:00' },
+    { trip_id: 'trip_2', booking_id: 'lg_2', idx: 0, sequence: 2, return_van_id: null, pickup_time: null },
+  ] });
+  const bks = bookings();
+  byId(bks, 'b1').ops = { pickupTimeFinal: '05:00-05:10' };
+  byId(bks, 'b2').ops = { pickupTimeFinal: '06:00' };
+  const rt = runtime({ bks, handlers: { 'GET /operations/van-groups': { body: { groups: [g] } } } });
+  await rt.O.vans.load(D, R);
+  assert.equal(byId(rt.bks, 'b1').ops.pickupTimeFinal, '05:00-05:10');   // a window starting with the member's time stays whole
+  assert.equal(byId(rt.bks, 'b2').ops.pickupTimeFinal, '');              // the server says this part has no final pickup
 });
 
 test('disband: DELETE, then the members lose the group and their van, keep their pickup time', async () => {

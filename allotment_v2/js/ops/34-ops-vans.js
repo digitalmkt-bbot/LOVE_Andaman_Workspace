@@ -177,8 +177,19 @@
       o.vanId = g.van_id || null;
       o.vanSeq = +m.sequence || 0;
       o.vanReturnId = m.return_van_id || g.return_van_id || null;   // the part's own return van, else the group's (PATCH van-groups return_van_id sets the group's)
-      o.pickupTimeFinal = g.pickup_time || '';
+      o.pickupTimeFinal = memberPickup(o.pickupTimeFinal, m, g);
     });
+  }
+  /* §vanPickFinal (2026-11-24) · the member's own final pickup, not the group's. A group read lists each member with
+     `pickup_time` (the trip's final pickup); the group's `pickup_time` is only set when the dispatcher typed one for the
+     whole van, so it is null on most imported groups. Taking the group's wiped the booking's own time (Naiyang Beach
+     Hotel 05:00) and the check-in pages fell back to the area's window (04:40-04:50). A final with an end or "at pier"
+     text that starts with the member's time is kept whole (the member carries only the start). */
+  function memberPickup(cur, m, g){
+    var t = m && m.pickup_time != null ? m.pickup_time : (g && g.pickup_time) || '';
+    cur = String(cur || '');
+    if(!t) return /at pier/i.test(cur) ? cur : '';
+    return cur.indexOf(t) === 0 ? cur : t;
   }
 
   /* GET the day's groups and replace the route's van fields with them · no write */
@@ -189,7 +200,7 @@
       Object.keys(serverIds).forEach(function(k){ if(k.indexOf(prefix) === 0) delete serverIds[k]; });
       allBookings().forEach(function(b){
         if(!b || !routeOn(b, date, routeId)) return;
-        clearVan(bkOpsRead(b, date) || {}, false);
+        clearVan(bkOpsRead(b, date) || {}, true);    // §vanPickFinal · the final pickup is the booking's (its read carries it), not the group's: a booking in no group keeps it
         var sps = splitsOf(b, date);   // the parts: group, van and order come back with the groups; a part's own return van stays as the booking read gave it
         if(sps) sps.forEach(function(s){ if(s){ var rv = s.vanReturnId; clearVan(s, true); s.vanReturnId = rv || null; } });
       });
