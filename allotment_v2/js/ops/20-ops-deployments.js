@@ -454,4 +454,85 @@
   })();
 
   O.deployments = { adopt: adopt, load: load, sync: sync, syncNow: syncNow, markCharters: markCharters, addBetween: addBetween, ensureDays: ensureDays, isReady: function(){ return ready; } };
+  /* §opsBopDnd (2026-11-24) · Boat Operation's drag board (lk-inbox §bopDnd) ⇄ POST /operations/deployments/plan
+     Legacy keeps the drops as a draft and on "บันทึก" writes TRIPS and moves the bookings in the browser (bop2RpMoveBookings),
+     which reached no server here: the bookings never moved. Now each drop legacy accepted is recorded as a move, and Save
+     sends them all with the board the server last confirmed (synced). The server replays them with legacy's rules, writes
+     all or nothing, and moves the bookings; this then takes the server's deployments and re-reads those days' bookings.
+     Legacy's dialogs and messages stay: its confirm before saving, its over-seat confirm (409 over_capacity → capacity_anyway),
+     its "someone changed it meanwhile" alert (409 plan_stale), its toast and its list of guaranteed bookings left in place. */
+  var dndMoves = [];
+  function dndTarget(t){ return t.kind === 'chip' ? { boat_id: t.bid } : t.kind === 'route' ? { route_id: t.route } : { free: true }; }
+  function dndSeen(days){
+    var out = {};
+    days.forEach(function(d){
+      out[d] = Object.keys(synced).filter(function(k){ return k.slice(0, 10) === d; })
+        .map(function(k){ return { boat_id: k.slice(12), route_id: synced[k].route }; });
+    });
+    return out;
+  }
+  var PLAN_RULES = {
+    over_capacity: { flag: 'capacity_anyway', ask: function(e){ return e.message.replace(/ · send capacity_anyway.*$/, '') + '\n\nยังจะจัดแบบนี้ไหม?'; } },
+    boat_not_ready: DEP_RULES.boat_not_ready
+  };
+  (function(){
+    var drop = window.bopDDrop, reset = window.bopDReset, saveD = window.bopDSave;
+    if(typeof saveD !== 'function' || saveD.__ops) return;
+    if(typeof drop === 'function'){
+      var wd = function(ev){
+        var g = window._bopDDrag, src = g ? { d: g.d, bid: g.bid } : null;
+        var t = (src && typeof window.bopDTgt === 'function') ? window.bopDTgt(ev && ev.target) : null;
+        var D = window._bopD, n = D && D.log ? D.log.length : 0;
+        var ret = drop.apply(this, arguments);
+        try{ if(src && t && D && D.log && D.log.length > n) dndMoves.push({ service_date: src.d, boat_id: src.bid, to: dndTarget(t) }); }catch(_){}
+        return ret;
+      };
+      wd.__ops = true; window.bopDDrop = wd;
+    }
+    if(typeof reset === 'function'){
+      var wr = function(){ dndMoves = []; return reset.apply(this, arguments); };
+      wr.__ops = true; window.bopDReset = wr;
+    }
+    var ws = function(){
+      if(!O.enabled() || !ready) return saveD.apply(this, arguments);
+      if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return;
+      var D = window._bopD || { log: [] };
+      if(!dndMoves.length){ window.bopDReset(); return; }
+      var days = dndMoves.map(function(m){ return m.service_date; }).filter(function(d, i, a){ return a.indexOf(d) === i; }).sort();
+      var past = days.filter(function(d){ return typeof window.bop2IsPast === 'function' && window.bop2IsPast(d); });
+      if(past.length){ alert('วันที่ผ่านมาแล้วแก้ไม่ได้: ' + past.join(', ')); return; }
+      if(!confirm('บันทึกการจัดเรือ ' + D.log.length + ' รายการ?\n\n' + D.log.join('\n'))) return;
+      var body = { moves: dndMoves.slice(), seen: dndSeen(days) }, n = D.log.length;
+      return O.queue(function(){
+        return O.anyway(function(f){ return O.post('/operations/deployments/plan', Object.assign({}, body, f)); }, PLAN_RULES);
+      }).then(function(j){
+        return O.get('/operations/deployments', { from: days[0], to: days[days.length - 1] }).then(function(r){
+          var rows = (r && r.deployments) || [];
+          days.forEach(function(d){
+            var mine = rows.filter(function(x){ return x.service_date === d; });
+            var gone = Object.keys(synced).filter(function(k){ return k.slice(0, 10) === d; }).map(function(k){ return k.slice(12); })
+              .filter(function(b){ return !mine.some(function(x){ return x.boat_id === b; }); });
+            adoptRows(d, mine, gone);
+          });
+          window.bopDReset(true);
+          try{ window._bopDPaxMemo = {}; }catch(_){}
+          days.forEach(function(d){ try{ if(O.bookings && typeof O.bookings.refreshDay === 'function') O.bookings.refreshDay(d); }catch(_){} });
+          O.wrote('deployments'); rerender();
+          var nb = ((j && j.days) || []).reduce(function(s, x){ return s + (+x.bookings_moved || 0); }, 0);
+          if(typeof flShowToast === 'function') flShowToast('บันทึกการจัดเรือ ' + n + ' รายการ' + (nb ? (' · ย้ายบุคกิ้ง ' + nb + ' ใบ') : ''));
+          var kept = ((j && j.kept) || []).map(function(k){ return k.ref + ' ' + k.service_date; });
+          if(kept.length) alert('ไม่ได้ย้าย ' + kept.length + ' บุคกิ้งที่สัญญาเรือไว้กับลูกค้า: ' + kept.join(', ') + '\nจัดเรือให้เองทีละใบ แล้วแจ้งลูกค้า');
+          return j;
+        });
+      }, function(e){
+        if(e && e.declined) return;
+        // legacy's own refusal texts: plan_stale ("มีคนแก้การจัดเรือ…"), past_day, boat_has_passengers, boat_fixed
+        if(e && e.status === 409 && e.message){ alert(e.message); return; }
+        O.fail('Boat plan not saved', e);
+      });
+    };
+    ws.__ops = true; window.bopDSave = ws;
+  })();
+  O.dnd = { moves: function(){ return dndMoves.slice(); }, seen: dndSeen, target: dndTarget };
+
 })();
