@@ -67,7 +67,7 @@
       bid:t.boat_id, boat:{ id:t.boat_id, name:t.name, cap:t.capacity }, name:t.name || t.boat_id,
       rid:t.route_id || '', route:{ name:t.route_name || '', color:t.route_color || '', pier:t.pier || '' }, dep:t.departs || '',
       px:{ ad:n(px.ad), chd:n(px.chd), inf:n(px.inf), foc:n(px.foc), tot:n(px.total), th:n(px.th), fr:n(px.fr), bk:n(px.bookings), rev:n(px.revenue) },
-      ctx:{ eng:t.engines || '3EN' }, plan:t.plan ? { id:t.plan.id, name:t.plan.name, ovr:{}, grp:{} } : null,
+      ctx:{ eng:t.engines || '3EN', date:t.date }, plan:t.plan ? { id:t.plan.id, name:t.plan.name, ovr:{}, grp:{} } : null,
       rows:rows, cost:n(t.cost),
       up:{ rows:(up.rows || []).map(function(u){ return { vc:u.voucher, label:u.label, sell:n(u.sell), comp:n(u.company), comm:n(u.commission), seller:u.seller || '', got:!!u.collected, kind:u.kind === 'sale' ? 'ex' : 'upg' }; }),
            sell:n(up.sell), company:n(up.company), comm:n(up.commission) },
@@ -76,7 +76,11 @@
       noSail:!!t.no_sail, ran:!!t.ran, wouldCost:n(t.would_cost),
       revGross:n(t.revenue_gross), rev:n(t.revenue), profit:n(t.profit), st:t.status || 'est', nReal:n(t.actual_lines),
       closed:!!t.closed, frozen:t.closed ? { at:t.closed.at || '', by:t.closed.by || '', pax:t.closed.pax } : null,
-      be:t.break_even == null ? null : n(t.break_even), fuelPr:n(fp.price), checkRev:!!t.check_revenue, vans:t.vans || [], date:t.date
+      be:t.break_even == null ? null : n(t.break_even), fuelPr:n(fp.price), checkRev:!!t.check_revenue, vans:t.vans || [], date:t.date,
+      /* §bopSwap2 (sync 11-10, ported 11-11) · the server costs a rescue boat on fuel/captain/crew/rent only and says which
+         boat it went out for; the boat that broke says where its guests went (pxSwPill reads both) */
+      rescue:(t.rescue && t.rescue.for) ? { for:t.rescue.for } : null,
+      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null
     };
   }
   function emptyTrip(date, bid){
@@ -113,6 +117,30 @@
         return d;
       });
     });
+  }
+  /* §pxForecast (sync 11-16, lk-inbox 434545bf..88b0a9d3): the Forecast tab reads every day of the month so far and of the month
+     before (actuals, the 14-day basis early in a month, the previous-month column, each with its steps), and the bookings of the
+     booking-pace window (§pxFcPace: 28 travel days back from yesterday, to the month's end). The forecast is drawn by legacy's
+     pxForecast from these: its method is a first version the owner has not settled, so it stays on screen. */
+  var paceRange = {};
+  function forecastNeeds(){
+    var P = window._px, pier = P.pier || '', ym = P.mon || String(P.date || '').slice(0, 7);
+    var out = monthNeeds();
+    var pdays = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(prevMonth(ym)) : [];
+    var pmiss = pdays.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
+    if(pmiss.length) out.push(function(){ return pool(pmiss, 5, function(d){ return loadDay(d, pier); }); });
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+    if(y && m && typeof window.bookingV2LoadFromOpsBackend === 'function'){
+      var t = new Date(O.today() + 'T12:00:00'); t.setDate(t.getDate() - 29);
+      var from = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      var to = ym + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+      if(to < from) to = O.today();
+      var rk = from + '|' + to;
+      if(!fresh(paceRange[rk])) out.push(function(){
+        return Promise.resolve(window.bookingV2LoadFromOpsBackend({ from: from, to: to })).then(function(){ paceRange[rk] = { at: Date.now() }; }, function(){ /* the pace line is drawn from what is loaded */ });
+      });
+    }
+    return out;
   }
   function prevMonth(ym){
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 2, d = new Date(y, m, 1);
@@ -171,6 +199,9 @@
       if(lt.be){ R.be += lt.be; R.beN++; }
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
       lt.rows.forEach(function(r){ a.groups[r.g] = (a.groups[r.g] || 0) + r.use; });
+      /* §pxSteps (sync 11-16, lk-inbox 434545bf): profit by step (operation cost / wages / depreciation), legacy's own split of the
+         server's cost lines (each row's id, group and use), as legacy pxDayAgg does with its own trips */
+      if(typeof window.pxStAdd === 'function') window.pxStAdd(a, lt);
     });
     return dayData ? serverAggregates(a, dayData) : a;
   }
@@ -251,6 +282,7 @@
     var P = window._px; if(!P) return [];
     var pier = P.pier || '';
     if(P.tab === 'm') return monthNeeds();
+    if(P.tab === 'f') return forecastNeeds();
     if(P.tab === 'a') return fresh(S.an[anKey(P.an || 47, pier)]) ? [] : [function(){ return loadAnalysis(P.an || 47, pier); }];
     return fresh(S.day[dayKey(P.date, pier)]) ? [] : [function(){ return loadDay(P.date, pier); }];
   }

@@ -15,7 +15,7 @@ function bookingV2LockEditSubmit(){
   if(!(qty>0)){ alert('Enter the number of seats'); return; }
   const peak = (typeof bookingV2LockPeakUsed==='function') ? bookingV2LockPeakUsed(l) : 0;
   const alloc = (typeof bookingV2LockAllocated==='function') ? bookingV2LockAllocated(l) : 0;
-  const floor = Math.max(peak, alloc);
+  const floor = (!l.parentId && typeof bookingV2LockParentFloor==='function') ? Math.max(peak, bookingV2LockParentFloor(l)) : Math.max(peak, alloc);   /* §lkSubDay */
   if(qty < floor){
     alert('Seats cannot go below ' + floor
       + (peak>=alloc ? ' (already drawn on one round)' : ' (already split into sub-groups)'));
@@ -76,8 +76,12 @@ function bookingV2LockEditSubmit(){
      ไม่งั้นลูกจะค้างอยู่กับช่วงเดิมแล้วคิดที่นั่งคนละรอบกับแม่ */
   if(!moveLocked && typeof bookingV2LockChildren==='function'){
     bookingV2LockChildren(l.id).forEach(c=>{
+      /* §lkSubDay · กรุ๊ปย่อยรายวันใต้ Bulk เก็บวันของตัวเองไว้ ถ้ายังอยู่ในช่วงใหม่ */
+      const _keepDay = (l.scope==='bulk') && bookingV2LockKidDated(c) && c.date>=(l.dateFrom||'') && c.date<=(l.dateTo||l.dateFrom||'');
+      if(!_keepDay){
       c.scope=l.scope; c.routeId=l.routeId; c.date=l.date;
       c.dateFrom=l.dateFrom; c.dateTo=l.dateTo; c.dow=(l.dow||[]).slice();
+      } else { c.routeId=l.routeId; }
       c.holderType=l.holderType; c.holderId=l.holderId;
       c.releaseDaysBefore=l.releaseDaysBefore; c.releaseTime=l.releaseTime;
     });

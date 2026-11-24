@@ -1,4 +1,3 @@
-// Right-column live Review · summarizes what's been filled
 function bookingV2RenderReviewPanel(){
   const d = _bkV2.newBooking;
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -148,7 +147,11 @@ function bookingV2RenderReviewPanel(){
       ${pickupArea ? `
         <div class="rv-section">
           <div class="rv-lab">Pickup</div>
-          ${d.hotelName
+          ${d.pickupSelf
+            ? `<div class="rv-val" style="font-size:13.5px;line-height:1.3;color:#5B289A">&#128694; ลูกค้ามาเองที่ท่าเรือ</div>
+               <div class="rv-sub" style="text-transform:none">ขาไปไม่มีรถไปรับ</div>
+               ${(d.dropoffSame && (d.hotelName||'').trim()) ? `<div class="rv-sub" style="text-transform:none">&#8617; ส่งกลับ: <b>${escapeHTML(d.hotelName)}</b> · ${escapeHTML(pickupArea.name)}${d.roomNumber?' · Room '+escapeHTML(d.roomNumber):''}</div>` : ''}`
+            : d.hotelName
             ? `<div class="rv-val" style="font-size:13.5px;line-height:1.3">${escapeHTML(d.hotelName)}</div>
                <div class="rv-sub" style="text-transform:none">${escapeHTML(pickupArea.name)}${d.roomNumber?' · Room '+escapeHTML(d.roomNumber):''}</div>`
             : `<div class="rv-val" style="font-size:13.5px;line-height:1.3">${escapeHTML(pickupArea.name)}</div>

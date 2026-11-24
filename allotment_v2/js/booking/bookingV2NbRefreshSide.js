@@ -2,6 +2,8 @@ function bookingV2NbRefreshSide(){
   if(_bkV2NbSideRaf) return;
   var go=function(){ _bkV2NbSideRaf=0; try{
     if(!_bkV2.newBooking) return;
+    var df=document.getElementById('nbf-diff-slot');
+    if(df && typeof bookingV2EditDiffHtml==='function') df.innerHTML=bookingV2EditDiffHtml();   /* §nbDiff */
     var c=document.getElementById('nbf-checks-slot');
     if(c && typeof bkNbfChecksHtml==='function') c.innerHTML=bkNbfChecksHtml();
     var b=document.getElementById('nbf-submit-slot');

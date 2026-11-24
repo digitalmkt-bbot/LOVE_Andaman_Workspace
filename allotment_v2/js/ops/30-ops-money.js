@@ -924,7 +924,14 @@
     var amt = num(amtEl && amtEl.value);
     var method = (methodEl && methodEl.value) || 'transfer';
     if(amt <= 0){ alert('ใส่จำนวนเงิน'); return; }
-    return recordPaymentServer(invId, amt, method, {}).then(function(){
+    /* §paySlip (sync 11-16) · slips attached in this window are tied to this payment (legacy: acctRecordPayment's {slips}).
+       They went up as booking slips (ops/38); the payment takes them as slip_ids and the booking-level links come off. */
+    var sl = (typeof _bkV2PaySlips !== 'undefined' && _bkV2PaySlips[bkId]) ? _bkV2PaySlips[bkId].slice() : [];
+    return recordPaymentServer(invId, amt, method, sl.length ? { slip_ids: sl.map(function(s){ return s.id; }) } : {}).then(function(){
+      if(typeof _bkV2PaySlips !== 'undefined') delete _bkV2PaySlips[bkId];
+      var un = (O.paySlips && sl.length) ? Promise.all(sl.map(function(s){ return O.paySlips.unlink(bkId, s.slipId).catch(function(e){ console.warn('[ops] booking slip link not removed · ' + (e && e.message)); }); })) : null;
+      return un;
+    }).then(function(){
       if(typeof window.bookingV2Render === 'function') window.bookingV2Render();
       if(typeof window.bookingV2RowPayAction === 'function') window.bookingV2RowPayAction(bkId);
     }).catch(function(){});

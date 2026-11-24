@@ -79,7 +79,8 @@
     var d = typeof g('bkOpsDate') === 'function' ? window.bkOpsDate(b, date) : date;
     var D = c.data, base = orig.apply(this, a) || {};
     return { b: b, t: t, d: d, cur: D.current_boat_id || '', curName: D.current_boat_name || '', pax: +D.pax || 0,
-      opts: (D.options || []).map(function(o){ return { id: o.boat_id, name: o.name || o.boat_id, cap: +o.capacity || 0, load: +o.load || 0, next: +o.next || 0, over: !!o.over, block: !!o.block }; }),
+      /* gone (§pckMoveNs, sync 11-19): heads on that boat recorded as no-show / cancelled at check-in, already off load */
+      opts: (D.options || []).map(function(o){ return { id: o.boat_id, name: o.name || o.boat_id, cap: +o.capacity || 0, load: +o.load || 0, next: +o.next || 0, over: !!o.over, block: !!o.block, gone: +o.gone || 0 }; }),
       issued: +base.issued || 0, tol: +base.tol || 2 };
   });
 

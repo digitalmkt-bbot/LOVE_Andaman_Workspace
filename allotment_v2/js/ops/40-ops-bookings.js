@@ -1029,27 +1029,58 @@
   /* ── route upgrade undo · bookingV2UpgUndo (booking/bookingV2UpgUndo.js) → POST /v1/bookings/{id}/upgrade/undo ──
      Legacy's checks and its confirm stay; the server checks again (route sailing, free seats on the old route) and
      answers the whole booking: the trip is back on its route, the uncollected charge is gone, the boat is cleared. */
+  /* §upgUndoUi (sync 11-19) · legacy's app dialogs, not the browser's: bkUpgUndoBlocked when the old programme is not
+     running or short of seats, bkUpgSheet to confirm. The server checks again; its 409 route_closed / not_enough_seats
+     ({needed, free, short}) opens the same blocked dialog with the server's numbers instead of a red toast. */
   var origUpgUndo = window.bookingV2UpgUndo;
-  window.bookingV2UpgUndo = function(bkId, routeId, date){
+  window.bookingV2UpgUndo = function(bkId, routeId, date, _ok){
     if(!O.enabled() || typeof origUpgUndo !== 'function') return origUpgUndo ? origUpgUndo.apply(this, arguments) : undefined;
     var b = find(bkId); if(!b) return;
     var t = bkUpgTripOn(b, date, routeId); if(!t || !bkUpgActive(t)) return;
     var u = t.upg, fromNm = bkUpgRouteName(u.fromRouteId), toNm = bkUpgRouteName(u.toRouteId);
     var item = (u.upgId && Array.isArray(b.upgrades)) ? b.upgrades.find(function(x){ return x.id === u.upgId; }) : null;
     var pax = (typeof bookingV2PaxAllTot === 'function') ? bookingV2PaxAllTot(t.pax || {}) : 0;
-    if(typeof bookingV2IsRouteOpenOn === 'function' && !bookingV2IsRouteOpenOn(u.fromRouteId, date)){
-      alert('Cannot undo: ' + fromNm + ' is not running on ' + date + '.'); return; }
+    var who = b.leadPax || b.customerName || b.voucherRef || b.id;
+    var blocked = function(al, n){
+      if(typeof bkUpgUndoBlocked === 'function') bkUpgUndoBlocked({ al: al, fromNm: fromNm, toNm: toNm, toRid: t.routeId, fromRid: u.fromRouteId, who: who, vc: b.voucherRef || '', pax: n != null ? n : pax, date: date });
+      else alert('Cannot undo: ' + fromNm + (al ? ' has not enough free seats' : ' is not running') + ' on ' + date + '.');
+    };
+    if(typeof bookingV2IsRouteOpenOn === 'function' && !bookingV2IsRouteOpenOn(u.fromRouteId, date)){ blocked(null); return; }
     var al = (typeof getAllotment === 'function') ? getAllotment(u.fromRouteId, date, null) : null;
-    if(al && al.hasAllotment && pax > al.seatsAvailable){
-      alert('Cannot undo: not enough free seats on ' + fromNm + ' (' + date + ').'+'\nNeeds ' + pax + ', free ' + al.seatsAvailable + '.'); return; }
-    if(!confirm('Undo the upgrade?\n' + toNm + ' > back to ' + fromNm + '\n' + (item ? (item.collected ? 'The extra charge was already collected - it stays on the booking.' : 'The uncollected extra charge (THB ' + (+item.sellPrice || 0).toLocaleString() + ') will be removed.') : '') + '\nThe boat must be assigned again.')) return;
+    if(al && al.hasAllotment && pax > al.seatsAvailable){ blocked(al); return; }
+    if(!_ok && typeof bkUpgSheet === 'function'){
+      var _T = function(x){ return (typeof laT === 'function') ? laT(x) : x; };
+      bkUpgSheet({ mode: 'ask', title: _T('ย้ายลูกค้ากลับโปรแกรมเดิม?'), toNm: toNm, fromNm: fromNm, toRid: t.routeId, fromRid: u.fromRouteId, who: who,
+        whoSub: (b.voucherRef ? (b.voucherRef + ' · ') : '') + pax + ' pax', pax: pax, date: date,
+        rows: item ? [[_T('ค่า Upgrade'), item.collected ? _T('เก็บแล้ว · คงไว้ในบุคกิ้ง') : ('<span style="color:#7A4A00">&#3647;' + (+item.sellPrice || 0).toLocaleString() + '</span> ' + _T('ยังไม่เก็บ · จะถูกลบออก'))]] : [],
+        tip: _T('ย้ายกลับแล้วเรือที่จัดไว้จะถูกล้าง ต้องจัดเรือใหม่ในโปรแกรมเดิม'), okLabel: _T('ยืนยันยกเลิก Upgrade'),
+        onYes: function(){ window.bookingV2UpgUndo(bkId, routeId, date, true); } });
+      return;
+    }
     if(!b.opsId || !t.opsTripId){ alert('Save this booking to operation-backend first.'); return; }
-    window.laOpsBookingAction(b.id, 'upgrade/undo', { trip_id: t.opsTripId }, function(){
-      if(item && !item.collected) b.upgrades = b.upgrades.filter(function(x){ return x.id !== u.upgId; });
-      t.routeId = u.fromRouteId; delete t.upg;
-      var op = bkOpsFor(b, date); op.boatId = null; if(op.boatSplits) delete op.boatSplits;
-      if(typeof bookingV2AddHistory === 'function') bookingV2AddHistory(b, 'edit', 'Upgrade undone · back to ' + fromNm, 'Edit');
-    }, 'Undo upgrade', true);
+    O.toast({ kind: 'neutral', title: 'Undo upgrade…', id: b.id, status: 'SENDING', dur: 1500 });
+    hold(b.id);
+    return O.queue(function(){ return O.bookingWrite('POST', '/v1/bookings/' + encodeURIComponent(b.opsId) + '/upgrade/undo', b, { trip_id: t.opsTripId }); })
+      .then(function(j){
+        try{
+          if(item && !item.collected) b.upgrades = b.upgrades.filter(function(x){ return x.id !== u.upgId; });
+          t.routeId = u.fromRouteId; delete t.upg;
+          var op = bkOpsFor(b, date); op.boatId = null; if(op.boatSplits) delete op.boatSplits;
+          if(typeof bookingV2AddHistory === 'function') bookingV2AddHistory(b, 'edit', 'Upgrade undone · back to ' + fromNm, 'Edit');
+          if(j){ mergeInto(b, j); persist(); }
+        } finally { free(b.id); }
+        O.wrote('booking'); render();
+        return j;
+      }, function(e){
+        free(b.id); render();
+        var bd = (e && e.body) || {};
+        if(e && e.status === 409 && e.code === 'route_closed'){ blocked(null); return null; }
+        if(e && e.status === 409 && e.code === 'not_enough_seats'){
+          var need = +bd.needed || pax;
+          blocked({ hasAllotment: true, seatsAvailable: Math.max(0, +bd.free || 0) }, need); return null;
+        }
+        O.fail('Undo upgrade refused · nothing changed', e); return null;
+      });
   };
 
   /* ── upgrade sale deleted · bookingV2UpgradeDelete → the shorter list goes with the booking (PATCH upgrades) ──

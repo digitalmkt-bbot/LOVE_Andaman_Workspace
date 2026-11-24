@@ -2,7 +2,7 @@
 function bookingV2DrawSources(routeId, date, agentId){
   const out=[];
   bookingV2LocksForAgent(routeId,date,agentId).forEach(l=>{
-    const kids=bookingV2LockChildren(l.id);
+    const kids=bookingV2LockChildren(l.id, date);   /* §lkSubDay */
     if(kids.length){
       kids.forEach(c=>{ const r=bookingV2LockDrawable(c,date); if(r>0) out.push({lockId:c.id, label:bookingV2LockHolderName(l)+' · '+(c.subName||'ย่อย'), remaining:r}); });
       const ur=bookingV2LockUnallocDrawable(l,date); if(ur>0) out.push({lockId:l.id, label:bookingV2LockHolderName(l)+' · ยังไม่จัด', remaining:ur});

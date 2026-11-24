@@ -15,13 +15,16 @@ function bookingV2RenderDietaryLuggageSection(){
   `;
   const totalSpecial = (m.veg||0) + (m.vegan||0) + (m.halal||0);
   const luggageWarn = luggage >= 3 ? `<div style="background:#FBEBD3;border-radius:10px;padding:8px 12px;margin-top:8px;font-size:12.5px;font-weight:600;color:#7A4300">&#9888; ${luggage} large bag(s) may require van seat reduction · check with dispatcher</div>` : '';
+  /* §mealNote2 · owner: "แบ่งเป็น 2 คอลัมน์" · ซ้าย = ช่องกรอก · ขวา = ตัวอย่าง By trip date · จอแคบพับลงมาเป็นคอลัมน์เดียวเอง */
   return `
-    <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <div style="flex:1 1 520px;min-width:0;display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;align-items:start">
       <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Diet</span>
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       ${pill((m.veg||0)>0, m.veg||0, 'Vegetarian', '#246b43', 'veg', "bookingV2ToggleMealOn('veg',this.checked)", "bookingV2SetMealQty('veg',this)")}
       ${pill((m.vegan||0)>0, m.vegan||0, 'Vegan', '#1f8a4a', 'vegan', "bookingV2ToggleMealOn('vegan',this.checked)", "bookingV2SetMealQty('vegan',this)")}
       ${pill((m.halal||0)>0, m.halal||0, 'Halal', '#8a5b1f', 'halal', "bookingV2ToggleMealOn('halal',this.checked)", "bookingV2SetMealQty('halal',this)")}
+        <div style="flex-basis:100%;font-size:10.5px;color:#6B7280;margin-top:1px">ทานมังสวิรัติ / วีแกน / ฮาลาล ติ๊กที่นี่แล้วใส่จำนวนคน &middot; ครัวนับยอดจากช่องนี้</div>
       </div>
       <span style="font-size:9px;color:#3E4658;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:36px">Luggage</span>
       <div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
@@ -33,10 +36,11 @@ function bookingV2RenderDietaryLuggageSection(){
       ${(typeof bookingV2AllergyCount==='function'&&bookingV2AllergyCount(m)>0)?`<div style="font-size:12px;font-weight:600;color:#8E2019;margin-bottom:6px">&#9888; ${bookingV2AllergyCount(m)} ราย</div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         ${(Array.isArray(m.allergyList)?m.allergyList:[]).map((a,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;background:#FCEBEB;border:1px solid #F0C9C9;color:#A32D2D;border-radius:12px;padding:4px 5px 4px 11px;font-size:11.5px;font-weight:700">${escapeHTML(a.name)} &times;<input type="number" min="1" max="99" value="${Math.floor(+a.qty||1)}" onchange="bookingV2AllergySetQty(${i},this.value)" onclick="event.stopPropagation()" style="width:44px;height:24px;box-sizing:border-box;padding:0 3px;text-align:center;border:1px solid #E6B8B8;border-radius:6px;font-size:13px;font-weight:500;color:#8E2019;font-family:'DM Mono',monospace;background:#fff"><span onclick="bookingV2AllergyRemove(${i})" style="cursor:pointer;color:#C77;font-size:14px;padding:0 3px;line-height:1" title="ลบ">&times;</span></span>`).join('')}
-        <input id="bkv2-allerg-name" placeholder="เพิ่มสิ่งที่แพ้ เช่น Peanut" onkeydown="if(event.key==='Enter'){event.preventDefault();bookingV2AllergyAdd();}" style="flex:1;min-width:150px;height:36px;box-sizing:border-box;border:1.5px solid #C9CCD6;border-radius:10px;padding:0 10px;font-size:13px;font-family:inherit">
+        <input id="bkv2-allerg-name" placeholder="เฉพาะสิ่งที่แพ้ เช่น Peanut, กุ้ง" onkeydown="if(event.key==='Enter'){event.preventDefault();bookingV2AllergyAdd();}" style="flex:1;min-width:150px;height:36px;box-sizing:border-box;border:1.5px solid #C9CCD6;border-radius:10px;padding:0 10px;font-size:13px;font-family:inherit">
         <input id="bkv2-allerg-qty" type="number" min="1" max="99" value="1" title="จำนวนคน" style="width:52px;height:36px;box-sizing:border-box;text-align:center;border:1.5px solid #C9CCD6;border-radius:10px;font-size:13px;font-weight:500;font-family:'DM Mono',monospace">
         <button type="button" onclick="bookingV2AllergyAdd()" style="height:36px;background:#16265C;color:#fff;border:none;border-radius:10px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ เพิ่ม</button>
       </div>
+      ${(Array.isArray(m.allergyList)?m.allergyList:[]).map((a,i)=>{ const k=bookingV2DietKeyOf(a&&a.name); return k?`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;background:#FFF7E6;border:1px solid #F1D9A6;border-radius:10px;padding:7px 10px;font-size:12px;color:#7A4300"><span>&#9888; "<b>${escapeHTML(a.name)}</b>" เป็นประเภทอาหาร ไม่ใช่สิ่งที่แพ้ &middot; ตอนนี้ครัวเห็นเป็นแพ้อาหาร และยอด ${BKV2_DIET_LBL[k]} ไม่ถูกนับ</span><button type="button" onclick="bookingV2AllergyToDiet(${i})" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">ย้ายไป ${BKV2_DIET_LBL[k]} ${Math.floor(+a.qty||1)} คน</button></div>`:''; }).join('')}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
         ${['Peanut','Tree nuts','Shellfish','Fish','Egg','Milk/Lactose','Gluten','Soy'].map(p=>`<button type="button" onclick="bookingV2AllergyAddPreset('${p}')" style="font-size:10.5px;color:#3E4658;background:#fff;border:1px dashed #C9CCD6;border-radius:13px;padding:4px 10px;cursor:pointer;font-family:inherit">+ ${p}</button>`).join('')}
       </div>
@@ -46,15 +50,17 @@ function bookingV2RenderDietaryLuggageSection(){
            และคนที่อยากโน้ตเป็นประโยค (ไม่ใช่ชื่อวัตถุดิบ) ไม่มีที่ให้ลง
            ชิปข้างบนไว้ของที่นับจำนวนคนได้ · ช่องนี้ไว้รายละเอียดที่นับไม่ได้ */''}
       <div style="margin-top:8px">
-        <label class="bkv2-nb-label" style="display:flex;align-items:center;gap:7px">รายละเอียดเพิ่มเติมเรื่องอาหาร
-          <em style="font-weight:600;font-style:normal;color:var(--ink-soft);font-size:10px">ประโยคที่ครัวกับไกด์ต้องอ่าน · ขึ้นบนใบพิมพ์</em>
+        <label class="bkv2-nb-label" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">โน้ตอาหารถึงครัว / ไกด์
+          <em style="font-weight:600;font-style:normal;color:var(--ink-soft);font-size:10px">ขึ้นบนใบพิมพ์ · ไม่นับเป็นจำนวนคน · ถ้าแพ้อาหารให้เพิ่มในช่อง Allergies ด้านบน</em>
           ${(m.pierBy||m.pierAt)?`<em style="font-weight:700;font-style:normal;color:#0C6285;background:#E4F2F8;border-radius:9px;padding:1px 8px;font-size:9.5px">หน้าท่าบันทึก${m.pierBy?(' · '+escapeHTML(m.pierBy)):''}${m.pierAt?(' · '+escapeHTML(m.pierAt)):''}</em>`:''}
         </label>
-        <textarea id="bkv2-allerg-free" rows="2" placeholder="เช่น เด็ก 1 คนไม่กินเผ็ด · ขอข้าวสวยเพิ่ม 2 ที่ · ห้ามใส่ถั่วทุกจาน"
+        <textarea id="bkv2-allerg-free" rows="2" placeholder="เช่น มังสวิรัติทานไข่ได้ · ขอข้าวสวยเพิ่ม 2 ที่ · เด็ก 1 คนขอไม่เผ็ด"
           oninput="bookingV2SetMealNote(this.value)"
-          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${(m.allergies||'').trim()?'#F0C9C9':'var(--border)'};background:${(m.allergies||'').trim()?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
+          style="width:100%;box-sizing:border-box;margin-top:5px;border:1px solid ${bookingV2MealNoteIsAl(m)?'#F0C9C9':'var(--border)'};background:${bookingV2MealNoteIsAl(m)?'#FFFBFB':'var(--white)'};border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit;line-height:1.45;resize:vertical">${escapeHTML(m.allergies||'')}</textarea>
       </div>
     </div>
+    </div>
+    <div id="bkv2-diet-pv" style="flex:0 1 320px;min-width:260px">${bookingV2DietPreviewHtml()}</div>
     </div>
   `;
 }

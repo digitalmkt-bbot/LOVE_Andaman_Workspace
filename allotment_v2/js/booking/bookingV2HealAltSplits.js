@@ -1,4 +1,6 @@
 function bookingV2HealAltSplits(date){
+  /* §codeVer · หน้านี้เป็นโค้ดเก่ากว่าที่อยู่บนเซิร์ฟเวอร์ → ตัวซ่อมอัตโนมัติห้ามเขียนทับใคร (รอโหลดหน้าใหม่) */
+  if(window._laStale) return false;
   let changed=false;
   (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
     if(date && !(b.trips||[]).some(t=>t.date===date)) return;

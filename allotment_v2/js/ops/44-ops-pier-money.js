@@ -106,6 +106,9 @@
     if(!r || !m) return m;
     var exCov = n(m.exCov);
     m.cot = n(r.cot); m.cur = r.cot_currency || m.cur; m.handling = r.cot_handling || ''; m.note = r.cot_note || '';
+    /* §cotBill / §cotChip (sync 11-16) · the COT already paid through the booking's own invoice: legacy's chip and its
+       guard in pckPayOpen ("ใบนี้จ่ายผ่านบิลแล้ว") read these */
+    m.cotBill = n(r.cot_bill); m.cotBillNo = r.cot_bill_no || '';
     m.upDue = n(r.upgrades_due); m.upGot = n(r.upgrades_got); m.balance = n(r.b2c_balance);
     m.exDue = n(r.tour_sales_due); m.exGot = n(r.tour_sales_got); m.extrasTot = m.exGot + m.exDue + exCov;
     m.gross = n(r.gross); m.pierPaid = n(r.paid); m.pierFee = n(r.fees); m.due = n(r.due); m.got = n(r.got);
@@ -149,11 +152,15 @@
       }
       return line;
     });
+    /* §cotBill · legacy asked "ใบนี้จ่ายผ่านบิลแล้ว" when this window opened (pckPayOpen): being here means yes, so the
+       server's 409 paid_via_bill is answered up front. If the figures changed since, the server asks again. */
+    var M0 = window.pckMoney(b, date) || {};
+    var preset = (n(M0.cotBill) > 0 && !(n(M0.due) > 0) && !(n(M0.pierPaid) > 0)) ? { collect_anyway: true } : {};
     return O.queue(function(){
       return O.anyway(function(extra){
         return O.bookingWrite('POST', '/v1/bookings/' + enc(sid(b)) + '/pier-payments', b,
           Object.assign({ service_date: date, lines: lines }, extra));
-      }, { overpayment: { flag: 'overpay_anyway' } });
+      }, { overpayment: { flag: 'overpay_anyway' }, paid_via_bill: { flag: 'collect_anyway' } }, preset);
     }).then(function(row){
       putRow(date, row); mirror(b, date, row);
       var M = window.pckMoney(b, date);

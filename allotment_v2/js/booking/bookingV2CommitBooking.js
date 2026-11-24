@@ -21,12 +21,13 @@ function bookingV2CommitBooking(status){
          ยาวเกินชื่อวัตถุดิบ หรือมีตัวคั่นประโยค → ลงช่องรายละเอียด ซึ่งพิมพ์ออกใบเหมือนกัน
          สั้นแบบชื่อวัตถุดิบ → เข้าชิปเหมือนกดปุ่ม + เพิ่ม เพื่อให้ยังนับจำนวนคนได้
          ทั้งสองทางถูกพิมพ์ลงใบและถูกนับโดย bookingV2AllergyText/Count · ไม่มีทางไหนที่ข้อความหาย */
-      var _alLong = _alWas.length>28 || _alWas.indexOf('\u00b7')>=0 || /[.\n]/.test(_alWas);
+      var _alLong = _alWas.length>28 || _alWas.indexOf('\u00b7')>=0 || /[.\n]/.test(_alWas)
+        || !!((typeof bookingV2DietKeyOf==='function')&&bookingV2DietKeyOf(_alWas));   /* §mealNote */
       if(_alLong){
         var _sm=d.specialMeals||(d.specialMeals={veg:0,vegan:0,halal:0,allergies:''});
         _sm.allergies=[String(_sm.allergies||'').trim(), _alWas].filter(Boolean).join(' \u00b7 ');
       } else if(typeof bookingV2AllergyAdd==='function'){
-        bookingV2AllergyAdd();
+        bookingV2AllergyAdd(true);
       }
       _alN=document.getElementById('bkv2-allerg-name');
       if(_alN) _alN.value='';
@@ -168,7 +169,7 @@ function bookingV2CommitBooking(status){
     }
     // Soft: self-arrive ticked but a hotel pickup was entered → likely a mis-tick (booking gets dropped from the outbound van sheet)
     if(d.pickupSelf && (d.hotelName||'').trim()){
-      if(!confirm('⚠ ติ๊ก "ลูกค้ามาเอง (self-arrive)" แต่กรอกโรงแรม "'+(d.hotelName||'').trim()+'" ไว้\n\nbooking นี้จะไม่ขึ้นในใบงานรถขาไป (ถือว่าลูกค้าไปเองที่ท่า)\nถ้าลูกค้าให้ไปรับที่โรงแรม กด Cancel แล้วเอาติ๊กออก\n\nยืนยันเป็น self-arrive ต่อไปหรือไม่?')) return;
+      if(!confirm('⚠ ติ๊ก "ลูกค้ามาเอง (self-arrive)" แต่กรอกโรงแรม "'+(d.hotelName||'').trim()+'" ไว้\n\nขาไป: ลูกค้ามาเองที่ท่า ไม่มีรถไปรับ (ไม่ขึ้นในใบงานรถขาไป)\nขากลับ: รถยังส่งที่โรงแรมนี้\nถ้าต้องให้รถไปรับที่โรงแรม กด Cancel แล้วเอาติ๊กออก\n\nยืนยันเป็น self-arrive ต่อไปหรือไม่?')) return;
     }
     // Soft: pickup (hotel / area) — OTA bookings may not have it yet → warn + flag, don't block
     const _missSoft = [];

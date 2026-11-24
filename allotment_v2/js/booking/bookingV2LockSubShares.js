@@ -8,12 +8,12 @@
 function bookingV2LockSubShares(p, date){
   let left = bookingV2LockHeldRemaining(p, date);
   const by = {};
-  bookingV2LockChildren(p.id).forEach(c=>{
+  bookingV2LockChildren(p.id, date).forEach(c=>{
     const rem = Math.max(0, (c.qty||0) - bookingV2LockUsedOn(c, date));
     const h = Math.min(rem, left); left -= h;
     by[c.id] = { rem:rem, held:h, pend:rem-h };
   });
-  const urem = Math.max(0, bookingV2LockUnalloc(p) - bookingV2LockUsedOn(p, date));
+  const urem = Math.max(0, bookingV2LockUnalloc(p, date) - bookingV2LockUsedOn(p, date));
   const uh = Math.min(urem, left);
   return { by:by, un:{ rem:urem, held:uh, pend:urem-uh } };
 }

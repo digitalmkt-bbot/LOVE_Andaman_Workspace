@@ -333,6 +333,12 @@
     var q = Number(m.qty) || 0; if(q <= 0){ alert('Enter the number of seats for this sub-group'); return; }
     var L = find(m.parentId); if(!L) return;
     var body = { sub_name: String(m.name).trim(), pax: q }; if(m.reason) body.reason = m.reason;
+    /* §lkSubDay (sync 11-17) · a sub-group under a bulk lock is one travel day's: the server needs it (service_date),
+       legacy asks for it in the same words */
+    if(isGroup(L)){
+      if(!m.date){ alert('เลือกวันเดินทางของกรุ๊ปย่อยก่อน'); return; }
+      body.service_date = m.date;
+    }
     return go('Sub-group not saved', function(){ return W('POST', lockPath(L) + '/sub-groups', L.opsVersion, body); })
       .then(function(r){ if(r !== null) _bkV2SubModal = null; render(); });
   });
