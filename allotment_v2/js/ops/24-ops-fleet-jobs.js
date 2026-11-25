@@ -438,7 +438,8 @@
   /* flwParked: why a job is laid up on purpose (donor, off season, documents expired, charter, parked on the board)
      = the server's parked_reason label on the job. */
   wrap('flwParked', function(orig, m){
-    if(m && m._fromOpsBackend && m.parkedReason !== undefined) return m.parkedReason ? m.parkedReason.label : '';
+    // legacy answers flwT(label): the screen's language, Thai by default (parity G10)
+    if(m && m._fromOpsBackend && m.parkedReason !== undefined) return m.parkedReason ? (typeof window.flwT === 'function' ? window.flwT(m.parkedReason.label) : m.parkedReason.label) : '';
     return orig.apply(this, [].slice.call(arguments, 1));
   });
   wrap('flBoardLane', function(orig, m){

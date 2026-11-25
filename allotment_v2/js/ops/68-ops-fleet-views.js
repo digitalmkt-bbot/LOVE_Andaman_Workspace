@@ -79,7 +79,8 @@
       it.stage = s.stage;
       it.silent = num(s.silent_days);
       it.cost = num(s.cost);
-      if(it.kind === 'mj') it.park = s.parked ? s.parked.label : '';
+      // the server's label is legacy's English key (FLW_PARK): flwT shows it as legacy does (Thai unless the screen is in English) · parity G10
+      if(it.kind === 'mj') it.park = s.parked ? (typeof window.flwT === 'function' ? window.flwT(s.parked.label) : s.parked.label) : '';
     });
     /* w5-b: WHICH items are on the page is the server's too (an open incident with no job, a job not cancelled, a closed job only while
        it waits for its invoice, a project awaiting the bill). The legacy builder still supplies the objects the page draws from,
