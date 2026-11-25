@@ -4197,7 +4197,11 @@ function renderBookingFlow(){
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ymd=d=>(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(d):d.toISOString().slice(0,10);
   const paxOf=t=>(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot((t&&t.pax)||{}):0;
-  const B=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(b=>b && !['cancelled','cancelled_weather','rejected'].includes(b.status));
+  /* §bfSrvFlow · ops mode: every figure of the page from the server's GET /v1/bookings/flow?mode= (js/ops/53-ops-booking-flow.js),
+     worked out over every live booking with legacy's rules (operation-backend src/domain/booking-flow.ts). The browser keeps no bookings
+     for this page: the markup below is unchanged, only the numbers are read from _bfF instead of being added up from SB_BOOKINGS. */
+  const _bfF=(window._opsBfFlow&&window._opsBfFlow.mode===_bfMode&&Array.isArray(window._opsBfFlow.buckets))?window._opsBfFlow:null;
+  const B=_bfF?[]:(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(b=>b && !['cancelled','cancelled_weather','rejected'].includes(b.status));
   const bkDate=b=>{ if(b.bookingDate) return String(b.bookingDate).slice(0,10); const tr=(b.trips||[]).map(t=>t.date).filter(Boolean).sort(); return tr[0]||''; };
   const firstTrip=b=>((b.trips||[]).filter(t=>t.date).sort((x,y)=>String(x.date).localeCompare(String(y.date)))[0])||null;
   const mkOf=b=>{ let code=(typeof pmMarket==='function')?pmMarket(b):((b.marketSnapshot&&b.marketSnapshot.market)||'unassigned'); code=code||'unassigned'; const m=(typeof sbGetMarket==='function')?sbGetMarket(code):null; return {code:code, name:m?(m.name||m.code||code):(code==='b2c'?'B2C':code==='unassigned'?'ไม่ระบุ':code), color:m?(m.color||'#94A3B8'):'#94A3B8'}; };
@@ -4206,7 +4210,7 @@ function renderBookingFlow(){
   const FALL=['#E0457F','#185FA5','#0F6E56','#A05A1A','#8B5CF6','#19A7C9'];
   const thMon=laMonAbbrTH();
 
-  if(!B.length){ host.innerHTML='<div style="padding:40px;text-align:center;color:#9aa49c;font-size:13px;font-family:DM Sans,sans-serif">ยังไม่มีบุคกิ้ง · หน้านี้จะสรุปจากบุคกิ้งที่บันทึกแล้ว</div>'; return; }
+  if(!B.length&&!_bfF){ host.innerHTML='<div style="padding:40px;text-align:center;color:#9aa49c;font-size:13px;font-family:DM Sans,sans-serif">ยังไม่มีบุคกิ้ง · หน้านี้จะสรุปจากบุคกิ้งที่บันทึกแล้ว</div>'; return; }
 
   // ── period buckets ──
   const today=new Date();
@@ -4217,12 +4221,12 @@ function renderBookingFlow(){
     else { for(let i=5;i>=0;i--){ const s=new Date(today.getFullYear(), today.getMonth()-i, 1); const en=new Date(today.getFullYear(), today.getMonth()-i+1, 0); out.push({label:thMon[s.getMonth()], from:ymd(s), to:ymd(en)}); } }
     return out;
   }
-  const buckets=periodBuckets(_bfMode);
-  buckets.forEach(bk=>{ bk.total=0; bk.mk={}; bk.list=[]; });
+  const buckets=_bfF?_bfF.buckets.map(x=>({label:x.label, dow:x.dow, from:x.from, to:x.to, total:+x.total||0, mk:Object.assign({},x.markets||{}), list:[]})):periodBuckets(_bfMode);
+  if(!_bfF) buckets.forEach(bk=>{ bk.total=0; bk.mk={}; bk.list=[]; });
   const findBucket=ds=>{ for(let i=0;i<buckets.length;i++){ if(ds>=buckets[i].from && ds<=buckets[i].to) return buckets[i]; } return null; };
   // top markets overall
   const mkCountAll={}; B.forEach(b=>{ const c=mkOf(b).code; mkCountAll[c]=(mkCountAll[c]||0)+1; });
-  let topN=Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
+  let topN=_bfF?(_bfF.markets||[]).map(m=>m.code).filter(c=>c!=='__other'):Object.keys(mkCountAll).sort((a,b)=>mkCountAll[b]-mkCountAll[a]).slice(0,4);
   B.forEach(b=>{ const bd=bkDate(b); if(!bd) return; const bk=findBucket(bd); if(!bk) return; bk.total++; bk.list.push(b); const c=mkOf(b).code; bk.mk[c]=(bk.mk[c]||0)+1; });
   /* §bfSrvTot · bucket totals from the server's daily-counts (live bookings per sale day,
      GET /v1/bookings/daily-counts via js/ops/53-ops-booking-flow.js). SB_BOOKINGS holds only
@@ -4231,7 +4235,7 @@ function renderBookingFlow(){
      The unloaded remainder of a bucket lands in the gray "other" segment below. */
   const _bfDcw=window._opsBfDaily;
   const _bfDc=(_bfDcw&&typeof bookingV2OpsDailyCounts==='function')?bookingV2OpsDailyCounts(_bfDcw.from,_bfDcw.to):null;
-  if(_bfDc){ buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return;
+  if(_bfDc&&!_bfF){ buckets.forEach(bk=>{ if(bk.from<_bfDcw.from||bk.from>_bfDcw.to) return;
     let t=0; Object.keys(_bfDc).forEach(ds=>{ if(ds>=bk.from&&ds<=bk.to) t+=(_bfDc[ds].bk||0); });
     bk.total=t; });
     /* §bfSrvMk · the by-market split comes from the same server answer (daily-counts?markets=1: stamped
@@ -4247,7 +4251,7 @@ function renderBookingFlow(){
     }
   }
   buckets.forEach(bk=>{ let s=0; topN.forEach(c=>s+=bk.mk[c]||0); bk.mk.__other=Math.max(0,bk.total-s); });
-  const mkOrder=topN.map((c,i)=>{ const m=(typeof sbGetMarket==='function')?sbGetMarket(c):null; return {code:c, name:m?(m.name||m.code||c):(c==='b2c'?'B2C':c==='unassigned'?'ไม่ระบุ':c), color:(m&&m.color)||FALL[i%FALL.length]}; }).concat([{code:'__other',name:'อื่นๆ',color:'#94A3B8'}]);
+  const mkOrder=_bfF?(_bfF.markets||[]).map(m=>({code:m.code, name:m.name, color:m.color})):topN.map((c,i)=>{ const m=(typeof sbGetMarket==='function')?sbGetMarket(c):null; return {code:c, name:m?(m.name||m.code||c):(c==='b2c'?'B2C':c==='unassigned'?'ไม่ระบุ':c), color:(m&&m.color)||FALL[i%FALL.length]}; }).concat([{code:'__other',name:'อื่นๆ',color:'#94A3B8'}]);
 
   // ── stacked intake bars SVG ──
   function barsSVG(){
@@ -4266,6 +4270,7 @@ function renderBookingFlow(){
   // ── dual line: bookings-in (pax) vs travel (pax) · window today-14 .. today+15 ──
   const inMap={},tvMap={};
   B.forEach(b=>{ const bd=bkDate(b); const ft=firstTrip(b); const fp=ft?paxOf(ft):0; if(bd) inMap[bd]=(inMap[bd]||0)+fp; (b.trips||[]).forEach(t=>{ if(t.date) tvMap[t.date]=(tvMap[t.date]||0)+paxOf(t); }); });
+  if(_bfF) (_bfF.in_vs_travel||[]).forEach(x=>{ inMap[x.date]=+x.in||0; tvMap[x.date]=+x.travel||0; });
   const _DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const days=[]; for(let off=-14; off<=15; off++){ const d=new Date(today); d.setDate(d.getDate()+off); const k=ymd(d); days.push({k:k, inV:inMap[k]||0, tvV:tvMap[k]||0, dnum:d.getDate(), dow:_DOW[d.getDay()], isToday:off===0}); }
   function dualSVG(){
@@ -4288,24 +4293,27 @@ function renderBookingFlow(){
   const curRangeLbl=(cur.from===cur.to)?_fmtD(cur.from):(_fmtD(cur.from)+' – '+_fmtD(cur.to));
   let perPax=0, leadSum=0, leadN=0; const mkC={}, slC={};
   cur.list.forEach(b=>{ const ft=firstTrip(b); const p=ft?paxOf(ft):0; perPax+=p; const bd=bkDate(b); if(ft&&bd){ const ld=Math.round((new Date(ft.date+'T00:00:00')-new Date(bd+'T00:00:00'))/86400000); if(ld>=0&&ld<400){ leadSum+=ld; leadN++; } } const mc=mkOf(b); mkC[mc.code]=mkC[mc.code]||{n:0,name:mc.name,color:mc.color}; mkC[mc.code].n++; const sl=slOf(b); slC[sl.id]=slC[sl.id]||{n:0,pax:0,name:sl.name,color:sl.color}; slC[sl.id].n++; slC[sl.id].pax+=p; });
-  const avgLead=leadN?(leadSum/leadN):0;
-  const topMk=Object.values(mkC).sort((a,b)=>b.n-a.n)[0];
-  const topSl=Object.values(slC).sort((a,b)=>b.n-a.n)[0];
+  const _bfK=_bfF?(_bfF.kpi||{}):null;
+  if(_bfK) perPax=+_bfK.pax||0;
+  const avgLead=_bfK?(+_bfK.avg_lead||0):leadN?(leadSum/leadN):0;
+  const topMk=_bfK?(_bfK.top_market?{n:+_bfK.top_market.count||0,name:_bfK.top_market.name,color:_bfK.top_market.color}:undefined):Object.values(mkC).sort((a,b)=>b.n-a.n)[0];
+  const topSl=_bfK?(_bfK.top_sales?{n:+_bfK.top_sales.count||0,pax:+_bfK.top_sales.pax||0,name:_bfK.top_sales.name,color:_bfK.top_sales.color}:undefined):Object.values(slC).sort((a,b)=>b.n-a.n)[0];
   const momPct=prev.total?Math.round((cur.total-prev.total)/prev.total*100):0;
   const periodLbl=_bfMode==='day'?'Today':_bfMode==='week'?'This week':'This month';
   const rangeLbl=buckets[0].from+' → '+cur.to;
 
   // ── horizontal bars ──
   function hbars(items){ const mx=Math.max(1,Math.max.apply(null,items.map(i=>i.val))); return items.map(i=>'<div class="bfw-brow"><div class="bfw-blab"><span class="bfw-dot" style="background:'+i.color+'"></span>'+e(i.label)+'</div><div class="bfw-btrack"><div class="bfw-bfill" style="width:'+(i.val/mx*100).toFixed(1)+'%;background:'+i.color+'"></div></div><div class="bfw-bval">'+e(i.disp)+'</div></div>').join(''); }
-  const salesItems=Object.values(slC).sort((a,b)=>b.pax-a.pax).slice(0,6).map(s=>({label:s.name,color:s.color,val:s.pax,disp:s.pax+' ('+s.n+')'}));
-  const mktItems=Object.values(mkC).sort((a,b)=>b.n-a.n).slice(0,6).map(m=>({label:m.name,color:m.color,val:m.n,disp:(cur.total?Math.round(m.n/cur.total*100):0)+'%'}));
+  const salesItems=_bfF?(_bfF.sales||[]).map(s=>({label:s.name,color:s.color,val:+s.pax||0,disp:s.pax+' ('+s.count+')'})):Object.values(slC).sort((a,b)=>b.pax-a.pax).slice(0,6).map(s=>({label:s.name,color:s.color,val:s.pax,disp:s.pax+' ('+s.n+')'}));
+  const mktItems=_bfF?(_bfF.markets_top||[]).map(m=>({label:m.name,color:m.color,val:+m.count||0,disp:(+m.pct||0)+'%'})):Object.values(mkC).sort((a,b)=>b.n-a.n).slice(0,6).map(m=>({label:m.name,color:m.color,val:m.n,disp:(cur.total?Math.round(m.n/cur.total*100):0)+'%'}));
   const famPax={}; let famTot=0; cur.list.forEach(b=>{ (b.trips||[]).forEach(t=>{ if(!t.date) return; const f=famOf(t.routeId); famPax[f.id]=famPax[f.id]||{name:f.name,color:f.color,p:0}; famPax[f.id].p+=paxOf(t); famTot+=paxOf(t); }); });
-  const destItems=Object.values(famPax).sort((a,b)=>b.p-a.p).slice(0,6).map(f=>({label:f.name,color:f.color,val:f.p,disp:(famTot?Math.round(f.p/famTot*100):0)+'%'}));
+  const destItems=_bfF?(_bfF.families||[]).map(f=>({label:f.name,color:f.color,val:+f.pax||0,disp:(+f.pct||0)+'%'})):Object.values(famPax).sort((a,b)=>b.p-a.p).slice(0,6).map(f=>({label:f.name,color:f.color,val:f.p,disp:(famTot?Math.round(f.p/famTot*100):0)+'%'}));
 
   // ── calendar heatmap · current month · pax departing ──
   function calHTML(){
     const y=today.getFullYear(), m=today.getMonth(); const first=new Date(y,m,1), firstDow=first.getDay(), ndays=new Date(y,m+1,0).getDate();
     const pax={}; B.forEach(b=>{ (b.trips||[]).forEach(t=>{ if(!t.date) return; const dd=new Date(t.date+'T00:00:00'); if(dd.getFullYear()===y&&dd.getMonth()===m) pax[dd.getDate()]=(pax[dd.getDate()]||0)+paxOf(t); }); });
+    if(_bfF&&_bfF.calendar&&_bfF.calendar.month===(y+'-'+String(m+1).padStart(2,'0'))) (_bfF.calendar.days||[]).forEach(x=>{ if(x.pax) pax[x.day]=+x.pax; });
     const mxp=Math.max(1,Math.max.apply(null,Object.values(pax).concat([1])));
     const dows=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     let cells=''; for(let b0=0;b0<firstDow;b0++) cells+='<div class="bfw-cell empty"></div>';
@@ -4322,6 +4330,7 @@ function renderBookingFlow(){
     const ri={},ci={}; rows.forEach((r,i)=>ri[r.k]=i); cols.forEach((c,i)=>ci[c.k]=i);
     const M=rows.map(()=>cols.map(()=>0));
     B.forEach(b=>{ const bd=bkDate(b); if(!(bd in ri)) return; (b.trips||[]).forEach(t=>{ if(t.date in ci) M[ri[bd]][ci[t.date]]+=paxOf(t); }); });
+    if(_bfF&&_bfF.cohort){ const C=_bfF.cohort; (C.rows||[]).forEach((rk,i)=>{ if(!(rk in ri)) return; (C.cols||[]).forEach((ck,j)=>{ if(ck in ci) M[ri[rk]][ci[ck]]=+((C.cells[i]||[])[j])||0; }); }); }
     let mx=1; M.forEach(r=>r.forEach(v=>{ if(v>mx)mx=v; }));
     let h='<div class="bfw-ch" style="grid-template-columns:56px repeat('+colN+',1fr)"><div class="bfw-chcorner">จอง&#8595;<br>เที่ยว&#8594;</div>';
     cols.forEach(c=>{ h+='<div class="bfw-chlab'+(c.today?' t':'')+(c.we?' we':'')+'">'+c.d+'</div>'; });
