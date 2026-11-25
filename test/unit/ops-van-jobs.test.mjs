@@ -37,6 +37,8 @@ function handlersBase(over = {}) {
     } },
     'GET /operations/pickup-names-th': { body: { names: [{ name: 'Patong Beach', name_th: 'หาดป่าตอง' }] } },
     'GET /operations/van-groups': { body: { groups: [group('vgrp_1', 1, 'veh01'), group('vgrp_2', 2, 'veh02')] } },
+    // §vanDayRead: the day's groups in one read (the per-route read is still used after a stop write)
+    'GET /operations/van-groups/day': { body: { service_date: D, routes: [{ route_id: R, groups: [group('vgrp_1', 1, 'veh01'), group('vgrp_2', 2, 'veh02')] }] } },
     'GET /operations/van-stops': { body: { stops: [stop(), stop({ id: 'vs_2', group_id: 'vgrp_2', kind: 'cargo', pax: 0,
       checked_in: { at: '2026-10-02T06:00:00Z', by: 'pier', seats: 0 } })] } },
     'GET /operations/van-jobs': { body: { date: D, jobs: [
@@ -311,7 +313,7 @@ test('the day load waits for the day\'s bookings before applying van groups', as
   const late = { id: 'b3', opsId: 'lg_3', status: 'confirmed', trips: [{ date: D, routeId: R, opsTripId: 't3' }], ops: {} };
   const order = [];
   const g1 = { ...group('vgrp_1', 1, 'veh01'), members: [{ trip_id: 't3', booking_id: 'lg_3', idx: 0, sequence: 1, return_van_id: null }] };
-  const rt = runtime({ handlers: handlersBase({ 'GET /operations/van-groups': () => { order.push('groups'); return { body: { groups: [g1] } }; } }) });
+  const rt = runtime({ handlers: handlersBase({ 'GET /operations/van-groups/day': () => { order.push('groups'); return { body: { service_date: D, routes: [{ route_id: R, groups: [g1] }] } }; } }) });
   rt.ctx.bookingV2OpsEnsureDay = (date) => new Promise((resolve) => {
     setTimeout(() => { order.push('bookings ' + date); rt.ctx.SB_BOOKINGS.push(late); resolve({ bookings: [] }); }, 5);
   });

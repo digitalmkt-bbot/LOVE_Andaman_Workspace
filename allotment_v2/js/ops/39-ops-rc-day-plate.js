@@ -61,13 +61,18 @@
       /* §vanCatalogue · the real vans (names, registered plates) instead of legacy's demo vans; the demo list is
          emptied before this render, so a plate is blank for the ~30 ms the catalogue takes, never "กข 5678" */
       var cat = (O.enabled() && O.vanJobs && typeof O.vanJobs.ensureCatalogue === 'function') ? O.vanJobs.ensureCatalogue() : null;
+      /* §rcAreaNames (2026-11-26) · the pickup-area names are the server's (legacy reads its database's: "Nang Thong"), not the code's
+         seed ("Nang Thong / La Flora", 08-app.js): SB_PICKUP_AREAS was filled from the server only when Pickup Setup opened.
+         The areas are read once (21-ops-pickup.js O.pickup.load) and the screen redraws when they land. */
+      var areas = (O.enabled() && O.pickup && typeof O.pickup.load === 'function' && !(O.pickup.isReady && O.pickup.isReady()))
+        ? O.pickup.load().then(function(){ return true; }, function(e){ try{ console.warn('[ops] pickup areas did not load · ' + (e && e.message)); }catch(_){} return false; }) : null;
       var r = orig.apply(this, arguments);
       if(!O.enabled()) return r;
       var d = ymd(dateOf());
       var again = function(changed){
         if(changed && ymd(dateOf()) === d && document.getElementById(hostId) && typeof window[name] === 'function') window[name]();
       };
-      if(d) Promise.all([loadDay(d), cat]).then(function(x){ again(x[0] || x[1]); });
+      if(d) Promise.all([loadDay(d), cat, areas]).then(function(x){ again(x[0] || x[1] || x[2]); });
       return r;
     };
   }

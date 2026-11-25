@@ -247,8 +247,16 @@ test('PFM load, approve-travel, hold, remind, and M1 payment submit refresh serv
 
   // pfmRecSubmit delegates to M1 and does NOT write bk.paymentSlips[]
   rt.context._pfmRec = { bkId: 'bk_client_1', invId: null, prepay: true, amount: 1500, method: 'transfer', ref: 'REF-9', slips: [{ id: 'att_1', name: 'slip.jpg' }] };
-  await rt.window.pfmRecSubmit();
+  const recP = rt.window.pfmRecSubmit();
+  await rt.tick();
+  // §pfmSlipCount: the payment's slip is linked to the booking too (legacy pfmRecSubmit keeps it on the booking), so slip_count counts it
+  const link = rt.calls.find(x => x.path === '/v1/bookings/bk_srv_1/slips');
+  assert.ok(link, 'the slip is linked to the booking');
+  assert.deepEqual(JSON.parse(JSON.stringify(link.body)), { attachment_id: 'att_1' });
+  rt.resolveNext({ id: 'bs_1', attachment_id: 'att_1', added_at: '2026-10-15T01:00:00Z', added_by: 'staff' });
+  await recP;
   assert.equal(rt.SB_BOOKINGS[0].paymentSlips.length, 0, 'bk.paymentSlips[] is not written in ops mode');
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.SB_BOOKINGS[0].slips.map(s => s.attachmentId))), ['att_1'], 'the booking\'s own slips list carries it');
   assert.ok(rt.calls.some(x => x.m1 === 'createInvoice' && x.opt.kind === 'prepay'));
   assert.ok(rt.calls.some(x => x.m1 === 'recordPayment' && x.invId === 'inv_prepay_1' && x.amt === 1500));
 });

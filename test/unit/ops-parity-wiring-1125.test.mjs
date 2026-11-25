@@ -135,7 +135,7 @@ function vanRuntime({ jobs, catalogue } = {}) {
       : p === '/operations/vans' ? { vans: catalogue || [{ id: 'veh03', name: 'Love3', plate: '31-6675', capacity: 13, ownership: 'own' }] }
       : p === '/operations/van-days' ? { vans: [], days: [] }
       : p === '/operations/pickup-names-th' ? { names: [] }
-      : p === '/operations/van-groups' ? { groups: [] } : p === '/operations/van-stops' ? { stops: [] } : p === '/operations/van-arrivals' ? { arrivals: [] } : {};
+      : p === '/operations/van-groups' ? { groups: [] } : p === '/operations/van-groups/day' ? { routes: [] } : p === '/operations/van-stops' ? { stops: [] } : p === '/operations/van-arrivals' ? { arrivals: [] } : {};
     return { status: 200, ok: true, text: async () => JSON.stringify(body) };
   };
   vm.runInContext(VANS, ctx);

@@ -98,7 +98,8 @@
       status: r.status || 'no_invoice',
       decision: d,
       reminded_at: r.reminded_at || null,
-      cot_deduct: num(r.cot_deduct)
+      cot_deduct: num(r.cot_deduct),
+      slip_count: r.slip_count == null ? null : num(r.slip_count)   // §pfmSlipCount · the slip chip's count, the server's (legacy laPaySlips(b).length)
     };
     state.byClientId[cid] = mapped;
     state.byServerId[r.booking_id] = mapped;
@@ -222,6 +223,13 @@
       total: r.total,
       trips: [{ routeId: r.route_id, date: r.travel_date, pax: { ad: r.pax } }]
     };
+    /* §pfmSlipCount (2026-11-26) · the chip (`🧾 สลิป N` / `🧾 + สลิป`) counts the server's slip_count: a booking outside the loaded
+       SB_BOOKINGS window had no slips here, so every such row read "+ สลิป". The row is a copy, so the real booking's list (the slip
+       viewer's) is left as syncSlipView built it. */
+    if(r.slip_count != null){
+      base.paymentSlips = [];
+      for(var si = 0; si < r.slip_count; si++) base.paymentSlips.push({ id: 'pfm-slip-' + si, kind: 'upload' });
+    }
     base.ops = Object.assign({}, base.ops || {});
     if(r.decision){
       base.ops.pfm = {
@@ -276,7 +284,9 @@
     var sum = function(k){ return entry.rows.reduce(function(a, x){ return a + num(x[k]); }, 0); };
     /* §pfmUnpaidCard (2026-11-25) · the "Unpaid" card is the server's too: totals.unpaid_due / unpaid_bookings (legacy's rule, a proforma
        row still owing, over every row of the period), not a sum over the invoices this browser happened to load. null: an older answer. */
-    return { total: t.total != null ? num(t.total) : sum('total'), received: t.received != null ? num(t.received) : sum('received'),
+    /* §pfmLegacyAmounts (2026-11-26, parity) · the "Paid" / "Collected" cards are legacy's paidAmt: the rows' paid (total - balance), the
+       server's totals.paid. They were totals.received (Q24), which read ฿3,552,585 where legacy reads ฿3,539,340 (Nov 2026). */
+    return { total: t.total != null ? num(t.total) : sum('total'), received: t.paid != null ? num(t.paid) : sum('paid'),
       unpaid: t.unpaid_due != null ? num(t.unpaid_due) : null, nUnpaid: t.unpaid_bookings != null ? num(t.unpaid_bookings) : null };
   };
 
@@ -444,6 +454,27 @@
     return out;
   });
 
+  /* §pfmSlipCount (2026-11-26) · legacy pfmRecSubmit keeps the payment's slips on the booking too ("keep slip refs on the booking too",
+     bk.paymentSlips), and the chip counts that list. Here the list is the booking's slips (POST /v1/bookings/:id/slips): each slip sent
+     with the payment is linked to the booking as well, so the server's slip_count goes up as legacy's chip does. The slip viewer lists a
+     file once (38-ops-attachments.js syncSlipView). A refused link is only a console warning: the payment itself is recorded. */
+  function mirrorSlips(bkId, slips){
+    var ids = (slips || []).map(function(s){ return typeof s === 'string' ? s : (s && (s.id || s.attachmentId)); }).filter(Boolean);
+    var sid = toServerBookingId(bkId);
+    if(!ids.length || !sid) return Promise.resolve();
+    var bk = findBooking(bkId);
+    return ids.reduce(function(pr, id){
+      return pr.then(function(){
+        return O.post('/v1/bookings/' + enc(sid) + '/slips', { attachment_id: id }).then(function(row){
+          if(bk && row && row.id){
+            bk.slips = (bk.slips || []).filter(function(x){ return x && x.id !== row.id && x.attachmentId !== id; })
+              .concat([{ id: row.id, attachmentId: row.attachment_id || id, addedAt: row.added_at || '', addedBy: row.added_by || '' }]);
+          }
+        }, function(e){ try{ console.warn('[ops] PFM slip not linked to the booking · ' + (e && e.message)); }catch(_){} });
+      });
+    }, Promise.resolve());
+  }
+
   wrap('pfmRecSubmit', function(){
     var r = typeof _pfmRec !== 'undefined' ? _pfmRec : null;
     if(!r) return null;
@@ -467,6 +498,8 @@
     return p.then(function(){
       // Do NOT write bk.paymentSlips[] or call acctPersistBookings() in ops mode.
       _pfmRec = null;
+      return mirrorSlips(r.bkId, slips);
+    }).then(function(){
       return refreshCurrent();
     }).catch(function(){ return null; });
   });

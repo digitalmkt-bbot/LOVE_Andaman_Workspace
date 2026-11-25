@@ -527,8 +527,25 @@
     if(date) loadDay(date);
     return r;
   });
+  /* §vckFirstPaint (2026-11-26, UI parity G7) · the first draw of Van Check-in named its vans by id ("veh11 0/2") because
+     SB_VEHICLES still held legacy's demo vans until the day's load came in. Until the van catalogue (GET /operations/vans,
+     ~30 ms) is in, the screen shows "Loading…" and then draws once with the real names ("VAN1 0/2"), as legacy does at once.
+     A catalogue that does not load draws anyway (ids, as before). */
+  var vckCatTried = false;
   wrap('renderVanCheckin', function(){
-    var r = originals.renderVanCheckin ? originals.renderVanCheckin.apply(this, arguments) : undefined;
+    var self = this, args = arguments;
+    if(O.enabled() && !vansEver && !catalogueIn && !vckCatTried){
+      var host = typeof document !== 'undefined' && document.getElementById ? document.getElementById('vancheckin-host') : null;
+      if(host) host.innerHTML = O.loadingHtml('Loading van check-in…');
+      try{ if(typeof _vanCkDate !== 'undefined') loadDay(_vanCkDate); }catch(_){}
+      ensureCatalogue().then(function(){
+        vckCatTried = true;
+        var view = O.activeView ? O.activeView() : '';
+        if(view === 'vancheckin' && typeof window.renderVanCheckin === 'function') window.renderVanCheckin();
+      });
+      return undefined;
+    }
+    var r = originals.renderVanCheckin ? originals.renderVanCheckin.apply(self, args) : undefined;
     try{ if(typeof _vanCkDate !== 'undefined') loadDay(_vanCkDate); }catch(_){}
     return r;
   });

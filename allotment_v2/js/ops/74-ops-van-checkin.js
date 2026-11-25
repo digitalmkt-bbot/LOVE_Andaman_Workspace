@@ -6,7 +6,7 @@
    the order of the vans and the zone bands, and the list of bookings that still need a van. The server serves all
    of them (README "The Van Check-in numbers", src/domain/van-checkin.ts):
 
-     GET /v1/van-checkin?date=&route_id=&family_id=
+     GET /v1/van-checkin?date=&route_id=&family_id=&pier=
        kpi        { checked rows percent strand no_show_at_checkin heads { booked boarded no_show cxl to_pier waiting } }
        vans[]     { van_id route_id rows checked booked lost going zone order ... }   (in the screen's order)
        zones[]    { zone vans rows pax }
@@ -41,9 +41,13 @@
     var date = '', route = '', fam = '', q = '';
     try{ date = typeof _vanCkDate !== 'undefined' ? _vanCkDate : ''; route = typeof _vckRoute !== 'undefined' ? _vckRoute : ''; fam = typeof _vckFam !== 'undefined' ? _vckFam : ''; q = typeof _vckQ !== 'undefined' ? _vckQ : ''; }catch(_){}
     date = date || ''; route = route || ''; fam = fam || ''; q = q || '';
-    return { date: date, route: route, fam: route ? '' : fam, q: String(q || '').trim() };
+    /* §vckPier (2026-11-26) · legacy draws only the routes of the pier picked, or of the user's own pier (vckPierOk): the server narrows
+       its zones, vans and KPI the same way (GET /v1/van-checkin?pier=). Without it the zone band summed both piers (44 = 21 + 23 คัน). */
+    var pier = '';
+    try{ pier = (typeof laMyPier === 'function' && laMyPier()) || (typeof _vckPier !== 'undefined' && _vckPier) || ''; }catch(_){}
+    return { date: date, route: route, fam: route ? '' : fam, q: String(q || '').trim(), pier: String(pier || '') };
   }
-  function keyOf(s){ return s.date + '|' + s.route + '|' + s.fam; }
+  function keyOf(s){ return s.date + '|' + s.route + '|' + s.fam + '|' + (s.pier || ''); }
 
   function host(){ return document.getElementById('vancheckin-host'); }
   function visible(){ var h = host(); return !!(h && h.offsetParent); }
@@ -56,6 +60,7 @@
     if(c && c.data && !force && c.gen === gen && Date.now() - c.at < TTL) return Promise.resolve(c);
     var cur = cache[key] = { at: 0, data: (c && c.gen === gen) ? c.data : null, sig: (c && c.gen === gen) ? c.sig : '', loading: null, gen: gen };
     var q = { date: s.date }; if(s.route) q.route_id = s.route; else if(s.fam) q.family_id = s.fam;
+    if(s.pier) q.pier = s.pier;
     var mine = gen;
     cur.loading = O.get('/v1/van-checkin', q).then(function(res){
       cur.loading = null;
@@ -215,5 +220,5 @@
     if(visible()){ var s = scope(); if(!s.q) ensure(s); }
   });
 
-  O.vanCheckin = { ensure: function(date, route, fam){ return ensure({ date: date || scope().date, route: route || '', fam: fam || '', q: '' }, true); }, scope: scope, current: current, patch: applyIfOpen, clear: function(){ gen++; cache = {}; } };
+  O.vanCheckin = { ensure: function(date, route, fam){ return ensure({ date: date || scope().date, route: route || '', fam: fam || '', q: '', pier: scope().pier }, true); }, scope: scope, current: current, patch: applyIfOpen, clear: function(){ gen++; cache = {}; } };
 })();
