@@ -28952,7 +28952,51 @@ function _tsSlipPage(r, i, total, seq, date, kicker){
    เพื่อจับสลิปให้ตรงใบ · ตอนนี้หน้าสลิปของใบไหน วางต่อจากหน้าเอกสารของใบนั้นเลย
    ใบที่มีสลิปแต่ไม่มีในชุดเอกสาร (เช่น walk-in ไม่มีไฟล์แนบ) ยังพิมพ์อยู่ · ต่อท้ายตามลำดับเดิม
    เลข # เดินตามเส้นทางเหมือนเดิม · หน้าสลิปใช้เลขเดียวกับหน้าเอกสารของใบนั้น = เป็นคู่กัน */
-function _tsPackPages(refList, slipList, date, kicker, slipKicker){
+/* §tsPenPack (2026-11-25) · ชุดหลักฐานประกอบคำตัดสิน (ยกเลิก / เลื่อนวัน) ต่อท้ายเล่ม
+   ไฟล์ที่แนบจากส่วน 02 (§tsPenFile) ไม่ใช่สลิปเงิน จึงไม่ปนในชุดสลิป · แยกเป็นชุดของตัวเองท้ายสุด
+   เดินตามชิปกรองท่าเรือ/เส้นทาง/VAT ชุดเดียวกับใบสรุป · เคสที่ไม่มีไฟล์ไม่มีหน้า */
+function tsPenPackList(date){
+  var rows=tsRows(date);
+  rows=rows.filter(function(r){ return tsScopeKeep(r.routeId); });
+  if(_tsVatF) rows=rows.filter(function(r){ return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b); });
+  var out=[];
+  rows.forEach(function(r,i){
+    var ss=tsPenFiles(r.b.id,date); if(!ss.length) return;
+    out.push({ bk:r.b, trip:r.t, ord:i, dec:tsGet(r.b.id,date),
+               imgs:ss.map(function(f){ return { f:f, cap:(f.name||'ไฟล์')+(f.by?(' · แนบโดย '+f.by):'') }; }) });
+  });
+  return out;
+}
+function _tsPenPage(r, i, total, seq, date, kicker){
+  var e=_docPackEsc, b=r.bk, t=r.trip, d=r.dec;
+  var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
+  var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var DL={full:'เก็บเต็ม', partial:'เก็บบางส่วน', none:'ไม่ชาร์จ', postpone:'เลื่อนวัน'};
+  var res=d ? ((DL[d.decision]||d.decision||'')+(d.decision==='postpone'?'':(' · ฿'+num(d.amount)))) : 'ยังไม่ตัดสิน';
+  var n=r.imgs.length, grid=(n<=1)?'one':(n===2)?'two':(n<=4)?'four':'many';
+  var body='<div class="grid '+grid+'">'+r.imgs.map(function(x,k){
+    var f=x.f||{}, url='/api/attach/'+encodeURIComponent(f.id);
+    var isImg=/^image\//.test(f.mime||'');
+    var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
+    var box=isImg?('<img src="'+url+'" alt="">')
+           :isPdf?('<canvas class="pdfc" data-pdf="'+url+'"></canvas>'
+                  +'<div class="pdfw">&#128196; '+e(f.name||'file')+' &middot; กำลังเปิดไฟล์ PDF…</div>')
+                 :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
+    return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(x.cap)+'</figcaption></figure>';
+  }).join('')+'</div>';
+  return '<section class="pg">'
+    + '<header><span>LOVE Andaman &middot; '+e(kicker||'หลักฐานประกอบคำตัดสิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
+    + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>ผลตัดสิน &middot; '+e(res)+'</span></div>'
+    +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
+    +   ((d&&d.note)?(' &middot; หมายเหตุ: '+e(d.note)):'')
+    +   ((d&&d.by)?(' &middot; ตัดสินโดย '+e(d.by)):'')+'</div></div>'
+    + '<div class="body">'+body+'</div>'
+    + '<footer><span>&#9744; ตรวจหลักฐานแล้ว</span><span>ผู้อนุมัติ ________________</span></footer>'
+    + '</section>';
+}
+function _tsPackPages(refList, slipList, date, kicker, slipKicker, penList, penKicker){
   var items=[];
   /* ทั้งสองลิสต์เป็นส่วนหนึ่งของแถวชุดเดียวกัน · เรียงด้วย ord แล้วเอกสารมาก่อนสลิปของใบเดียวกัน */
   (refList||[]).forEach(function(r,i){ items.push({ k:'doc',  r:r, ord:(r.ord==null?i:+r.ord), sub:0 }); });
@@ -28963,7 +29007,8 @@ function _tsPackPages(refList, slipList, date, kicker, slipKicker){
     var id=String(((it.r||{}).bk||{}).id||'');
     it.pair=!!(p && it.k==='slip' && p.k==='doc' && id && String(((p.r||{}).bk||{}).id||'')===id);
   });
-  var total=items.length, lastRoute=null, seq=0, html='';
+  var pens=penList||[];   /* §tsPenPack · ต่อท้ายสุด ไม่แทรกกลางชุดเอกสาร/สลิป */
+  var total=items.length+pens.length, lastRoute=null, seq=0, html='';
   items.forEach(function(it,i){
     var R=((typeof getRoute==='function'?getRoute(it.r.trip.routeId):null)||{});
     if(!it.pair){                                  /* หน้าสลิปที่ต่อจากเอกสารใบเดียวกัน ไม่กินเลขใหม่ */
@@ -28973,6 +29018,7 @@ function _tsPackPages(refList, slipList, date, kicker, slipKicker){
     html += (it.k==='doc') ? _docPackPage(it.r, i, total, seq, date, kicker)
                            : _tsSlipPage(it.r, i, total, seq, date, slipKicker);
   });
+  pens.forEach(function(r,j){ html += _tsPenPage(r, items.length+j, total, j+1, date, penKicker); });
   return html;
 }
 /* ══ §tsDoc (2026-10-05) · หน้าพิมพ์ "สรุปการเดินทางประจำวัน" โครงใหม่ ══════════════════════
@@ -29253,9 +29299,11 @@ function tsPrintSheet(){
   var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
   var _kick=(_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
           + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : (_tsPier ? (' · '+tsPierName(_tsPier)) : ''));
-  var pack=((list.length||slipL.length) && typeof _tsPackPages==='function')
+  var penL=(typeof tsPenPackList==='function')?tsPenPackList(date):[];   /* §tsPenPack */
+  var pack=((list.length||slipL.length||penL.length) && typeof _tsPackPages==='function')
     ? _tsPackPages(list, slipL, date, 'Reference · เอกสารประกอบ'+_kick,
-                   'Payment slip · สลิปการชำระเงิน'+_kick) : '';
+                   'Payment slip · สลิปการชำระเงิน'+_kick,
+                   penL, 'หลักฐานประกอบคำตัดสิน · ยกเลิก / เลื่อนวัน'+_kick) : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
