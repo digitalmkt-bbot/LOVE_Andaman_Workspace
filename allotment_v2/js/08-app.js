@@ -75204,6 +75204,14 @@ function pkCxChip(C){ if(!C || !C.tot) return '';
 function pkTkData(date, pier){
   var boats=(typeof poBoats==='function')?poBoats(date,pier):[];
   var byRid={}, order=[];
+  /* §pkLeadOnce (2026-11-25) · ผู้ใช้แจ้ง "ชื่อซ้ำมาตั้งแต่การจองจาก B2C" · LOV-2603466 · Aluminous1
+     ออเดอร์ B2C หนึ่งใบมีหลายรายการ = หลายใบจองในระบบ และทุกใบมีชื่อผู้จองคนเดียวกัน (leadPax เป็นของออเดอร์)
+     รายการที่ 1 (6 ท่าน) ได้ผู้จอง + ผู้ร่วมเดินทาง 5 คน · รายการที่ 2 (1 ท่าน) ไม่มีชื่อใครเลย → ใช้ชื่อผู้จองอีกรอบ
+     คนเดียวกันจึงขึ้นสองแถว ซึ่งด่านจะเห็นเป็นคนเดียวได้ตั๋วสองใบ · คนที่ 7 จริง ๆ ไม่มีชื่ออยู่ในระบบ
+     ผู้จองของออเดอร์หนึ่งลงได้ครั้งเดียวต่อวัน · รายการถัดไปของออเดอร์เดียวกันปล่อยเป็นช่อง "รอชื่อ" ให้พิมพ์ในหน้านี้
+     เฉพาะใบ B2C (b2c_<ออเดอร์>_<รายการ>) · ใบที่คีย์เองไม่แตะ */
+  var _leadTaken={};
+  var _ordOf=function(b){ var m=/^b2c_(.+)_\d+$/.exec(String((b&&b.id)||'')); return m?m[1]:''; };
   boats.forEach(function(B){
     var g=byRid[B.rid];
     if(!g){ g=byRid[B.rid]={rid:B.rid, route:B.route, boats:[]}; order.push(g); }
@@ -75244,7 +75252,9 @@ function pkTkData(date, pier){
          แต่ติดป้ายว่าเกิน จะได้ไปตามแก้ที่ใบจอง */
       var ps=[];
       (b.passengers||[]).forEach(function(p,ix){ if(p && p.name) ps.push({p:p, ix:ix}); });
-      if(!ps.length && b.leadPax) ps=[{p:{name:b.leadPax, nationality:b.leadNationality, type:'AD'}, ix:'L'}];
+      var _ok=_ordOf(b), _lkey=_ok?(_ok+'|'+pkNmNorm(String(b.leadPax||''))):'';
+      var _leadGone=!!(_lkey && _leadTaken[_lkey]);   /* §pkLeadOnce · ผู้จองลงไปแล้วในรายการอื่นของออเดอร์นี้ */
+      if(!ps.length && b.leadPax && !_leadGone) ps=[{p:{name:b.leadPax, nationality:b.leadNationality, type:'AD'}, ix:'L'}];
 
       var slot={}, slotTot=0;
       PK_CATS.forEach(function(C){ slot[C.k]=(bc[C.k]||0); slotTot+=slot[C.k];
@@ -75263,11 +75273,12 @@ function pkTkData(date, pier){
          เติมต่อเมื่อ "ยังมีช่องเหลือ" เท่านั้น · ใบที่คนจองไม่ได้ไปด้วย
          จำนวนชื่อจะเท่ากับหัวพอดีอยู่แล้ว จะได้ไม่มีแถวเกินโผล่มาโดยไม่จำเป็น
          เทียบชื่อด้วย pkNmNorm ตัวเดียวกับกฎห้ามชื่อซ้ำ ตัดคำนำหน้าก่อนเทียบ */
-      if(leadNm && ps.length < slotTot){
+      if(leadNm && !_leadGone && ps.length < slotTot){
         var _lk=pkNmNorm(leadNm);
         if(_lk && !ps.some(function(w){ return pkNmNorm(w.p && w.p.name)===_lk; }))
           ps.unshift({ p:{name:leadNm, nationality:leadNat, type:'AD'}, ix:'L' });
       }
+      if(_lkey && leadNm && ps.some(function(w){ return pkNmNorm(w.p && w.p.name)===pkNmNorm(leadNm); })) _leadTaken[_lkey]=1;   /* §pkLeadOnce */
 
       var mk=function(w,cat,mism,over){
         var p=w.p;
