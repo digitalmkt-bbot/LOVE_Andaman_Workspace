@@ -84,7 +84,7 @@ test('whenFree: runs now when free, otherwise once the field loses focus (never 
 
 // ── N4 · Dashboard needs-action counts ───────────────────────────────────────
 
-test('dashboard: pending approvals, open weather follow-ups and cancelled-today come from the server', async () => {
+test('dashboard: pending approvals, open weather follow-ups and cancelled-today are the server\'s needs_action, in the one Dashboard read', async () => {
   const doc = fakeDoc();
   const ctx = core(doc, {
     _dashBoardData: () => ({ pend: 0, wx: 0, wxDate: '2026-11-25', cxl: 0, unN: 0 }),
@@ -94,29 +94,20 @@ test('dashboard: pending approvals, open weather follow-ups and cancelled-today 
   ctx.laOpsFetch = async (path) => {
     asked.push(path);
     const p = path.split('?')[0];
-    const body = p === '/v1/bookings' ? { bookings: [{}], total: 1 }
-      : p === '/v1/weather-closures' ? { weather_closures: [
-          { id: 'w1', service_date: '2026-10-29', counts: { awaiting: 0, notified: 2, resolved: 17 } },
-          { id: 'w2', service_date: '2026-07-02', counts: { awaiting: 3, notified: 0, resolved: 6 } },
-          { id: 'w3', service_date: '2026-11-01', counts: { awaiting: 0, notified: 0, resolved: 4 } }] }
-      : p === '/v1/dashboard' ? { version: 1, generated_at: new Date().toISOString(), summary: {}, bookings: { cancelled_today: 4 }, unbilled: { count: 1, baht: 1, agents: 1 } }
-      : null;
+    const body = p === '/v1/dashboard' ? { version: 1, generated_at: new Date().toISOString(), summary: {}, bookings: { cancelled_today: 4 }, unbilled: { count: 1, baht: 1, agents: 1 },
+      needs_action: { pending_approval: 1, weather_to_resolve: 5, weather_first_date: '2026-07-02', cancelled_today: 4 } } : null;
     return { status: 200, ok: true, text: async () => JSON.stringify(body) };
   };
   vm.runInContext(SRV, ctx);
   vm.runInContext(DASH, ctx);
   const before = ctx._dashBoardData();
-  assert.deepEqual([before.pend, before.wx, before.cxl], [0, 0, 0], 'until the answers land the legacy figures stay');
+  assert.deepEqual([before.pend, before.wx, before.cxl], [0, 0, 0], 'until the answer lands the legacy figures stay');
   await ctx.laOps.dashboard.ensure(ctx.laOps.today(), 'day', '', { bare: true });
   await settle();
   const d = ctx._dashBoardData();
-  assert.equal(d.pend, 1, 'GET /v1/bookings?status=pending_approval → total');
-  assert.equal(d.wx, 5, 'Σ awaiting + notified of the open closures, every date');
-  assert.equal(d.wxDate, '2026-07-02', 'the earliest such closure');
-  assert.equal(d.cxl, 4, '/v1/dashboard bookings.cancelled_today');
-  assert.ok(asked.some((p) => p.startsWith('/v1/bookings?') && p.includes('status=pending_approval') && p.includes('limit=1')));
-  assert.ok(asked.some((p) => p.startsWith('/v1/weather-closures?from=2000-01-01')));
-  assert.ok(ctx.drawn >= 1, 'the Dashboard is drawn again when an answer lands');
+  assert.deepEqual([d.pend, d.wx, d.wxDate, d.cxl], [1, 5, '2026-07-02', 4], 'needs_action → pend, wx, wxDate, cxl');
+  assert.deepEqual(asked.map((p) => p.split('?')[0]), ['/v1/dashboard'], 'no separate bookings or weather-closures reads any more');
+  assert.ok(ctx.drawn >= 1, 'the Dashboard is drawn again when the answer lands');
 });
 
 // ── N2 / N3 · Van Jobs first paint and the van catalogue ─────────────────────

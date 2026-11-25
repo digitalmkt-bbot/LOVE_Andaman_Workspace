@@ -274,7 +274,10 @@
     if(!entry || !Array.isArray(entry.rows)) return null;
     var t = entry.totals || {};
     var sum = function(k){ return entry.rows.reduce(function(a, x){ return a + num(x[k]); }, 0); };
-    return { total: t.total != null ? num(t.total) : sum('total'), received: t.received != null ? num(t.received) : sum('received') };
+    /* §pfmUnpaidCard (2026-11-25) · the "Unpaid" card is the server's too: totals.unpaid_due / unpaid_bookings (legacy's rule, a proforma
+       row still owing, over every row of the period), not a sum over the invoices this browser happened to load. null: an older answer. */
+    return { total: t.total != null ? num(t.total) : sum('total'), received: t.received != null ? num(t.received) : sum('received'),
+      unpaid: t.unpaid_due != null ? num(t.unpaid_due) : null, nUnpaid: t.unpaid_bookings != null ? num(t.unpaid_bookings) : null };
   };
 
   wrap('pfmIsProforma', function(orig, bk){

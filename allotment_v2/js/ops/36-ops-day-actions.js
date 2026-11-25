@@ -971,10 +971,12 @@
       if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
       return null;
     }
-    var body = { pickup_time_final: split.pickupTime || null, pickup_time_final_end: split.pickupTimeEnd || null, pickup_final_at_pier: !!split.pickupAtPier };
+    /* §pickupTyped2 · the text as typed goes too (pickup_final_text, migration 609): legacy prints 05:20 a.m. as it was typed */
+    var body = { pickup_time_final: split.pickupTime || null, pickup_time_final_end: split.pickupTimeEnd || null, pickup_final_at_pier: !!split.pickupAtPier,
+                 pickup_final_text: text(val).trim() || null };
     return patchTripOps(b, d, body).then(function(res){
       var op = res && res.trip && res.trip.operations;
-      opsBlock(b, d).pickupTimeFinal = op ? O.pickupText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier) : O.pickupText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier);
+      opsBlock(b, d).pickupTimeFinal = op ? (op.pickup_final_text || O.pickupText(op.pickup_time_final, op.pickup_time_final_end, op.pickup_final_at_pier)) : (body.pickup_final_text || O.pickupText(body.pickup_time_final, body.pickup_time_final_end, body.pickup_final_at_pier));
       O.wrote('trip-ops');
       return res;
     }, function(e){

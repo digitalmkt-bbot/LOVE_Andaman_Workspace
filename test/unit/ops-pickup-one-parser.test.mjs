@@ -47,3 +47,21 @@ test('a moved-away row shows the old departure\'s pickup whole (pickup_text), no
   assert.deepEqual(rows.map((r) => [r.t.pickupTime, r.O.pickupTimeFinal]), [['07:15-07:30', '07:15-07:30'], ['Before 08:30 at pier', 'Before 08:30 at pier']],
     'legacy ckStrandSnap kept O.pickupTimeFinal || t.pickupTime as this text');
 });
+
+// §pickupTyped2 (2026-11-25, UI parity gap 3): legacy prints the pickup as typed (05:20 a.m., 08.20); the server keeps that text
+// (operation-backend migration 609: trip pickup_text, operations pickup_final_text) and the screens print it.
+test('the booking read prints the typed text the server kept; a save sends what was typed', () => {
+  const rt = runtime({ files: ['40-ops-bookings.js'] });
+  const read = rt.O.bookings.fromServer({ id: 'ob_9', code: 'BK-9', status: 'confirmed', passengers: [], trips: [
+    { id: 't1', route_id: 'r1', service_date: D, pax: { ad_fr: 1 }, pickup_time: '05:20', pickup_text: '05:20 a.m.',
+      operations: { pickup_time_final: '06:10', pickup_time_final_end: null, pickup_final_at_pier: false, pickup_final_text: '06.10', van_parts: [] } },
+    { id: 't2', route_id: 'r1', service_date: '2026-12-02', pax: { ad_fr: 1 }, pickup_time: '07:15', pickup_time_end: '07:30',
+      operations: { pickup_time_final: null, pickup_time_final_end: null, pickup_final_at_pier: false, pickup_final_text: null, van_parts: [] } },
+  ] });
+  const trips = plain(read.trips);
+  assert.deepEqual(trips.map((t) => t.pickupTime), ['05:20 a.m.', '07:15-07:30'], 'typed when kept, else the window joined');
+  assert.deepEqual([plain(read.ops).pickupTimeFinal, trips[1].ops.pickupTimeFinal], ['06.10', ''], 'the final pickup as typed (legacy keeps the first day on bk.ops); none set: empty');
+  const body = rt.O.bookings.toServer({ id: 'B1', status: 'confirmed', passengers: [], trips: [{ routeId: 'r1', date: D, pickupTime: '05:20 a.m.', pax: { ad_fr: 1 } }, { routeId: 'r1', date: D, pickupTime: '', pax: { ad_fr: 1 } }] }, true);
+  const sent = plain(body.trips);
+  assert.deepEqual([sent[0].pickupTime, sent[0].pickup_text, sent[1].pickup_text], ['05:20', '05:20 a.m.', null], 'the window and the text; an empty box clears it');
+});
