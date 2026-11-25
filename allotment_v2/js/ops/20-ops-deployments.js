@@ -15,10 +15,13 @@
    difference is sent. If the server refuses, the calls already made are
    undone and TRIPS / BOAT_CAP_OVR go back to the last confirmed state.
 
-   TRIPS cells the server doesn't hold (type charter + charterBookingId,
-   boatLockId) are rebuilt from bookings after load; the deployment itself
-   (boat on route) is still sent for them, since a charter needs its boat
-   deployed.
+   Charter cells (type charter + charterBookingId) come with the read since
+   parity R2 (2026-11-26): the server names the charter booking that takes
+   the boat (charter_booking_id, charter_agent) and keeps the Boat Operation
+   "Charter" pick (charter, sent only when it changes). boatLockId cells are
+   still rebuilt from the locks after load; markCharters still runs after
+   bookings load. The deployment itself (boat on route) is still sent for
+   them, since a charter needs its boat deployed.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -35,6 +38,12 @@
      {type:'rescue', rescueFor, prev}). The server owns them: PUT / DELETE /operations/deployments/{d}/{boat}/mid-trip-swap. */
   function cellOf(r){
     var c = { route: r.route_id, type: (r.trip_type === 'early' || r.trip_type === 'normal') ? r.trip_type : 'normal', booked: 0 };
+    /* parity R2 (2026-11-26) · legacy's charter cell (type 'charter' + charterBookingId) comes from the server: the booking that takes
+       the boat that day (charter_booking_id, worked out from every booking, not only the ones this browser loaded), or the
+       Charter pick on Boat Operation (charter, stored). charter_agent is what the fleet calendar prints after "⚓ Charter ·". */
+    if(r.charter_booking_id){ c.type = 'charter'; c.charterBookingId = r.charter_booking_id; }
+    else if(r.charter) c.type = 'charter';
+    if(r.charter_agent) c.charterAgent = r.charter_agent;
     if(r.rescue_for){
       c.type = 'rescue'; c.rescueFor = r.rescue_for;
       c.prev = r.rescue_prev ? { route: r.rescue_prev.route_id, type: r.rescue_prev.trip_type, booked: 0 } : null;
@@ -62,7 +71,8 @@
         var cell = T[d][b]; if(!cell || !cell.route) return;
         var cap = capFor(b, d); if(!(cap > 0)) return;           // server wants a positive capacity
         out[key(d, b)] = { route: cell.route, capacity: cap, date: d, boat: b,
-          type: (cell.type === 'early' || cell.type === 'normal') ? cell.type : null };   // the Early / Normal pick (a client fact); a charter cell is not one
+          type: (cell.type === 'early' || cell.type === 'normal') ? cell.type : null,     // the Early / Normal pick (a client fact); a charter cell is not one
+          charter: cell.type === 'charter' && !cell.charterBookingId && !cell.boatLockId };  // the Charter pick (a client fact): not a charter booking's or a hold's cell
       });
     });
     return out;
@@ -96,6 +106,7 @@
     var b = (typeof getBoat === 'function') ? getBoat(x.boat) : null;
     var body = { boat_id: x.boat, route_id: x.route, service_date: x.date, capacity: x.capacity };
     if(x.sendType) body.trip_type = x.sendType;      // only when the person picked it: otherwise the server keeps the stored type or takes the route name's default
+    if(x.sendCharter === true || x.sendCharter === false) body.charter = x.sendCharter;   // only when it changed: otherwise the server keeps its mark
     if(b && +b.totalcap > 0) body.registered_persons = +b.totalcap;
     return O.anyway(function(f){ return O.post('/operations/deployments', Object.assign({}, body, f)); }, DEP_RULES);
   }
@@ -134,7 +145,9 @@
       var w = want[k], had = synced[k];
       // trip_type goes when the person changed it from what the server holds (or picked Early for a new deployment)
       w.sendType = w.type && ((had && had.type && had.type !== w.type) || (!had && w.type === 'early')) ? w.type : null;
-      if(had && had.route === w.route && had.capacity === w.capacity && !w.sendType) return;
+      // the Charter pick goes when it differs from the server's mark (or is set on a new deployment)
+      w.sendCharter = (had ? !!had.charter !== w.charter : w.charter) ? w.charter : null;
+      if(had && had.route === w.route && had.capacity === w.capacity && !w.sendType && w.sendCharter === null) return;
       ops.push({ label: 'deploy ' + w.boat + ' → ' + w.route + ' on ' + w.date,
         run: function(){
           return postDep(w).catch(function(e){
@@ -143,7 +156,7 @@
             return null;
           });
         },
-        undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity, sendType: w.sendType ? had.type : null }) : delDep(w.date, w.boat); } });
+        undo: function(){ if(skipped[k]) return null; return had ? postDep({ boat: w.boat, date: w.date, route: had.route, capacity: had.capacity, sendType: w.sendType ? had.type : null, sendCharter: w.sendCharter === null ? null : !!had.charter }) : delDep(w.date, w.boat); } });
     });
     Object.keys(synced).forEach(function(k){
       if(want[k] || swapBusy[k]) return;
@@ -162,7 +175,8 @@
       Object.keys(want).forEach(function(k){
         if(swapBusy[k]) return;
         if(skipped[k]){ if(before[k]) synced[k] = before[k]; return; }
-        synced[k] = { route: want[k].route, capacity: want[k].capacity, type: want[k].type || (before[k] && before[k].type) || null };
+        synced[k] = { route: want[k].route, capacity: want[k].capacity, type: want[k].type || (before[k] && before[k].type) || null,
+          charter: want[k].sendCharter !== null && want[k].sendCharter !== undefined ? want[k].sendCharter : !!(before[k] && before[k].charter) };
       });
       snapshot();
       O.wrote('deployments');
@@ -244,7 +258,7 @@
         (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
         var b = (typeof getBoat === 'function') ? getBoat(r.boat_id) : null;
         if(C && b && +b.cap !== +r.capacity) C[r.service_date + '::' + r.boat_id] = { cap: r.capacity, reason: 'operation-backend', by: '', at: '' };
-        synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
+        synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null, charter: !!r.charter };
       });
       ready = true;
       snapshot();
@@ -339,7 +353,7 @@
           if(!T) return;
           if(T[r.service_date] && T[r.service_date][r.boat_id]) return;
           (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
-          synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null };
+          synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity, type: r.trip_type || null, charter: !!r.charter };
         });
         farDone[m] = 1;
       }).catch(function(e){ try{ console.warn('[ops] deployments ' + m + ' · ' + (e && e.message)); }catch(_){} })
@@ -380,7 +394,7 @@
     (rows || []).forEach(function(r){
       if(!r || !r.boat_id) return;
       (T[r.service_date] = T[r.service_date] || {})[r.boat_id] = cellOf(r);
-      synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity || capFor(r.boat_id, r.service_date), type: r.trip_type || null };
+      synced[key(r.service_date, r.boat_id)] = { route: r.route_id, capacity: +r.capacity || capFor(r.boat_id, r.service_date), type: r.trip_type || null, charter: !!r.charter };
     });
     (removed || []).forEach(function(b){
       if(T[d]){ delete T[d][b]; if(!Object.keys(T[d]).length) delete T[d]; }
