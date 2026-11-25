@@ -121,6 +121,12 @@
       var day = BO.day(ds), a = day && (day.assigned || []).find(function(x){ return x.boat_id === b.id; });
       if(a && c && c.k === 'run' && !!c.chr !== !!a.is_charter){ c.chr = !!a.is_charter; if(!c.chr) delete c.ag; }
     }catch(_){}
+    /* parity R2 (2026-11-26) · legacy prints "⚓ Charter · <agent>" from SB_BOOKINGS, which here holds a window only: the agent of the
+       charter booking comes with the deployment (GET /operations/deployments charter_agent, kept on the TRIPS cell by ops/20) */
+    try{
+      var cell = (typeof TRIPS !== 'undefined' && TRIPS[ds]) ? TRIPS[ds][b.id] : null;
+      if(c && c.chr && !c.ag && cell && cell.charterAgent) c.ag = cell.charterAgent;
+    }catch(_){}
     return c;
   });
 
