@@ -315,6 +315,89 @@
 
   /* ── 03 เงินที่เก็บหน้างาน ── */
   var PM = { cash: ['เงินสด','e'], transfer: ['โอนเงิน','b'], card: ['บัตรเครดิต','p'] };
+  /* §tsSaleItems (2026-11-25, UI parity N11) · section 03 per booking, as legacy tsSaleCell / mchips / the คนเก็บ column:
+     one chip per on-tour sale ("Longtail Join ×2 ฿1,000 · คอม ฿300"), the sellers, a chip per pier payment and one per
+     method of the collected sales tagged ขายเพิ่ม. All from the day's GET /v1/pier-money row (tour_sales[], payments[]):
+     the server's items as they are, nothing worked out here. Without a pier-money row the summary chip stays. */
+  function moneyRowOf(r, date){ var P = pierMoney(); return P && P.rowById ? P.rowById(r.id, date) : null; }
+  function saleItems(row){
+    return ((row && row.tour_sales) || []).map(function(s){
+      var dup = !!s.pier_duplicate, cov = !!s.covered_by_pier || dup, done = s.settle === 'done';
+      var m = cov ? 'pier' : (s.method || 'cash');
+      return { id: s.id, t: text(s.service || 'ขายเพิ่ม'), qty: n(s.qty) || 1, amt: n(s.total), fee: n(s.fee), comm: n(s.commission), toCompany: n(s.to_company),
+               method: m, who: text(s.seller), done: done, covered: cov, dup: dup,
+               noSlip: done && !cov && m !== 'cash' && m !== 'cot' && !((s.slips || []).length) };
+    });
+  }
+  function saleCellHtml(L){
+    if(!L.length) return '<span style="color:var(--zn400)">&mdash;</span>';
+    var PMS = { cash: 'สด', transfer: 'โอน', card: 'บัตร', cot: 'เก็บวันเดินทาง', pier: 'เก็บแล้วที่หน้าท่า (รวมอยู่ในเงินเก็บหน้าท่า)' };
+    return '<div class="ts-sls">' + L.map(function(x){
+      var tip = (x.qty > 1 ? 'จำนวน ' + x.qty + ' · ' : '') + (PMS[x.method] || x.method)
+        + (x.comm > 0 ? ' · บริษัท ' + money(x.toCompany) + ' · คอม ' + money(x.comm) : '')
+        + (x.fee > 0 ? ' · ค่าธรรมเนียมบัตร ' + money(x.fee) + ' · รูดจริง ' + money(x.amt + x.fee) : '')
+        + (x.who ? ' · ' + x.who : '') + (x.done ? '' : ' · ยังไม่เก็บ') + (x.noSlip ? ' · ยังไม่มีสลิป' : '');
+      return '<span class="ts-ao ao-ex" title="' + esc(tip) + '">' + esc(x.t) + (x.qty > 1 ? ' ×' + x.qty : '')
+        + ' <b>' + money(x.amt) + '</b>'
+        + (x.comm > 0 ? ' <i style="font-style:normal;opacity:.78">· คอม ' + money(x.comm) + '</i>' : '')
+        + (x.fee > 0 ? ' <i style="font-style:normal;opacity:.72">+fee ' + money(x.fee) + '</i>' : '')
+        + (x.done ? (x.covered ? ' <i style="font-style:normal;opacity:.75">เก็บที่ท่า</i>' : '') : ' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
+        + (x.noSlip ? ' <i style="font-style:normal;color:#A32D2D">⚠</i>' : '') + '</span>';
+    }).join('') + '</div>';
+  }
+  function whoCellHtml(row, L){
+    var w = [];
+    ((row && row.payments) || []).forEach(function(p){ var by = text(p.collected_by || p.by || p.recorded_by); if(by && w.indexOf(by) < 0) w.push(by); });
+    L.forEach(function(x){ if(x.who && w.indexOf(x.who) < 0) w.push(x.who); });
+    return w.length ? esc(w.join(' · ')) : '<span style="color:var(--zn400)">&mdash;</span>';
+  }
+  function rowChips(row, L, date){
+    var out = '';
+    ((row && row.payments) || []).filter(function(p){ return !p.deleted_at && (!p.service_date || p.service_date === date); }).forEach(function(p){
+      var x = PM[p.method || 'cash'] || ['อื่นๆ', 'n'];
+      out += '<span class="ts-chip ' + x[1] + '">' + x[0] + ' ' + money(p.amount) + (n(p.fee) > 0 ? ' <i style="font-style:normal;opacity:.7">+fee ' + money(p.fee) + '</i>' : '') + '</span>';
+    });
+    var by = {};
+    L.forEach(function(x){ if(!x.done || x.covered) return; by[x.method] = (by[x.method] || 0) + x.amt; });
+    Object.keys(by).forEach(function(k){ var x = PM[k] || ['อื่นๆ', 'n'];
+      out += '<span class="ts-chip ' + x[1] + '" title="เงินจากของที่ขายเพิ่มหน้างาน">' + x[0] + ' ' + money(by[k]) + ' <i style="font-style:normal;opacity:.7">ขายเพิ่ม</i></span>'; });
+    return out;
+  }
+  /* §tsInvSlip (UI parity N11) · the Manifest's "📎 สลิปบิล" and "Proforma · dd/mm/yyyy": the slips and last payment day of the
+     booking's invoice (legacy tsInvSlips / tsProformaPaidDate read SB_PAYMENTS). GET /v1/invoices/{id} carries booking_ids and
+     payments[] {paid_on, amount, slips}; each invoice of the day is read once, then the screen is drawn again. Slips are shown
+     for an invoice of this booking alone, as legacy does. */
+  var INV = {}, invAsked = {};
+  function invDetail(b){
+    var iv = b && b.invoice; if(!iv || !iv.id) return null;
+    if(INV[iv.id]) return INV[iv.id];
+    if(!invAsked[iv.id]){
+      invAsked[iv.id] = 1;
+      O.get('/v1/invoices/' + encodeURIComponent(iv.id)).then(function(j){ INV[iv.id] = j || {}; invRedraw(); }, function(){ INV[iv.id] = {}; });
+    }
+    return null;
+  }
+  var invTimer = null;
+  function invRepaint(){ if(O.activeView() === 'travelsum' && typeof window.renderTravelSum === 'function'){ last = {}; window.renderTravelSum(); } }
+  function invRedraw(){
+    if(invTimer) return;
+    invTimer = setTimeout(function(){ invTimer = null; if(O.whenFree) O.whenFree(invRepaint); else invRepaint(); }, 250);
+  }
+  function invPays(d){ return ((d && d.payments) || []).filter(function(p){ return p && !p.deleted_at && n(p.amount) > 0; }); }
+  function dTH(v){ var d = text(v).slice(0, 10).split('-'); return d.length === 3 ? d[2] + '/' + d[1] + '/' + d[0] : ''; }
+  function proformaDate(b){
+    var ps = invPays(invDetail(b)).filter(function(p){ return p.paid_on; }).sort(function(a, z){ return text(a.paid_on).localeCompare(text(z.paid_on)); });
+    return ps.length ? dTH(ps[ps.length - 1].paid_on) : '';
+  }
+  function invSlipChip(b){
+    var d = invDetail(b); if(!d || !(Array.isArray(d.booking_ids) && d.booking_ids.length === 1)) return '';
+    var seen = {}, list = [];
+    invPays(d).forEach(function(p){ (p.slips || []).forEach(function(f){ if(f && f.id && !seen[f.id]){ seen[f.id] = 1; list.push(f); } }); });
+    if(!list.length) return '';
+    var t = 'สลิปจ่ายผ่านบิล' + (d.number ? ' ' + d.number : ''), mark = call('laSlipClickAttr', [list, t], '');
+    if(!mark) return '';
+    return '<span class="ts-slipok ts-invslip" style="cursor:pointer" ' + mark + ' title="' + esc(t + ' · ' + list.length + ' ไฟล์ · กดเพื่อเปิดดู') + '">&#128206; สลิปบิล' + (list.length > 1 ? ' ' + list.length : '') + '</span>';
+  }
   function payChips(c){
     var rc = c.received || {}, out = '';
     ['cash','transfer','card'].forEach(function(k){ if(n(rc[k]) > 0) out += '<span class="ts-chip ' + PM[k][1] + '">' + PM[k][0] + ' ' + money(rc[k]) + '</span>'; });
@@ -473,10 +556,11 @@
       var noCol = dec && dec.mode === 'nocol';
       var noColAmt = noCol ? Math.max(0, n(c.cot) - Math.min(n(c.cot), n(dec.deduct))) : 0;   /* §cotPart */
       if(noCol && noColAmt > 0) cotNoList.push({ code: r.voucher, amt: noColAmt, why: dec.ref || '' });
-      var chips = payChips(c) || (n(c.billed) > 0 ? '<span class="ts-chip g">&#10003; จ่ายผ่านบิล</span>' : '<span class="ts-chip n">ยังไม่เก็บ</span>');
+      var mrow = moneyRowOf(r, S.date), items = saleItems(mrow);   // §tsSaleItems
+      var chips = (mrow ? rowChips(mrow, items, S.date) : payChips(c)) || (n(c.billed) > 0 ? '<span class="ts-chip g">&#10003; จ่ายผ่านบิล</span>' : '<span class="ts-chip n">ยังไม่เก็บ</span>');
       if(n(c.no_slip) > 0) chips += '<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป ' + n(c.no_slip) + '</span>';
       var parts = []; if(n(c.cot) > 0) parts.push('COT ' + money(c.cot)); if(n(c.b2c_balance) > 0) parts.push('ค้าง ' + money(c.b2c_balance)); if(n(c.upgrades_due) > 0) parts.push('upgrade ' + money(c.upgrades_due));
-      var sl = c.sales || {}, sale = n(sl.total) > 0 ? '<span class="ts-ao ao-ex">ขายเพิ่ม ' + n(sl.count) + ' รายการ <b>+' + money(sl.total) + '</b></span>' + (n(sl.due) > 0 ? '<div class="ts-tel">รอเก็บ ' + money(sl.due) + '</div>' : '') : '<span style="color:var(--zn400)">&mdash;</span>';
+      var sl = c.sales || {}, sale = items.length ? saleCellHtml(items) : n(sl.total) > 0 ? '<span class="ts-ao ao-ex">ขายเพิ่ม ' + n(sl.count) + ' รายการ <b>+' + money(sl.total) + '</b></span>' + (n(sl.due) > 0 ? '<div class="ts-tel">รอเก็บ ' + money(sl.due) + '</div>' : '') : '<span style="color:var(--zn400)">&mdash;</span>';
       var cx = !!c.not_counted;
       mbody += '<tr class="' + (cx ? 'ts-cxl' : (n(c.due) > 0 ? 'need' : '')) + '" data-ops-ts-collect="' + e(r.id) + '">'
         + '<td><span class="ts-vch">' + e(r.voucher) + '</span></td>'
@@ -484,7 +568,7 @@
         + '<td><div class="ts-lead">' + e(b.lead_pax || '—') + '</div><div class="ts-tel">' + e(b.lead_phone || '') + '</div></td>'
         + '<td><div style="font-size:11px">' + e(b.hotel_name || '—') + '</div><div class="ts-tel">' + (van ? e(vanName(van)) : 'มาเอง') + (boat ? ' · ' + e(boatName(boat)) : '') + '</div></td>'
         + '<td class="ts-aocol">' + sale + '</td>'
-        + '<td class="ts-mono" style="font-size:10.5px"><span style="color:var(--zn400)">&mdash;</span></td>'
+        + '<td class="ts-mono" style="font-size:10.5px">' + whoCellHtml(mrow, items) + '</td>'
         + '<td>' + chips + slipCell(r, S.date) + '</td>'
         + '<td class="r ts-mono" style="font-weight:800">' + (cx ? '<span style="text-decoration:line-through;opacity:.45">' + money(c.target) + '</span>' : money(c.target))
           + '<div class="ts-tel">' + (cx ? 'ไม่นับ · เก็บไม่ได้' : e(parts.join(' · '))) + '</div></td>'
@@ -523,10 +607,12 @@
     var ag = agent(b.agent_id), term = (b.agent_id === 'a_b2c' && b.payment_method) || (ag && ag.payType) || '';
     var pt = PT[text(term)] || null;
     if(B2C && b.payment_paid_status === 'paid') L.push('<span class="ts-chip g" data-tspay="paid">' + B2C[0] + '</span>');
-    else if(pt) L.push('<span class="ts-chip ' + pt[1] + '">' + pt[0] + '</span>');
+    else if(pt){ var pfd = (term === 'proforma' || term === 'prepaid') ? proformaDate(b) : '';   // §tsInvSlip
+      L.push('<span class="ts-chip ' + pt[1] + '">' + pt[0] + (pfd ? ' · ' + e(pfd) : '') + '</span>'); }
     else if(!b.agent_id) L.push('<span class="ts-chip n">Walk-in</span>');
     if(B2C && b.payment_paid_status !== 'paid') L.push('<span class="ts-chip ' + B2C[1] + '">' + B2C[0] + '</span>');
     if(b.invoice && b.invoice.status === 'paid') L.push('<span class="ts-chip g">&#10003; จ่ายผ่านบิลแล้ว</span>');
+    var isc = invSlipChip(b); if(isc) L.push(isc);   // §tsInvSlip
     if(r.cxlRow){
       var cc = b.cancellation || {};
       L.push('<span class="ts-pyd">' + (n(cc.charge_amount) > 0 ? 'ค่าปรับ ' + money(cc.charge_amount) : 'ไม่มียอดเก็บ') + '</span>');
