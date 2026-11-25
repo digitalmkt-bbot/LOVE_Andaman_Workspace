@@ -105,12 +105,15 @@
     dates.reduce(function(p, d){
       return p.then(function(){ return V.loadVans(d); }).then(function(j){ if(j) loaded = true; });
     }, Promise.resolve()).then(function(){
-      if(!(loaded || (!wasLoaded && V.vansLoaded && V.vansLoaded())) || (O.busy && O.busy())) return;
-      for(var i = 0; i < MODALS.length; i++){ if(elById(MODALS[i])) return; }
-      if(O.activeView && O.activeView() && O.activeView() !== 'vehicles') return;
-      if(originals.renderVehicles) originals.renderVehicles();
-      var sel = null; try{ sel = typeof _vehSel !== 'undefined' ? _vehSel : null; }catch(_){}
-      if(sel) loadLog(sel);
+      if(!(loaded || (!wasLoaded && V.vansLoaded && V.vansLoaded()))) return;
+      var paint = function(){
+        for(var i = 0; i < MODALS.length; i++){ if(elById(MODALS[i])) return; }
+        if(O.activeView && O.activeView() && O.activeView() !== 'vehicles') return;
+        if(originals.renderVehicles) originals.renderVehicles();
+        var sel = null; try{ sel = typeof _vehSel !== 'undefined' ? _vehSel : null; }catch(_){}
+        if(sel) loadLog(sel);
+      };
+      if(O.whenFree) O.whenFree(paint); else if(!(O.busy && O.busy())) paint();   // §busyVisible · kept, never dropped
     }).catch(function(e){ console.warn('[ops] vans did not load · ' + (e && e.message)); });
     return r;
   });

@@ -37,13 +37,14 @@
   }
 
   var selfNav = false;   // our own redraw, not a person opening a screen
-  function redraw(){
-    if(O.busy()) return;
+  /* §busyVisible · while the person types, the redraw waits for them (laOps.whenFree) instead of being dropped */
+  function redrawNow(){
     var el = document.querySelector('.nav-item.active[data-view]');
     selfNav = true;
     try{ if(el && typeof window.nav === 'function') window.nav(el); }catch(_){}
     finally{ selfNav = false; }
   }
+  function redraw(){ if(O.whenFree) O.whenFree(redrawNow); else if(!O.busy()) redrawNow(); }
 
   /* §bootLater · a screen opened while the background loads are still queued may read their data
      (fleet, money): run what is left at once; the redraw when they are in fills the screen.

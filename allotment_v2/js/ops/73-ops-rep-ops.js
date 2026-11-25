@@ -31,9 +31,8 @@
     };
     w.__w4f1 = true; w.__orig = orig; window[name] = w;
   }
-  function repaint(){
-    if(O.activeView() === 'rep-ops' && !O.busy() && typeof window.renderReport === 'function') window.renderReport('ops');
-  }
+  function paint(){ if(O.activeView() === 'rep-ops' && typeof window.renderReport === 'function') window.renderReport('ops'); }
+  function repaint(){ O.whenFree(paint); }   // §busyVisible · kept until the person is done typing, never dropped
   function key(st){ return 'ops|' + st.from + '|' + st.to; }
   function stOps(){ return (typeof window.repSt === 'function') ? window.repSt('ops') : null; }
   function answer(){

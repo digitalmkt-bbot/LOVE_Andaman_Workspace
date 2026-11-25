@@ -23,8 +23,7 @@
   function redraw(){
     var pier = typeof _poPier !== 'undefined' ? _poPier : '';
     if(typeof window.renderPierPark !== 'function' || !pier || !document.getElementById('pk-host-' + pier)) return;
-    if(O.busy()) return;
-    try{ window.renderPierPark(); }catch(_){}
+    O.whenFree(function(){ try{ if(document.getElementById('pk-host-' + pier)) window.renderPierPark(); }catch(_){} });   // §busyVisible
   }
   O.onWrite(function(){ Object.keys(cache).forEach(function(k){ stale[k] = true; }); failed = {}; });
   function ask(m, pier){

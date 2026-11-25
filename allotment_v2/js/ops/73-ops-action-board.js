@@ -43,9 +43,8 @@
     w.__w4f1 = true; w.__orig = orig; window[name] = w;
   }
 
-  function repaint(){
-    if(O.activeView() === 'actionboard' && !O.busy() && typeof window.abRender === 'function') window.abRender();
-  }
+  function paint(){ if(O.activeView() === 'actionboard' && typeof window.abRender === 'function') window.abRender(); }
+  function repaint(){ O.whenFree(paint); }   // §busyVisible · kept until the person is done typing, never dropped
   function boardKey(){ return 'ab|' + today().slice(0, 7) + '|' + (window._abSales || ''); }
   function board(){
     var q = { month: today().slice(0, 7) };

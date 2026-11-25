@@ -267,13 +267,36 @@
     Object.assign(target, clone(snap) || {});
   }
 
-  /* a user is mid-edit → don't redraw under them */
+  /* a user is mid-edit → don't redraw under them.
+     §busyVisible (2026-11-25, UI parity N7) · only an edit the person can see counts. A new booking left open on the
+     Bookings page while another page is shown (legacy keeps the draft to come back to), a field still focused on a
+     page they left (hidden with its view), a focused checkbox or radio: none of them is "mid-edit" on the page shown.
+     Before, any of them made every repaint skip, and a page that shows "Loading…" until its server answer lands stayed
+     on "Loading…" (Action Board, Vehicles, PR/PO, Operations report, Market data). */
+  function shown(el){ return !!(el && el.isConnected && el.getClientRects && el.getClientRects().length); }
   function busy(){
-    var a = document.activeElement;
-    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
-    try{ if(typeof _bkV2 !== 'undefined' && _bkV2 && _bkV2.newBooking) return true; }catch(_){}
+    var a = typeof document !== 'undefined' ? document.activeElement : null;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|button|submit|reset)$/i.test(a.type || '') && shown(a)) return true;
+    try{ if(typeof _bkV2 !== 'undefined' && _bkV2 && _bkV2.newBooking && typeof document !== 'undefined' && shown(document.getElementById('bkv2-host'))) return true; }catch(_){}
     return false;
   }
+  /* run fn now when the person is not mid-edit, else as soon as they are done (the field loses focus, or the next
+     1.5 s tick that finds them free). A repaint that lands while someone types is kept, not dropped: dropping it left
+     the "Loading…" placeholder on screen for good. One pending call per fn. */
+  var freeQ = [], freeTimer = null;
+  function flushFree(){
+    if(!freeQ.length || busy()) return;
+    var q = freeQ; freeQ = [];
+    if(freeTimer){ clearInterval(freeTimer); freeTimer = null; }
+    q.forEach(function(fn){ try{ fn(); }catch(e){ console.warn('[ops] deferred redraw', e && e.message); } });
+  }
+  function whenFree(fn){
+    if(typeof fn !== 'function') return;
+    if(!busy()){ fn(); return; }
+    if(freeQ.indexOf(fn) < 0) freeQ.push(fn);
+    if(!freeTimer) freeTimer = setInterval(flushFree, 1500);
+  }
+  try{ document.addEventListener('focusout', function(){ setTimeout(flushFree, 0); }, true); }catch(_){}
   /* placeholder while a view waits on operation-backend: spinner + label (css .la-ops-loading in 01-base.css) */
   function loadingHtml(label){
     var t = String(label == null ? 'Loading…' : label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
@@ -334,7 +357,7 @@
     del: function(p){ return call('DELETE', p); },
     queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
-    busy: busy, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
+    busy: busy, whenFree: whenFree, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today, clock: clock, pickupWindow: pickupWindow, pickupText: pickupText,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }
