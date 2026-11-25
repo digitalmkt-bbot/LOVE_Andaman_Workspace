@@ -30,8 +30,12 @@
     };
     w.__w4f1 = true; w.__orig = orig; window[name] = w;
   }
+  /* the answer redraws the page; while someone is typing the redraw waits for them (laOps.whenFree) instead of being dropped,
+     which left legacy's partial sums on screen (§calRepaint, 2026-11-25: "13687 pax · 5565 bookings", no month cards) */
   function repaint(){
-    if(O.activeView() === 'booking' && !O.busy() && typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+    var draw = function(){ if(O.activeView() === 'booking' && typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep(); };
+    if(typeof O.whenFree === 'function') O.whenFree(draw);
+    else if(!O.busy()) draw();
   }
   /* the answer for one month of the page on screen, null while there is none */
   function month(ym){
