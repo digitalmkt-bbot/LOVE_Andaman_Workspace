@@ -8264,12 +8264,17 @@ function _rcAlt(bk, date){
       var ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null, an=(ar&&ar.name)||'';
       var sp=SP.filter(function(x){ return x && !x.main && (x.pickAreaId||'')===(a.areaId||'') && String(x.pickHotel||'').trim()===place; })[0];
       var tm=(sp&&typeof bkSplitPickTime==='function')?bkSplitPickTime(sp):'', who=String(a.who||'').trim();
-      out.push((who?(who+': '):'')+n+' pax \u00b7 '+(place||an)+((place&&an&&an!==place)?(' ('+an+')'):'')+(tm?(' \u00b7 '+tm):''));
+      /* §rcAlt2 · คืนเป็นก้อนข้อมูล · หน้าจอและใบ Sheet วาดเป็นแถวย่อยใต้ใบ (ชื่อ · จำนวนคน · เวลา · โรงแรม · ย่าน · ทะเบียนรถของจุดนั้น) */
+      var plate='';
+      try{ if(sp && sp.vanId){ var _vi=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(sp.vanId,date):{}, _vh=(typeof vehGet==='function'?vehGet(sp.vanId):null)||{}; plate=(_vi.plate||_vh.plate||''); if(plate==='-') plate=''; } }catch(_){}
+      out.push({ who:who, n:n, place:(place||an), area:an, tm:tm, plate:plate,
+        txt:(who?(who+': '):'')+n+' pax \u00b7 '+(place||an)+((place&&an&&an!==place)?(' ('+an+')'):'')+(tm?(' \u00b7 '+tm):'') });
     });
     return out;
   }catch(_){ return []; }
 }
-function _rcAltHtml(d, esc){ return (d.alt&&d.alt.length)?d.alt.map(function(x){ return '<div class="drop" style="background:#E3EEFB;color:#143F73">&#10133; Extra pick-up: '+esc(x)+'</div>'; }).join(''):''; }
+function _rcAltN(d){ return (d.alt||[]).reduce(function(s,a){ return s+(+a.n||0); },0); }
+function _rcAltHtml(d, esc){ return (d.alt&&d.alt.length)?d.alt.map(function(x){ return '<div class="drop" style="background:#E3EEFB;color:#143F73">&#10133; Extra pick-up: '+esc(x.txt)+'</div>'; }).join(''):''; }
 function _rcDrop(bk){
   try{
     var out=[];
@@ -8396,14 +8401,23 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td class="mono nowrap">'+esc(d.phone||'—')+'</td>'
         +'<td class="ctr mono">'+(d.ad||0)+'</td><td class="ctr mono">'+(d.chd||0)+'</td><td class="ctr mono">'+(d.inf||0)+'</td><td class="ctr mono" style="color:'+((d.foc||0)?'#993C1D':'#c9c7c0')+'">'+(d.foc||0)+'</td>'
         +'<td class="mono nowrap">'+esc(d.time)+'</td>'
-        +'<td>'+esc(d.hotel||'—')+_rcAltHtml(d,esc)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
+        +'<td>'+esc(d.hotel||'—')+((d.alt&&d.alt.length&&d.pax-_rcAltN(d)>0)?(' <span class="altn">'+(d.pax-_rcAltN(d))+' pax</span>'):'')+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
         +'<td class="ctr mono">'+esc(d.room||'—')+'</td>'
         +'<td>'+esc(d.zone)+'</td>'
         +'<td class="nowrap">'+_rcVanSheet(d.van, esc)+'</td>'   /* §rcPlate */
         +'<td>'+(d.addon?'<span class="ao">'+esc(d.addon)+'</span>':'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.special?esc(d.special):'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.cot?'<span class="cot">'+esc(d.cot)+'</span>':'<span class="mut">—</span>')+'</td>'
-        +'</tr>';
+        +'</tr>'
+        /* §rcAlt2 · จุดรับเพิ่ม = แถวย่อยใต้ใบ · เวลา/โรงแรม/ย่าน/ทะเบียน อยู่ตรงคอลัมน์ของมันเอง */
+        +((d.alt||[]).map(function(a){ return '<tr class="altr"><td></td><td></td>'
+          +'<td colspan="2" class="nowrap"><span class="alta">&#8627;</span> '+esc(a.who||'Extra pick-up')+'</td>'
+          +'<td colspan="4" class="ctr nowrap"><span class="altn">'+a.n+' pax</span></td>'
+          +'<td class="mono nowrap">'+esc(a.tm||'—')+'</td>'
+          +'<td>'+esc(a.place||'—')+'</td><td></td>'
+          +'<td>'+esc(a.area||'')+'</td>'
+          +'<td class="nowrap">'+(a.plate?('<b class="mono">'+esc(a.plate)+'</b>'):'<span class="mut">—</span>')+'</td>'
+          +'<td></td><td></td><td></td></tr>'; }).join(''));
     }).join('');
     /* §rcColor · สีของเส้นทางนี้จริง ๆ ไม่ใช่เขียวฟิกซ์เหมือนกันทุกแถบ */
     var _T=_rcSecTint(route&&route.color);
@@ -8484,6 +8498,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.dt{width:100%;border-collapse:collapse;font-size:12.5px}.dt td{padding:3px 0;vertical-align:top}.dt .lbl{color:#9a988f;width:100px}.mut{color:#9a988f}'
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
     +'.gt .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px;white-space:nowrap}'   /* §rcDrop */
+    +'.gt tr.altr td{background:#F3F8FE;color:#143F73;border-top:0;padding-top:4px;padding-bottom:4px}.gt .alta{color:#5B8FD0;font-weight:700;margin-right:2px}.gt .altn{display:inline-block;font-size:10px;font-weight:700;color:#143F73;background:#DCEAFB;border-radius:999px;padding:1px 7px;white-space:nowrap}'   /* §rcAlt2 */
     +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
     +'.bar{max-width:1440px;margin:10px auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 8px}.bar .sp{flex:1}'
     +'.seg{display:inline-flex;background:#fff;border:1px solid #d8d6cf;border-radius:9px;padding:3px;gap:2px}'
@@ -8647,10 +8662,9 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* §rcDropFt (2026-10-14) · owner: "ทำเป็น Popup ลอยขึ้นมาไหม จะได้ไม่กินเนื้อที่" · บรรทัด Drop-off ใต้ชื่อโรงแรม
        ทำให้แถวสูงขึ้นทั้งแถวเพื่อข้อมูลที่นาน ๆ มีที · เหลือป้ายเล็กลอยมุมขวาของช่อง เอาเมาส์ชี้ค่อยกางเป็นที่ส่งเต็ม
        (แบบเดียวกับป้ายลอยใน By trip · Compact) · ใบพิมพ์ (บรรทัด 'drop' ข้างบน) ยังพิมพ์เต็มเหมือนเดิม */
-    case 'hotel': return (d.drop || (d.alt&&d.alt.length))   /* §rcAlt · จุดรับเพิ่มใช้ป้ายลอยเดียวกับจุดส่ง */
+    case 'hotel': return d.drop   /* §rcAlt2 · จุดรับเพิ่มย้ายไปเป็นแถวย่อยใต้ใบ (rowFor) · ป้ายลอยเหลือเฉพาะจุดส่ง */
       ? '<div class="rc-hc'+(d.room?' rm':'')+'"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'   /* §rcDropFt3 · มีเลขห้อง = ไม่ล้นไปบัง */
-        +'<span class="rc-ft" title="'+((d.alt&&d.alt.length)?'มีจุดรับเพิ่ม':'')+((d.alt&&d.alt.length&&d.drop)?' · ':'')+(d.drop?'จุดส่งขากลับต่างจากจุดรับ':'')+'"><span class="s">'+((d.alt&&d.alt.length)?'&#10133; รับ ':'')+(d.drop?'&#8617; ส่ง':'')+'</span><span class="x">'
-        +((d.alt&&d.alt.length)?('&#10133; Extra pick-up: '+d.alt.map(esc).join(' | ')+(d.drop?' &nbsp; ':'')):'')+(d.drop?('&#8617; Drop-off: '+esc(d.drop)):'')+'</span></span></div>'
+        +'<span class="rc-ft" title="จุดส่งขากลับต่างจากจุดรับ"><span class="s">&#8617; ส่ง</span><span class="x">&#8617; Drop-off: '+esc(d.drop)+'</span></span></div>'
       : esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
     case 'zone': return esc(d.zone);
@@ -8672,7 +8686,18 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
     }
     var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis');
-    if(c.k==='hotel' && (d.drop || (d.alt&&d.alt.length))) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
+    if(c.k==='hotel' && d.drop) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'
+    /* §rcAlt2 (2026-11-25) · owner "ปรับให้มันสวย และดูเข้าใจหน่อย" · จุดรับเพิ่ม = แถวย่อยสีฟ้าอ่อนใต้ใบ · ข้อมูลอยู่ตรงคอลัมน์เดียวกับแถวหลัก */
+    +((d.alt||[]).map(function(a){ var T2=TD+';background:#F3F8FE;color:#143F73;padding-top:4px;padding-bottom:4px';
+      return '<tr class="rc-alt" data-s="'+esc(_rcSearchText(d))+'">'+cols.map(function(c){ var v='', x='';
+        if(c.k==='prog') v='<span style="color:#5B8FD0;font-weight:700;padding-left:14px">&#8627; จุดรับเพิ่ม</span>';
+        else if(c.k==='lead') v=esc(a.who||'—');
+        else if(c.k==='pax'||c.k==='ad'){ v='<span style="font-size:10px;font-weight:700;background:#DCEAFB;border-radius:999px;padding:1px 7px">'+a.n+' pax</span>'; x=';text-align:center;overflow:visible'; }
+        else if(c.k==='time') v='<span style="'+MONO+'">'+esc(a.tm||'—')+'</span>';
+        else if(c.k==='hotel'){ v=esc(a.place||'—'); x=';overflow:hidden;text-overflow:ellipsis'; }
+        else if(c.k==='zone') v=esc(a.area||'');
+        else if(c.k==='van') v=a.plate?('<b style="'+MONO+'">'+esc(a.plate)+'</b>'):'<span style="color:#9AA8BD">—</span>';
+        return '<td style="'+T2+x+'">'+v+'</td>'; }).join('')+'</tr>'; }).join('')); }
   /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
      ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
   var out='<style id="rc-skin">'
