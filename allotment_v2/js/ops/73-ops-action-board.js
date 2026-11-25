@@ -185,7 +185,8 @@
     var ab = board(), st = O.srv.status(boardKey());
     if(!ab){
       if(st === 'failed') return orig.apply(this, args);                        // legacy's own render, with 52's loads
-      if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading the Action Board…');
+      // §loadingOver · another salesperson: the previous board stays under a loading line until this one's answer lands
+      if(O.loadingOver) O.loadingOver(host, 'Loading the Action Board…'); else if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading the Action Board…');
       return;
     }
     /* the legacy render underneath 52's booking loads: its agent sums, the cards and the sold-by bars come from the answers */

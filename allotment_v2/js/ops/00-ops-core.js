@@ -274,9 +274,15 @@
      Before, any of them made every repaint skip, and a page that shows "Loading…" until its server answer lands stayed
      on "Loading…" (Action Board, Vehicles, PR/PO, Operations report, Market data). */
   function shown(el){ return !!(el && el.isConnected && el.getClientRects && el.getClientRects().length); }
+  /* §busyChrome (2026-11-26, UI parity N7/N1/gap 6) · a field in the app's frame (the sidebar's "Search menu..." box, the
+     topbar) is never redrawn by a page, so it is no edit either. The menu search keeps focus after its × (clear.onclick
+     focuses it again) or after typing a menu name; while it held focus every whenFree repaint waited for good: Action Board,
+     Vehicles, PR/PO, Operations report stayed on "Loading…", the park month on its one-day fallback and Market data on
+     "No daily data yet" (reproduced: dashboard day-detail dialog closed with ×, then any of those pages). */
+  function frameField(el){ try{ return !!(el.closest && el.closest('.sidebar, .topbar')); }catch(_){ return false; } }
   function busy(){
     var a = typeof document !== 'undefined' ? document.activeElement : null;
-    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|button|submit|reset)$/i.test(a.type || '') && shown(a)) return true;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|button|submit|reset)$/i.test(a.type || '') && shown(a) && !frameField(a)) return true;
     try{ if(typeof _bkV2 !== 'undefined' && _bkV2 && _bkV2.newBooking && typeof document !== 'undefined' && shown(document.getElementById('bkv2-host'))) return true; }catch(_){}
     return false;
   }
@@ -301,6 +307,20 @@
   function loadingHtml(label){
     var t = String(label == null ? 'Loading…' : label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
     return '<div class="la-ops-loading" role="status" aria-live="polite"><span class="la-ops-loading-ring"></span><span>' + t + '</span></div>';
+  }
+  /* §loadingOver (2026-11-26, UI parity G17) · a screen waiting for the answer to a NEW choice (another range, another
+     salesperson): an empty host gets the placeholder; a host still showing the previous choice keeps it (its buttons
+     stay usable) under a loading line on top, so the old figures are never read as the new range's. The render that
+     follows the answer rewrites the host and the line goes with it. */
+  function loadingOver(host, label){
+    if(!host) return;
+    if(!host.firstChild){ host.innerHTML = loadingHtml(label); return; }
+    var first = host.firstElementChild;
+    if(first && first.getAttribute && first.getAttribute('data-ops-loading') === '1') return;
+    var d = document.createElement('div');
+    d.setAttribute('data-ops-loading', '1');
+    d.innerHTML = loadingHtml(label);
+    host.insertBefore(d, host.firstChild);
   }
   /* §skel · shimmer placeholder shaped like a page: o.kpis KPI cards, o.panels wide cards, then a
      table of o.rows × o.cols. The label is read out to screen readers only (css .la-skel* in 01-base.css). */
@@ -357,7 +377,7 @@
     del: function(p){ return call('DELETE', p); },
     queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
-    busy: busy, whenFree: whenFree, activeView: activeView, loadingHtml: loadingHtml, skeletonHtml: skeletonHtml,
+    busy: busy, whenFree: whenFree, activeView: activeView, loadingHtml: loadingHtml, loadingOver: loadingOver, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today, clock: clock, pickupWindow: pickupWindow, pickupText: pickupText,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }
