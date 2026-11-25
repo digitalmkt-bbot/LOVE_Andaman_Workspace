@@ -92,6 +92,21 @@ test('day aggregate is built from server trips, month totals fill the previous p
   assert.equal(m.cap, 150);
 });
 
+test('§pxFam (N10): the server FAM split reaches the trip and the day sums as legacy pxDayAgg', () => {
+  const { c } = load();
+  const fam = { pax: 3, th: 0, cost: 1200, all: false, list: [{ booking_id: 'bk9', name: 'Aqua Travel', pax: 3, staff: false, full: 4500 }], zero: [{ booking_id: 'bk8', name: 'walk-in', pax: 2 }] };
+  const t = c.legacyTrip({ ...serverTrip, fam, sale_profit: 5500 });
+  eq(t.fam, { pax: 3, th: 0, cost: 1200, all: false, list: [{ id: 'bk9', name: 'Aqua Travel', pax: 3, staff: false, full: 4500 }], zero: [{ id: 'bk8', name: 'walk-in', pax: 2 }] });
+  assert.equal(t.saleProfit, 5500);
+  assert.equal(c.legacyTrip(serverTrip).fam.pax, 0, 'an older answer without fam reads as no FAM');
+  const a = c.aggFromTrips('2026-10-12', [{ ...serverTrip, fam, sale_profit: -1 }, { ...serverTrip, boat_id: 'b2', no_sail: true, fam }]);
+  assert.deepEqual([a.famCost, a.famPax, a.famTrips, a.saleLoss, a.zeroN], [1200, 3, 1, 1, 1], 'a boat that did not sail is left out');
+  assert.deepEqual([a.famAg['Aqua Travel'].pax, a.famAg['Aqua Travel'].full, a.famAg['Aqua Travel'].cost], [3, 4500, 1200]);
+  assert.deepEqual([a.routes.r1.famCost, a.routes.r1.famN], [1200, 1]);
+  const m = c.aggFromTotals('2026-09-12', { trips: 1, fam_cost: 700, fam_pax: 4, fam_trips: 1, sale_loss: 2 });
+  assert.deepEqual([m.famCost, m.famPax, m.famTrips, m.saleLoss], [700, 4, 1, 2]);
+});
+
 test('template, plan and rent round-trip between server and legacy shapes', () => {
   const { c } = load();
   const tpl = c.templateFromServer({ vat_rate: 7, dropped: ['snk'], lines: [

@@ -119,18 +119,18 @@
       + '<div class="eb-top"><h1>Executive Board<small>' + (EB.tab === 'move' ? 'OVERVIEW · มูฟเมนต์บุคกิ้ง' : EB.tab === 'tgt' ? 'OVERVIEW · เป้าเซลส์รายวัน' : EB.tab === 'gap' ? 'OVERVIEW · ต้องหาอีกเท่าไหร่ถึงเต็มเรือ' : 'OVERVIEW · รายได้และยอดจอง') + '</small></h1>'
       + seg('tab', [['move', 'มูฟเมนต์'], ['rev', 'ภาพรวมรายได้'], ['sales', 'Sales Performance'], ['gap', 'Gap to Target'], ['tgt', 'เป้าเซลส์']])
       + (EB.tab === 'tgt'
-          ? (seg('stm', [['this', 'เดือนนี้'], ['next', 'เดือนหน้า']]) + seg('me', [['', 'ทุกคน'], ['1', 'เฉพาะฉัน']]) + seg('pier', [['', 'ทุกท่า'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']]))
+          ? (seg('stm', [['this', 'เดือนนี้'], ['next', 'เดือนหน้า']]) + seg('me', [['', 'ทุกคน'], ['1', 'เฉพาะฉัน']]) + seg('pier', [['', 'TL + Panwa'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']]))
           : EB.tab === 'move'
-          ? seg('pier', [['', 'ทุกท่า'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']])
+          ? seg('pier', [['', 'TL + Panwa'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']])
           : EB.tab === 'sales'
           ? (seg('sp', [['week', 'สัปดาห์'], ['month', 'เดือน']])
              + '<span class="eb-nav"><button onclick="ebSet(\'off\',' + ((+EB.off || 0) - 1) + ')" title="ช่วงก่อนหน้า">‹</button><b>' + E(nav) + '</b>'
              + '<button onclick="ebSet(\'off\',' + Math.min(0, (+EB.off || 0) + 1) + ')"' + ((+EB.off || 0) >= 0 ? ' disabled' : '') + ' title="ช่วงถัดไป">›</button></span>')
           : EB.tab === 'gap'
           ? (seg('gp', [['h', '14 วันข้างหน้า'], ['month', 'เดือนนี้'], ['next', 'เดือนหน้า']])
-             + seg('pier', [['', 'ทุกท่า'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']]))
+             + seg('pier', [['', 'TL + Panwa'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']]))
           : (seg('per', [['today', 'วันนี้'], ['month', 'เดือนนี้'], ['quarter', 'ไตรมาส'], ['year', 'ปีนี้']])
-             + seg('pier', [['', 'ทุกท่า'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']])))
+             + seg('pier', [['', 'TL + Panwa'], ['tublamu', 'Tub Lamu'], ['panwa', 'Panwa'], ['ranong', 'Ranong']])))
       + '<span class="eb-sp"></span><span class="eb-upd">' + E(thDow(t0)) + ' ' + E(thD(t0)) + ' ' + t0.slice(0, 4) + ' · อัปเดต ' + hhmm(Date.now()) + ' · วาดใหม่ทุก 1 นาที</span></div>'
       + body + '</div>';
   }

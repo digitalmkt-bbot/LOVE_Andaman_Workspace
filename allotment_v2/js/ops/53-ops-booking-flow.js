@@ -1,6 +1,9 @@
 /* ══════════════════════════════════════════════════════════════════════════
    §opsBookingFlow (2026-10-14) · Booking Flow ⇄ operation-backend
    ──────────────────────────────────────────────────────────────────────────
+   Since 2026-11-25 (§bfSrvFlow below): the page draws from GET /v1/bookings/flow
+   and GET /v1/bookings/lead-times only. What follows is the fallback used when
+   that read fails.
    renderBookingFlow (08-app.js) groups SB_BOOKINGS by CREATION date (intake
    buckets, MoM delta) and by trip date (travel calendar, dual line, cohort).
    Bookings are no longer preloaded, so every bucket counted only whatever
@@ -81,8 +84,50 @@
     });
   }
 
+  /* §bfSrvFlow (2026-11-25) · the whole page from one server read: GET /v1/bookings/flow?mode=day|week|month answers every figure the
+     screen shows (buckets with their market split, the legend's top 4, bookings-in vs travel, the KPIs and top lists, the travel calendar
+     and the cohort), worked out over every live booking with legacy's rules (operation-backend src/domain/booking-flow.ts). §bfSrvFlow
+     in 08-app.js reads window._opsBfFlow in place of SB_BOOKINGS, so no booking is paged into the browser for this page (it paged ~21
+     pages of 1,000 whole bookings: 36 s). Cached a minute per mode, dropped by a write. If the read fails, the page falls back to the
+     paged loads below for 5 minutes and says so in the console. */
+  var flow = {}, flowFailedAt = 0;
+  if(O.onWrite) O.onWrite(function(){ flow = {}; });
+  function mode(){ try{ return (typeof _bfMode !== 'undefined' && _bfMode) || 'month'; }catch(_){ return 'month'; } }
+  function validFlow(r, m){ return !!(r && r.mode === m && Array.isArray(r.buckets) && r.buckets.length && r.kpi && Array.isArray(r.in_vs_travel)); }
+  function loadFlow(m){
+    var c = flow[m];
+    if(c && c.data && Date.now() - c.at < 60000) return Promise.resolve(c.data);
+    if(c && c.loading) return c.loading;
+    var p = O.get('/v1/bookings/flow', { mode: m }).then(function(r){
+      if(!validFlow(r, m)) throw new Error('invalid Booking Flow answer');
+      flow[m] = { at: Date.now(), data: r };
+      return r;
+    }, function(e){ throw e; });
+    flow[m] = { at: 0, loading: p.then(null, function(e){ delete flow[m]; throw e; }) };
+    return flow[m].loading;
+  }
+
   wrap('renderBookingFlow', function(orig){
     var self = this, args = [].slice.call(arguments, 1);
+    var m = mode();
+    if(typeof O.get === 'function' && Date.now() - flowFailedAt > 300000){
+      var c = flow[m];
+      if(c && c.data && Date.now() - c.at < 60000 && window._opsBfLead){ window._opsBfFlow = c.data; return orig.apply(self, args); }
+      var host0 = document.getElementById('bookingflow-host');
+      if(host0 && !host0.firstChild) host0.innerHTML = O.loadingHtml('Loading Booking Flow…');
+      return Promise.all([loadFlow(m), loadLead()]).then(function(rs){
+        if(O.activeView() && O.activeView() !== 'bookingflow') return;     // left the page while loading
+        if(mode() !== m) return;                                           // the mode changed meanwhile: its own call draws
+        window._opsBfFlow = rs[0];
+        return orig.apply(self, args);
+      }, function(e){
+        flowFailedAt = Date.now();
+        window._opsBfFlow = null;
+        console.warn('[ops] Booking Flow: GET /v1/bookings/flow failed; drawing from paged bookings for 5 minutes', e && e.message);
+        return window.renderBookingFlow.apply(self, args);
+      });
+    }
+    window._opsBfFlow = null;
     var W = windows();
     var loads = [];
     if(typeof window.bookingV2OpsEnsureDailyCounts === 'function'){

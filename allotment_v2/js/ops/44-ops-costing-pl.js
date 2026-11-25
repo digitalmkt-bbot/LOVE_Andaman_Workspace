@@ -80,8 +80,16 @@
       /* §bopSwap2 (sync 11-10, ported 11-11) · the server costs a rescue boat on fuel/captain/crew/rent only and says which
          boat it went out for; the boat that broke says where its guests went (pxSwPill reads both) */
       rescue:(t.rescue && t.rescue.for) ? { for:t.rescue.for } : null,
-      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null
+      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null,
+      /* §pxFam (N10, 2026-11-25) · the server's FAM split (who is FAM, what they cost), in legacy pxTrip's shape */
+      fam:famOf(t.fam), saleProfit:t.sale_profit == null ? n(t.profit) : n(t.sale_profit)
     };
+  }
+  function famOf(f){
+    f = f || {};
+    return { pax:n(f.pax), th:n(f.th), cost:n(f.cost), all:!!f.all,
+             list:(f.list || []).map(function(x){ return { id:x.booking_id, name:x.name || '—', pax:n(x.pax), staff:!!x.staff, full:n(x.full) }; }),
+             zero:(f.zero || []).map(function(x){ return { id:x.booking_id, name:x.name || '—', pax:n(x.pax) }; }) };
   }
   function emptyTrip(date, bid){
     return legacyTrip({ date:date, boat_id:bid, name:bid, status:'nosail', no_sail:true, pax:{}, rows:[], upsell:{}, longtail:{}, fuel_price:{} });
@@ -107,6 +115,25 @@
     return null;
   }
 
+  /* §plDays (2026-11-25) · many days in one read: GET /v1/reports/trip-pl/days?from=&to=&pier= answers each day exactly as
+     GET /v1/reports/trip-pl?date=&pier= does (at most 62 days a call). The Monthly and Forecast tabs read their missing days with it:
+     the Forecast tab made one call per day (168 calls, 11 s); now it makes one or two. */
+  function loadDays(dates, pier){
+    var sorted = dates.slice().sort(), chunks = [], cur = null;
+    sorted.forEach(function(d){ if(cur && O.shift(cur.from, 61) >= d) cur.to = d; else { cur = { from:d, to:d }; chunks.push(cur); } });
+    return Promise.all(chunks.map(function(c){
+      return once('days:' + c.from + '|' + c.to + '|' + (pier || ''), function(){
+        return O.get('/v1/reports/trip-pl/days', { from:c.from, to:c.to, pier:pier || '' }).then(function(r){
+          if(!r || r.from !== c.from || r.to !== c.to || !Array.isArray(r.days)) throw new Error('invalid Trip P&L days response');
+          var at = Date.now();
+          r.days.forEach(function(d){ if(d && d.date && Array.isArray(d.trips)) S.day[dayKey(d.date, pier)] = { at:at, data:d }; });
+          return r;
+        });
+      });
+    }));
+  }
+  O.tripPlLoadDays = loadDays;
+
   /* ── month: full days for the shown month, server month totals for the one before ── */
   function loadMonthTotals(ym, pier){
     return once('mon:' + ym + '|' + (pier || ''), function(){
@@ -128,19 +155,38 @@
     var out = monthNeeds();
     var pdays = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(prevMonth(ym)) : [];
     var pmiss = pdays.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
-    if(pmiss.length) out.push(function(){ return pool(pmiss, 5, function(d){ return loadDay(d, pier); }); });
+    if(pmiss.length) out.push(function(){ return loadDays(pmiss, pier); });
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
-    if(y && m && typeof window.bookingV2LoadFromOpsBackend === 'function'){
+    if(y && m){
       var t = new Date(O.today() + 'T12:00:00'); t.setDate(t.getDate() - 29);
       var from = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
       var to = ym + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
       if(to < from) to = O.today();
       var rk = from + '|' + to;
+      /* §plPace (2026-11-25): the pace rows come from GET /v1/reports/trip-pl/pace (operation-backend trip-pace.ts, legacy
+         pxPaceRows' rules) instead of paging the window's whole bookings in (~12 s); pxPaceRows below reads them. */
       if(!fresh(paceRange[rk])) out.push(function(){
-        return Promise.resolve(window.bookingV2LoadFromOpsBackend({ from: from, to: to })).then(function(){ paceRange[rk] = { at: Date.now() }; }, function(){ /* the pace line is drawn from what is loaded */ });
+        return once('pace:' + rk, function(){
+          return O.get('/v1/reports/trip-pl/pace', { from: from, to: to }).then(function(r){
+            if(!r || !r.days || typeof r.days !== 'object') throw new Error('invalid booking pace response');
+            paceRange[rk] = { at: Date.now() }; paceDays = r.days; paceSpan = { from: from, to: to };
+            if(window._px) window._px._pace = null;          // pxPace caches its curve: work it out again from these rows
+            return r;
+          });
+        });
       });
     }
     return out;
+  }
+  var paceDays = null, paceSpan = null;
+  /* legacy pxPaceRows(D, pier): [{ c: day booked, n: heads }] of the live bookings travelling on D; the server's rows, by pier */
+  var legacyPaceRows = window.pxPaceRows;
+  if(typeof legacyPaceRows === 'function' && !legacyPaceRows.__plPace){
+    window.pxPaceRows = function(D, pier){
+      if(!enabled() || !paceDays || !paceSpan || D < paceSpan.from || D > paceSpan.to) return legacyPaceRows.apply(this, arguments);
+      return (paceDays[D] || []).filter(function(r){ return !pier || r.pier === pier; }).map(function(r){ return { c:r.booked, n:n(r.heads) }; });
+    };
+    window.pxPaceRows.__plPace = true; window.pxPaceRows.__orig = legacyPaceRows;
   }
   function prevMonth(ym){
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 2, d = new Date(y, m, 1);
@@ -151,7 +197,7 @@
     var days = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(ym) : [];
     var out = [];
     var miss = days.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });       /* w6-d · the day read for the pier on screen: its bands, best boat and agent sums are the server's */
-    if(miss.length) out.push(function(){ return pool(miss, 5, function(d){ return loadDay(d, pier); }); });
+    if(miss.length) out.push(function(){ return loadDays(miss, pier); });
     if(days.length && !fresh(S.rent[ym])) out.push(function(){ return loadMonthTotals(ym, ''); });   // w5-d: pxRentIdle reads the server's rent_idle
     var pym = prevMonth(ym);
     var pmiss = days.some(function(d){ return !fresh(S.mday[dayKey(pym + '-' + d.slice(8, 10), pier)]); });
@@ -186,7 +232,7 @@
   }
   function aggFromTrips(date, trips, dayData){
     var a = { date:date, trips:trips.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0, routes:{}, agents:{}, groups:{}, gdet:{},
-              bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[] };
+              bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0 };
     trips.forEach(function(t){
       var lt = legacyTrip(t), cap = n(t.capacity);
       a.rev += lt.rev; a.cost += lt.cost; a.profit += lt.profit; a.pax += lt.px.tot; a.bk += lt.px.bk; a.cap += cap;
@@ -194,7 +240,17 @@
       if(!a.best || lt.profit > a.best.profit) a.best = { name:lt.name, profit:lt.profit };
       a.boats.push({ bid:lt.bid, name:lt.name, profit:lt.profit });
       var rk = lt.rid || lt.route.name || '-';
-      var R = a.routes[rk] || (a.routes[rk] = { name:lt.route.name || '-', color:lt.route.color || '#64748B', n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:lt.route.pier });
+      var R = a.routes[rk] || (a.routes[rk] = { name:lt.route.name || '-', color:lt.route.color || '#64748B', n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:lt.route.pier, famCost:0, famN:0, noPlan:0 });
+      /* §pxFam (N10) · legacy pxDayAgg's FAM sums over the server's per-trip FAM split: boats that sailed only */
+      var F = lt.fam;
+      if(!lt.noSail){
+        if(F.pax > 0){ a.famCost += F.cost; a.famPax += F.pax; a.famTrips++; R.famCost += F.cost; R.famN++;
+          F.list.forEach(function(x){ var G = a.famAg[x.name] || (a.famAg[x.name] = { name:x.name, staff:!!x.staff, trips:{}, pax:0, full:0, cost:0 });
+            G.trips[date + '|' + lt.bid] = 1; G.pax += x.pax; G.full += x.full; G.cost += F.cost * (x.pax / Math.max(1, F.pax)); }); }
+        if(lt.saleProfit < 0) a.saleLoss++;
+        if(!lt.plan) R.noPlan++;
+        a.zeroN += F.zero.length;
+      }
       R.n++; R.pax += lt.px.tot; R.rev += lt.rev; R.cost += lt.cost; R.profit += lt.profit; R.cap += cap;
       if(lt.be){ R.be += lt.be; R.beN++; }
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
@@ -208,7 +264,8 @@
   function aggFromTotals(date, x){
     x = x || {};
     return { date:date, trips:n(x.trips), rev:n(x.revenue), cost:n(x.cost), profit:n(x.profit), pax:n(x.pax), bk:n(x.bookings), loss:n(x.loss_trips), cap:n(x.capacity),
-             routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[] };
+             routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[],
+             famCost:n(x.fam_cost), famPax:n(x.fam_pax), famTrips:n(x.fam_trips), famAg:{}, saleLoss:n(x.sale_loss), zeroN:0 };
   }
 
   /* ── Analysis tab, drawn from the server report ─────────────────────────── */

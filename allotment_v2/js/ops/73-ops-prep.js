@@ -33,9 +33,8 @@
     };
     w.__w4f1 = true; w.__orig = orig; window[name] = w;
   }
-  function repaint(){
-    if(O.activeView() === 'prpo' && !O.busy() && typeof window.renderPrPo === 'function') window.renderPrPo();
-  }
+  function paint(){ if(O.activeView() === 'prpo' && typeof window.renderPrPo === 'function') window.renderPrPo(); }
+  function repaint(){ O.whenFree(paint); }   // §busyVisible · kept until the person is done typing, never dropped
   function keyNow(){ return 'prep|' + window._ppFrom + '|' + window._ppTo; }
   function prep(){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(window._ppFrom || '') || !/^\d{4}-\d{2}-\d{2}$/.test(window._ppTo || '')) return null;

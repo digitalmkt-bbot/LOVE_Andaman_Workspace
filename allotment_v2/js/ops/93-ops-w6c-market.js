@@ -31,9 +31,8 @@
     };
     w.__opsW6c = true; w.__orig = orig; window[name] = w;
   }
-  function repaint(){
-    if(O.activeView() === 'marketdata' && !O.busy() && typeof window.renderMarketData === 'function') window.renderMarketData();
-  }
+  function paint(){ if(O.activeView() === 'marketdata' && typeof window.renderMarketData === 'function') window.renderMarketData(); }
+  function repaint(){ O.whenFree(paint); }   // §busyVisible · kept until the person is done typing, never dropped
   function all(){ return O.srv.read('w6c-market', '/v1/market-stats', {}, repaint); }
 
   wrap('mdArrivalsByWeekday', function(){
