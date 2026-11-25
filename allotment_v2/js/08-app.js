@@ -8241,6 +8241,7 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     drop:_rcDrop(bk),   /* §rcDrop */
+    alt:_rcAlt(bk, (t&&t.date)||bk.travelDate||''),   /* §rcAlt */
     /* §rcArea · ย่านรับจริง เช่น Patong / Kalim / Karon
        ของเดิมใช้โซนใหญ่ PK/KL ซึ่งแปลได้แค่ "Phuket" ทั้งคอลัมน์
        ไม่มีย่านค่อยถอยไปใช้โซนใหญ่ ดีกว่าเว้นว่าง */
@@ -8248,6 +8249,27 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
 /* ══ §rcDrop (2026-10-14) · owner "กรณีที่มี Drop off ให้ขึ้นด้วย" ══════════════════════
    จุดส่งที่ไม่ใช่ที่เดิม · ระดับใบ (dropoffSame=false) และรายคน (altPickups[i].dropSame=false · §altDrop)
    อ่านผ่าน bkDropOf ตัวเดียวกับใบงานรถ จะได้ตรงกัน · ไม่มี = '' (ช่องโรงแรมเหมือนเดิม) */
+/* ══ §rcAlt (2026-11-25) · owner ดูหน้า Re-confirmation (PEGAS): "กรณีแยกที่รับมันควรขึ้นด้วย และในหน้า sheet ควรขึ้นด้วย"
+   ใบที่มีจุดรับเพิ่ม (altPickups ที่มีสถานที่/ย่านของตัวเอง) เดิมขึ้นแค่โรงแรมหลัก · เอเจนต์ไม่เห็นว่าอีกกลุ่มรับที่ไหน กี่โมง
+   คืน array ข้อความต่อจุด: "ชื่อ: 2 pax · โรงแรม (ย่าน) · เวลา" · เวลารับอ่านจากก้อนแยกของจุดนั้น (ops.vanSplits · §splitPickTime) ถ้าตั้งไว้
+   แถวที่รับที่เดิมแต่ส่งคนละที่ ไม่นับ (อยู่ใน §rcDrop แล้ว) */
+function _rcAlt(bk, date){
+  try{
+    var out=[], A=Array.isArray(bk.altPickups)?bk.altPickups:[];
+    if(!A.length) return out;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):(bk.ops||{}), SP=Array.isArray(O&&O.vanSplits)?O.vanSplits:[];
+    A.forEach(function(a){
+      if(!a) return; var place=String(a.place||'').trim(); if(!place && !a.areaId) return;
+      var n=(typeof bkAltPax==='function'&&typeof bkPaxSum==='function')?bkPaxSum(bkAltPax(a)):(+a.qty||0); if(!(n>0)) return;
+      var ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null, an=(ar&&ar.name)||'';
+      var sp=SP.filter(function(x){ return x && !x.main && (x.pickAreaId||'')===(a.areaId||'') && String(x.pickHotel||'').trim()===place; })[0];
+      var tm=(sp&&typeof bkSplitPickTime==='function')?bkSplitPickTime(sp):'', who=String(a.who||'').trim();
+      out.push((who?(who+': '):'')+n+' pax \u00b7 '+(place||an)+((place&&an&&an!==place)?(' ('+an+')'):'')+(tm?(' \u00b7 '+tm):''));
+    });
+    return out;
+  }catch(_){ return []; }
+}
+function _rcAltHtml(d, esc){ return (d.alt&&d.alt.length)?d.alt.map(function(x){ return '<div class="drop" style="background:#E3EEFB;color:#143F73">&#10133; Extra pick-up: '+esc(x)+'</div>'; }).join(''):''; }
 function _rcDrop(bk){
   try{
     var out=[];
@@ -8374,7 +8396,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td class="mono nowrap">'+esc(d.phone||'—')+'</td>'
         +'<td class="ctr mono">'+(d.ad||0)+'</td><td class="ctr mono">'+(d.chd||0)+'</td><td class="ctr mono">'+(d.inf||0)+'</td><td class="ctr mono" style="color:'+((d.foc||0)?'#993C1D':'#c9c7c0')+'">'+(d.foc||0)+'</td>'
         +'<td class="mono nowrap">'+esc(d.time)+'</td>'
-        +'<td>'+esc(d.hotel||'—')+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
+        +'<td>'+esc(d.hotel||'—')+_rcAltHtml(d,esc)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
         +'<td class="ctr mono">'+esc(d.room||'—')+'</td>'
         +'<td>'+esc(d.zone)+'</td>'
         +'<td class="nowrap">'+_rcVanSheet(d.van, esc)+'</td>'   /* §rcPlate */
@@ -8401,7 +8423,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
           +'<div class="ph2">'+(d.phone?esc(d.phone):'<span class="mut">Phone &mdash;</span>')+'</div>'
           +'<dl>'
             +cell('Pick-up',esc(d.time),'t')
-            +cell('Hotel',(esc(d.hotel)||M)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
+            +cell('Hotel',(esc(d.hotel)||M)+_rcAltHtml(d,esc)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
             +cell('Room',d.room?esc(d.room):M,'m')
             +cell('Zone',d.zone?esc(d.zone):M)
             +cell('Plate',_rcVanSheet(d.van, esc))
@@ -8625,9 +8647,10 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* §rcDropFt (2026-10-14) · owner: "ทำเป็น Popup ลอยขึ้นมาไหม จะได้ไม่กินเนื้อที่" · บรรทัด Drop-off ใต้ชื่อโรงแรม
        ทำให้แถวสูงขึ้นทั้งแถวเพื่อข้อมูลที่นาน ๆ มีที · เหลือป้ายเล็กลอยมุมขวาของช่อง เอาเมาส์ชี้ค่อยกางเป็นที่ส่งเต็ม
        (แบบเดียวกับป้ายลอยใน By trip · Compact) · ใบพิมพ์ (บรรทัด 'drop' ข้างบน) ยังพิมพ์เต็มเหมือนเดิม */
-    case 'hotel': return d.drop
+    case 'hotel': return (d.drop || (d.alt&&d.alt.length))   /* §rcAlt · จุดรับเพิ่มใช้ป้ายลอยเดียวกับจุดส่ง */
       ? '<div class="rc-hc'+(d.room?' rm':'')+'"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'   /* §rcDropFt3 · มีเลขห้อง = ไม่ล้นไปบัง */
-        +'<span class="rc-ft" title="จุดส่งขากลับต่างจากจุดรับ"><span class="s">&#8617; ส่ง</span><span class="x">&#8617; Drop-off: '+esc(d.drop)+'</span></span></div>'
+        +'<span class="rc-ft" title="'+((d.alt&&d.alt.length)?'มีจุดรับเพิ่ม':'')+((d.alt&&d.alt.length&&d.drop)?' · ':'')+(d.drop?'จุดส่งขากลับต่างจากจุดรับ':'')+'"><span class="s">'+((d.alt&&d.alt.length)?'&#10133; รับ ':'')+(d.drop?'&#8617; ส่ง':'')+'</span><span class="x">'
+        +((d.alt&&d.alt.length)?('&#10133; Extra pick-up: '+d.alt.map(esc).join(' | ')+(d.drop?' &nbsp; ':'')):'')+(d.drop?('&#8617; Drop-off: '+esc(d.drop)):'')+'</span></span></div>'
       : esc(d.hotel||'—');
     case 'room': return '<span style="'+MONO+'">'+esc(d.room||'—')+'</span>';
     case 'zone': return esc(d.zone);
@@ -8649,7 +8672,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
     }
     var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis');
-    if(c.k==='hotel' && d.drop) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
+    if(c.k==='hotel' && (d.drop || (d.alt&&d.alt.length))) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
   /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
      ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
   var out='<style id="rc-skin">'
