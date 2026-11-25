@@ -186,21 +186,44 @@
       st.loaded = key; st.loading = '';
       return true;
     }, function(e){
-      if(my === st.seq) st.loading = '';
+      if(my === st.seq){ st.loading = ''; failedKey = key; }
       O.fail('Job sheets did not load', e);
       return null;
     });
   }
   function ensure(){
     var pier = window._poPier, date = window._poDate;
-    if(!pier || !date || P.busy()) return;
+    if(!pier || !date) return;
     var key = pier + '|' + date;
     if(st.loaded === key || st.loading === key) return;
-    loadDay(pier, date).then(function(ok){ if(ok) window.renderPierJob(); });
+    /* §busyVisible · the load starts even while someone types; the redraw waits for them (it used to be skipped,
+       and with §pjLockWait the fields would then stay held) */
+    loadDay(pier, date).then(function(ok){
+      if(!ok) return;
+      var paint = function(){ if(window._poPier === pier && window._poDate === date) window.renderPierJob(); };
+      if(O.whenFree) O.whenFree(paint); else if(!P.busy()) paint();
+    });
+  }
+  /* §pjLockWait (2026-11-25, UI parity N14) · until the day's job cards have landed, nobody knows which sheets are done
+     (completed_at → lock): the sheet drew every field enabled, and a change on a completed sheet came back
+     409 job_complete. Legacy knew its lock at once and disabled them (lro). So the sheet's own fields (the handlers
+     named pj…) stay disabled until the cards are in; the redraw that follows applies each card's real lock. A failed
+     load leaves them as legacy would draw them. */
+  var failedKey = '';
+  function holdFields(pier){
+    var host = document.getElementById('pj-host-' + pier); if(!host || !host.querySelectorAll) return;
+    [].slice.call(host.querySelectorAll('select, input, textarea')).forEach(function(el){
+      var h = el.getAttribute('onchange') || el.getAttribute('oninput') || el.getAttribute('onblur') || el.getAttribute('onclick') || '';
+      if(/^\s*pj[A-Z]/.test(h) && !el.disabled && el !== document.activeElement){ el.disabled = true; el.setAttribute('data-pj-wait', '1'); el.title = 'Loading the job sheet…'; }
+    });
   }
   window.renderPierJob = function(){
     var r = L.renderPierJob.apply(this, arguments);
-    if(enabled()) ensure();
+    if(enabled()){
+      ensure();
+      var pier = window._poPier, key = pier + '|' + window._poDate;
+      if(pier && st.loaded !== key && failedKey !== key) holdFields(pier);
+    }
     return r;
   };
   function reloadKeys(keys){
