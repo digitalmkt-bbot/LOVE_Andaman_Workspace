@@ -1,31 +1,24 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   §opsMdSalesLoad (2026-10-20) · workflow-compare gap 13 · Market Data > "Sales & Agents" and "Agents" tabs
+   §opsMdSalesLoad (2026-10-20, server read 2026-11-25) · Market Data > "⑤ Sales & Agents" and "⑥ Agents" tabs
    ──────────────────────────────────────────────────────────────────────────
-   mdTabSales and mdTabAgents (08-app.js) rank salespeople and agents by adding up SB_BOOKINGS (value, pax, cancels, no-shows, paid, AR, pax by
-   programme family and pickup area). In ops mode SB_BOOKINGS holds only the days some view has loaded, so the figures were partial.
-   Server check (2026-10-20): no endpoint gives these per-person / per-agent figures (GET /v1/market-stats/our-mix is nationality and lead time,
-   GET /v1/sales-board is the Sales Board's month; neither has paid / AR / family / area per agent). So the tabs load the period first:
-   the bookings CREATED in the last 12 months (bookingV2OpsEnsureCreated, GET /v1/bookings/recent, paged), then draw again.
-     - While that load runs the tab shows a "loading" note instead of partial numbers.
-     - If it fails the tab draws from what is loaded (as before) and does not retry in a loop (the loader answers null once it has run).
-   A failed load is not retried for 5 minutes. Classic script · after 93-ops-w6c-market.js.
+   mdTabSales and mdTabAgents (08-app.js) rank salespeople and agents by adding up SB_BOOKINGS (value, pax, cancels, no-shows, paid, AR,
+   pax by programme family and pickup area, the discount / mix / market blocks). In ops mode SB_BOOKINGS holds only the days some view
+   has loaded, so the tabs used to page the bookings of the last 12 months in first (~70 × GET /v1/bookings/recent, ~115 s).
+   §mdSrvSales: operation-backend folds every booking once with legacy's rules (md-sales.ts) and answers the figures:
+   GET /v1/market-stats/sales-agents (one call, ~0.7 s). window._opsMdSales() hands the answer to the two legacy renders, which use it
+   in place of their own sums (§mdSrvSales in 08-app.js); markup and texts are legacy's.
+     - While the answer loads the tab shows a "loading" note instead of partial numbers; a failed read says so (retried on the next open).
+     - The answer is kept a minute; a write drops it.
+   Classic script · after 93-ops-w6c-market.js.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
   var O = window.laOps; if(!O) return;
-  var MONTHS = 12;
   var TABS = { mdTabSales: 'sales', mdTabAgents: 'agents' };
-  var failedAt = 0;
+  var TTL = 60000, snap = { at: 0, data: null, load: null, failed: false };
+  if(O.onWrite) O.onWrite(function(){ snap.at = 0; });
 
   function on(){ return !!(O.enabled && O.enabled()); }
-  function ymd(d){
-    var m = d.getMonth() + 1, day = d.getDate();
-    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
-  }
-  function range(){
-    var now = new Date();
-    return { from: ymd(new Date(now.getFullYear(), now.getMonth() - MONTHS, now.getDate())), to: ymd(now) };
-  }
   function repaint(tab){
     try{
       if(O.activeView && O.activeView() !== 'marketdata') return;
@@ -34,20 +27,33 @@
       window.renderMarketData();
     }catch(_){}
   }
+  function note(text){ return typeof window.mdNote === 'function' ? window.mdNote(text) : '<div>' + text + '</div>'; }
+  function load(tab){
+    if(snap.load) return snap.load;
+    snap.load = O.get('/v1/market-stats/sales-agents').then(function(d){
+      if(!d || !d.totals || !Array.isArray(d.sales) || !Array.isArray(d.agents)) throw new Error('invalid Sales & Agents answer');
+      snap.data = d; snap.at = Date.now(); snap.failed = false; snap.load = null;
+      repaint(tab);
+    }).catch(function(e){
+      snap.load = null; snap.failed = true;
+      if(typeof O.fail === 'function') O.fail('Sales & Agents did not load', e);
+      repaint(tab);
+    });
+    return snap.load;
+  }
+  /* the legacy renders read this (null outside ops mode or before the first answer) */
+  window._opsMdSales = function(){ return on() ? snap.data : null; };
 
   Object.keys(TABS).forEach(function(name){
     var orig = window[name];
     if(typeof orig !== 'function' || orig.__opsMdLoad) return;
     var w = function(){
-      if(!on() || typeof window.bookingV2OpsEnsureCreated !== 'function') return orig.apply(this, arguments);
-      if(Date.now() - failedAt < 300000) return orig.apply(this, arguments);   // the last load failed: show what is loaded
-      var r = range();
-      var load = window.bookingV2OpsEnsureCreated(r.from, r.to);
-      if(!load) return orig.apply(this, arguments);            // already loaded (or not an ops session)
-      load.then(function(j){ if(!j) failedAt = Date.now(); repaint(TABS[name]); });   // a failed load is drawn once from what is loaded, then left alone
-      return typeof window.mdNote === 'function'
-        ? window.mdNote('Loading bookings of the last ' + MONTHS + ' months for this tab...')
-        : '<div>Loading bookings...</div>';
+      if(!on()) return orig.apply(this, arguments);
+      var fresh = snap.data && Date.now() - snap.at < TTL;
+      if(!fresh && !snap.load && !snap.failed) load(TABS[name]);
+      if(snap.data) return orig.apply(this, arguments);               // fresh, or stale while the new answer loads
+      if(snap.failed){ snap.failed = false; return note('Sales &amp; Agents could not load from operation-backend. Open the tab again to retry.'); }
+      return note('Loading the sales figures from operation-backend...');
     };
     w.__opsMdLoad = true; w.__orig = orig;
     window[name] = w;

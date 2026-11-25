@@ -5,13 +5,13 @@
    backend holds only the date ranges other views happened to load — their
    totals were partial and changed between visits with the cache.
 
-   FOC Detail (renderFocDetail, 08-app.js) has no period UI, and the server
-   has no FOC aggregate endpoint yet (proposed: GET /v1/bookings/foc-stats
-   ?from=&to= → per-agent {agent_id, foc, paying_pax, value, trips:[{date,
-   route_id, foc, reason, status}]}). Until that exists the screen gets a
-   fixed, labelled window — trips in the last 90 days plus the next 30 (by
-   travel date) — loaded with bookingV2EnsureOpsRange and shown with a
-   period banner.
+   FOC Detail (renderFocDetail, 08-app.js) ranks every booking ever made.
+   §focDetailSrv (2026-11-25): it no longer pages every booking in (28.7 s);
+   it reads GET /v1/bookings/foc-detail (one call, ~0.2 s): the bookings with
+   FOC heads whole, the others folded per agent and route (heads, value
+   shared by heads) and per agent (value). focDetailBookings turns that into
+   a small SB_BOOKINGS of stand-in bookings that add up to the same figures
+   in legacy's render (see the section below).
 
    B2B Dashboard (renderB2BDash, 08-app.js) · §b2dParity (2026-10-15): the
    legacy render reads the WHOLE confirmed history — default reference date
@@ -43,7 +43,6 @@
     };
   }
 
-  function iso(s){ if(!s) return null; s = String(s).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; }
   function allBookings(){ return (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : null; }
   /* SB_BOOKINGS is a top-level `let` in 08-app.js — one global lexical binding shared by every
      classic script, so the swap is visible to the legacy render. It lasts only for the
@@ -55,47 +54,70 @@
     try{ return fn(); } finally{ SB_BOOKINGS = real; }
   }
 
-  /* one redraw subscription per window per 5 s · a failed load resolves null → no redraw, no loop */
-  var kickedAt = {};
-  function kick(sig, loads, redraw){
-    loads = loads.filter(Boolean);
-    if(!loads.length) return;
-    var now = Date.now();
-    if(kickedAt[sig] && now - kickedAt[sig] < 5000) return;
-    kickedAt[sig] = now;
-    Promise.all(loads).then(function(rs){ if(rs.every(Boolean)) redraw(); }).catch(function(){});
-  }
   function viewIs(v){ try{ return O.activeView() === v; }catch(_){ return false; } }
 
-  /* ════ FOC Detail · trips in [today−90d .. today+30d] ════ */
-  /* legacy ranks every booking ever made (all-time FOC pax, agents and value); a 120-day window showed 490 FOC pax against lk's 652.
-     So the window is the whole history; the first open pages it in once (limit 500), later opens read the cached range. */
-  var FOC_BACK = 3650, FOC_FWD = 400;
-  function focWindow(){ var t = O.today(); return { from: O.shift(t, -FOC_BACK), to: O.shift(t, FOC_FWD) }; }
-  function tripIn(b, from, to){
-    return !!b && (b.trips || []).some(function(t){ var d = t && iso(t.date); return d && d >= from && d <= to; });
+  /* ════ FOC Detail · §focDetailSrv (2026-11-25) · GET /v1/bookings/foc-detail ════
+     Legacy ranks every booking ever made (all-time FOC pax, agents and value). The server folds them (foc-detail.ts) and this
+     builds the stand-in bookings legacy's render adds up to the same figures:
+       · each booking with FOC heads, whole: its trips' heads as {ad: paying, foc: free}, its value (srvFlags.owed → laBkMoney),
+         its FOC reason and approval state as focApproval, in legacy's booking order (reasons and ties follow it);
+       · per agent (or none) and route, one booking with one trip of the folded heads and the value shared by heads (famVal);
+       · per agent, one booking with no trip for the value of its bookings with no heads (in the agent's value, not in famVal).
+     Routes are folded into families by legacy's own bkV2RouteFamily, as before. Cached a minute; a write drops it. */
+  var FOC_TTL = 60000, focSnap = { at: 0, data: null, load: null };
+  if(O.onWrite) O.onWrite(function(){ focSnap.at = 0; });
+  function focDetailBookings(d){
+    var out = [], n = 0;
+    function own(v){ return { owed: Math.round((+v || 0) * 100) / 100 }; }
+    (d.foc || []).forEach(function(f){
+      out.push({ id: f.booking_id, status: 'confirmed', agentId: f.agent_id || null, b2cChannel: f.channel || '', srvFlags: own(f.value),
+        focApproval: { status: f.approval || '', reason: f.reason || '' }, focReason: f.reason || '',
+        trips: (f.trips || []).map(function(t){ return { date: t.date || '', routeId: t.route_id || '', pax: { ad: Math.max(0, (+t.pax || 0) - (+t.foc || 0)), foc: +t.foc || 0 } }; }) });
+    });
+    var shared = {};
+    (d.shares || []).forEach(function(s){
+      if(s.agent_id) shared[s.agent_id] = (shared[s.agent_id] || 0) + (+s.value || 0);
+      out.push({ id: 'focd_s' + (n++), status: 'confirmed', agentId: s.agent_id || null, srvFlags: own(s.value),
+        trips: [{ date: '', routeId: s.route_id || '', pax: { ad: +s.pax || 0 } }] });
+    });
+    (d.agents || []).forEach(function(a){
+      var rest = (+a.value || 0) - (shared[a.agent_id] || 0);
+      if(Math.abs(rest) >= 0.005) out.push({ id: 'focd_a' + (n++), status: 'confirmed', agentId: a.agent_id, srvFlags: own(rest), trips: [] });
+    });
+    return out;
   }
-  function focBanner(w, loading){
-    try{
-      var host = document.getElementById('foc-host'); if(!host) return;
-      var el = document.createElement('div');
-      el.id = 'foc-ops-period';
-      el.style.cssText = 'margin:0 0 10px;padding:8px 14px;border-radius:10px;background:#EDF4FB;color:#1B5E96;font-size:11.5px;font-weight:600';
-      if(!loading) return;          // the whole history is shown: legacy has no period line, only a note while the rest is still coming in
-      el.textContent = 'Loading every booking from operation-backend... the totals fill in when it lands';
-      host.insertBefore(el, host.firstChild);
-    }catch(_){}
+  O.focDetailBookings = focDetailBookings;
+  function focLoad(){
+    if(focSnap.load) return focSnap.load;
+    focSnap.load = O.get('/v1/bookings/foc-detail').then(function(d){
+      if(!d || !Array.isArray(d.foc) || !Array.isArray(d.shares) || !Array.isArray(d.agents)) throw new Error('invalid FOC detail answer');
+      focSnap.data = focDetailBookings(d); focSnap.at = Date.now(); focSnap.load = null;
+      return true;
+    }, function(e){
+      focSnap.load = null;
+      if(typeof O.fail === 'function') O.fail('FOC detail did not load', e);
+      return false;
+    });
+    return focSnap.load;
   }
   wrap('renderFocDetail', function(){
-    var w = focWindow();
-    /* limit 500: the 120-day window holds ~4k bookings — at the default 100/page that is ~40
-       sequential round-trips (~30 s before the screen fills); 500 cuts it to ~8 */
-    var load = (typeof bookingV2EnsureOpsRange === 'function') ? bookingV2EnsureOpsRange({ from: w.from, to: w.to, limit: 500 }) : null;
-    var subset = (allBookings() || []).filter(function(b){ return tripIn(b, w.from, w.to); });
-    var r = withBookings(subset, function(){ return originals.renderFocDetail ? originals.renderFocDetail() : undefined; });
-    focBanner(w, !!load);
-    kick('foc|' + w.from + '|' + w.to, [load], function(){ if(viewIs('focdetail')) window.renderFocDetail(); });
-    return r;
+    var fresh = focSnap.data && Date.now() - focSnap.at < FOC_TTL;
+    if(!fresh){
+      var first = !focSnap.data;
+      var p = focLoad();
+      if(first){
+        var host = document.getElementById('foc-host');
+        if(host && typeof O.loadingHtml === 'function') host.innerHTML = O.loadingHtml('Loading FOC detail…');
+        p.then(function(ok){
+          if(!viewIs('focdetail')) return;
+          if(ok) window.renderFocDetail();
+          else if(host) host.innerHTML = '<div class="md-card" style="color:#8a9088;text-align:center;padding:30px">FOC detail could not load from operation-backend. Open the page again to retry.</div>';
+        });
+        return undefined;
+      }
+      p.then(function(ok){ if(ok && viewIs('focdetail')) window.renderFocDetail(); });   // stale: draw what we have, then the fresh answer
+    }
+    return withBookings(focSnap.data, function(){ return originals.renderFocDetail ? originals.renderFocDetail() : undefined; });
   });
 
   /* ════ B2B Dashboard · every confirmed booking, as lk-inbox sees it ════
