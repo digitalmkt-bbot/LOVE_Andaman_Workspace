@@ -47,7 +47,7 @@
     if(!enabled()) return Promise.resolve([]);
     return O.get('/v1/staff/trips',{year:year}).then(function(j){
       tripsByYear[year]=((j&&j.trips)||[]).map(function(x){ return {
-        bk:{id:x.booking_id,code:x.booking_id}, staff:(typeof staffGet==='function'?staffGet(x.staff_id):null),
+        bk:{id:x.booking_id,code:x.booking_code||x.booking_id}, staff:(typeof staffGet==='function'?staffGet(x.staff_id):null),
         t:{date:x.service_date,routeId:x.route_id}, route:(typeof getRoute==='function'?getRoute(x.route_id):null),
         purpose:x.purpose, foc:Number(x.foc)||0, head:Number(x.head)||0, paid:Number(x.paid)||0
       }; });

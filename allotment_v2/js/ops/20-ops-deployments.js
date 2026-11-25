@@ -243,6 +243,34 @@
       };
       wg.__ops = true; window.bop2GuardPast = wg;
     }
+    /* §opsPastOvf (2026-11-26, parity G3) · the admin pass above is for editing only. Legacy's "ที่นั่งไม่พอ" and
+       "ยังไม่มีเรือ" lists (bop2OvfSkip, used by bop2Overflow and bop2NbPax) never count a past day, admin or not:
+       with the pass, an admin saw every oversold past day flagged (`ที่นั่งไม่พอ · ดูเฉพาะ 12`). */
+    var skip = window.bop2OvfSkip;
+    if(typeof skip === 'function' && !skip.__ops){
+      var ws = function(r, d){ return (r && isPast.call(this, d)) ? true : skip.apply(this, arguments); };
+      ws.__ops = true; window.bop2OvfSkip = ws;
+    }
+    /* §opsNoBoatPax (2026-11-26, parity G3) · legacy getAllotment answers seatsConsumed 0 on a day with no boat, so a
+       boatless day enters "ยังไม่มีเรือ" only through bop2NbPax, which skips Ranong (its trips are sold Open and boats
+       are placed close to the day) and past / closed / weather days. Here getAllotment keeps the server's sold count on
+       such a day (ops/50 noLimit), which put Ranong's boatless days in the list. Same rule as legacy: a no-boat entry
+       stays only while bop2NbPax counts heads, and shows that count. */
+    var needs = window.bop2RouteDaysNeedingBoats;
+    if(typeof needs === 'function' && !needs.__ops){
+      var wn = function(routes){
+        var out = needs.apply(this, arguments);
+        if(!O.enabled() || typeof window.bop2NbPax !== 'function') return out;
+        var byId = {}; (routes || []).forEach(function(r){ if(r) byId[r.id] = r; });
+        return out.filter(function(x){
+          if(x.reason !== 'no_boat') return true;
+          var n = +window.bop2NbPax(byId[x.routeId], x.dateStr) || 0;
+          if(n > 0) x.paxCount = n;
+          return n > 0;
+        });
+      };
+      wn.__ops = true; window.bop2RouteDaysNeedingBoats = wn;
+    }
   })();
 
   function load(){

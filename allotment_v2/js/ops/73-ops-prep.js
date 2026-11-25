@@ -100,7 +100,8 @@
     var j = prep(), st = O.srv.status(keyNow());
     if(!j){
       if(st === 'failed') return orig.apply(this, args);                  // legacy's way, with 41's booking load
-      if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading PR/PO…');
+      // §loadingOver (G17) · a new range: the previous range's sheet stays under a loading line, never passed off as this one
+      if(O.loadingOver) O.loadingOver(host, 'Loading PR/PO…'); else if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading PR/PO…');
       return;
     }
     var ens = window.bookingV2EnsureOpsRange;

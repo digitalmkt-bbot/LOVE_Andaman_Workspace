@@ -49,6 +49,9 @@
         else if(v === 'operation' && typeof renderOp === 'function') renderOp();
         else if(v === 'dashboard' && typeof renderDash === 'function') renderDash();
         else if(v === 'actionboard' && typeof abRender === 'function') abRender();
+        // Fleet Deployment's 'จองเข้ามาแล้ว N ที่นั่ง' sums getSeatsConsumed over its days: drawn before a window landed it read the
+        // few local bookings (15 where legacy has 1,074) and was never drawn again · parity G11
+        else if(v === 'fl-deployment' && typeof flRenderDeployment === 'function') flRenderDeployment();
       }catch(_){}
     }, 120);
   }

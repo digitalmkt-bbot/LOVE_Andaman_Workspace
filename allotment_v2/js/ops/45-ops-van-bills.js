@@ -75,7 +75,9 @@
      SB_VEHICLES, which nothing fills in ops mode, so it answers with 08-app.js's demo vehicles. */
   function partnerNames(){
     var hit = cache[overviewKey()];
-    return hit ? (hit.view.partners || []).map(function(p){ return text(p.partner); }).filter(Boolean) : [];
+    // legacy vbSuppliers sorts the owners in Thai order (localeCompare 'th'), and the owner's sheet opens on the first: โกหมง, not
+    // the server's first (ภูเก็ตล่ำซำ) · parity G14
+    return hit ? (hit.view.partners || []).map(function(p){ return text(p.partner); }).filter(Boolean).sort(function(a, b){ return a.localeCompare(b, 'th'); }) : [];
   }
   function host(){ return document.getElementById('vanbill-host'); }
   function addrOf(v){ return '/v1/van-bills/' + enc(v.partner) + '/' + enc(v.month) + '/' + enc(v.period); }
@@ -400,7 +402,7 @@
       + '<div class="s">' + (v.updated_by ? ('แก้ล่าสุด ' + esc(v.updated_by) + (v.updated_at ? (' · ' + esc(text(v.updated_at).slice(0, 10))) : '')) : 'ยังไม่มีใครกรอก') + '</div></div></div>';
     var acts;
     if(ED) acts = '<span class="vbx-dirty">&#9679; กำลังแก้ไข · ยังไม่บันทึก</span><button class="vbx-btn" onclick="vbCancel()">ยกเลิก</button><button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>';
-    else acts = statePill(v.state)
+    else acts = statePill(v.state, true)   // legacy's sheet shows no 'ร่าง' badge: only sent / paid are marked · parity G14
       + (ro ? '<button class="vbx-btn" onclick="laOpsVanBills.unpay()">ยกเลิกการจ่าย</button>'
         : (v.sent ? '<button class="vbx-btn" onclick="laOpsVanBills.unsend()">ดึงกลับเป็นร่าง</button><button class="vbx-btn ok" onclick="laOpsVanBills.pay()">บันทึกว่าจ่ายแล้ว</button>'
           : '<button class="vbx-btn" onclick="laOpsVanBills.send()">ส่งให้เจ้าของรถ</button>')

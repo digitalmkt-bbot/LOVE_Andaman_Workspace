@@ -86,4 +86,22 @@
     return { m: m, y: y, mo: mo, last: last, TY: TY, T: T, rows: rows, days: days, routes: rts };
   };
   w.__w6a = true; w.__orig = orig; window.pk2Month = w;
+
+  /* §pkMonthWait (2026-11-26, UI parity N1) · until the month's answer lands the month view is legacy's fallback, drawn from the one
+     day the page holds ("1/ 30 วัน · 7 ลำ" where the server says 30 days and 216 boats). It now says so with a loading line on top;
+     the redraw when the answer lands rewrites the page and the line goes. */
+  var origRender = window.renderPierPark;
+  if(typeof origRender === 'function' && !origRender.__pkMonthWait){
+    var rw = function(){
+      var r = origRender.apply(this, arguments);
+      try{
+        if(O.enabled() && typeof _pkView !== 'undefined' && _pkView === 'ov' && typeof _poPier !== 'undefined' && typeof window.pkOvMon === 'function'){
+          var k = _poPier + '|' + window.pkOvMon();
+          if(loading[k] && !cache[k] && O.loadingOver) O.loadingOver(document.getElementById('pk-host-' + _poPier), 'กำลังโหลดภาพรวมเดือน…');
+        }
+      }catch(_){}
+      return r;
+    };
+    rw.__pkMonthWait = true; rw.__orig = origRender; window.renderPierPark = rw;
+  }
 })();
