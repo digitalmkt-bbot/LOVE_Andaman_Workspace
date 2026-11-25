@@ -68,9 +68,13 @@
 
   /* ══ Internal (company-own) bookings report ═════════════════════════════════════════════════════════════════
      One row per trip of a live company-own booking, the money on the booking's first trip of the year only. */
-  function bookingOf(id){
+  /* the row names the booking as legacy shows it (voucherRef || code || id): the server's booking_code is the legacy number,
+     not the importer's lg_ id (parity G15) */
+  function bookingOf(id, r){
     var list = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : [];
-    return list.find(function(b){ return b && (b.opsId === id || b.id === id); }) || { id: id, voucherRef: '' };
+    var b = list.find(function(x){ return x && (x.opsId === id || x.id === id); });
+    if(b) return (b.code || !r || !r.booking_code) ? b : Object.assign({}, b, { code: r.booking_code });
+    return { id: id, voucherRef: (r && r.voucher_ref) || '', code: (r && r.booking_code) || '' };
   }
   wrap('laInternalRows', function(orig, year){
     var d = read('internal|' + year, '/v1/reports/internal-trips', { year: year }, function(){
@@ -78,7 +82,7 @@
     });
     if(!d || !Array.isArray(d.rows)) return orig.apply(this, [].slice.call(arguments, 1));
     return d.rows.map(function(r){
-      return { bk: bookingOf(r.booking_id), t: { date: r.date, routeId: r.route_id }, date: r.date,
+      return { bk: bookingOf(r.booking_id, r), t: { date: r.date, routeId: r.route_id }, date: r.date,
         route: fn('getRoute') ? (window.getRoute(r.route_id) || null) : null,
         purpose: r.purpose || '', lbl: r.label || '', unset: !!r.unset, pax: +r.pax || 0, foc: +r.foc || 0, free: !!r.free,
         money: +r.money || 0, moneyHere: !!r.money_here };
