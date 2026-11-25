@@ -39273,13 +39273,19 @@ function pxFlow2(e, sp, note, C, loss){
   else stages.push({ n:'ค่าเสื่อมเรือ', v:+sp.dep||0 });
   stages=stages.filter(function(s){ return s.v>0; });
   var hasOi=!!(C && C.oi>0), oh=hasOi?Math.max(C.oi*S,3):0;
-  var y0=102+16*stages.length+((hasOi && !loss)?(oh+44):0);
+  /* §pxFlowOi (2026-11-25) · owner: "รายได้อื่นๆ ควรจะเริ่มจากต้นทางเหมือนกันไหม" → เริ่มที่คอลัมน์โปรแกรม (เหนือโปรแกรมทัวร์)
+     วิ่งเป็นแถบเหลืองเหนือแถบเขียวผ่านทุกขั้นโดยไม่ถูกหักต้นทุนทัวร์ ไปรวมที่คอลัมน์สุดท้าย (แบบเดียวกับแผนภาพเดิม) */
+  var ys=96, y0=102+16*stages.length+(hasOi?(oh+8):0);
+  function abar(x,y){ nd+='<rect x="'+x+'" y="'+f1(y)+'" width="'+BW+'" height="'+f1(oh)+'" rx="'+f1(Math.min(BW/2,oh/2))+'" fill="'+A+'"/>'; }
   /* โปรแกรม → ท่าเรือ → รายได้ */
   var fams=(sp.fams||[]).filter(function(f){ return f.v>0; }), piers=[], nP=0;
   ['panwa','tublamu','ranong','other'].forEach(function(p){ var L=fams.filter(function(f){ return (f.pier||'other')===p; }).sort(function(a,b){ return b.v-a.v; });
     if(L.length){ piers.push({ p:p, L:L }); nP+=L.length; } });
   var pg=16, ps=22, qg=44, totP=H+pg*(nP-piers.length)+ps*Math.max(0,piers.length-1);
-  var py=Math.max(96, y0+(H-totP)/2), qy=Math.max(118, y0-qg*Math.max(0,piers.length-1)/2), ry=y0;
+  var py=Math.max(hasOi?(ys+oh+34):96, y0+(H-totP)/2), qy=Math.max(hasOi?(ys+oh+52):118, y0-qg*Math.max(0,piers.length-1)/2), ry=y0;
+  if(hasOi){ abar(xp,ys); abar(xq,ys); abar(xr,y0-oh);
+    rib(xp+BW,ys,ys+oh,xq,ys,ys+oh,A); rib(xq+BW,ys,ys+oh,xr,y0-oh,y0,A);
+    tx(xp-12,ys+Math.min(oh/2+4,14),'รายได้อื่น  '+pxSkM(C.oi),AD,12.5,700,'end'); }
   piers.forEach(function(p){ var c=PC[p.p]||PC.other, pv=0, qin=qy;
     p.L.forEach(function(f){ var h=f.v*S; pv+=f.v;
       rib(xp+BW,py,py+h,xq,qin,qin+h,c); bar(xp,py,h,c); qin+=h;
@@ -39301,6 +39307,7 @@ function pxFlow2(e, sp, note, C, loss){
         hN=Math.max(nl,0)*S, hT=take*S, hC=c.v*S, top=y0-16*(i+1), cy=top+Math.max(hN,3)+66, last=(i===stages.length-1);
     if(nl>0){ rib(px+BW,pt,pt+hN,x,top,top+hN,G); bar(x,top,hN,GD); tx(x+BW+7,top+15,((C && last)?'EBITDA ทัวร์ ':'')+pxSkM(nl),GD,12.5,700); }
     if(take>0) rib(px+BW,pt+hN,pt+avail*S,x,cy,cy+hT,R);
+    if(hasOi){ rib(px+BW,pt-oh,pt,x,top-oh,top,A); abar(x,top-oh); }
     if(need>0){ if(hT>0) bar(x,cy,hT,R);
       nd+='<rect x="'+x+'" y="'+f1(cy+hT)+'" width="'+BW+'" height="'+f1(Math.max(need*S,3))+'" rx="3" fill="url(#pxhx2)" stroke="'+R+'" stroke-width="1.2" stroke-dasharray="4 3"/>'; bot=Math.max(bot,cy+hC); }
     else bar(x,cy,hC,R);
@@ -39328,11 +39335,7 @@ function pxFlow2(e, sp, note, C, loss){
   } else if(left>0){
     var hE=left*S, yE=pt;
     rib(px+BW,pt,pt+hE,xf,yE,yE+hE,G); bar(xf,yE,hE,GD);
-    if(hasOi){ var ya=pt-oh-34;
-      nd+='<rect x="'+px+'" y="'+f1(ya)+'" width="'+BW+'" height="'+f1(oh)+'" rx="'+f1(Math.min(BW/2,oh/2))+'" fill="'+A+'"/>';
-      rib(px+BW,ya,ya+oh,xf,yE-oh,yE,A);
-      nd+='<rect x="'+xf+'" y="'+f1(yE-oh)+'" width="'+BW+'" height="'+f1(oh)+'" rx="'+f1(Math.min(BW/2,oh/2))+'" fill="'+A+'"/>';
-      tx(px-8,ya+Math.min(oh/2+4,14),'รายได้อื่น +'+pxSkM(C.oi),AD,12,700,'end'); }
+    if(hasOi){ rib(px+BW,pt-oh,pt,xf,yE-oh,yE,A); abar(xf,yE-oh); }
     tx(xf+BW/2,72,'EBITDA รวม',GD,12.5,700,'middle');
     tx(xf+BW+7,yE-oh+15,pxSkM(C.eb),GD,14,700);
     tx(xf+BW+7,yE-oh+31,'ทัวร์ '+pxSkM(C.core),MU,11,500);
@@ -39340,9 +39343,10 @@ function pxFlow2(e, sp, note, C, loss){
     feet.push([xf,'g','เหลือ',P(C.eb),'('+pxSkM(C.eb)+')']);
   } else {
     tx(xf+BW/2,72,'EBITDA ทัวร์',R,12.5,700,'middle');
-    tx(xf+BW/2,pt+15,'ขาด '+neg(C.core),R,14,700,'middle');
-    if(hasOi) tx(xf+BW/2,pt+33,'+ รายได้อื่น '+pxSkM(C.oi),AD,11,700,'middle');
-    tx(xf+BW/2,pt+(hasOi?51:33),'EBITDA รวม '+(C.eb<0?neg(C.eb):('+'+pxSkM(C.eb))),(C.eb<0)?R:GD,12.5,700,'middle');
+    if(hasOi){ rib(px+BW,pt-oh,pt,xf,pt-oh,pt,A); abar(xf,pt-oh); }
+    tx(xf+BW+7,pt+15,'ขาด '+neg(C.core),R,14,700);
+    if(hasOi) tx(xf+BW+7,pt-oh+Math.min(oh/2+4,12)-(oh<16?4:0),'+ รายได้อื่น '+pxSkM(C.oi),AD,11,700);
+    tx(xf+BW+7,pt+33,'EBITDA รวม '+(C.eb<0?neg(C.eb):('+'+pxSkM(C.eb))),(C.eb<0)?R:GD,12.5,700);
     feet.push([xf,'r','ขาด',P(-C.core),'('+neg(C.core)+')']);
   }
   /* แถวสรุปใต้ทุกขั้น + เส้นประแบ่งขั้น */
