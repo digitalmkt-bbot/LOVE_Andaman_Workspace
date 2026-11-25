@@ -405,23 +405,38 @@
   /* The chart under the list (pfmChartBuckets): legacy sums the bookings this browser has loaded, so it could
      disagree with the list. Each bucket's total / paid / unpaid is the server's totals for its dates
      (GET /v1/pfm?from=&to=, the same rows as the list). The legacy sum shows until the answer is in; a changed
-     bucket redraws the page once. Buckets are cached for 30 s and cleared when invoices or bookings change. */
+     bucket redraws the page once. Buckets are cached for 30 s and cleared when invoices or bookings change.
+     2026-11-25: all the buckets missing from the cache are read in ONE call, GET /v1/pfm/totals?ranges=from..to,…
+     (each answer equals GET /v1/pfm's totals for that period); it was one /v1/pfm call per bucket (8). */
   var chartCache = {};
   O.onWrite(function(kind){ if(kind && /^invoice|^deposit|^refund|^booking|^pfm/.test(kind)) chartCache = {}; });
   O.onChange(function(change){ if(change && ['booking', 'invoice', 'payment', 'pfm'].indexOf(change.entity_type) >= 0) chartCache = {}; });
   wrap('pfmChartBuckets', function(orig){
     var out = orig.apply(this, [].slice.call(arguments, 1));
+    var miss = [];
     (out || []).forEach(function(b){
       var k = b.from + '..' + b.to, c = chartCache[k];
       if(c && c.totals){ b.tot = num(c.totals.total); b.paid = num(c.totals.paid); b.unpaid = num(c.totals.unpaid); }
       if(c && (c.loading || Date.now() - c.at < 30000)) return;
-      var cell = chartCache[k] = { totals: c && c.totals, at: c ? c.at : 0, loading: true };
-      O.get('/v1/pfm', { from: b.from, to: b.to }).then(function(j){
-        var t = (j && j.totals) || {}, was = cell.totals;
-        var changed = !was || num(was.total) !== num(t.total) || num(was.paid) !== num(t.paid) || num(was.unpaid) !== num(t.unpaid);
+      chartCache[k] = { totals: c && c.totals, at: c ? c.at : 0, loading: true };
+      miss.push(k);
+    });
+    if(!miss.length) return out;
+    var cells = miss.map(function(k){ return chartCache[k]; });
+    O.get('/v1/pfm/totals', { ranges: miss.join(',') }).then(function(j){
+      var got = {};
+      ((j && j.ranges) || []).forEach(function(r){ got[r.from + '..' + r.to] = r.totals || {}; });
+      var changed = false;
+      miss.forEach(function(k, i){
+        var t = got[k], was = cells[i].totals;
+        if(!t){ chartCache[k] = { totals: was, at: Date.now(), loading: false }; return; }
+        if(!was || num(was.total) !== num(t.total) || num(was.paid) !== num(t.paid) || num(was.unpaid) !== num(t.unpaid)) changed = true;
         chartCache[k] = { totals: t, at: Date.now(), loading: false };
-        if(changed && typeof window.renderDailyPFM === 'function' && document.getElementById('dailypfm-host') && !(O.busy && O.busy())) window.renderDailyPFM();
-      }, function(e){ chartCache[k] = { totals: cell.totals, at: Date.now(), loading: false }; try{ console.warn('[ops] PFM chart did not load · ' + (e && e.message)); }catch(_){} });
+      });
+      if(changed && typeof window.renderDailyPFM === 'function' && document.getElementById('dailypfm-host') && !(O.busy && O.busy())) window.renderDailyPFM();
+    }, function(e){
+      miss.forEach(function(k, i){ chartCache[k] = { totals: cells[i].totals, at: Date.now(), loading: false }; });
+      try{ console.warn('[ops] PFM chart did not load · ' + (e && e.message)); }catch(_){}
     });
     return out;
   });
