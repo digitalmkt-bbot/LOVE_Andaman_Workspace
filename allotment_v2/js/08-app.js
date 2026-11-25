@@ -3777,7 +3777,8 @@ function mdTabOps(days){
 function mdTabSales(days){
   const SALES=(typeof sbSalesActive==='function')?sbSalesActive():[];   /* §salesActive */
   const AG=(typeof SB_AGENTS!=='undefined')?SB_AGENTS:[];
-  const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
+  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;   /* §mdSrvSales: the server's figures; the browser's bookings are not added up then (15k bookings × invoices took ~6 s) */
+  const BK=_mdS?[]:((typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]);
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
@@ -3805,7 +3806,6 @@ function mdTabSales(days){
     const iv=invOf(b); if(iv){ const paid=Math.max(0,acctInvoicePaid(iv)), bal=acctInvoiceBalance(iv); tPaid+=paid; tAr+=bal; if(p){p.paid+=paid; p.ar+=bal;} } });
   /* §mdSrvSales (2026-11-25) · operation-backend's figures (GET /v1/market-stats/sales-agents, md-sales.ts, read by js/ops/99-ops-md-sales-load.js)
      replace the sums of whatever bookings this browser holds: legacy's rules over every booking. Without the answer: legacy's own sums. */
-  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;
   if(_mdS){ const T=_mdS.totals||{}; tVal=+T.val||0; tPax=+T.pax||0; tBk=+T.bk||0; tTot=+T.tot||0; tCancel=+T.cancel||0; tNoShow=+T.no_show||0; tPaid=+T.paid||0; tAr=+T.ar||0;
     recentAg.clear(); (_mdS.active_agents||[]).forEach(id=>recentAg.add(id));
     const _sv={}; (_mdS.sales||[]).forEach(r=>{ _sv[r.id]=r; });
@@ -4904,7 +4904,8 @@ function renderFocDetail(){
 }
 function mdTabAgents(days){
   const SALES=(typeof sbSalesActive==='function')?sbSalesActive():[];   /* §salesActive */
-  const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
+  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;   /* §mdSrvSales: the server's figures; the browser's bookings are not added up then (15k bookings × invoices took ~6 s) */
+  const BK=_mdS?[]:((typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]);
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0),0);
@@ -4916,7 +4917,6 @@ function mdTabAgents(days){
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
   const sName=s=>esc((s.name||'').replace(/^Khun\s+/,''));
-  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;   /* §mdSrvSales (see mdTabSales) */
   if(!BK.length && !_mdS) return mdNote('No bookings yet — agent stats populate from bookings.');
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
   const A={};

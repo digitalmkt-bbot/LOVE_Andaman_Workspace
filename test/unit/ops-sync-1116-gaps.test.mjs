@@ -94,6 +94,7 @@ function costingPL() {
       gets.push([p, clone(q)]);
       if (p === '/v1/reports/trip-pl') return Promise.resolve({ date: q.date, trips: [trip(q.date)], bands: [], agents: [] });
       if (p === '/v1/reports/trip-pl/days') { const days = []; for (let d = q.from; d <= q.to; d = O.shift(d, 1)) days.push({ date: d, trips: [trip(d)], bands: [], agents: [] }); return Promise.resolve({ from: q.from, to: q.to, pier: null, days }); }
+      if (p === '/v1/reports/trip-pl/pace') { ranges.push({ from: q.from, to: q.to }); return Promise.resolve({ from: q.from, to: q.to, days: { '2026-11-02': [{ booked: '2026-10-30', pier: 'tublamu', heads: 4 }, { booked: '2026-11-01', pier: 'panwa', heads: 2 }] } }); }
       if (p === '/v1/reports/trip-pl/month') return Promise.resolve({ month: q.month, days: [], rent_idle: null });
       return Promise.resolve({});
     },
@@ -104,7 +105,8 @@ function costingPL() {
     renderTripPL: () => { drawn++; }, pxDay() {}, pxTrip() {}, pxDayAgg() { return { legacy: true }; }, pxAgents() {}, pxRentIdle() {},
     pxStAdd: (a, t) => { stAdds.push(t.bid); a.st = a.st || {}; a.st.r1 = { n: 1, op: t.rows.filter((r) => r.id !== 'dep').reduce((s, r) => s + r.use, 0), dep: 3000 }; },
     pxDaysOf: (ym) => (ym === '2026-11' ? ['2026-11-01', '2026-11-02'] : ['2026-10-30', '2026-10-31']),
-    bookingV2LoadFromOpsBackend: (o) => { ranges.push(o); return Promise.resolve({ bookings: [] }); },
+    bookingV2LoadFromOpsBackend: () => { throw new Error('the pace must not page bookings'); },
+    pxPaceRows: () => [{ c: 'browser', n: 1 }],
     pxCSS: () => '', pxBar: () => '',
   };
   window.window = window;
@@ -120,7 +122,10 @@ test('§pxForecast: the Forecast tab reads the days of the month and of the mont
   assert.equal(t.gets.filter((g) => g[0] === '/v1/reports/trip-pl').length, 0, 'no call per day (§plDays: it made 168)');
   const days = t.gets.filter((g) => g[0] === '/v1/reports/trip-pl/days').map((g) => g[1].from + '..' + g[1].to).sort();
   assert.deepEqual(days, ['2026-10-30..2026-10-31', '2026-11-01..2026-11-02'], 'this month so far and the month before, each with its trips (steps need them), one range read each');
-  assert.deepEqual(clone(t.ranges), [{ from: '2026-10-05', to: '2026-11-30' }], '28 travel days back from yesterday, to the month end');
+  assert.deepEqual(clone(t.ranges), [{ from: '2026-10-05', to: '2026-11-30' }], '28 travel days back from yesterday, to the month end: one GET /v1/reports/trip-pl/pace (§plPace)');
+  assert.deepEqual(clone(t.window.pxPaceRows('2026-11-02', '')), [{ c: '2026-10-30', n: 4 }, { c: '2026-11-01', n: 2 }], 'legacy pxPaceRows reads the server rows');
+  assert.deepEqual(clone(t.window.pxPaceRows('2026-11-02', 'panwa')), [{ c: '2026-11-01', n: 2 }], 'by pier');
+  assert.deepEqual(clone(t.window.pxPaceRows('2026-09-01', '')), [{ c: 'browser', n: 1 }], 'outside the window: legacy rows');
   assert.equal(t.drawn(), 1, 'drawn once everything landed');
   t.window.renderTripPL();
   await flush();

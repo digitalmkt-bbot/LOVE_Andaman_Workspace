@@ -149,17 +149,36 @@
     var pmiss = pdays.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
     if(pmiss.length) out.push(function(){ return loadDays(pmiss, pier); });
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
-    if(y && m && typeof window.bookingV2LoadFromOpsBackend === 'function'){
+    if(y && m){
       var t = new Date(O.today() + 'T12:00:00'); t.setDate(t.getDate() - 29);
       var from = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
       var to = ym + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
       if(to < from) to = O.today();
       var rk = from + '|' + to;
+      /* §plPace (2026-11-25): the pace rows come from GET /v1/reports/trip-pl/pace (operation-backend trip-pace.ts, legacy
+         pxPaceRows' rules) instead of paging the window's whole bookings in (~12 s); pxPaceRows below reads them. */
       if(!fresh(paceRange[rk])) out.push(function(){
-        return Promise.resolve(window.bookingV2LoadFromOpsBackend({ from: from, to: to })).then(function(){ paceRange[rk] = { at: Date.now() }; }, function(){ /* the pace line is drawn from what is loaded */ });
+        return once('pace:' + rk, function(){
+          return O.get('/v1/reports/trip-pl/pace', { from: from, to: to }).then(function(r){
+            if(!r || !r.days || typeof r.days !== 'object') throw new Error('invalid booking pace response');
+            paceRange[rk] = { at: Date.now() }; paceDays = r.days; paceSpan = { from: from, to: to };
+            if(window._px) window._px._pace = null;          // pxPace caches its curve: work it out again from these rows
+            return r;
+          });
+        });
       });
     }
     return out;
+  }
+  var paceDays = null, paceSpan = null;
+  /* legacy pxPaceRows(D, pier): [{ c: day booked, n: heads }] of the live bookings travelling on D; the server's rows, by pier */
+  var legacyPaceRows = window.pxPaceRows;
+  if(typeof legacyPaceRows === 'function' && !legacyPaceRows.__plPace){
+    window.pxPaceRows = function(D, pier){
+      if(!enabled() || !paceDays || !paceSpan || D < paceSpan.from || D > paceSpan.to) return legacyPaceRows.apply(this, arguments);
+      return (paceDays[D] || []).filter(function(r){ return !pier || r.pier === pier; }).map(function(r){ return { c:r.booked, n:n(r.heads) }; });
+    };
+    window.pxPaceRows.__plPace = true; window.pxPaceRows.__orig = legacyPaceRows;
   }
   function prevMonth(ym){
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 2, d = new Date(y, m, 1);

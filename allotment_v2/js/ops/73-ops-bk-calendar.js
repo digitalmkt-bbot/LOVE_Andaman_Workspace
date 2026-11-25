@@ -49,6 +49,15 @@
     return c.getFullYear() + '-' + String(c.getMonth() + 1).padStart(2, '0');
   }
 
+  /* §calNoSkel (2026-11-25) · the calendar drew shimmer cells and no month cards until the month's WHOLE bookings had paged in
+     (bookingV2OpsEnsureMonth: 7 pages, ~11 s for November), although every figure it draws is in the server's answer (~0.3 s).
+     Once that answer is in, the month is not "loading" for the calendar: it draws at once; the whole bookings (the Selected
+     Day panel's list) keep loading behind it and redraw when they land, as before. */
+  wrap('bookingV2OpsMonthStatus', function(orig, ym){
+    var st = orig.apply(this, [].slice.call(arguments, 1));
+    return st === 'loading' && month(ym) ? 'srv' : st;
+  });
+
   /* ── the calendar chips and the Selected Day panel ──────────────────────── */
   wrap('bookingV2FamilyAggregate', function(orig, familyId, dateStr){
     var j = month(String(dateStr || '').slice(0, 7)), d = j && j.__byDate[dateStr];
