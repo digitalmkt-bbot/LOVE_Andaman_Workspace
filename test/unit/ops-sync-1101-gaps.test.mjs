@@ -226,42 +226,40 @@ test('outside ops mode (lk-inbox itself) the new features are legacy\'s', () => 
   assert.deepEqual(plain(r.ctx.called), ['tbBoatSave', 'tbBoatRemove', 'paAddSave', 'paAddUndo', 'paAddBillDone', 'insReviewBoat']);
 });
 
-// ── Guest Insights ──
-function guest({ enabled = true, load = null } = {}) {
-  const host = { innerHTML: '' }, seen = [], toasts = [];
+// ── Guest Insights ── (the server read itself: ops-guest-foc-srv.test.mjs)
+function guest({ enabled = true, answer = { heads: 0, groups: [] } } = {}) {
+  const host = { innerHTML: '' }, seen = [];
   const w = {
-    laOps: { enabled: () => enabled, activeView: () => 'guestins', toast: (t) => toasts.push(t) },
+    laOps: { enabled: () => enabled, activeView: () => 'guestins', onWrite() {}, fail() {},
+      get: (path, q) => { seen.push(['get', path, q.from, q.to]); return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer); } },
     document: { getElementById: () => host },
     renderGuestInsights() { seen.push('drawn'); },
+    giCollect: () => ({ rows: [] }),
     giRange: () => ({ from: '2026-01-01', to: DAY }),
-    // as the real one: a range answers its load once, then null
-    bookingV2EnsureOpsRange: (r) => { seen.push(['load', r.from, r.to]); const l = load; load = null; return l; },
     Date,
   };
-  vm.runInNewContext(fs.readFileSync('allotment_v2/js/ops/99-ops-guest-insights.js', 'utf8'), { window: w, document: w.document, Date });
-  return { w, host, seen, toasts };
+  vm.runInNewContext(fs.readFileSync('allotment_v2/js/ops/99-ops-guest-insights.js', 'utf8'), { window: w, document: w.document, Date, Promise, Array, Object, String, Number });
+  return { w, host, seen };
 }
 const tick = () => new Promise((r) => setImmediate(r));
 
-test('§guestIns: the period is loaded by travel date first, with a note instead of partial numbers, then drawn', async () => {
-  const g = guest({ load: Promise.resolve({ bookings: [] }) });
+test('§guestIns: the period is read from the server first, with a note instead of partial numbers, then drawn', async () => {
+  const g = guest();
   g.w.renderGuestInsights();
-  assert.match(g.host.innerHTML, /Loading the bookings/);
-  assert.deepEqual(g.seen, [['load', '2026-01-01', DAY]]);
+  assert.match(g.host.innerHTML, /Loading the guests/);
+  assert.deepEqual(plain(g.seen), [['get', '/v1/bookings/guest-insights', '2026-01-01', DAY]]);
   await tick(); await tick();
-  assert.ok(g.seen.length >= 2, 'drawn again once loaded');
+  assert.ok(g.seen.includes('drawn'), 'drawn once the answer is in');
 });
 
-test('§guestIns: already loaded draws at once; a failed load draws what there is and says so; legacy mode does not load', async () => {
-  const done = guest({ load: null });
-  done.w.renderGuestInsights();
-  assert.deepEqual(done.seen, [['load', '2026-01-01', DAY], 'drawn']);
-  const bad = guest({ load: Promise.reject(new Error('x')) });
+test('§guestIns: a failed read says so and does not loop; legacy mode does not read', async () => {
+  const bad = guest({ answer: new Error('x') });
   bad.w.renderGuestInsights();
   await tick(); await tick();
-  assert.equal(bad.toasts.length, 1);
-  assert.ok(bad.seen.includes('drawn'), 'not a loop: the second draw does not ask again');
+  assert.match(bad.host.innerHTML, /could not load/);
+  assert.equal(bad.seen.filter((x) => x !== 'drawn').length, 1, 'one read');
   const off = guest({ enabled: false });
   off.w.renderGuestInsights();
-  assert.deepEqual(off.seen, ['drawn']);
+  assert.deepEqual(plain(off.seen), ['drawn']);
 });
+

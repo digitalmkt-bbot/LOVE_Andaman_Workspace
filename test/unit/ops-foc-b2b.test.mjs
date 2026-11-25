@@ -65,39 +65,31 @@ const srv = (id, over = {}) => ({ id, status: 'confirmed', agent_id: 'ag1', trip
 
 // ── FOC Detail ───────────────────────────────────────────────────────────────
 
-test('FOC Detail loads the whole history (legacy ranks every booking ever made) and aggregates what is loaded', async () => {
-  const from = shift(TODAY, -3650), to = shift(TODAY, 400);
+test('FOC Detail reads GET /v1/bookings/foc-detail once (no booking paging) and draws the legacy render over its stand-in bookings', async () => {
   const rt = runtime({
-    bookings: [
-      sb('inWin', { trips: [{ date: TODAY, routeId: 'r1', pax: { foc: 2 } }] }),
-      sb('outWin', { trips: [{ date: '2025-01-05', routeId: 'r1', pax: { foc: 9 } }] }),
-    ],
-    handlers: { 'GET /v1/bookings': { body: { bookings: [
-      srv('S1', { trips: [{ service_date: shift(TODAY, -10), pax: { foc: 3 } }] }),
-      srv('S2', { trips: [{ service_date: shift(TODAY, 14), pax: { foc: 1 } }] }),
-    ] } } },
+    bookings: [sb('cached', { trips: [{ date: TODAY, routeId: 'r1', pax: { foc: 2 } }] })],
+    handlers: { 'GET /v1/bookings/foc-detail': { body: {
+      foc: [{ booking_id: 'F1', agent_id: 'ag1', channel: null, value: 900, reason: 'Guide', approval: 'approved', trips: [{ date: TODAY, route_id: 'r1', pax: 3, foc: 1 }] }],
+      shares: [{ agent_id: 'ag1', route_id: 'r1', pax: 4, value: 2000 }], agents: [{ agent_id: 'ag1', value: 2000 }],
+    } } },
   });
   rt.ctx.renderFocDetail();
   await rt.settle();
-
-  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings?from=' + from + '&to=' + to + '&limit=1000'],
-    'the render asks the server for exactly the screen\'s window (a page holds up to 1000 rows; the cache key has no page size)');
-  assert.equal(rt.renders.renderFocDetail.length, 2, 'renders once now, once when the window arrives');
-  assert.deepEqual(rt.renders.renderFocDetail[0].sort(), ['inWin', 'outWin'], 'the first paint shows the cached bookings (both are within the history)');
-  assert.deepEqual(rt.renders.renderFocDetail[1].sort(), ['S1', 'S2', 'inWin', 'outWin'], 'the redraw sees everything that arrived');
-  assert.deepEqual(rt.ctx.SB_BOOKINGS.map((b) => b.id).sort(), ['S1', 'S2', 'inWin', 'outWin'],
-    'SB_BOOKINGS itself is restored after the swap (merge included)');
-  assert.ok(!rt.host.querySelector || !rt.host.querySelector('#foc-ops-period'), 'no period line once everything is shown (legacy has none)');
+  assert.deepEqual(rt.requests.map((r) => r.path), ['/v1/bookings/foc-detail'], 'one summary read, never GET /v1/bookings');
+  assert.equal(rt.renders.renderFocDetail.length, 1, 'no partial first paint: drawn once the answer is in');
+  assert.deepEqual(plain(rt.renders.renderFocDetail[0]), ['F1', 'focd_s0'], 'the FOC booking whole, the folded share as one stand-in');
+  assert.deepEqual(plain(rt.ctx.SB_BOOKINGS.map((b) => b.id)), ['cached'], 'SB_BOOKINGS itself is restored after the swap');
 });
 
-test('FOC Detail does not refetch a cached window and does not loop', async () => {
+test('FOC Detail does not refetch within a minute and does not loop', async () => {
   let hits = 0;
-  const rt = runtime({ handlers: { 'GET /v1/bookings': () => { hits++; return { body: { bookings: [] } }; } } });
+  const rt = runtime({ handlers: { 'GET /v1/bookings/foc-detail': () => { hits++; return { body: { foc: [], shares: [], agents: [] } }; } } });
   rt.ctx.renderFocDetail();
   await rt.settle();
   rt.ctx.renderFocDetail();
   await rt.settle();
-  assert.equal(hits, 1, 'the window is fetched once');
+  assert.equal(hits, 1, 'read once');
+  assert.equal(rt.renders.renderFocDetail.length, 2, 'the answer redraws, then the second open draws from the cache');
 });
 
 // ── B2B Dashboard ── see ops-b2b-dash.test.mjs (§b2dParity: whole confirmed history, real legacy render)
