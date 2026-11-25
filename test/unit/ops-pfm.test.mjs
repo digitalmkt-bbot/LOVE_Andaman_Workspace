@@ -253,6 +253,21 @@ test('PFM load, approve-travel, hold, remind, and M1 payment submit refresh serv
   assert.ok(rt.calls.some(x => x.m1 === 'recordPayment' && x.invId === 'inv_prepay_1' && x.amt === 1500));
 });
 
+test('the Unpaid card is the server\'s totals.unpaid_due / unpaid_bookings (legacy\'s rule over every row of the period)', async () => {
+  const rt = createRuntime();
+  rt.setPfmResponse({ from: '2026-10-15', to: '2026-10-15', rows: [],
+    totals: { count: 712, total: 2000000, paid: 1, received: 1, unpaid: 1148763, unpaid_due: 1148763, unpaid_bookings: 168, collected_pct: 1, alert: 0, by_status: {} } });
+  await rt.window.laOpsPfm.load('2026-10-15', '2026-10-15');
+  const t = rt.window.pfmServerTotals('2026-10-15', 'daily');
+  assert.deepEqual([t.unpaid, t.nUnpaid], [1148763, 168]);
+  rt.setPfmResponse({ from: '2026-10-16', to: '2026-10-16', rows: [], totals: { count: 0, total: 0, paid: 0, received: 0, unpaid: 0 } });
+  await rt.window.laOpsPfm.load('2026-10-16', '2026-10-16');
+  const old = rt.window.pfmServerTotals('2026-10-16', 'daily');
+  assert.deepEqual([old.unpaid, old.nUnpaid], [null, null], 'an older answer without the fields: renderDailyPFM keeps its own sums');
+  const app = fs.readFileSync('allotment_v2/js/08-app.js', 'utf8');
+  assert.match(app, /if\(_srvT\.unpaid!=null\)\{ unpaidAmt=_srvT\.unpaid; nUnpaid=_srvT\.nUnpaid; \}/, 'renderDailyPFM takes them for the card');
+});
+
 test('legacy mode delegates to original PFM functions without API requests', () => {
   const calls = [];
   const window = {
