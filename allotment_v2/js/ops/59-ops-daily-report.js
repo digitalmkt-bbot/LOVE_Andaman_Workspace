@@ -330,10 +330,13 @@
     if(start && end) return start + '-' + end;
     return start || '';
   }
+  /* §drPickTyped (2026-11-26) · legacy prints the pickup as staff typed it (`05:10 a.m.`, `04.50 a.m.`): the server keeps that text beside
+     the window (trip pickup_text, the final window's operations.pickup_final_text; migrations 609/615) and sends it while it still fits the
+     window. The rebuilt `05:10` only when nothing was typed. The same rule as the server's tripPickupShown (src/domain/pickup.ts). */
   function pickupText(t){
     var o = (t && t.operations) || {};
-    if(o.pickup_time_final || (o.pickup_final_at_pier && o.pickup_time_final_end)) return win(o.pickup_time_final, o.pickup_time_final_end, o.pickup_final_at_pier);
-    return win(t.pickup_time, t.pickup_time_end, t.pickup_at_pier);
+    if(o.pickup_time_final || o.pickup_time_final_end) return o.pickup_final_text || win(o.pickup_time_final, o.pickup_time_final_end, o.pickup_final_at_pier);
+    return t.pickup_text || win(t.pickup_time, t.pickup_time_end, t.pickup_at_pier);
   }
   function rowsOf(date, list, M){
     var agName = {}; M.agents.forEach(function(a){ if(a.agent_id) agName[a.agent_id] = a.name; });

@@ -195,8 +195,10 @@
 
   /* GET the day's groups and replace the route's van fields with them · no write */
   function fetchDay(date, routeId){
-    return O.get(BASE, { service_date: date, route_id: routeId }).then(function(j){
-      var groups = (j && j.groups) || [];
+    return O.get(BASE, { service_date: date, route_id: routeId }).then(function(j){ return applyRouteGroups(date, routeId, (j && j.groups) || []); });
+  }
+  /* the route's groups as the server answered them (per route, or one route of the day read below) onto the local bookings */
+  function applyRouteGroups(date, routeId, groups){
       var prefix = date + '|' + routeId + '|';
       Object.keys(serverIds).forEach(function(k){ if(k.indexOf(prefix) === 0) delete serverIds[k]; });
       allBookings().forEach(function(b){
@@ -213,7 +215,6 @@
         .forEach(function(g){ var k = date + '::' + routeId + '::' + g.zone; (groupOrderMap[k] = groupOrderMap[k] || []).push(+g.number); });
 
       return groups;
-    });
   }
 
   /* loader · queued behind any write still in flight, so it reads what was just saved */
@@ -775,8 +776,21 @@
     var now = Date.now();
     if(dayLoadedAt[date] && now - dayLoadedAt[date] < 5000) return dayLoading[date];
     dayLoadedAt[date] = now;
+    /* §vanDayRead (2026-11-26) · ONE read for the day, GET /operations/van-groups/day?service_date= (every route's groups, each exactly the
+       per-route answer), instead of one GET per route (61 reads on every redraw: 1,281 calls, 65 s of server time in the 2026-11-25 parity
+       run). A route of ROUTES the answer does not list is applied with no groups, as its own empty read would be. Queued behind any write. */
     var routes = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : [];
-    dayLoading[date] = Promise.all(routes.map(function(r){ return load(date, r.id); })).then(function(){ redraw(); });
+    dayLoading[date] = O.queue(function(){
+      return O.get(BASE + '/day', { service_date: date }).then(function(j){
+        var byRoute = {};
+        ((j && j.routes) || []).forEach(function(x){ if(x && x.route_id) byRoute[x.route_id] = x.groups || []; });
+        routes.forEach(function(r){ if(r && r.id && !byRoute[r.id]) byRoute[r.id] = []; });
+        Object.keys(byRoute).forEach(function(rid){ applyRouteGroups(date, rid, byRoute[rid]); });
+      });
+    }).catch(function(e){
+      try{ console.warn('[ops] van groups did not load · local van fields kept · ' + (e && e.message)); }catch(_){}
+      return null;
+    }).then(function(){ redraw(); });
     return dayLoading[date];
   }
   window.bookingV2OpsVansDay = loadDay;

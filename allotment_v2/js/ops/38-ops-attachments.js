@@ -197,7 +197,8 @@
   function syncSlipView(bkId){
     var b=bkOf(bkId), inv=slipInvoice(bkId); if(!b) return;
     var out=[]; livePayments(inv).forEach(function(p){ (p.slips||[]).forEach(function(s){ if(s&&s.id) out.push({id:s.id,name:s.name,mime:s.mime,size:s.size,kind:'payment',amount:p.amount,at:p.recordedAt,by:p.recordedBy,paymentId:p.id}); }); });
-    (b.slips||[]).forEach(function(s){ if(!s||!s.attachmentId) return; var m=slipMeta[s.attachmentId]||{}; out.push({id:s.attachmentId,slipId:s.id,name:m.name||'',mime:m.mime||'',size:m.size||0,kind:'booking',amount:0,at:s.addedAt,by:s.addedBy}); });
+    var onPay={}; out.forEach(function(x){ onPay[x.id]=1; });   /* §pfmSlipCount · a PFM payment's slip is linked to the booking too (31-ops-pfm.js): list the file once */
+    (b.slips||[]).forEach(function(s){ if(!s||!s.attachmentId||onPay[s.attachmentId]) return; var m=slipMeta[s.attachmentId]||{}; out.push({id:s.attachmentId,slipId:s.id,name:m.name||'',mime:m.mime||'',size:m.size||0,kind:'booking',amount:0,at:s.addedAt,by:s.addedBy}); });
     b.paymentSlips=out;
   }
   function rerenderSlips(bkId){ syncSlipView(bkId); if(typeof window.pfmSlipsRender==='function') window.pfmSlipsRender(); }

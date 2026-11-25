@@ -313,6 +313,25 @@
   }
   // pjCopyYday is the server's command now (POST …/jobs/copy-yesterday): 85-ops-pier-w5.js
 
+  /* §pjLockGuard (2026-11-26, UI parity N14) · on a completed sheet (lock, the server's completed_at) legacy draws every field of the
+     card disabled (lro = ro || lk, 08-app.js renderPierJob: pjWcSet, pjMjPick, pjMvSet …), so nothing on it changes until it is
+     reopened. A change that still reached pjSet (a disabled select fired by script, the parity harness's 6 × 409 job_complete on
+     poj-panwa b4) went to the server as PATCH …/job and came back refused. Here such a change is dropped before it is written,
+     as the disabled field would have it, and the sheet redraws with the saved value. Reopen / complete (patch.lock) pass. */
+  if(typeof window.pjSet === 'function'){
+    L.pjSet = window.pjSet;
+    window.pjSet = function(d, b, patch){
+      if(enabled() && patch && typeof patch === 'object' && !Object.prototype.hasOwnProperty.call(patch, 'lock')){
+        var J = obj('PIER_JOB')[String(d || '') + '::' + String(b || '')];
+        if(J && J.lock){
+          try{ console.warn('[ops] job sheet ' + b + ' ' + d + ' is complete: change dropped (reopen it first)'); }catch(_){}
+          return undefined;
+        }
+      }
+      return L.pjSet.apply(this, arguments);
+    };
+  }
+
   /* ── writes ──────────────────────────────────────────────────────────── */
   // 409 guide_double_booked lists who is on another boat (body.busy); OK resends with guide_anyway (legacy's pjGdBusy marker, but asked first).
   // O.anyway fits: the flag goes in the body next to the diff. Cancel = declined, the card is put back, nothing was saved.
@@ -349,6 +368,8 @@
           Object.keys(a).forEach(function(k){ if(!same(a[k], b.proj[k])){ diff[k] = a[k]; any = true; } });
           if(any) whole(diff, a);
           var lockWas = b.lock, lockNow = cur.lock ? 1 : 0, mvNow = cur.mv || '', mvChanged = mvNow !== b.mv;
+          // §pjLockGuard · a sheet complete before and after has nothing to send (legacy's fields are disabled; the server would answer 409 job_complete)
+          if(lockWas && lockNow){ if(any || mvChanged){ JOB[key] = clone(b.J); } any = false; mvChanged = false; }
           if(any || lockWas !== lockNow || mvChanged){
             touched.push(key);
             jobs.push({ phase: 2, label: 'job ' + key, run: function(){
