@@ -39269,7 +39269,14 @@ function pxFlow2(e, sp, note, C, loss){
     L.sort(function(a,b){ return b[1]-a[1]; }); return { L:L, k:(sum>total && sum>0)?(total/sum):1 }; }
   var stages=[{ n:'Operation cost', v:+sp.op||0, sub:subOf((typeof PX_ST_OP!=='undefined')?PX_ST_OP:[], +sp.op||0) },
               { n:'ค่าจ้าง', v:+sp.wage||0, sub:subOf((typeof PX_ST_WG!=='undefined')?PX_ST_WG:[], +sp.wage||0) }];
-  if(C) stages.push({ n:'ค่าใช้จ่ายคงที่', v:+C.fx||0 }, { n:'ควบคุมได้', v:+C.ct||0 }, { n:'ซ่อมเรือ', v:+C.mt||0 });
+  /* §pxFlowDet (2026-11-25) · owner ดูหน้าจริงแล้ว: "รายละเอียดค่าใช้จ่ายที่เหลือควรระบุด้วย" → ขั้นส่วนกลางมีรายการย่อยด้วย (C.fxL / C.ctL / C.mtL จาก §pxForecast)
+     คอลัมน์ส่วนกลางห่างกันแค่ 150 → รายการย่อยวางใต้แท่ง ไล่ลงเป็นขั้นบันไดไม่ให้ทับกัน (narrow) */
+  function subL(L0, total){ var L=[], sum=0;
+    (L0||[]).forEach(function(d){ var v=+d[1]||0; if(v>0){ var nm=String(d[0]||'').replace(/\s*\(.*\)\s*$/,''); if(nm.length>23) nm=nm.slice(0,22)+'\u2026'; L.push([nm,v]); sum+=v; } });
+    if(total-sum>1 && L.length) L.push(['อื่น ๆ', total-sum]);
+    L.sort(function(a,b){ return b[1]-a[1]; }); return { L:L, k:(sum>total && sum>0)?(total/sum):1 }; }
+  if(C) stages.push({ n:'ค่าใช้จ่ายคงที่', v:+C.fx||0, sub:subL(C.fxL,+C.fx||0), narrow:1 }, { n:'ควบคุมได้', v:+C.ct||0, sub:subL(C.ctL,+C.ct||0), narrow:1 },
+                    { n:'ซ่อมเรือ', v:+C.mt||0, sub:subL(C.mtL,+C.mt||0), narrow:1 });
   else stages.push({ n:'ค่าเสื่อมเรือ', v:+sp.dep||0 });
   stages=stages.filter(function(s){ return s.v>0; });
   var hasOi=!!(C && C.oi>0), oh=hasOi?Math.max(C.oi*S,3):0;
@@ -39314,17 +39321,23 @@ function pxFlow2(e, sp, note, C, loss){
     gx.push(x);
     tx(x+BW/2,72,(i+1)+' · '+c.n,K,12.5,700,'middle');
     tx(x-8,cy+Math.min(hC/2+4,16),neg(c.v),R,13,700,'end');
-    var hasL=!!(c.sub && c.sub.L.length>1);
-    if(hasL){ var sy=cy, ly=cy-6;
-      c.sub.L.forEach(function(q,j){ var h=q[1]*c.sub.k*S, mid=sy+h/2; ly=Math.max(mid+4, ly+18);
-        if(j) nd+='<line x1="'+x+'" x2="'+(x+BW)+'" y1="'+f1(sy)+'" y2="'+f1(sy)+'" stroke="#fff" stroke-width="1"/>';
-        var ex=x+BW+24, ey=ly-4;
-        tt+='<path d="M'+(x+BW+2)+' '+f1(mid)+' C'+(x+BW+15)+' '+f1(mid)+' '+(x+BW+11)+' '+f1(ey)+' '+ex+' '+f1(ey)+'" fill="none" stroke="'+R+'" stroke-opacity=".6" stroke-width="1.2" stroke-linecap="round"/>'
-          +'<circle cx="'+ex+'" cy="'+f1(ey)+'" r="1.8" fill="'+R+'"/>';
-        tx(x+BW+31,ly,e(q[0]),K,11.5,500); tx(x+BW+212,ly,pxSkM(q[1])+'  '+P(q[1]),MU,11,600,'end');
-        sy+=h; }); }
+    var hasL=!!(c.sub && c.sub.L.length>1); c._x=x; c._cy=cy; c._hC=hC; c._hasL=hasL;
     feet.push([x,'r','หักออก',P(c.v),'('+pxSkM(c.v)+')']);
-    left=nl; px=x; pt=top; gapN=hasL?224:150; x+=gapN; });
+    left=nl; px=x; pt=top; gapN=(hasL && !c.narrow)?224:150; x+=gapN; });
+  /* รายการย่อยข้างแท่งแดง · วาดหลังรู้ตำแหน่งทุกขั้น · ขั้น narrow เริ่มใต้แท่งแดงของขั้นถัดไปและใต้รายการของขั้นก่อนหน้า */
+  var lFloor=0;
+  stages.forEach(function(c,i){ if(!c._hasL) return;
+    var X0=c._x, sy=c._cy, fl=0, ax=c.narrow?250:212;
+    if(c.narrow){ fl=lFloor; for(var j=i+1;j<stages.length;j++) fl=Math.max(fl, stages[j]._cy+Math.max(stages[j]._hC,3)+22); }
+    var ly=Math.max(c._cy-6, fl-18);
+    c.sub.L.forEach(function(q,j){ var h=q[1]*c.sub.k*S, mid=sy+h/2; ly=Math.max(mid+4, ly+18);
+      if(j) nd+='<line x1="'+X0+'" x2="'+(X0+BW)+'" y1="'+f1(sy)+'" y2="'+f1(sy)+'" stroke="#fff" stroke-width="1"/>';
+      var ex=X0+BW+24, ey=ly-4;
+      tt+='<path d="M'+(X0+BW+2)+' '+f1(mid)+' C'+(X0+BW+15)+' '+f1(mid)+' '+(X0+BW+11)+' '+f1(ey)+' '+ex+' '+f1(ey)+'" fill="none" stroke="'+R+'" stroke-opacity=".6" stroke-width="1.2" stroke-linecap="round"/>'
+        +'<circle cx="'+ex+'" cy="'+f1(ey)+'" r="1.8" fill="'+R+'"/>';
+      tx(X0+BW+31,ly,e(q[0]),K,11.5,500); tx(X0+BW+ax,ly,pxSkM(q[1])+'  '+P(q[1]),MU,11,600,'end');
+      sy+=h; });
+    if(c.narrow) lFloor=ly+18; });
   var xf=x; gx.push(xf);
   if(!C){
     rib(px+BW,pt,pt+left*S,xf,pt,pt+left*S,G); bar(xf,pt,left*S,GD);
@@ -39738,10 +39751,12 @@ function pxForecast(e){
   var _fcSk='', _fcHide=false;
   if(pxStViewGet()==='s'){
     var _ln={}; PX_ST_OP.forEach(function(dn){ _ln[dn[0]]=Vln(dn[0]).c; });
+    if(typeof PX_ST_WG!=='undefined') PX_ST_WG.forEach(function(dn){ _ln[dn[0]]=Vln(dn[0]).c; });   /* §pxFlowDet · รายการย่อยของค่าจ้าง */
     var _cen=null;
-    if(hasCen && cv){ var _fx=0, _ct=0;
-      PX_FC_CEN.forEach(function(c){ if(c[2] || c[0]==='bm') return; var v=+cv[c[0]]||0; if(c[3]==='f') _fx+=v; else _ct+=v; });
-      _cen={ fx:_fx, ct:_ct, mt:DP.c+(+cv.bm||0), oi:oiV, core:CORE, eb:EB }; }
+    if(hasCen && cv){ var _fx=0, _ct=0, _fxL=[], _ctL=[], _bm=(+cv.bm||0);
+      PX_FC_CEN.forEach(function(c){ if(c[2] || c[0]==='bm') return; var v=+cv[c[0]]||0; if(c[3]==='f'){ _fx+=v; _fxL.push([c[1],v]); } else { _ct+=v; _ctL.push([c[1],v]); } });
+      _cen={ fx:_fx, ct:_ct, mt:DP.c+_bm, oi:oiV, core:CORE, eb:EB, fxL:_fxL, ctL:_ctL,
+             mtL:(_bm>0 ? [['ค่าเสื่อมเรือที่หักไว้',DP.c],['ซ่อมจริงส่วนที่เกินค่าเสื่อม',_bm]] : []) }; }
     var _fr=pxFlow(e, { rev:REV.c, op:OP.c, wage:WG.c, dep:DP.c, pax:PAX.c, n:V(function(T){ return T.n; }).c, ln:_ln,
       prev:{ rev:REV.p, op:OP.p, wage:WG.p }, cmp:pLbl.slice(0,3), cen:_cen,
       fams:Object.keys(famK).map(function(k){ var X=V(function(T,M){ return (M.fam[k]||{}).rev||0; });
