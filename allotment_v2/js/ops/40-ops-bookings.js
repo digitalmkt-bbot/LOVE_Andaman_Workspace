@@ -328,7 +328,9 @@
         s.fromAlt = true;
         s.pickAreaId = a.pick_area_id || ''; s.pickHotel = a.pick_hotel || ''; s.pickZone = a.pick_zone || '';
         s.dropAreaId = a.drop_area_id || ''; s.dropHotel = a.drop_hotel || ''; s.dropZone = a.drop_zone || '';
-        s.pickTime = pickupJoin(a.pick_time, a.pick_time_end, a.pick_at_pier);   /* §pickupWindowWhole: the part's own window, whole */ s.altWho = a.alt_who || '';
+        /* §pickupWindowWhole: the part's own window, whole · §pickupTyped3 (2026-11-25): as typed (08.00 a.m.), the server's
+           pick_text while it still fits the window (operation-backend migration 615), else the window joined */
+        s.pickTime = a.pick_text || pickupJoin(a.pick_time, a.pick_time_end, a.pick_at_pier); s.altWho = a.alt_who || '';
       }
       return s;
     });
