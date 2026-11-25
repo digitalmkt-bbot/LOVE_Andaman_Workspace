@@ -107,6 +107,25 @@
     return null;
   }
 
+  /* §plDays (2026-11-25) · many days in one read: GET /v1/reports/trip-pl/days?from=&to=&pier= answers each day exactly as
+     GET /v1/reports/trip-pl?date=&pier= does (at most 62 days a call). The Monthly and Forecast tabs read their missing days with it:
+     the Forecast tab made one call per day (168 calls, 11 s); now it makes one or two. */
+  function loadDays(dates, pier){
+    var sorted = dates.slice().sort(), chunks = [], cur = null;
+    sorted.forEach(function(d){ if(cur && O.shift(cur.from, 61) >= d) cur.to = d; else { cur = { from:d, to:d }; chunks.push(cur); } });
+    return Promise.all(chunks.map(function(c){
+      return once('days:' + c.from + '|' + c.to + '|' + (pier || ''), function(){
+        return O.get('/v1/reports/trip-pl/days', { from:c.from, to:c.to, pier:pier || '' }).then(function(r){
+          if(!r || r.from !== c.from || r.to !== c.to || !Array.isArray(r.days)) throw new Error('invalid Trip P&L days response');
+          var at = Date.now();
+          r.days.forEach(function(d){ if(d && d.date && Array.isArray(d.trips)) S.day[dayKey(d.date, pier)] = { at:at, data:d }; });
+          return r;
+        });
+      });
+    }));
+  }
+  O.tripPlLoadDays = loadDays;
+
   /* ── month: full days for the shown month, server month totals for the one before ── */
   function loadMonthTotals(ym, pier){
     return once('mon:' + ym + '|' + (pier || ''), function(){
@@ -128,7 +147,7 @@
     var out = monthNeeds();
     var pdays = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(prevMonth(ym)) : [];
     var pmiss = pdays.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
-    if(pmiss.length) out.push(function(){ return pool(pmiss, 5, function(d){ return loadDay(d, pier); }); });
+    if(pmiss.length) out.push(function(){ return loadDays(pmiss, pier); });
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
     if(y && m && typeof window.bookingV2LoadFromOpsBackend === 'function'){
       var t = new Date(O.today() + 'T12:00:00'); t.setDate(t.getDate() - 29);
@@ -151,7 +170,7 @@
     var days = typeof window.pxDaysOf === 'function' ? window.pxDaysOf(ym) : [];
     var out = [];
     var miss = days.filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });       /* w6-d · the day read for the pier on screen: its bands, best boat and agent sums are the server's */
-    if(miss.length) out.push(function(){ return pool(miss, 5, function(d){ return loadDay(d, pier); }); });
+    if(miss.length) out.push(function(){ return loadDays(miss, pier); });
     if(days.length && !fresh(S.rent[ym])) out.push(function(){ return loadMonthTotals(ym, ''); });   // w5-d: pxRentIdle reads the server's rent_idle
     var pym = prevMonth(ym);
     var pmiss = days.some(function(d){ return !fresh(S.mday[dayKey(pym + '-' + d.slice(8, 10), pier)]); });

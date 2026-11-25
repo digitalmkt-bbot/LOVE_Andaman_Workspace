@@ -89,9 +89,11 @@ function costingPL() {
     rows: [{ id: 'fuel', group: 'น้ำมัน', label: 'Fuel', estimate: 9000, use: 9000 }, { id: 'dep', group: 'ค่าเสื่อม', label: 'Depreciation', estimate: 3000, use: 3000 }] });
   const O = {
     enabled: () => true, today: () => '2026-11-03', fail() {}, wrote() {}, onWrite() {}, loadingHtml: () => '', queue: (fn) => Promise.resolve().then(fn),
+    shift: (ds, n) => { const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); },
     get: (p, q) => {
       gets.push([p, clone(q)]);
       if (p === '/v1/reports/trip-pl') return Promise.resolve({ date: q.date, trips: [trip(q.date)], bands: [], agents: [] });
+      if (p === '/v1/reports/trip-pl/days') { const days = []; for (let d = q.from; d <= q.to; d = O.shift(d, 1)) days.push({ date: d, trips: [trip(d)], bands: [], agents: [] }); return Promise.resolve({ from: q.from, to: q.to, pier: null, days }); }
       if (p === '/v1/reports/trip-pl/month') return Promise.resolve({ month: q.month, days: [], rent_idle: null });
       return Promise.resolve({});
     },
@@ -115,8 +117,9 @@ test('§pxForecast: the Forecast tab reads the days of the month and of the mont
   const t = costingPL();
   t.window.renderTripPL();
   await flush();
-  const days = t.gets.filter((g) => g[0] === '/v1/reports/trip-pl').map((g) => g[1].date).sort();
-  assert.deepEqual(days, ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'], 'this month so far and the month before, each with its trips (steps need them)');
+  assert.equal(t.gets.filter((g) => g[0] === '/v1/reports/trip-pl').length, 0, 'no call per day (§plDays: it made 168)');
+  const days = t.gets.filter((g) => g[0] === '/v1/reports/trip-pl/days').map((g) => g[1].from + '..' + g[1].to).sort();
+  assert.deepEqual(days, ['2026-10-30..2026-10-31', '2026-11-01..2026-11-02'], 'this month so far and the month before, each with its trips (steps need them), one range read each');
   assert.deepEqual(clone(t.ranges), [{ from: '2026-10-05', to: '2026-11-30' }], '28 travel days back from yesterday, to the month end');
   assert.equal(t.drawn(), 1, 'drawn once everything landed');
   t.window.renderTripPL();
