@@ -188,6 +188,9 @@
       var pk = pickupSplit(t.pickupTime);            // §opsPickup · a trip is sent whole: a field left out is cleared
       if(!pk) throw new Error('Pickup time "' + t.pickupTime + '" on ' + t.date + ' is not a time (07:30), a window (07:30-07:45) or "Before 08:30 at pier"');
       Object.assign(o, pk);
+      /* §pickupTyped2 (2026-11-25) · the text as typed (05:20 a.m., 08.20) is a client fact the server keeps (migration 609) and
+         prints back; null when there is none, so a cleared box clears it */
+      o.pickup_text = String(t.pickupTime == null ? '' : t.pickupTime).trim() || null;
       if(t.ovn){ o.ovn = t.ovn; if(t.ovn === 'return' && t.ovnReturnDate) o.ovnReturnDate = t.ovnReturnDate; }
       if(t.ovnLeg){ o.ovnLeg = true; if(t.ovnOf != null) o.ovnOf = +t.ovnOf; }
       /* §ovnBoatBack · the boat goes back to the pier between the two days (migration 580). A saved trip keeps it as
@@ -288,7 +291,8 @@
     var r = { boatId: x.boat_id || x.boatId || null,
       boatSplits: (x.boat_splits || x.boatSplits || []).map(function(s){ return { boatId: s.boat_id || s.boatId, ad: +s.ad || 0, chd: +s.chd || 0, inf: +s.inf || 0, foc: +s.foc || 0 }; }),
       boatPulled: !!(x.boat_pulled != null ? x.boat_pulled : x.boatPulled),
-      pickupTimeFinal: pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
+      /* §pickupTyped2 · legacy prints what was typed: the server's pickup_final_text while it fits the window, else the window joined */
+      pickupTimeFinal: x.pickup_final_text || pickupJoin(x.pickup_time_final || x.pickupTimeFinal, x.pickup_time_final_end || x.pickupTimeFinalEnd, x.pickup_final_at_pier != null ? x.pickup_final_at_pier : x.pickupFinalAtPier),
       returnSameVan: !!(x.return_same_van != null ? x.return_same_van : x.returnSameVan),
       pierNote: pierNoteFrom(x.pier_note || x.pierNote), checkins: x.checkins || {}, vanParts: x.van_parts || x.vanParts || [] };
     var tb = turnBackFrom(x.turn_back);
@@ -339,7 +343,7 @@
     var o = { opsTripId: t.id, routeId: g('routeId', 'route_id'), date: g('date', 'service_date'), bookingMode: g('bookingMode', 'booking_mode') || 'seat',
               pax: Object.assign({}, t.pax || {}), charterBoatId: g('charterBoatId', 'charter_boat_id') || null,
               lockDraws: lockDraws, lockDrawSel: sel, lockUse: locked, seatSource: { locked: locked, general: Math.max(0, total - locked) },
-              zone: t.zone || '', pickupTime: pickupJoin(g('pickupTime', 'pickup_time'), g('pickupTimeEnd', 'pickup_time_end'), g('pickupAtPier', 'pickup_at_pier')),
+              zone: t.zone || '', pickupTime: t.pickup_text || pickupJoin(g('pickupTime', 'pickup_time'), g('pickupTimeEnd', 'pickup_time_end'), g('pickupAtPier', 'pickup_at_pier')),
               ovn: t.ovn || null, ovnReturnDate: g('ovnReturnDate', 'ovn_return_date') || '', ovnLeg: !!g('ovnLeg', 'ovn_leg'),
               /* §ovnBoatBack · legacy's stored shape: 'boatback' on the outbound (bkOvnBoatBack, the edit form's tick) */
               ovnOf: g('ovnBoatBack', 'ovn_boat_back') === true ? 'boatback' : g('ovnOf', 'ovn_of') != null ? g('ovnOf', 'ovn_of') : null,
