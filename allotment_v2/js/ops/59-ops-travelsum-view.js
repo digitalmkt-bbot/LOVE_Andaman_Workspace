@@ -111,7 +111,7 @@
       var why = [m.to_date ? 'เลื่อนไป ' + call('ckDayShortTh', [m.to_date], m.to_date) : 'ย้ายวันออกไป', call('ckShortDay', [m.at], ''), m.by || ''].filter(Boolean).join(' · ');
       return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {} }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
         a: null, c: null, dec: null, ns: null, ev: [], cxlRow: true, mvRow: true, booked: n(m.pax_total), trav: 0, pb: paxBreak(m.pax), clean: clean,
-        amount: null, isCase: false, pend: false, due: false, cotOpen: false, mvTo: m.to_date || '', mvWhy: why };
+        amount: null, isCase: false, pend: false, due: false, cotOpen: false, mvTo: m.to_date || '', mvWhy: m.why_text || why };
     }
     return { all: V.inScope.map(function(r){ return mk(r, false); }).sort(cmp), cxl: V.cancelled.map(function(r){ return mk(r, true); }),
       mv: (V.moved || []).map(mv), movedListed: !!V.movedListed, cmp: cmp, clean: clean };
@@ -291,7 +291,8 @@
         + '<td><span class="ts-chip p">&#10007; เลื่อนวัน ' + r.booked + '</span></td>'
         + '<td style="max-width:230px;color:var(--zn700)">' + e(r.mvWhy) + (r.routeId ? '<div class="ts-tel">' + e(routeName(r.routeId)) + '</div>' : '') + '</td>'
         + '<td class="r ts-mono" style="font-weight:800">&mdash;<div class="ts-tel" style="font-weight:400;margin-top:3px">ยอดเงินไปอยู่กับวันใหม่แล้ว</div></td>'
-        + '<td class="ts-noprint"></td>'
+        + '<td class="ts-noprint"><button class="ts-db del" onclick="tsMvClear(\'' + q(r.id) + '\',\'' + q(dateOf()) + '\')" '
+        + 'title="เอารายการนี้ออกจากใบปิดวัน · ใบจองกับการจัดรถของวันใหม่ไม่ถูกแตะ">ล้างออกจากใบนี้</button></td>'
         + '<td class="c"><span class="ts-chip p">เลื่อนวันแล้ว</span></td></tr>';
     });
     if(!R.movedListed && nMoved) body += '<tr class="ts-moved" data-ops-ts-needs="moved"><td colspan="8" style="color:var(--zn700)"><span class="ts-chip p">&#10007; เลื่อนวัน ' + nMoved + ' ใบ</span> '
@@ -815,7 +816,7 @@
       + '<th class="ts-rn ts-scr ts-noprint">#</th><th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
       + '<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
       + '<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Zone</th><th>Drop-off</th>'
-      + '<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total</th>'
+      + '<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>คำขอพิเศษ<span class="ts-thsub">Special request</span></th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
       + '<th>Cancel &middot; Charge</th><th class="c">Status</th></tr></thead><tbody>'
       + (body || '<tr><td colspan="19" class="ts-empty">' + (onlyIssue ? 'ไม่มีเคสที่ต้องตัดสินในวันนี้' : 'ไม่มี booking ในวันนี้') + '</td></tr>')
       + '</tbody></table></div><div class="ts-scr ts-noprint ts-mnone" data-tsman-none style="display:none">ไม่พบใบที่ตรงกับที่ค้นหา</div></div>'
@@ -929,6 +930,25 @@
       O.wrote('ts-exdup');
       return Promise.resolve(P && P.loadDay ? P.loadDay(date, true) : null).then(redraw, redraw);
     }, function(e){ O.fail('Could not reset the extra', e); });
+  };
+  /* §tsMvClear (2026-11-25) · "ล้างออกจากใบนี้" on a moved-out row (legacy ckStrandClear → ckStrandMvDrop): the server's moved_rows come
+     from the moved-away rows, so DELETE /operations/van-strands/{booking}/{date} takes it off this sheet (and off the van sheets).
+     The booking and the new day's arrangements are not touched. 404 = already gone on the server: the sheet is read again anyway.
+     The booking is often not loaded here (it moved to another day), so this does not go through ckStrandClear's booking lookup. */
+  window.tsMvClear = function(bkId, date){
+    if(!O.enabled()) return typeof window.ckStrandClear === 'function' ? window.ckStrandClear(bkId, date) : null;
+    var row = ((last[date] && last[date].moved_rows) || []).filter(function(m){ return m.booking_id === bkId; })[0];
+    var nm = (row && (row.lead_pax || row.voucher_ref || row.code)) || bkId;
+    if(!window.confirm('ล้างรายการค้างของ ' + nm + ' ออกจากวันที่ ' + date + ' ?\n\n' + 'ใบนี้ถูกเลื่อนวันไปแล้ว · การจัดรถ/เรือของวันใหม่ไม่ถูกแตะ')) return Promise.resolve();
+    return O.queue(function(){ return O.call('DELETE', '/operations/van-strands/' + enc(bkId) + '/' + enc(date)); }).then(null, function(e){
+      if(e && e.status === 404) return null;
+      throw e;
+    }).then(function(){
+      O.wrote('van-strands');
+      if(typeof window.ckStrandMvDrop === 'function') window.ckStrandMvDrop(bkId + '|' + date);
+      if(typeof window.laSaveToast === 'function') window.laSaveToast({ kind: 'neutral', title: 'ล้างรายการค้างแล้ว', id: bkId, status: 'CLEARED', sub: nm + ' · ' + date });
+      redraw();
+    }, function(e){ O.fail('Moved row not cleared', e); });
   };
   wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
   wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });

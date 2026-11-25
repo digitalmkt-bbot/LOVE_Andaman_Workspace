@@ -60,3 +60,30 @@ test('the manifest shows them faded after the route\'s rows, counted in the rout
   const H = handed(host.innerHTML, 'H');
   assert.equal(H.nBk, 3); assert.equal(H.booked, 6);
 });
+
+test('"ล้างออกจากใบนี้" on a moved row drops its moved-away row on the server (legacy ckStrandClear → ckStrandMvDrop), then reads the sheet again', async () => {
+  const h = await run();
+  const m1 = movedRows02(h.host.innerHTML).find((r) => r.startsWith('m1'));
+  assert.match(m1, /<button class="ts-db del" onclick="tsMvClear\('m1','2026-10-14'\)"[^>]*>ล้างออกจากใบนี้<\/button>/);
+  const sent = [];
+  let dropped = null;
+  h.ctx.confirm = () => true;
+  h.ctx.ckStrandMvDrop = (key) => { dropped = key; };
+  h.ctx.laOps.call = (method, path) => { sent.push([method, path]); return Promise.resolve({ dropped: 1 }); };
+  const wrote = []; h.ctx.laOps.wrote = (k) => wrote.push(k);
+  await h.ctx.tsMvClear('m1', '2026-10-14');
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(sent, [['DELETE', '/operations/van-strands/m1/2026-10-14']]);
+  assert.equal(dropped, 'm1|2026-10-14', 'the van sheets\' cache drops it too');
+  assert.deepEqual(wrote, ['van-strands'], 'a write: every cached read (the sheet too) is read again');
+  h.ctx.confirm = () => false;
+  await h.ctx.tsMvClear('m2', '2026-10-14');
+  assert.equal(sent.length, 1, 'cancelled at the confirm: nothing sent');
+});
+
+test('the moved row prints the server\'s why_text when it has one', async () => {
+  const h = load(extra, { summary: { ...SUMMARY, moved_trips: 1, moved_rows: [{ ...moved[0], why_text: 'เลื่อนไป 17 ต.ค. · 11 ต.ค. 21:06 · RSVN01 · เคยเช็คอินแล้ว' }] } });
+  await h.ctx.window.renderTravelSum();
+  assert.match(movedRows02(h.host.innerHTML)[0], /RSVN01 · เคยเช็คอินแล้ว/);
+  assert.match(section(h.host.innerHTML, '04'), /<th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net<\/span><\/th>/, 'the Total column names its bracket line, as legacy');
+});
