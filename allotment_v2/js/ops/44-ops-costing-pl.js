@@ -80,8 +80,16 @@
       /* §bopSwap2 (sync 11-10, ported 11-11) · the server costs a rescue boat on fuel/captain/crew/rent only and says which
          boat it went out for; the boat that broke says where its guests went (pxSwPill reads both) */
       rescue:(t.rescue && t.rescue.for) ? { for:t.rescue.for } : null,
-      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null
+      swap:(t.swap && t.swap.to) ? { to:t.swap.to, cause:t.swap.cause || '' } : null,
+      /* §pxFam (N10, 2026-11-25) · the server's FAM split (who is FAM, what they cost), in legacy pxTrip's shape */
+      fam:famOf(t.fam), saleProfit:t.sale_profit == null ? n(t.profit) : n(t.sale_profit)
     };
+  }
+  function famOf(f){
+    f = f || {};
+    return { pax:n(f.pax), th:n(f.th), cost:n(f.cost), all:!!f.all,
+             list:(f.list || []).map(function(x){ return { id:x.booking_id, name:x.name || '—', pax:n(x.pax), staff:!!x.staff, full:n(x.full) }; }),
+             zero:(f.zero || []).map(function(x){ return { id:x.booking_id, name:x.name || '—', pax:n(x.pax) }; }) };
   }
   function emptyTrip(date, bid){
     return legacyTrip({ date:date, boat_id:bid, name:bid, status:'nosail', no_sail:true, pax:{}, rows:[], upsell:{}, longtail:{}, fuel_price:{} });
@@ -186,7 +194,7 @@
   }
   function aggFromTrips(date, trips, dayData){
     var a = { date:date, trips:trips.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0, routes:{}, agents:{}, groups:{}, gdet:{},
-              bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[] };
+              bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[], famCost:0, famPax:0, famTrips:0, famAg:{}, saleLoss:0, zeroN:0 };
     trips.forEach(function(t){
       var lt = legacyTrip(t), cap = n(t.capacity);
       a.rev += lt.rev; a.cost += lt.cost; a.profit += lt.profit; a.pax += lt.px.tot; a.bk += lt.px.bk; a.cap += cap;
@@ -194,7 +202,17 @@
       if(!a.best || lt.profit > a.best.profit) a.best = { name:lt.name, profit:lt.profit };
       a.boats.push({ bid:lt.bid, name:lt.name, profit:lt.profit });
       var rk = lt.rid || lt.route.name || '-';
-      var R = a.routes[rk] || (a.routes[rk] = { name:lt.route.name || '-', color:lt.route.color || '#64748B', n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:lt.route.pier });
+      var R = a.routes[rk] || (a.routes[rk] = { name:lt.route.name || '-', color:lt.route.color || '#64748B', n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:lt.route.pier, famCost:0, famN:0, noPlan:0 });
+      /* §pxFam (N10) · legacy pxDayAgg's FAM sums over the server's per-trip FAM split: boats that sailed only */
+      var F = lt.fam;
+      if(!lt.noSail){
+        if(F.pax > 0){ a.famCost += F.cost; a.famPax += F.pax; a.famTrips++; R.famCost += F.cost; R.famN++;
+          F.list.forEach(function(x){ var G = a.famAg[x.name] || (a.famAg[x.name] = { name:x.name, staff:!!x.staff, trips:{}, pax:0, full:0, cost:0 });
+            G.trips[date + '|' + lt.bid] = 1; G.pax += x.pax; G.full += x.full; G.cost += F.cost * (x.pax / Math.max(1, F.pax)); }); }
+        if(lt.saleProfit < 0) a.saleLoss++;
+        if(!lt.plan) R.noPlan++;
+        a.zeroN += F.zero.length;
+      }
       R.n++; R.pax += lt.px.tot; R.rev += lt.rev; R.cost += lt.cost; R.profit += lt.profit; R.cap += cap;
       if(lt.be){ R.be += lt.be; R.beN++; }
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
@@ -208,7 +226,8 @@
   function aggFromTotals(date, x){
     x = x || {};
     return { date:date, trips:n(x.trips), rev:n(x.revenue), cost:n(x.cost), profit:n(x.profit), pax:n(x.pax), bk:n(x.bookings), loss:n(x.loss_trips), cap:n(x.capacity),
-             routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[] };
+             routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0], best:null, boats:[], tr:[],
+             famCost:n(x.fam_cost), famPax:n(x.fam_pax), famTrips:n(x.fam_trips), famAg:{}, saleLoss:n(x.sale_loss), zeroN:0 };
   }
 
   /* ── Analysis tab, drawn from the server report ─────────────────────────── */
