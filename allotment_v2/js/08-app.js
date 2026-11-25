@@ -3803,11 +3803,18 @@ function mdTabSales(days){
     const v=valOf(b), px=paxOf(b); tVal+=v; tPax+=px; tBk++;
     if(p){ p.val+=v; p.pax+=px; p.bk++; const ym=ymOf(bkDate(b)); if(ym===curYM)p.cur+=v; else if(ym===prevYM)p.prev+=v; }
     const iv=invOf(b); if(iv){ const paid=Math.max(0,acctInvoicePaid(iv)), bal=acctInvoiceBalance(iv); tPaid+=paid; tAr+=bal; if(p){p.paid+=paid; p.ar+=bal;} } });
+  /* §mdSrvSales (2026-11-25) · operation-backend's figures (GET /v1/market-stats/sales-agents, md-sales.ts, read by js/ops/99-ops-md-sales-load.js)
+     replace the sums of whatever bookings this browser holds: legacy's rules over every booking. Without the answer: legacy's own sums. */
+  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;
+  if(_mdS){ const T=_mdS.totals||{}; tVal=+T.val||0; tPax=+T.pax||0; tBk=+T.bk||0; tTot=+T.tot||0; tCancel=+T.cancel||0; tNoShow=+T.no_show||0; tPaid=+T.paid||0; tAr=+T.ar||0;
+    recentAg.clear(); (_mdS.active_agents||[]).forEach(id=>recentAg.add(id));
+    const _sv={}; (_mdS.sales||[]).forEach(r=>{ _sv[r.id]=r; });
+    Object.keys(P).forEach(id=>{ const r=_sv[id]||{}; Object.assign(P[id],{val:+r.val||0,pax:+r.pax||0,bk:+r.bk||0,tot:+r.tot||0,cancel:+r.cancel||0,noShow:+r.no_show||0,paid:+r.paid||0,ar:+r.ar||0,cur:+r.cur||0,prev:+r.prev||0}); }); }
   const tActive=AG.filter(a=>recentAg.has(a.id)).length, tAgents=AG.length;
   const tColl=pf(tPaid,tPaid+tAr), tCancelR=pf(tCancel,tTot), tNoShowR=pf(tNoShow,tTot);
   const tCur=Object.values(P).reduce((s,p)=>s+p.cur,0), tPrev=Object.values(P).reduce((s,p)=>s+p.prev,0);
   const tMoM=tPrev>0?Math.round((tCur-tPrev)/tPrev*100):(tCur>0?100:0);
-  if(!BK.length){ return mdNote('No bookings yet — Sales KPIs populate from confirmed bookings (agent → owner via agent.sales).'); }
+  if(!BK.length && !_mdS){ return mdNote('No bookings yet — Sales KPIs populate from confirmed bookings (agent → owner via agent.sales).'); }
   // ── north-star ──
   const kpi=(lab,val,sub,col)=>`<div style="background:#fff;border:1px solid rgba(0,0,0,.07);border-radius:12px;padding:12px 13px"><div style="font-size:11px;color:var(--fd-ink-soft)">${lab}</div><div style="font-size:21px;font-weight:700;margin-top:3px;color:${col||'#1B2A55'};font-family:'DM Mono',monospace">${val}</div><div style="font-size:10.5px;color:var(--fd-ink-soft);margin-top:1px">${sub}</div></div>`;
   const north=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
@@ -3875,6 +3882,10 @@ function mdTabSales(days){
     chan[chOf(b)]=(chan[chOf(b)]||0)+net;
     const a=sbGetAgent(b.agentId); const mk=a?(a.market||'unassigned'):'b2c'; mkt[mk]=(mkt[mk]||0)+paxOf(b);
     if(b.addOns && Object.keys(b.addOns).length) withAddon++; });
+  if(_mdS && _mdS.mix){ const M=_mdS.mix; gGross=+M.gross||0; gDisc=+M.disc||0; gExtra=+M.extra||0; gFoc=+M.foc||0; gPaxAll=+M.pax_all||0; withAddon=+M.with_addon||0; activeBk=+M.active_bk||0;   /* §mdSrvSales */
+    [fam,pier,chan,mkt].forEach(o=>Object.keys(o).forEach(k=>{ delete o[k]; }));
+    Object.keys(M.families||{}).forEach(k=>{ const f=M.families[k]||{}; fam[k]={name:f.name,color:f.color,pax:+f.pax||0}; });
+    Object.assign(pier,M.piers||{}); Object.assign(chan,M.channels||{}); Object.assign(mkt,M.markets||{}); }
   // 7 · discounts & FOC
   const stat=(lab,val,col)=>`<div><div style="font-size:10.5px;color:var(--fd-ink-soft)">${lab}</div><div style="font-size:17px;font-weight:700;font-family:'DM Mono',monospace;color:${col||'#1B2A55'}">${val}</div></div>`;
   const disc7=`<div class="md-card" style="margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:10px">Discounts &amp; FOC</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${stat('Gross sales',fK(gGross))}${stat('Discount given',fK(gDisc)+' ('+pf(gDisc,gGross)+'%)','#A32D2D')}${stat('Extra charges',fK(gExtra),'#0F6E56')}${stat('FOC pax',gFoc+' ('+pf(gFoc,gPaxAll)+'%)')}</div></div>`;
@@ -4905,13 +4916,16 @@ function mdTabAgents(days){
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
   const sName=s=>esc((s.name||'').replace(/^Khun\s+/,''));
-  if(!BK.length) return mdNote('No bookings yet — agent stats populate from bookings.');
+  const _mdS=(typeof window!=='undefined'&&typeof window._opsMdSales==='function'&&window._opsMdSales())||null;   /* §mdSrvSales (see mdTabSales) */
+  if(!BK.length && !_mdS) return mdNote('No bookings yet — agent stats populate from bookings.');
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
   const A={};
   BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{},area:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b);
     const aid=b.pickupAreaId||'';   // configured pickup area (Phuket Town, Patong, …) · booking-level
     (b.trips||[]).forEach(t=>{ const px=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; const f=bookingV2RouteFamily(t.routeId); if(f) o.fam[f.id]=(o.fam[f.id]||0)+px; const k=aid||('_z'+String(t.zone||b.pickupZone||'NT').toUpperCase()); o.area[k]=(o.area[k]||0)+px; });
     const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
+  if(_mdS){ Object.keys(A).forEach(k=>{ delete A[k]; }); (_mdS.agents||[]).forEach(r=>{ const a=sbGetAgent(r.id); if(!a) return;   /* §mdSrvSales */
+    A[a.id]={a,val:+r.val||0,pax:+r.pax||0,cancel:+r.cancel||0,tot:+r.tot||0,paid:+r.paid||0,ar:+r.ar||0,fam:Object.assign({},r.fam||{}),area:Object.assign({},r.area||{})}; }); }
   const zClr=z=>z==='PK'?['#E6F1FB','#185FA5']:z==='KL'?['#EAF3DE','#3B6D11']:['#F1EFE8','#5F5E5A'];
   /* §rnZone */
   const areaInfo=k=>{ if(k && k.slice(0,2)==='_z'){ const z=k.slice(2); return {nm:(z==='PK'?'Phuket (no area)':z==='KL'?'Khao Lak (no area)':z==='RN'?'Ranong (no area)':z==='NT'||z==='NOTRANSFER'?'No transfer':z),z:(z==='PK'||z==='KL'||z==='RN')?z:'NT'}; } const ar=(typeof bookingV2GetArea==='function')?bookingV2GetArea(k):null; return {nm:ar?ar.name:(k||'—'), z:ar?ar.zone:'NT'}; };
