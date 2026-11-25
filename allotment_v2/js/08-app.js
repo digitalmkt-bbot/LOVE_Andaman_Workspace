@@ -9581,7 +9581,7 @@ function renderDailyPFM(){
       /* §สลิป · ปุ่มนี้เคยโผล่เฉพาะตอนมีสลิปอยู่แล้ว (_nSlip>0) และการแนบทำได้ที่ Record modal ที่เดียว
          ซึ่งหายไปทันทีที่จ่ายครบ → บุ๊กกิ้งที่ลืมแนบสลิป หรือแนบผิด ไม่มีทางกลับเข้าไปแก้ได้เลย
          ตอนนี้โผล่เสมอเมื่อออกใบแจ้งหนี้แล้ว · 0 ไฟล์ = "+ สลิป" (ขาว) · มีแล้ว = นับจำนวน (เขียว) */
-      const _nSlip=((b.paymentSlips)||[]).length;
+      const _nSlip=laPaySlips(b).length;   /* §tsPenFile · ไม่นับหลักฐานค่าปรับ */
       act+=` <button onclick="pfmViewSlips('${b.id}')" title="${_nSlip?('ดู / แนบเพิ่ม / ลบสลิป ('+_nSlip+' ไฟล์)'):'ยังไม่มีสลิป · กดเพื่อแนบ'}" style="${_obtn};color:${_nSlip?'#0F6E56':'#8a8a82'}">\u{1F9FE} ${_nSlip?('สลิป '+_nSlip):'+ สลิป'}</button>`;
       act+=` <button onclick="acctOpenDoc('${inv.id}','invoice')" title="ดู/พิมพ์ใบแจ้งหนี้" style="${_obtn}">View</button>`;
       /* §pfmEdit · บันทึกรับเงินผิด (ยอด/วันที่/ช่องทาง) หรือกด Issue PFM ผิดใบ → เดิมไม่มีทางแก้จากหน้านี้ */
@@ -28218,6 +28218,65 @@ function tsCotCell(b, M, date, money, e, r){
 }
 var _tsOnlyIssue=false;
 function tsToggleFilter(){ _tsOnlyIssue=!_tsOnlyIssue; tsAfter(); }
+/* §tsPenFile (2026-11-25) · แนบหลักฐานของคำตัดสินค่าปรับ (ใบรับรองแพทย์ · แชต · อีเมลจากเอเจนต์)
+   เดิมเขียนได้แค่หมายเหตุ "ยกเลิกไม่ชาร์จ มีใบรับรองแพทย์" แต่ตัวใบรับรองไปอยู่ในไลน์ · บัญชี/ผู้อนุมัติตามหาเอง
+   ตาราง travel_sum ไม่มีคอลัมน์เก็บไฟล์ (ใส่ไปจะหายเงียบตอนขึ้นเซิร์ฟเวอร์) จึงเก็บ ref ไว้ที่ใบจอง
+   (b.paymentSlips · มีคอลัมน์อยู่แล้ว) โดยติด kind 'penalty:<วันเดินทาง>' · ไฟล์จริงอยู่ที่ /api/attach
+   - ไม่ใช่สลิปเงิน → laPaySlips() ตัดออกจากตัวนับ/หน้าดูสลิปการชำระ
+   - แนบได้ทั้งก่อนและหลังกดตัดสิน · กด "ล้าง" คำตัดสินแล้วไฟล์ยังอยู่ */
+function tsPenKind(date){ return 'penalty:'+String(date||''); }
+function laSlipIsPenalty(f){ return !!(f && /^penalty:/.test(String(f.kind||''))); }
+function laPaySlips(b){ return ((b&&Array.isArray(b.paymentSlips))?b.paymentSlips:[]).filter(function(f){ return !laSlipIsPenalty(f); }); }
+function tsPenFiles(bkId,date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }), k=tsPenKind(date);
+  return ((b&&Array.isArray(b.paymentSlips))?b.paymentSlips:[]).filter(function(f){ return f && f.id && f.kind===k; });
+}
+function tsPenFilePick(bkId,date,inp){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')){ if(inp) inp.value=''; return; }
+  var fs=Array.prototype.slice.call((inp&&inp.files)||[]); if(inp) inp.value='';
+  if(!fs.length) return;
+  if(typeof pckSlipUpload!=='function'){ alert('แนบไฟล์ไม่ได้ในหน้านี้'); return; }
+  var k=tsPenKind(date);
+  fs.forEach(function(f){ pckSlipUpload(f, bkId, function(meta){
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; });
+    if(b){ (b.paymentSlips||[]).forEach(function(ps){ if(ps.id===meta.id) ps.kind=k; });   // pckSlipUpload ลงเป็น 'pier' · เปลี่ยนเป็นหลักฐานค่าปรับ
+           try{ acctPersistBookings(); }catch(_){ }
+           if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','แนบหลักฐานค่าปรับ/ยกเลิก ('+date+'): '+(meta.name||''),'Operation'); }
+    tsAfter();
+  }); });
+}
+function tsPenFileDrop(bkId,date,fid){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var f=tsPenFiles(bkId,date).find(function(x){ return x.id===fid; }); if(!f) return;
+  if(!confirm('ลบไฟล์ "'+(f.name||fid)+'" ทิ้งถาวร?\n\nไฟล์จะถูกลบออกจากระบบ · คำตัดสินไม่เปลี่ยน')) return;
+  fetch('/api/attach/'+encodeURIComponent(fid),{method:'DELETE'}).then(function(r){ return r.json(); })
+    .then(function(j){ if(j&&j.error) alert('ลบไฟล์บนเซิร์ฟเวอร์ไม่สำเร็จ: '+j.error); }).catch(function(){});
+  b.paymentSlips=(b.paymentSlips||[]).filter(function(x){ return x.id!==fid; });
+  try{ acctPersistBookings(); }catch(_){ }
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','ลบหลักฐานค่าปรับ/ยกเลิก ('+date+'): '+(f.name||fid),'Operation');
+  tsAfter();
+}
+function tsPenFileRow(bkId,date,e){
+  var ss=tsPenFiles(bkId,date), lb='หลักฐานประกอบคำตัดสิน';
+  var chips=ss.map(function(f,i){
+    var nm=String(f.name||('ไฟล์ '+(i+1))); if(nm.length>22) nm=nm.slice(0,12)+'…'+nm.slice(-8);
+    return '<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(ss, lb, i)
+      +' title="'+e((f.name||'')+(f.by?(' · '+f.by):'')+' · กดเพื่อเปิดดู')+'">&#128206; '+e(nm)+'</span>'
+      +'<a class="ts-slipx" onclick="tsPenFileDrop(\''+bkId+'\',\''+date+'\',\''+e(f.id)+'\')" title="ลบไฟล์นี้"'
+      +' style="color:var(--rs700);cursor:pointer;font-size:11px;font-weight:800;align-self:center;margin-right:4px">&times;</a>';
+  }).join('');
+  var add='<label class="ts-slipb" title="'+e('แนบหลักฐาน เช่น ใบรับรองแพทย์ · แชต/อีเมลจากเอเจนต์ (รูป หรือ PDF · ไม่เกิน 6MB ต่อไฟล์)')+'">&#128206; '+(ss.length?'เพิ่มไฟล์':'แนบไฟล์')
+    +'<input type="file" multiple accept="image/*,application/pdf" style="display:none"'
+    +' onchange="tsPenFilePick(\''+bkId+'\',\''+date+'\',this)"></label>';
+  return '<div class="ts-slips">'+chips+add+'</div>';
+}
+/* ป้ายสั้นในช่อง "ผล" · ติดไปกับกระดาษตอนพิมพ์ ให้คนอนุมัติรู้ว่ามีหลักฐานในระบบ */
+function tsPenFileTag(bkId,date,e){
+  var ss=tsPenFiles(bkId,date); if(!ss.length) return '';
+  return '<div style="margin-top:4px"><span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(ss,'หลักฐานประกอบคำตัดสิน')
+    +' title="กดเพื่อเปิดดู">&#128206; หลักฐาน '+ss.length+' ไฟล์</span></div>';
+}
 function tsPick(bkId,date,kind,amt){
   const el=document.getElementById('ts-note-'+bkId);
   tsSet(bkId,date,kind,amt,el?el.value:'');
@@ -28778,7 +28837,7 @@ function tsInvSlips(b){
   /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
      kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าดึงของวันนั้นเองอยู่แล้ว */
   (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
-    if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
+    if(!f || !f.id || seen[f.id] || f.kind==='pier' || laSlipIsPenalty(f)) return; seen[f.id]=1;
     out.list.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
       +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
   });
@@ -32916,8 +32975,9 @@ function renderTravelSum(){
         +'</div>'
         +(_part?('<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป '+e(_lostW)+'</b> &middot; อีก <b>'+e(_goW)+'</b> ที่เดินทางจ่ายตามปกติ</div>'):'')   /* §tsLostPart2 */
         +'<input id="ts-note-'+id+'" class="ts-note" type="text" value="'+e(dec?dec.note:'')+'" placeholder="หมายเหตุ / เลขอ้างอิง"'
-        +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')"></td>'
-      +'<td class="c">'+(dec
+        +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')">'
+        +tsPenFileRow(id,date,e)+'</td>'   /* §tsPenFile */
+      +'<td class="c">'+tsPenFileTag(id,date,e).replace(/^<div style="margin-top:4px">/,'<div style="margin-bottom:4px">')+(dec
         ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+e(_decLbl(dec))+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
            +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(laAtLocal(dec.at,16))):'')+'</div>')
         : (r.tb   /* §turnBack3 · ข้อตกลงเงินที่บันทึกจากหน้าท่า · แก้ที่ปุ่ม ⛵ ในหน้าเช็คอิน */
@@ -43324,7 +43384,7 @@ function bkV2RowPayAction(bkId){
    · ตอนยังค้าง: แนบสลิปก่อนกดบันทึกรับเงิน → ผูกกับการรับเงินครั้งนั้น (payment.slips) ══ */
 var _bkV2PaySlips={};
 function bkV2PaySlipBtn(bkId){
-  const b=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const n=((b&&b.paymentSlips)||[]).length;
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===bkId); const n=laPaySlips(b).length;
   return `<button onclick="bkV2PaySlipsOpen('${bkId}')" title="ดู / แนบ / ลบสลิปการชำระของใบนี้" style="background:${n?'#fff':'#F6FAFE'};border:1px solid ${n?'var(--fd-line)':'#CFE0EF'};color:${n?'var(--fd-ink)':'#185FA5'};font-family:inherit;font-size:12px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer">&#128206; สลิป${n?(' ('+n+')'):' · แนบ'}</button>`;
 }
 function bkV2PaySlipList(bkId){
@@ -66803,7 +66863,7 @@ function pfmSlipsClose(){ _pfmSlipBk=null; const ov=document.getElementById('pfm
 function pfmSlipsRender(){
   const ov = document.getElementById('pfm-slipview'); if(!ov || !_pfmSlipBk) return;
   const b = (SB_BOOKINGS||[]).find(x => x.id===_pfmSlipBk); if(!b) return;
-  const ss = (b.paymentSlips||[]);
+  const ss = laPaySlips(b);   /* §tsPenFile */
   const e = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const tot = ss.reduce((s,x)=> s + (+x.amount||0), 0);
   const _mac = (typeof _bkV2IsMac==='function') ? _bkV2IsMac() : true;
@@ -66965,7 +67025,7 @@ function pfmPrintReport(){
     const bal = inv ? ((typeof acctInvoiceBalance==='function') ? acctInvoiceBalance(inv) : 0) : tot;
     const paid = Math.max(0, tot - bal);
     const pct  = tot>0 ? Math.round(paid/tot*100) : 0;
-    const ss   = (b.paymentSlips||[]);
+    const ss   = laPaySlips(b);
     const pays = inv ? (SB_PAYMENTS||[]).filter(p => p.invoiceId===inv.id && p.type!=='refund') : [];
 
     /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · นับเฉพาะก้อนที่รับแล้ว ไม่นับส่วนที่เหลือเป็นค้างชำระ */
