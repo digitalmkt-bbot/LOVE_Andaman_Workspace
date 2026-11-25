@@ -95,6 +95,41 @@
     });
     return best ? best.unbilled : null;
   }
+  /* §dashTodo (2026-11-25, UI parity N4/F3) · the header's "⚠ ต้องจัดการ N" chip adds three counts that legacy took from
+     every booking in the browser (_dashBoardData): pending approvals, weather follow-ups still open, bookings cancelled
+     today. SB_BOOKINGS holds only the loaded days on main, so the chip read "✓ วันนี้เคลียร์" while legacy said 10.
+     They now come from the server, all dates, as legacy counted them:
+       pend   GET /v1/bookings?status=pending_approval&limit=1 → total
+       wx     GET /v1/weather-closures (open closures, every date) → Σ counts.awaiting + counts.notified; wxDate = the
+              earliest such closure's day (legacy: the earliest trip date of those bookings, where the "ทริป cancel" row goes)
+       cxl    /v1/dashboard bookings.cancelled_today (the server's cancelledOn(today), company-wide like unbilled)
+     Until an answer lands the legacy figure stays; each landing redraws the Dashboard once. */
+  var TODO_FROM = '2000-01-01';
+  function paintDash(){ if(O.activeView() === 'dashboard' && typeof window.renderDash === 'function') window.renderDash(); }
+  function todoLanded(){ if(O.whenFree) O.whenFree(paintDash); else if(!O.busy()) paintDash(); }
+  function todoCounts(){
+    if(!O.enabled() || !O.srv) return null;
+    var out = {};
+    var p = O.srv.read('dash-todo|pend', '/v1/bookings', { status: 'pending_approval', limit: 1 }, todoLanded);
+    if(p && Number.isFinite(+p.total)) out.pend = Math.max(0, +p.total);
+    var to = O.shift(O.today(), 730);
+    var w = O.srv.read('dash-todo|wx', '/v1/weather-closures', { from: TODO_FROM, to: to }, todoLanded);
+    if(w && Array.isArray(w.weather_closures)){
+      var n = 0, first = '';
+      w.weather_closures.forEach(function(c){
+        var k = c && c.counts ? (+c.counts.awaiting || 0) + (+c.counts.notified || 0) : 0;
+        if(k > 0){ n += k; if(!first || c.service_date < first) first = c.service_date; }
+      });
+      out.wx = n; if(first) out.wxDate = first;
+    }
+    var best = null;
+    Object.keys(cache).forEach(function(k){
+      var j = cache[k];
+      if(j && j.bookings && Number.isFinite(+j.bookings.cancelled_today) && (!best || String(j.generated_at || '') > String(best.generated_at || ''))) best = j;
+    });
+    if(best && String(best.generated_at || '').slice(0, 10) >= O.shift(O.today(), -1)) out.cxl = +best.bookings.cancelled_today;
+    return out;
+  }
   var legacyBoard = window._dashBoardData;
   if(typeof legacyBoard === 'function'){
     var board = function(){
@@ -105,6 +140,8 @@
         d.unB = Math.round(+u.baht || 0);
         d.unAg = Math.max(0, Math.round(+u.agents || 0));
       }
+      var t = d ? todoCounts() : null;
+      if(t) Object.keys(t).forEach(function(k){ d[k] = t[k]; });
       return d;
     };
     board.__ops = true; window._dashBoardData = board;
