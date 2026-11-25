@@ -194,7 +194,7 @@
   function replaceTemplates(rows){var m=listTemplates();Object.keys(m).forEach(function(k){delete m[k];});(rows||[]).forEach(function(t){var x=fromServerTemplate(t);m[x.id]=x;});return m;}
   function loadTemplates(){
     if(!enabled()) return Promise.resolve(false); if(state.templates.loading) return state.templates.loading; listTemplates();
-    state.templates.loading=O.get('/v1/contract-templates',{active:'all',detail:'full'}).then(function(j){var rows=(j&&j.contract_templates)||[];if(rows.every(function(x){return x.sections_effective;}))return rows;/* older server: summaries only, read each */return Promise.all(rows.map(function(x){return O.get('/v1/contract-templates/'+enc(x.id));}));})
+    state.templates.loading=O.get('/v1/contract-templates',{active:'all',detail:'full'}).then(function(j){var rows=(j&&j.contract_templates)||[];state.sampleAgentId=(j&&typeof j.sample_agent_id==='string')?j.sample_agent_id:null;if(rows.every(function(x){return x.sections_effective;}))return rows;/* older server: summaries only, read each */return Promise.all(rows.map(function(x){return O.get('/v1/contract-templates/'+enc(x.id));}));})
       .then(function(rows){replaceTemplates(rows);state.templates.loaded=true;state.templates.failed=false;redraw();return true;})
       .catch(function(e){state.templates.failed=true;state.templates.loaded=false;var m=listTemplates();Object.keys(m).forEach(function(k){delete m[k];});O.fail('Could not load contract templates',e);return false;})
       .finally(function(){state.templates.loading=null;}); return state.templates.loading;
@@ -223,6 +223,12 @@
     if(typeof originals.cttToggleActive==='function') window.cttToggleActive=function(id){if(!enabled())return originals.cttToggleActive.apply(this,arguments);var t=listTemplates()[id];if(!t)return;return templateEdit(id,'active',!t.active);};
     if(typeof originals.cttDelete==='function') window.cttDelete=function(id){if(!enabled())return originals.cttDelete.apply(this,arguments);var t=listTemplates()[id];if(!t||!confirm('Delete contract template "'+t.name+'"?'))return;return O.queue(function(){return O.del('/v1/contract-templates/'+enc(id));}).then(function(){delete listTemplates()[id];countsStale=true;redraw();}).catch(function(e){O.fail('Could not delete contract template',e);});};
     if(typeof originals.cttResetKey==='function') window.cttResetKey=function(id,key,lang){if(!enabled())return originals.cttResetKey.apply(this,arguments);var t=clone(listTemplates()[id]);if(!t)return;var L=lang==='th'?'th':'en',v=typeof CT_DOC_I18N!=='undefined'&&CT_DOC_I18N[L]&&CT_DOC_I18N[L][key];if(v===undefined)return;t.text=t.text||{en:{},th:{}};t.text[L]=t.text[L]||{};t.text[L][key]=clone(v);return templateWrite(id,templateBody(t)).catch(function(e){O.fail('Could not reset contract template text',e);});};
+    /* §ctplSampleId (2026-11-25) · the preview's sample agent is the server's (GET /v1/contract-templates `sample_agent_id`, legacy
+       cttSampleAgent over its agents in id order). Legacy's own pick walks SB_AGENTS, which here is the name-sorted /v1/agents list with
+       no programme periods, so it drew "109 THAILAND TRAVEL" where legacy draws "Club Wyndham". No server id, or an agent not in the
+       list: legacy's pick, as before. */
+    originals.cttSampleAgent=window.cttSampleAgent;
+    if(typeof originals.cttSampleAgent==='function') window.cttSampleAgent=function(){if(!enabled())return originals.cttSampleAgent.apply(this,arguments);var a=state.sampleAgentId?agentRow(state.sampleAgentId):null;return a||originals.cttSampleAgent.apply(this,arguments);};
     /* oninput handlers: one save per pause in typing (600 ms) with the latest value, not one write per keystroke */
     ['cttSetText','cttSetHex'].forEach(function(n){
       var f=window[n]; if(typeof f!=='function') return;

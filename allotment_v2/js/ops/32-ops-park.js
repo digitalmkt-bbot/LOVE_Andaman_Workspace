@@ -54,13 +54,19 @@
     if(!pier || !date) return Promise.resolve(null);
     var key = pier + '|' + date, my = ++st.seq;
     st.pending = key;
-    // The going heads by nationality (pk2BoatS's pax8) are the server's booked.nationality of the pier day's boats.
+    // The going heads by nationality (pk2BoatS's pax8) are the server's booked.nationality of the pier day's boats, or its
+    // booked.nationality_real when a trip on the boat has a real nationality split (has_thai_passengers: legacy pkTkData's
+    // `P.hasNat ? P.n : P`, §parkNat 2026-11-25; the month overview's server figures make the same choice).
     return Promise.all([
       O.get('/v1/pier-office/' + enc(pier) + '/park-tickets', { date: date }),
       O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats')
     ]).then(function(r){
       var j = r[0], nat = {};
-      ((r[1] && r[1].boats) || []).forEach(function(b){ if(b.booked && b.booked.nationality) nat[b.boat_id] = b.booked.nationality; });
+      ((r[1] && r[1].boats) || []).forEach(function(b){
+        var k = b.booked || {};
+        var src = (k.has_thai_passengers && k.nationality_real) ? k.nationality_real : k.nationality;
+        if(src) nat[b.boat_id] = src;
+      });
       if(my !== st.seq) return j;                      // a later request for another day won
       st.pending = ''; st.key = key; st.nat = nat;
       st.boats = (j && j.boats) || []; st.tickets = (j && j.tickets) || [];
