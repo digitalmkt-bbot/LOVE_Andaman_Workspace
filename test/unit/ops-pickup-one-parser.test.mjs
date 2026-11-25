@@ -65,3 +65,20 @@ test('the booking read prints the typed text the server kept; a save sends what 
   const sent = plain(body.trips);
   assert.deepEqual([sent[0].pickupTime, sent[0].pickup_text, sent[1].pickup_text], ['05:20', '05:20 a.m.', null], 'the window and the text; an empty box clears it');
 });
+
+// §pickupTyped3 (2026-11-25): an alternate pickup's own time prints as typed too (operation-backend migration 615, van part pick_text).
+test('an alternate-pickup part prints its own time as typed, else its window joined', () => {
+  const rt = runtime({ files: ['40-ops-bookings.js'] });
+  const part = (idx, alt) => ({ idx, source: 'alt_pickup', ad: 1, chd: 0, inf: 0, foc: 0, group: null, sequence: null, return_van_id: null,
+    alt: { pick_area_id: 'pa_kata', pick_hotel: 'Kata Palm', pick_zone: 'PK', drop_area_id: null, drop_hotel: null, drop_zone: null, alt_who: 'Mr B', ...alt } });
+  const read = rt.O.bookings.fromServer({ id: 'ob_8', code: 'BK-8', status: 'confirmed', passengers: [], trips: [
+    { id: 't1', route_id: 'r1', service_date: D, pax: { ad_fr: 3 }, pickup_time: '07:00',
+      operations: { pickup_time_final: null, pickup_time_final_end: null, pickup_final_at_pier: false, pickup_final_text: null, van_parts: [
+        { idx: 0, source: 'main', ad: 1, chd: 0, inf: 0, foc: 0, group: null, sequence: null, return_van_id: null, alt: null },
+        part(1, { pick_time: '08:00', pick_time_end: null, pick_at_pier: false, pick_text: '08.00 a.m.' }),
+        part(2, { pick_time: '07:15', pick_time_end: '07:30', pick_at_pier: false, pick_text: null }),
+      ] } },
+  ] });
+  const splits = plain(read.ops).vanSplits;
+  assert.deepEqual(splits.slice(1).map((s) => s.pickTime), ['08.00 a.m.', '07:15-07:30']);
+});
