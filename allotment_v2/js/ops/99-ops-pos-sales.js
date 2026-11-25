@@ -16,8 +16,8 @@
    renderPosSales                    asks for the day's (or the analysed days') boat plan: laOps.deployments.ensureDays.
 
    The rule "a split never exceeds the pieces sold" is the server's (400 alloc_over); legacy's own clamp still runs first.
-   Not here (sync 11-12, listed in the PR): the analysis' boats / pax / guides / nationalities are still worked out in the
-   browser from TRIPS and SB_BOOKINGS, so a day outside the loaded booking window counts no boats.
+   pslBoats / pslBoatGuides / pslBoatNats ← GET /v1/pier-office/pos-sales/boats (§opsPosBoats, 2026-11-26): before that the analysis' boats / pax / guides / nationalities were worked out in the
+   browser from TRIPS and SB_BOOKINGS, so a day outside the loaded booking window counted no boats.
    Off unless laOps.enabled() and the login is not an agent's. Load order: after ops/61-ops-config-store.js. Classic script.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -178,6 +178,48 @@
     }
     return orig.apply(this, [].slice.call(arguments, 1));
   });
+
+  /* §opsPosBoats (2026-11-26, parity G6) · the boats a day's sales are split over, their heads, guides and nationalities, are the
+     server's (GET /v1/pier-office/pos-sales/boats?pier=&from=&to=, a month at a time): from TRIPS and SB_BOOKINGS the browser saw only
+     the loaded booking window, so the analysis read "ลูกค้า 2 คน · 1 เที่ยว" (legacy 4,865 · 111). Legacy's own answer is drawn only
+     until the month lands, and offline. */
+  var BM = {};                   // 'pier|YYYY-MM' -> { days: { date: [boat] } } once read; { loading: true } while asked
+  function monthEnd(mon){ var p = mon.split('-'), d = new Date(Date.UTC(+p[0], +p[1], 0)); return mon + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+  function boatsMonth(pier, date){
+    var mon = String(date || '').slice(0, 7), k = pier + '|' + mon, c = BM[k];
+    if((!c || (c.stale && !c.loading)) && /^\d{4}-\d{2}$/.test(mon) && PIERS.indexOf(pier) >= 0){
+      c = BM[k] = { days: c && c.days, loading: true };   // a stale month is drawn while it is read again
+      O.get('/v1/pier-office/pos-sales/boats', { pier: pier, from: mon + '-01', to: monthEnd(mon) }).then(function(j){
+        var was = JSON.stringify(BM[k] && BM[k].days); BM[k] = { days: (j && j.days) || {} };
+        if(was !== JSON.stringify(BM[k].days)) redraw();
+      }, function(e){ if(BM[k] && BM[k].days) BM[k] = { days: BM[k].days }; else delete BM[k]; O.fail('POS boats did not load', e); });
+    }
+    return (c && c.days) || null;
+  }
+  function boatOn(date, bid){
+    var mon = String(date || '').slice(0, 7), hit = null, known = false;
+    PIERS.forEach(function(p){ var c = BM[p + '|' + mon]; if(c && c.days){ known = true; (c.days[date] || []).forEach(function(b){ if(b.id === bid) hit = b; }); } });
+    return known ? (hit || false) : null;
+  }
+  wrap('pslBoats', function(orig, pier, date){
+    if(!active()) return orig.apply(this, [].slice.call(arguments, 1));
+    var days = boatsMonth(pier, date);
+    if(!days) return orig.apply(this, [].slice.call(arguments, 1));
+    return (days[date] || []).map(function(b){ return { id: b.id, name: b.name, pax: +b.pax || 0, route: b.route, rid: b.rid }; });
+  });
+  wrap('pslBoatGuides', function(orig, date, bid){
+    if(!active()) return orig.apply(this, [].slice.call(arguments, 1));
+    var b = boatOn(date, bid);
+    if(b === null) return orig.apply(this, [].slice.call(arguments, 1));
+    return b ? (b.guides || []).slice() : [];
+  });
+  wrap('pslBoatNats', function(orig, date, bid){
+    if(!active()) return orig.apply(this, [].slice.call(arguments, 1));
+    var b = boatOn(date, bid);
+    if(b === null) return orig.apply(this, [].slice.call(arguments, 1));
+    return b ? (b.nats || []).map(function(x){ return { c: x.c, n: +x.n || 0 }; }) : [];
+  });
+  if(O.onWrite) O.onWrite(function(){ Object.keys(BM).forEach(function(k){ if(BM[k] && BM[k].days && !BM[k].loading) BM[k].stale = true; }); });
 
   window.__laOpsPosSales = { M: M, readMonth: readMonth, writeMonth: writeMonth, loadMonth: loadMonth, loadAll: loadAll, fromServer: fromServer, toServer: toServer };
 })();

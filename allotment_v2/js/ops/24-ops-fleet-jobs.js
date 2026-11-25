@@ -231,8 +231,13 @@
     if(idx >= 0) target.splice(idx, 1);
   }
 
+  /* legacy FL_MAINT is in its server's row order (ORDER BY id, en_US collation): the screens that take "the first open job of a boat"
+     (Fleet Deployment's repair runway, the Fleet Report's longest jobs) depend on it. The server lists newest first, so the board
+     showed MJ-018 where legacy shows MJ-013 · parity G11 */
+  var JOB_ORDER = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('en', { sensitivity: 'base', ignorePunctuation: true }) : null;
+  function byLegacyId(a, b){ var x = String((a && a.id) || ''), y = String((b && b.id) || ''); return (JOB_ORDER ? JOB_ORDER.compare(x, y) : 0) || (x < y ? -1 : x > y ? 1 : 0); }
   function replaceJobs(rows){
-    var mapped = (rows || []).map(fromServerJob);
+    var mapped = (rows || []).map(fromServerJob).sort(byLegacyId);
     var target = listJobs();
     target.length = 0;
     Array.prototype.push.apply(target, mapped);
@@ -438,7 +443,8 @@
   /* flwParked: why a job is laid up on purpose (donor, off season, documents expired, charter, parked on the board)
      = the server's parked_reason label on the job. */
   wrap('flwParked', function(orig, m){
-    if(m && m._fromOpsBackend && m.parkedReason !== undefined) return m.parkedReason ? m.parkedReason.label : '';
+    // legacy answers flwT(label): the screen's language, Thai by default (parity G10)
+    if(m && m._fromOpsBackend && m.parkedReason !== undefined) return m.parkedReason ? (typeof window.flwT === 'function' ? window.flwT(m.parkedReason.label) : m.parkedReason.label) : '';
     return orig.apply(this, [].slice.call(arguments, 1));
   });
   wrap('flBoardLane', function(orig, m){

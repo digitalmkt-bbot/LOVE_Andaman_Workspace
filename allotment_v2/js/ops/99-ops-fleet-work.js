@@ -23,7 +23,9 @@
 
   function enc(x){ return encodeURIComponent(x); }
   function num(v){ var n = Number(v); return Number.isFinite(n) ? n : 0; }
-  function viewOn(){ try{ return !!(O.activeView && O.activeView() === 'fl-work'); }catch(_){ return false; } }
+  /* the work board draws into #fl-work-wrap, also when it is reached from another fleet page (Maintenance · Overview), where the
+     active nav item is not fl-work: the oil chip stayed on its first, empty answer ('ปกติ' where legacy has 'ใกล้ถึง 3') · parity G10 */
+  function viewOn(){ try{ var v = document.getElementById('view-fl-work'); return !!((v && v.classList.contains('active') && document.getElementById('fl-work-wrap')) || (O.activeView && O.activeView() === 'fl-work')); }catch(_){ return false; } }
   function redraw(){
     try{ if(viewOn() && typeof window.flRenderWork === 'function' && !(O.busy && O.busy())) window.flRenderWork(); }catch(_){}
   }
