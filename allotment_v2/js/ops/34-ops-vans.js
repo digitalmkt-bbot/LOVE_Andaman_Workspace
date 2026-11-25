@@ -623,7 +623,7 @@
       var changes = {};
       var picks = {};
       body.van_parts.forEach(function(x){
-        if(Object.prototype.hasOwnProperty.call(x, 'pick_time')) picks[+x.idx] = { pick_time: x.pick_time, pick_time_end: x.pick_time_end == null ? null : x.pick_time_end, pick_at_pier: !!x.pick_at_pier };
+        if(Object.prototype.hasOwnProperty.call(x, 'pick_time')) picks[+x.idx] = { pick_time: x.pick_time, pick_time_end: x.pick_time_end == null ? null : x.pick_time_end, pick_at_pier: !!x.pick_at_pier, pick_text: x.pick_text == null ? null : x.pick_text };
         else changes[+x.idx] = x.return_van_id || null;
       });
       return O.get('/v1/bookings/' + enc(b.opsId)).then(function(bk){
@@ -635,7 +635,7 @@
           var row = { idx: idx, ad: p.ad, chd: p.chd, inf: p.inf, foc: p.foc,
             group_id: p.group ? p.group.id : null, sequence: p.sequence == null ? null : p.sequence,
             return_van_id: Object.prototype.hasOwnProperty.call(changes, idx) ? changes[idx] : (p.return_van_id || null) };
-          if(Object.prototype.hasOwnProperty.call(picks, idx)){ row.pick_time = picks[idx].pick_time; row.pick_time_end = picks[idx].pick_time_end; row.pick_at_pier = picks[idx].pick_at_pier; }   // only the part being timed; the server refuses a part with no pickup of its own
+          if(Object.prototype.hasOwnProperty.call(picks, idx)){ row.pick_time = picks[idx].pick_time; row.pick_time_end = picks[idx].pick_time_end; row.pick_at_pier = picks[idx].pick_at_pier; row.pick_text = picks[idx].pick_text; }   // only the part being timed; the server refuses a part with no pickup of its own
           return row;
         });
         if(Object.keys(changes).concat(Object.keys(picks)).some(function(idx){ return !seen[idx]; })){ var e = new Error('The selected split part no longer exists'); e.code = 'part_missing'; throw e; }
@@ -686,11 +686,13 @@
     if(w === null) return null;
     var pidx = idxOfSplit(sp, idx);
     var row = windowBody(w, 'pick_time'); row.idx = pidx;
+    /* §pickupTyped3 (2026-11-25) · the text as typed goes too (pick_text, operation-backend migration 615): legacy prints 08.00 a.m. as typed */
+    row.pick_text = String(val == null ? '' : val).trim() || null;
     return tripPatch(b, d, { van_parts: [row] }, function(j){
       var parts = j && j.trip && j.trip.operations && j.trip.operations.van_parts || [];
       var p = parts.find(function(x){ return +x.idx === pidx; });
       var a = p && p.alt;
-      if(sp) sp.pickTime = a ? O.pickupText(a.pick_time, a.pick_time_end, a.pick_at_pier) : O.pickupText(w.start, w.end, w.pier);
+      if(sp) sp.pickTime = a ? (a.pick_text || O.pickupText(a.pick_time, a.pick_time_end, a.pick_at_pier)) : (row.pick_text || O.pickupText(w.start, w.end, w.pier));
     }, 'Pickup time not saved');
   });
   wrap('bookingV2SetReturnSameVan', function(bkId, val, date){
