@@ -70,11 +70,24 @@
   function allBookings(){ return (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : []; }
 
   /* redraw the screen on show (unless someone is typing in it) · the un-wrapped renders, so no new load */
-  function redraw(){
+  function redraw(){ if(O.whenFree) O.whenFree(redrawNow); else if(!(O.busy && O.busy())) redrawNow(); }   // §busyVisible · kept, never dropped
+  /* §vjFirstPaint2 (2026-11-25, UI parity N2) · before the day's /operations/van-jobs answer has landed once, legacy's
+     render walks the bookings' van groups against SB_VEHICLES, which then still holds legacy's 6 demo vans: every job
+     drew as "veh11 · 2/? · บริษัท · เกินที่นั่ง · ยังไม่ส่ง" and the strip read "55 บริษัท+เช่า · 2 รถร่วม · กำกับไทย 0".
+     Until that answer (or its failure) the screen shows the loading line; the answer seeds the vans (seedVans) and the
+     sent marks (applyJobs), then the screen draws once, right. Once the vans' window has landed this never applies. */
+  var jobsFailed = {};
+  function vjDate(){ try{ return typeof _vanJobsDate !== 'undefined' ? _vanJobsDate : ''; }catch(_){ return ''; } }
+  function firstPaintPending(date){ return !!(O.enabled() && !vansEver && date && !dayRead[date] && !jobsFailed[date]); }
+  function vjPlaceholder(){
+    var host = typeof document !== 'undefined' && document.getElementById ? document.getElementById('vanjobs-host') : null;
+    if(host) host.innerHTML = O.loadingHtml('Loading van jobs…');
+  }
+  function redrawNow(){
     try{
-      if(O.busy && O.busy()) return;
       var view = O.activeView ? O.activeView() : '';
-      if(view === 'vanjobs' && originals.renderVanJobs) originals.renderVanJobs();
+      if(view === 'vanjobs' && firstPaintPending(vjDate())) vjPlaceholder();
+      else if(view === 'vanjobs' && originals.renderVanJobs) originals.renderVanJobs();
       else if(view === 'vancheckin' && originals.renderVanCheckin) originals.renderVanCheckin();
       else if(view === 'booking' && typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep();   // w6: not from another screen - bookingV2RenderTab2 runs bkOvnHealSpans, which re-created a nightly charter cell just removed in Boat Operation before its DELETE was sent
     }catch(_){}
@@ -467,7 +480,7 @@
        legacy's walk over bookings that have no van yet, "1 job · 436 pax ยังไม่จัด" against the server's 57 jobs
        (UI parity run 2026-11-23, docs/ui-parity/findings-2026-11-23.md F1). The later stage reuses this answer. */
     var jobs = loadJobs(date).then(function(j){ seedVans(j); redraw(); return j; })
-      .catch(function(e){ console.warn('[ops] van jobs did not load · ' + (e && e.message)); });
+      .catch(function(e){ jobsFailed[date] = true; redraw(); console.warn('[ops] van jobs did not load · ' + (e && e.message)); });
     dayLoading[date] = Promise.all([
       loadVans(date).catch(function(e){ console.warn('[ops] vans did not load · ' + (e && e.message)); }),
       loadNames().catch(function(e){ console.warn('[ops] Thai pickup names did not load · ' + (e && e.message)); }),
@@ -485,7 +498,7 @@
      driver): SB_VEHICLES then holds legacy's 6 demo vans, which drew as empty cards ("Minibus 1", "Partner Van A").
      Replace them with the jobs' vans so the cards read "VAN1 · พี่เอก · 066-… · 7/13", not "veh11 — — 7/?".
      applyVans replaces the whole list (and the drivers) when the window lands, so nothing seeded here outlives it. */
-  var seeded = false;
+  var seeded = false, catalogueIn = false;   // catalogueIn: SB_VEHICLES holds GET /operations/vans (ensureCatalogue below)
   function seedVans(j){
     if(vansEver) return;
     var list = store('SB_VEHICLES'), jobs = (j && j.jobs) || [];
@@ -508,8 +521,10 @@
 
   wrap('renderVanJobs', function(){
     syncSreq();
-    var r = originals.renderVanJobs ? originals.renderVanJobs.apply(this, arguments) : undefined;
-    try{ if(typeof _vanJobsDate !== 'undefined') loadDay(_vanJobsDate); }catch(_){}
+    var date = vjDate(), r;
+    if(firstPaintPending(date)) vjPlaceholder();                                   // §vjFirstPaint2
+    else r = originals.renderVanJobs ? originals.renderVanJobs.apply(this, arguments) : undefined;
+    if(date) loadDay(date);
     return r;
   });
   wrap('renderVanCheckin', function(){
@@ -520,13 +535,39 @@
   /* by-trip Van mode shows the day's stops too · load them with the groups */
   wrap('bookingV2OpsVansDay', function(date){ return loadDay(date); });
 
+  /* §vanCatalogue (2026-11-25, UI parity N3) · a screen that only needs the vans' names and registered plates
+     (Re-confirm, Pier Check-in) must not wait for the 63-day window (/operations/van-days, ~11 s) and must not draw
+     legacy's 6 demo vans meanwhile ("กข 5678", "พง 2233"). GET /operations/vans (the catalogue, ~30 ms) fills
+     SB_VEHICLES once; the demo vans go at once. The window, when a van screen loads it, replaces the list as before.
+     Resolves true when it changed the list (the caller redraws). */
+  var catalogueP = null;
+  function ensureCatalogue(){
+    if(!O.enabled() || vansEver || catalogueIn) return Promise.resolve(false);
+    var list = store('SB_VEHICLES');
+    if(list && !seeded){ list.length = 0; seeded = true; }      // the demo vans are not the fleet
+    if(catalogueP) return catalogueP;
+    catalogueP = O.get('/operations/vans').then(function(j){
+      if(vansEver || !list) return false;
+      var old = {}; list.forEach(function(v){ if(v && v.id) old[v.id] = v; });
+      var next = ((j && j.vans) || []).map(function(v){ return vehicleOf(v, old[v.id]); });
+      list.length = 0; Array.prototype.push.apply(list, next);
+      catalogueIn = true;
+      return true;
+    }, function(e){
+      catalogueP = null;
+      console.warn('[ops] the van list did not load · ' + (e && e.message));
+      return false;
+    });
+    return catalogueP;
+  }
+
   /* the Transfer Fleet adapter (35-ops-vehicles.js) keeps these caches in step with what it writes */
   O.vanJobs = {
     loadDay: loadDay, legacyKeysOf: legacyKeysOf,
     loadJobs: loadJobs, redraw: redraw,
     jobKey: function(date, legacyKey){ return jobKeys[date + '::' + legacyKey] || null; },
     dayRead: function(date){ return dayRead[date] || null; },
-    loadVans: loadVans, vehicleOf: vehicleOf, vansLoaded: function(){ return vansEver; },
+    loadVans: loadVans, vehicleOf: vehicleOf, vansLoaded: function(){ return vansEver; }, ensureCatalogue: ensureCatalogue,
     putCell: function(c){ if(c && c.van_id) cells[c.van_id + '|' + c.service_date] = c; },
     cellOf: function(vanId, date){ return cells[vanId + '|' + date] || null; },      // w5-d: status_on / zone_on / usable of the day (83-ops-fleet-server.js)
     putRange: function(kind, r){ (kind === 'zone' ? zoneRanges : statusRanges)[r.id] = r; },

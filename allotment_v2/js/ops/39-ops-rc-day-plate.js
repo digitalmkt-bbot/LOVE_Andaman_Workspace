@@ -58,12 +58,16 @@
     var orig = window[name];
     if(typeof orig !== 'function') return;
     window[name] = function(){
+      /* §vanCatalogue · the real vans (names, registered plates) instead of legacy's demo vans; the demo list is
+         emptied before this render, so a plate is blank for the ~30 ms the catalogue takes, never "กข 5678" */
+      var cat = (O.enabled() && O.vanJobs && typeof O.vanJobs.ensureCatalogue === 'function') ? O.vanJobs.ensureCatalogue() : null;
       var r = orig.apply(this, arguments);
       if(!O.enabled()) return r;
       var d = ymd(dateOf());
-      if(d) loadDay(d).then(function(changed){
+      var again = function(changed){
         if(changed && ymd(dateOf()) === d && document.getElementById(hostId) && typeof window[name] === 'function') window[name]();
-      });
+      };
+      if(d) Promise.all([loadDay(d), cat]).then(function(x){ again(x[0] || x[1]); });
       return r;
     };
   }
