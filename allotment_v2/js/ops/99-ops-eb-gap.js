@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════
    §opsEbGap (2026-10-20) · FE-3d · Executive Board · Gap to Target tab and the allocation window on the server's answers
    gap    GET /v1/exec-board/gap?range=h14|month|next&pier=   (cells[], decisions[] with the server's suggestion, sales[], open_days)
-          + GET /v1/exec-board/overview?period=today          (only for the "lead time" card: lead_by_market)
+          (the "lead time" card is the gap answer's lead: legacy leadCompact, worked out by the server; K6 2026-11-26)
    alloc  GET /v1/exec-board/alloc/{month}?pier=              (shares, calc, seats, families, sales, lf, lf_default)
           PUT /v1/exec-board/alloc/{month} {shares, lf}       (the server writes only the rows that changed)
           DELETE /v1/exec-board/alloc/{month}                 (back to the computed shares)
@@ -33,10 +33,10 @@
       + c.routes.map(function(s){ return '\n  ' + X.variantOf(s.name, F.name) + ' ' + s.booked + '/' + s.capacity + (s.break_even ? ' · คุ้มทุน ' + s.break_even : ''); }).join('') + (c.in_today ? '\nเข้ามาวันนี้ +' + c.in_today : '') + '\nกดเพื่อเปิด By trip';
     return '<button class="eg-c ' + cls + '" title="' + E(tip) + '" onclick="ebGoTrip(\'' + E(d) + '\',\'' + E(c.routes[0].route_id) + '\')"><b>' + (c.worst === 'full' ? 'เต็ม' : num(c.free)) + '</b>' + (c.in_today ? '<i>+' + num(c.in_today) + '</i>' : '') + (c.behind && c.worst !== 'full' ? '<small>−' + num(c.behind) + '</small>' : '') + '</button>';
   }
-  /* legacy leadCompact: median lead time per market, the six slowest; the rows are the overview's (top 8 markets by pax, 5+ trips) */
-  function leadCompact(OV){
-    if(!OV) return '<div class="eb-none">กำลังโหลด…</div>';
-    var rows = (OV.lead_by_market || []).slice().sort(function(a, b){ return b.median - a.median; }).slice(0, 6);
+  /* legacy leadCompact: median lead time per market, the six slowest (5+ trips), as the server's gap answer sends them (G.lead) */
+  function leadCompact(LD){
+    if(!LD) return '<div class="eb-none">กำลังโหลด…</div>';
+    var rows = (LD.rows || []).slice(0, 6), OV = { lead_within7_pct: LD.within7_pct };
     if(!rows.length) return '<div class="eb-none">ยังมีข้อมูลไม่พอ</div>';
     var mx = Math.max.apply(null, rows.map(function(r){ return r.median; }).concat([1]));
     return rows.map(function(r){ return '<div class="eg-ld"><span>' + E(r.name) + '</span><span class="b"><i style="width:' + Math.max(4, Math.round(r.median * 100 / mx)) + '%"></i></span><span class="n">' + r.median + ' วัน</span></div>'; }).join('')
@@ -101,13 +101,12 @@
             + '<span class="eg-opt">' + opts.map(function(x){ return '<b class="' + (x[0] === sg.action ? 'on' : '') + '">' + E(x[1]) + '</b>'; }).join('') + '<button onclick="ebGoTrip(\'' + E(s.date) + '\',\'' + E(s.route_id) + '\')">By trip →</button></span></div>'; }).join('')
           + '<div class="eb-foot">ตัวเลือกที่ไฮไลต์คือข้อเสนอของระบบจากเส้นโค้งและจุดคุ้มทุน · ปุ่มเป็นทางลัด ไม่มีอะไรเกิดขึ้นเอง</div>'
         : '<div class="eb-none">ไม่มีเที่ยวที่ต้องตัดสินใจตอนนี้</div>') + '</div>';
-    var lead = '<div class="eb-card"><h2>ใครจองล่วงหน้าแค่ไหน <span class="eb-tag">lead time มัธยฐาน · 90 วัน</span></h2>' + leadCompact(xs && xs[0]) + '</div>';
+    var lead = '<div class="eb-card"><h2>ใครจองล่วงหน้าแค่ไหน <span class="eb-tag">lead time มัธยฐาน · 90 วัน</span></h2>' + leadCompact(G.lead) + '</div>';
     return head + grid + '<div class="eb-grid eb-r3" style="margin-top:12px">' + salesCard + '<div style="display:flex;flex-direction:column;gap:12px;min-width:0">' + decH + lead + '</div></div>';
   }
 
   O.eb.views.gap = {
     path: function(EB){ return ['/v1/exec-board/gap', { range: EB.gp === 'h' || !EB.gp ? 'h14' : EB.gp, pier: EB.pier || '' }]; },
-    extra: function(EB){ return [['/v1/exec-board/overview', { period: 'today', pier: EB.pier || '' }]]; },
     draw: viewGap
   };
 

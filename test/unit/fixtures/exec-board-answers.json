@@ -1552,6 +1552,7 @@
   }
  },
  "gap": {
+  "lead": { "rows": [{ "code": "house", "name": "House / Company", "pax": 40, "trips": 12, "median": 20 }, { "code": "m1", "name": "Market One", "pax": 285, "trips": 53, "median": 5 }], "within7_pct": 66 },
   "range": {
    "key": "h14",
    "from": "2026-10-21",
