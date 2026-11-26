@@ -1,0 +1,16 @@
+const fs=require('fs');const s=fs.readFileSync(process.argv[2],'utf8');
+const cut=(a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
+const V={'fl-prop-brand':'Solas','fl-prop-serial':'','fl-prop-diameter':'15.5','fl-prop-pitch':'17','fl-prop-blades':'3','fl-prop-material':'Stainless','fl-prop-rotation':'Standard','fl-prop-hub':'','fl-prop-cup':'no','fl-prop-cost':'0','fl-prop-buydate':'','fl-prop-note':'','fl-prop-gb-sel':'','fl-prop-spare-loc':'pier:tublamu'};
+global.document={getElementById:id=>({value:V[id]||''})};
+global.FL_PROPELLERS=[{id:'p1',serial:'AL1-P-RH-17-01',status:'active',boatId:'b1'},{id:'pA',serial:'AL1-P-RH-17-01',status:'spare',spareLocation:'pier:tublamu'},{id:'p9',serial:'ZEU-1',status:'spare',spareLocation:'pier:panwa'}];
+global.FL_GEARBOXES=[];global.getBoat=id=>({name:'Aluminous1'});global.flGetEng=()=>null;global.flParseSpareLoc=l=>({label:'คลัง '+l});
+global.flPropStValues=['active','spare'];global.flSelSts={prop:1};global.flEditPropId=null;global.LA_UID=p=>p+'NEW'+FL_PROPELLERS.length;let saved=0,msgs=[];global.flSave=()=>saved++;global.closeModal=()=>{};global.flRenderAsset=()=>{};global.alert=m=>msgs.push(m);
+eval(cut('function flPropSerialKey(','flLoad();')+';global.S=flSavePropeller;global.W=flPropWhere');
+const ok=(c,m)=>{console.log((c?'PASS':'FAIL')+' '+m);if(!c)process.exitCode=1};
+V['fl-prop-serial']='al1-p-rh-17-01 '; S(); ok(saved===0&&FL_PROPELLERS.length===3&&/มีอยู่ในระบบแล้ว/.test(msgs[0])&&/Aluminous1/.test(msgs[0]),'add with existing serial (case/space differ) is blocked and says where');
+V['fl-prop-serial']='AL1-NEW-01'; S(); ok(saved===1&&FL_PROPELLERS.length===4,'add with new serial saves');
+flEditPropId='pA'; V['fl-prop-serial']='AL1-P-RH-17-01'; V['fl-prop-note']='x'; S(); ok(saved===2&&FL_PROPELLERS[1].note==='x','editing an already-duplicate record without changing serial still saves');
+V['fl-prop-serial']='ZEU-1'; S(); ok(saved===2&&FL_PROPELLERS[1].serial==='AL1-P-RH-17-01','changing serial to another existing one is blocked');
+V['fl-prop-serial']='AL1-P-RH-17-02'; S(); ok(saved===3&&FL_PROPELLERS[1].serial==='AL1-P-RH-17-02','changing to a free serial saves');
+flEditPropId=null; V['fl-prop-serial']=''; S(); ok(saved===4,'blank serial not treated as duplicate');
+ok(/สำรอง · คลัง pier:panwa/.test(W(FL_PROPELLERS[2])),'where text for a spare');

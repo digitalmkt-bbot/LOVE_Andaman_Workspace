@@ -23446,6 +23446,7 @@ function flSaveAddSpare(){
     const sizeMatch=size.match(/^([\d.]+)[×x]([\d.]+)$/);
     const diameter=sizeMatch?parseFloat(sizeMatch[1]):15.5;
     const pitch=sizeMatch?parseFloat(sizeMatch[2]):17;
+    if(flPropDupBlock(serial, null)) return;   /* §propDup */
     const ids=FL_PROPELLERS.map(p=>parseInt((p.id||'p0').replace('p',''))||0);
     const newId='p'+(Math.max(...ids,0)+1);
     FL_PROPELLERS.push({id:newId,boatId:null,gearboxId:null,brand,serial,diameter,pitch,size,blades:'3',material:'Stainless',rotation,hubSize:'4.75',cupping:'no',cost:8500,status:loc.startsWith('shop:')?'fixing':'spare',buyDate:TODAY_STR,note,spareLocation:loc,log:initLog});
@@ -25817,6 +25818,29 @@ function flOpenAddPropModal(id){
   flPickSt('prop',p?flPropStValues.indexOf(p.status):0);
   openModal('fl-modal-propeller');
 }
+/* §propDup (2026-11-26) · กันเลขใบจักรซ้ำ
+   เคสจริง: AL1-P-RH-17-01 มี 3 รายการ · มีคนกด Add propeller สร้างใบใหม่เพื่อผูกเกียร์ Yamaha แทนที่จะเอาใบเดิมไปผูก
+   เทียบแบบไม่สนตัวพิมพ์/ช่องว่าง · คืนใบที่ชน (ไม่นับใบที่กำลังแก้) */
+function flPropSerialKey(v){ return String(v||'').replace(/\s+/g,'').toUpperCase(); }
+function flPropSerialDup(serial, exceptId){
+  var k=flPropSerialKey(serial); if(!k) return null;
+  return (FL_PROPELLERS||[]).find(function(x){ return x && x.id!==exceptId && flPropSerialKey(x.serial)===k; })||null;
+}
+function flPropWhere(p){
+  if(!p) return '';
+  var st={active:'ติดเรืออยู่',spare:'สำรอง',fixing:'ส่งซ่อม',damaged:'ชำรุด',broken:'เสีย'}[p.status||'active']||(p.status||'');
+  var g=p.gearboxId?(FL_GEARBOXES||[]).find(function(x){ return x.id===p.gearboxId; }):null;
+  var e=(g&&g.engineId&&typeof flGetEng==='function')?flGetEng(g.engineId):null;
+  var bid=(e&&e.boatId)||p.boatId||null, b=(bid&&typeof getBoat==='function')?getBoat(bid):null;
+  var L=(!b&&p.spareLocation&&typeof flParseSpareLoc==='function')?flParseSpareLoc(p.spareLocation):null;
+  return st+(b?(' · '+(b.name||bid)):'')+(g?(' · เกียร์ '+(g.serial||g.id)):'')+(L&&L.label?(' · '+L.label):'');
+}
+function flPropDupBlock(serial, exceptId){
+  var d=flPropSerialDup(serial, exceptId); if(!d) return false;
+  alert('เลขใบจักร "'+serial+'" มีอยู่ในระบบแล้ว\n\nใบเดิม: '+flPropWhere(d)
+    +'\n\nถ้าเป็นใบเดียวกัน ให้เปิดใบเดิมแล้วกด "ถอด/สลับ" หรือ Edit แทนการเพิ่มใหม่\nถ้าเป็นใบใหม่จริง ให้ใช้เลขที่ไม่ซ้ำ');
+  return true;
+}
 function flSavePropeller(){
   const brand=document.getElementById('fl-prop-brand').value;
   const serial=document.getElementById('fl-prop-serial').value.trim();
@@ -25831,6 +25855,9 @@ function flSavePropeller(){
   const cost=parseFloat(document.getElementById('fl-prop-cost').value)||0;
   const buyDate=document.getElementById('fl-prop-buydate').value||null;
   const note=document.getElementById('fl-prop-note').value.trim();
+  /* §propDup · เพิ่มใหม่ หรือแก้เลขไปชนใบอื่น = ไม่ให้บันทึก · ใบที่ซ้ำอยู่ก่อนแล้วยังแก้อย่างอื่นได้ (ไม่งั้นเคลียร์ของเก่าไม่ได้) */
+  { const _cur=flEditPropId?FL_PROPELLERS.find(x=>x.id===flEditPropId):null;
+    if((!_cur || flPropSerialKey(_cur.serial)!==flPropSerialKey(serial)) && flPropDupBlock(serial, flEditPropId||null)) return; }
   const status=flPropStValues[flSelSts.prop];
   let gearboxId=document.getElementById('fl-prop-gb-sel').value||null;
   // Invariant: a SPARE propeller is on the shelf → cannot stay linked to a gearbox.
