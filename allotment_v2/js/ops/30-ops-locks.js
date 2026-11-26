@@ -105,6 +105,9 @@
         G.opsIds[d] = r.id; G.opsVers[d] = r.version; srvOf(G, d, r);
         if(drawn){ G.usedBy[d] = drawn; G.used += drawn; }
         if(+r.pending_pax) G.pendBy[d] = +r.pending_pax;
+        /* K4 (parity 2026-11-26c): legacy keeps one log per bulk lock; its departures' lines (draw, return, release-round) are
+           that log, so By trip's "🔒 <holder>" row chip (§btLkBand, read from lock.log draw lines) finds a bulk lock's draws */
+        if(Array.isArray(r.log)) r.log.forEach(function(e){ G.log.push(logLine(e)); });
         if(r.status === 'released') G.releasedDates.push(d);
         else { if(!open) open = r; if(r.state !== 'depleted') anyLeft = true; }
       });
@@ -123,9 +126,10 @@
           K.id = c.id; K.scope = 'bulk'; K.date = ''; K.parentId = G.id; K.subName = key;
           K.dateFrom = G.dateFrom; K.dateTo = G.dateTo; K.dow = G.dow.slice(); K.releaseDaysBefore = G.releaseDaysBefore; K.releaseTime = G.releaseTime;
           K.holderType = G.holderType; K.holderId = G.holderId; K.expiry = '';
-          K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {};
+          K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {}; K.log = [];
           K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
         }
+        if(Array.isArray(c.log)) c.log.forEach(function(e){ K.log.push(logLine(e)); });   /* K4: a bulk sub-group's lines, as its parent's */
         var drawn = usedOf(c); K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
         if(drawn){ K.usedBy[c.service_date] = drawn; K.used += drawn; }
       }); });

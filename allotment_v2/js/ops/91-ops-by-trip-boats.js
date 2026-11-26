@@ -27,7 +27,8 @@
       var c = '#5b6472';
       try{ if(typeof getBoatColor === 'function'){ var k = getBoatColor(b.boat_id); if(k && k.text) c = k.fill || k.text; } }catch(_){}
       return { id: b.boat_id, name: b.boat_name || b.boat_id, col: c, pax: +b.pax || 0, bd: b.pax_by_type || null, cap: +b.capacity || 0, over: !!b.over, overBy: +b.over_by || 0,   // bd: A/C/I/F of the boat (BE-1, computed)
-               ovn: b.ovn_hold ? { bkId: b.ovn_hold.booking_id, from: b.ovn_hold.from, to: b.ovn_hold.to, routeId: routeId } : null };
+               ovn: b.ovn_hold ? { bkId: b.ovn_hold.booking_id, from: b.ovn_hold.from, to: b.ovn_hold.to, routeId: routeId } : null,
+               chtr: !!b.charter };   // K4: legacy's "⛵ เหมาลำ" chip (§btChtrChip) · the server's boats[].charter
     });
   };
 })();
