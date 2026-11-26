@@ -68,7 +68,7 @@
       memoN: n(mm.count), memoAmt: n(mm.amount), memoPend: n(mm.pending), memoPendAmt: n(mm.pending_amount), memoBySup: {}, memoByType: {},
       engHrs: {}, engTot: n(eg.total), engReads: n(eg.reads),
       invZero: n(stock.at_zero), invLow: n(stock.below_min), invHave: n(stock.with_min), invVal: n(stock.value),
-      invOut: (stock.out || []).map(function(i){ return { n: String(i.name || i.part_no || '—'), cat: CAT[i.category] || String(i.category || '—'), cost: n(i.cost), loc: String(i.warehouse || '') }; }),
+      invOut: (stock.out || []).map(function(i){ return { n: String(i.name || i.part_no || '—'), cat: CAT[i.category] || String(i.category || '—'), cost: n(i.cost), loc: String(i.warehouse_name || i.warehouse || '') }; }),   /* parity I7 · legacy shows the warehouse label (คลัง Tub Lamu) */
       invMinUniform: stock.uniform_min == null ? '' : String(stock.uniform_min), invN: n(stock.items), gaps: dataGaps ? gapsOf(dataGaps) : [], __srv: true };
     (av.down_by_boat || []).forEach(function(b){ G.downBy[b.boat_id] = n(b.days); });
     (inc.by_boat || []).forEach(function(b){ G.incBy[b.boat_id] = n(b.n); });

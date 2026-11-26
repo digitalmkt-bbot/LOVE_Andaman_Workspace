@@ -208,6 +208,10 @@
       routes.forEach(function(x){ if(x.days) window.OPS_ROUTE_DAYS[x.id] = x.days; });
       if(routes.length && typeof ROUTES !== 'undefined') mergeInto(ROUTES, routes, mapRoute);
       var boats = (r[1] && r[1].boats) || [];
+      /* parity I1 (2026-11-26) · legacy's BOATS is its boats table read ORDER BY id (server.js §stableOrder; code-point order on
+         every legacy boat id): Company Asset's type counts ("2 Catamaran · 13 Speedboat"), the first boat it opens, and every list
+         that walks BOATS follow it. The server answers by name. */
+      boats = boats.slice().sort(function(a, b){ var x = String(a.id), y = String(b.id); return x < y ? -1 : x > y ? 1 : 0; });
       if(boats.length && typeof BOATS !== 'undefined') mergeInto(BOATS, boats, mapBoat);
       if(typeof SB_MARKETS !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_MARKETS, (r[2] && r[2].markets) || [], mapMarket);
       if(typeof SB_SALES !== 'undefined' && !window.__laEmbedToken) replaceWith(SB_SALES, (r[3] && r[3].sales) || [], mapSales);
