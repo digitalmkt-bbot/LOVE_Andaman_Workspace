@@ -162,10 +162,10 @@ ok('a booking created now: the screen puts it on the same Bangkok day the server
 
 // ── 3. getRouteStatusNow ──
 item('calendar · getRouteStatusNow / isRouteActiveToday');
-const rs = await ev(() => { const r4 = getRoute('r4'), r10 = getRoute('r10'); const w = window.getRouteStatusNow; return { now: getRouteStatusNow(r4), legacy: w.__orig(r4), active: isRouteActiveToday(r4), none: getRouteStatusNow(r10) }; });
+const rs = await ev(() => { const r4 = getRoute('r4'), r10 = getRoute('r10'); return { now: getRouteStatusNow(r4), wrapped: !!window.getRouteStatusNow.__opsW5a, active: isRouteActiveToday(r4), none: getRouteStatusNow(r10) }; });
 const srvDay = (await api(`/v1/routes?from=${T0}&to=${T0}`)).routes.find((r) => r.id === 'r4').days[T0];
 ok('server: today is closed by the override on r4', srvDay.open === false && srvDay.source === 'override', srvDay);
-ok('screen: r4 is closed today (the server calendar); legacy alone says open (its season, no overrides)', rs.now && rs.now.type === 'closed' && rs.legacy && rs.legacy.type === 'open' && rs.active === false, rs);
+ok('screen: r4 is open today, as legacy (getRouteStatusNow reads seasons only; the override belongs to getDayStatus)', !rs.wrapped && rs.now && rs.now.type === 'open' && rs.active === true, rs);
 ok('a route with no season at all keeps legacy "no data" (null)', rs.none === null, rs.none);
 
 // ── 4. seats: getSeatsConsumed + getAllotment pool ──

@@ -935,6 +935,9 @@
     O.get('/v1/trip-cancellations/below-break-even').then(function(j){
       var rows = (j && j.trips) || [], changed = JSON.stringify(rows) !== JSON.stringify(below.rows);
       below.rows = rows; below.at = Date.now(); below.pending = false;
+      /* legacy keeps the banner's html for 20 s per route set (§tcxLazy, tcxBelowBannerLazy): the first All-piers draw kept the empty
+         banner made before this answer, so the redraw showed none (UI parity 2026-11-26, H4). A new answer drops that memo. */
+      if(changed && typeof window.tcxBanMemoClear === 'function') window.tcxBanMemoClear();
       if(changed && O.activeView && O.activeView() === 'operation') redrawOp();
     }, function(e){
       below.rows = below.rows || []; below.at = Date.now(); below.pending = false;
@@ -944,8 +947,11 @@
   function belowMap(r){ return { rid: r.route_id, ds: r.service_date, be: +r.break_even || 0, bk: +r.booked || 0, days: r.days }; }
   tw('tcxBelowList', function(routes){
     belowLoad();
-    var ids = {}; (routes || []).forEach(function(r){ if(r) ids[r.id] = 1; });
-    return (below.rows || []).filter(function(r){ return ids[r.route_id]; }).map(belowMap);
+    var ids = {}; (routes || []).forEach(function(r, i){ if(r && !(r.id in ids)) ids[r.id] = i + 1; });
+    /* legacy's order (tcxBelowList): day by day, and within a day the order of the routes the screen passed (Tub Lamu, Panwa, Ranong) */
+    return (below.rows || []).filter(function(r){ return ids[r.route_id]; })
+      .sort(function(a, b){ return String(a.service_date).localeCompare(String(b.service_date)) || (ids[a.route_id] - ids[b.route_id]); })
+      .map(belowMap);
   });
   tw('tcxBelow', function(rid, ds){
     belowLoad();
