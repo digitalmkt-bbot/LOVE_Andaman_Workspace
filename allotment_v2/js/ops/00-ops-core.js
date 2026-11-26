@@ -303,6 +303,19 @@
     if(!freeTimer) freeTimer = setInterval(flushFree, 1500);
   }
   try{ document.addEventListener('focusout', function(){ setTimeout(flushFree, 0); }, true); }catch(_){}
+  /* §redrawLater (2026-11-26, UI parity: Pier check-in 19 s) · a read that lands asks for the page to be drawn again. Pier check-in had
+     seven such reads, each redrawing the whole sheet (~0.7 s each, back to back). redrawLater(name, view) draws window[name] ONCE for
+     every ask that comes within the same moment (a timer of 40 ms; asks made while a draw runs join the next one), and only if the
+     page on screen is still 'view' (when given) and nobody is typing (whenFree). */
+  var laterT = {};
+  function redrawLater(name, view){
+    if(laterT[name]) return;
+    laterT[name] = setTimeout(function(){
+      delete laterT[name];
+      if(view && activeView() !== view) return;
+      whenFree(function(){ try{ if(typeof window[name] === 'function') window[name](); }catch(e){ try{ console.warn('[ops] redraw ' + name + ' failed', e); }catch(_){} } });
+    }, 40);
+  }
   /* placeholder while a view waits on operation-backend: spinner + label (css .la-ops-loading in 01-base.css) */
   function loadingHtml(label){
     var t = String(label == null ? 'Loading…' : label).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; });
@@ -377,7 +390,7 @@
     del: function(p){ return call('DELETE', p); },
     queue: queue, pending: pending, runBatch: runBatch, anyway: anyway,
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
-    busy: busy, whenFree: whenFree, activeView: activeView, loadingHtml: loadingHtml, loadingOver: loadingOver, skeletonHtml: skeletonHtml,
+    busy: busy, whenFree: whenFree, redrawLater: redrawLater, activeView: activeView, loadingHtml: loadingHtml, loadingOver: loadingOver, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today, clock: clock, pickupWindow: pickupWindow, pickupText: pickupText,
     onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
     state: { loaded: false }

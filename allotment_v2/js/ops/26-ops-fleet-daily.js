@@ -401,6 +401,10 @@
       var d0 = new Date(+m.slice(0, 4), +m.slice(5, 7) - 7, 1), d1 = new Date(+m.slice(0, 4), +m.slice(5, 7), 0);
       var from = O.ymd(d0), to = O.ymd(d1), k = from + '|' + to;
       if(fuelAsked[k]) return r;
+      /* §fuelNoPaging (2026-11-26, UI parity: 14 pages of May–Nov bookings, ~85 MB) · once the month's fuel report is in, every figure
+         the screen draws is the report's (_fuelAgg / _fuelWkAgg below answer from it, and renderFuelIntel reads nothing else), so
+         the seven months of bookings and daily log are not read. Without a report (the read failed), legacy's way as before. */
+      if(state.fuelReports && state.fuelReports[m]) return r;
       fuelAsked[k] = 1;
       var books = typeof window.bookingV2EnsureOpsRange === 'function' ? window.bookingV2EnsureOpsRange({ from: from, to: to }) : null;
       Promise.all([loadDailyWindow(from, to).catch(function(){ return null; }), Promise.resolve(books).catch(function(){ return null; })]).then(function(){

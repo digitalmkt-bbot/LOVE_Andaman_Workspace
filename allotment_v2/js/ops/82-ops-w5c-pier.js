@@ -91,7 +91,7 @@
       var differs = true;
       if(clone){ applyTo(progs, clone.fam, clone.rst); differs = sigOf(clone.fam, clone.rst) !== drawn; }
       try{
-        if(differs && O.activeView && O.activeView() === 'piercheckin' && !(O.busy && O.busy()) && typeof window.renderPierCheckin === 'function') window.renderPierCheckin();
+        if(differs && O.activeView && O.activeView() === 'piercheckin' && !(O.busy && O.busy()) && typeof window.renderPierCheckin === 'function') O.redrawLater('renderPierCheckin', 'piercheckin');   // §redrawLater
       }catch(_){}
     }, function(err){ PG[date] = { stamp: -1, programmes: null, busy: false, failedAt: Date.now() }; try{ console.warn('[ops] pier programmes: the server did not answer, the walk figures stay · ' + (err && err.message)); }catch(_){} });
   }

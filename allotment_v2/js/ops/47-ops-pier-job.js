@@ -176,11 +176,24 @@
     var ps = []; for(var k = 0; k < (size || 6); k++) ps.push(next());
     return Promise.all(ps).then(function(){ if(errors.length) throw errors[0]; });
   }
+  /* §jobsOne (2026-11-26, UI parity: pier check-in 19 s, poj 35 reads) · the day's jobs of many boats in ONE read:
+     GET …/days/{date}/jobs?boat_ids=a,b → { jobs: { bid: <what …/boats/{bid}/job answers, byte for byte> } }. A refused or
+     failed batch (an older server, a boat it does not know) falls back to the one-boat reads, as before. */
+  function readJobs(pier, date, ids){
+    if(!ids.length) return Promise.resolve({});
+    return O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/jobs', { boat_ids: ids.join(',') }).then(function(j){
+      if(!j || !j.jobs || typeof j.jobs !== 'object') throw new Error('no jobs in the answer');
+      return j.jobs;
+    }).catch(function(){
+      var out = {};
+      return pool(ids, function(bid){ return O.get(jobPath(pier, date, bid)).then(function(v){ out[bid] = v; }); }).then(function(){ return out; });
+    });
+  }
   function loadDay(pier, date){
     var ids = boatIds(pier, date), key = pier + '|' + date, my = ++st.seq;
     st.loading = key;
-    return pool(ids, function(bid){
-      return O.get(jobPath(pier, date, bid)).then(function(v){ if(my === st.seq) apply(date, bid, v); });
+    return readJobs(pier, date, ids).then(function(jobs){
+      if(my === st.seq) ids.forEach(function(bid){ if(jobs[bid]) apply(date, bid, jobs[bid]); });
     }).then(function(){
       if(my !== st.seq) return null;
       st.loaded = key; st.loading = '';
@@ -273,15 +286,34 @@
     var pier = pierOfBoat(date, bid);
     if(!pier) return null;
     carry[key] = {};
-    O.get(jobPath(pier, date, bid)).then(function(v){
-      // the day's own colour first (the server carries one only when the day has none)
-      var own = v && (String(v.wristband_colour || '').trim() || String(v.wristband_text || '').trim()) ? { colour: v.wristband_colour || '', text: v.wristband_text || '', from_date: '' } : null;
-      carry[key] = { v: own || (v && v.wristband_carried) || null };
-      if(!carry[key].v || typeof window.renderPierCheckin !== 'function') return;
-      var h = typeof window.pckHostEl === 'function' ? window.pckHostEl() : null;
-      if(h && h.offsetParent) try{ window.renderPierCheckin(); }catch(_){}
-    }, function(){ carry[key] = { v: null }; });
+    /* §jobsOne (2026-11-26) · the asks of one draw are gathered and sent as ONE read per pier and day (…/jobs?boat_ids=), and
+       Pier check-in is drawn again ONCE when they land. It was one read per boat, each landing redrawing the whole sheet
+       (12 boats = 12 full redraws of ~0.5–1.6 s: the 19 s the parity harness waited on the page open). */
+    var qk = pier + '|' + date, q = carryQ[qk] || (carryQ[qk] = { pier: pier, date: date, ids: [] });
+    q.ids.push(bid);
+    if(!carryTimer) carryTimer = setTimeout(flushCarry, 0);
     return null;
+  }
+  var carryQ = {}, carryTimer = null;
+  function carryFrom(v){
+    // the day's own colour first (the server carries one only when the day has none)
+    var own = v && (String(v.wristband_colour || '').trim() || String(v.wristband_text || '').trim()) ? { colour: v.wristband_colour || '', text: v.wristband_text || '', from_date: '' } : null;
+    return { v: own || (v && v.wristband_carried) || null };
+  }
+  function flushCarry(){
+    carryTimer = null;
+    var groups = Object.keys(carryQ).map(function(k){ return carryQ[k]; }); carryQ = {};
+    Promise.all(groups.map(function(g){
+      return readJobs(g.pier, g.date, g.ids).then(function(jobs){
+        var any = false;
+        g.ids.forEach(function(bid){ var c = carry[jkey(g.date, bid)] = carryFrom(jobs[bid]); if(c.v) any = true; });
+        return any;
+      }, function(){ g.ids.forEach(function(bid){ carry[jkey(g.date, bid)] = { v: null }; }); return false; });
+    })).then(function(r){
+      if(!r.some(Boolean) || typeof window.renderPierCheckin !== 'function') return;
+      var h = typeof window.pckHostEl === 'function' ? window.pckHostEl() : null;
+      if(h && h.offsetParent) O.redrawLater('renderPierCheckin', 'piercheckin');   // §redrawLater
+    });
   }
   O.onWrite(function(kind){ if(String(kind || '').indexOf('pier') >= 0) carry = {}; });
   O.pierJobCarry = { of: carryOf, reset: function(){ carry = {}; } };   // for tests
@@ -444,17 +476,41 @@
     if(e && e.loading) return;
     if(!e) e = day.by[k] = { boats: {}, fleet: {}, old: true };
     e.loading = true;
-    O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){
-      e.boats = {}; e.fleet = {}; e.order = [];
-      ((j && j.boats) || []).forEach(function(b){ if(b && b.boat_id) e.boats[b.boat_id] = b; });
-      ((j && j.fleet) || []).forEach(function(f){ if(f && f.boat_id){ e.fleet[f.boat_id] = f; e.order.push(f.boat_id); } });   // e.order: the server's order of the pier's boats (pjAllBoats)
-      e.old = false; e.loading = false; e.loaded = true;
-      var q2 = day.cbs[k] || []; day.cbs[k] = [];
-      if(!P.busy()) q2.forEach(function(fn){ try{ fn(); }catch(_){} });
-    }, function(err){
-      e.loading = false;                 // keep what we had; the next render asks again only after another write
-      e.old = false; day.cbs[k] = [];
-      try{ console.warn('[ops] boats of the day ' + k + ' · ' + err.message); }catch(_){}
+    O.get('/v1/pier-office/' + enc(pier) + '/days/' + enc(date) + '/boats').then(function(j){ landDay(k, e, j); }, function(err){ dayFailed(k, e, err); });
+  }
+  function landDay(k, e, j){
+    e.boats = {}; e.fleet = {}; e.order = [];
+    ((j && j.boats) || []).forEach(function(b){ if(b && b.boat_id) e.boats[b.boat_id] = b; });
+    ((j && j.fleet) || []).forEach(function(f){ if(f && f.boat_id){ e.fleet[f.boat_id] = f; e.order.push(f.boat_id); } });   // e.order: the server's order of the pier's boats (pjAllBoats)
+    e.old = false; e.loading = false; e.loaded = true;
+    var q2 = day.cbs[k] || []; day.cbs[k] = [];
+    if(!P.busy()) q2.forEach(function(fn){ try{ fn(); }catch(_){} });
+  }
+  function dayFailed(k, e, err){
+    e.loading = false;                 // keep what we had; the next render asks again only after another write
+    e.old = false; day.cbs[k] = [];
+    try{ console.warn('[ops] boats of the day ' + k + ' · ' + (err && err.message)); }catch(_){}
+  }
+  /* §daysOne (2026-11-26, UI parity: Ranong 13 per-day reads) · a month screen (petty cash long-tail, pc2LT) asks for the boats of
+     every day of the month at once: ONE read GET /v1/pier-office/{pier}/days?from=&to= → { days: { date: <…/days/{date}/boats,
+     byte for byte> } }. The days it covers are marked as loading first, so the per-day asks of the same draw wait for it; the
+     redraws they ask for run once each day lands, as before. A failed month read asks day by day, as before. */
+  function wantRange(pier, from, to){
+    if(!enabled() || !P.loaded || !pier || !from || !to || to < from) return;
+    var dates = [], d = new Date(from + 'T00:00:00Z');
+    for(; d.toISOString().slice(0, 10) <= to && dates.length < 62; d.setUTCDate(d.getUTCDate() + 1)) dates.push(d.toISOString().slice(0, 10));
+    var need = dates.filter(function(ds){ var e = day.by[dkey(pier, ds)]; return !e || (!e.loading && e.old); });
+    if(need.length < 2) return;
+    need.forEach(function(ds){ var k = dkey(pier, ds), e = day.by[k] || (day.by[k] = { boats: {}, fleet: {}, old: true }); e.loading = true; });
+    O.get('/v1/pier-office/' + enc(pier) + '/days', { from: need[0], to: need[need.length - 1] }).then(function(j){
+      if(!j || !j.days || typeof j.days !== 'object') throw new Error('no days in the answer');
+      need.forEach(function(ds){ var k = dkey(pier, ds); landDay(k, day.by[k], j.days[ds]); });
+    }).catch(function(){
+      need.forEach(function(ds){
+        var k = dkey(pier, ds), e = day.by[k], cbs = day.cbs[k] || []; day.cbs[k] = [];
+        e.loading = false; e.old = true;
+        if(cbs.length) cbs.forEach(function(cb){ wantBoats(pier, ds, cb); }); else wantBoats(pier, ds);
+      });
     });
   }
   function boatOf(pier, date, bid){ var e = day.by[dkey(pier, date)]; return e && e.loaded ? e.boats[bid] : null; }
@@ -526,7 +582,7 @@
       return e && e.loaded ? '' : out;
     };
   }
-  O.pier.dayBoats = { want: wantBoats, boat: boatOf, fleet: fleetOf, entry: function(pier, date){ var e = day.by[dkey(pier, date)]; return e && e.loaded ? e : null; } };   // w4-f2: fleet (permits on the card) is read by 74-ops-permits.js
+  O.pier.dayBoats = { want: wantBoats, wantRange: wantRange, boat: boatOf, fleet: fleetOf, entry: function(pier, date){ var e = day.by[dkey(pier, date)]; return e && e.loaded ? e : null; } };   // w4-f2: fleet (permits on the card) is read by 74-ops-permits.js
 
   O.pierJob = { state: st, loadDay: loadDay };
 })();
