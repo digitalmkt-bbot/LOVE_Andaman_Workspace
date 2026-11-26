@@ -6582,7 +6582,11 @@ function mdToggleAgZone(){ _mdAgZone=!_mdAgZone; if(typeof renderMarketData==='f
 let _insDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
 let INSURANCE_OVERRIDES=null;
 function insEnsure(){ if(INSURANCE_OVERRIDES) return INSURANCE_OVERRIDES; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); INSURANCE_OVERRIDES=(d.insurance_overrides&&typeof d.insurance_overrides==='object')?d.insurance_overrides:{}; }catch(e){ INSURANCE_OVERRIDES={}; } return INSURANCE_OVERRIDES; }
-function insPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const raw=localStorage.getItem(LS_KEY); const d=raw?JSON.parse(raw):{}; d.insurance_overrides=insEnsure(); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){} }
+/* §insPierSave (2026-11-26) · owner: "User แจ้งว่า ระบบไม่ถูกบันทึก" (รายชื่อ ตม. ทริป Se La Va 27 พ.ย. · 57 คน · ในระบบไม่มีสักช่อง)
+   ตารางกรอกรายชื่อ (tmGridHtml) เปิดให้แก้เมื่อมีสิทธิ์ operations "หรือ" pier · แต่ตัวบันทึกนี้ยอมเฉพาะ operations
+   → คนที่มีสิทธิ์ pier อย่างเดียว พิมพ์ได้ครบทุกช่อง ช่องเปลี่ยนเป็นสีปกติ แต่ไม่มีอะไรถูกเก็บ รีเฟรชแล้วหายหมด ไม่มีข้อความเตือน
+   ให้ตัวบันทึกใช้เงื่อนไขเดียวกับตาราง · ไม่มีสิทธิ์ทั้งสองอย่าง = ตารางถูกปิดอยู่แล้ว (disabled) */
+function insPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations') && !window.laCanEditArea('pier')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const raw=localStorage.getItem(LS_KEY); const d=raw?JSON.parse(raw):{}; d.insurance_overrides=insEnsure(); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){} }
 function insKey(bkId,pk){ return bkId+'::'+pk; }
 function insOv(bkId,pk){ const s=insEnsure(); return s[insKey(bkId,pk)]||null; }
 function insHas(bkId,pk,field){ const o=insOv(bkId,pk); return !!(o && o[field]!==undefined); }
