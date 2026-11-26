@@ -77,7 +77,11 @@
     var hit = cache[overviewKey()];
     // legacy vbSuppliers sorts the owners in Thai order (localeCompare 'th'), and the owner's sheet opens on the first: โกหมง, not
     // the server's first (ภูเก็ตล่ำซำ) · parity G14
-    return hit ? (hit.view.partners || []).map(function(p){ return text(p.partner); }).filter(Boolean).sort(function(a, b){ return a.localeCompare(b, 'th'); }) : [];
+    // N3 (parity 2026-11-27): legacy's list is every partner van's owner (vbVans), with work this period or not: the idle ones too
+    if(!hit) return [];
+    var seen = {};
+    return (hit.view.partners || []).map(function(p){ return text(p.partner); }).concat((hit.view.idle_partners || []).map(text))
+      .filter(function(s){ if(!s || seen[s]) return false; seen[s] = 1; return true; }).sort(function(a, b){ return a.localeCompare(b, 'th'); });
   }
   function host(){ return document.getElementById('vanbill-host'); }
   function addrOf(v){ return '/v1/van-bills/' + enc(v.partner) + '/' + enc(v.month) + '/' + enc(v.period); }
@@ -419,11 +423,9 @@
       + '<div class="s">' + (v.updated_by ? ('แก้ล่าสุด ' + esc(v.updated_by) + (v.updated_at ? (' · ' + esc(text(v.updated_at).slice(0, 10))) : '')) : 'ยังไม่มีใครกรอก') + '</div></div></div>';
     var acts;
     if(ED) acts = '<span class="vbx-dirty">&#9679; กำลังแก้ไข · ยังไม่บันทึก</span><button class="vbx-btn" onclick="vbCancel()">ยกเลิก</button><button class="vbx-btn ok" onclick="vbSave()">&#10003; บันทึก</button>';
-    else acts = statePill(v.state, true)   // legacy's sheet shows no 'ร่าง' badge: only sent / paid are marked · parity G14
-      + (ro ? '<button class="vbx-btn" onclick="laOpsVanBills.unpay()">ยกเลิกการจ่าย</button>'
-        : (v.sent ? '<button class="vbx-btn" onclick="laOpsVanBills.unsend()">ดึงกลับเป็นร่าง</button><button class="vbx-btn ok" onclick="laOpsVanBills.pay()">บันทึกว่าจ่ายแล้ว</button>'
-          : '<button class="vbx-btn" onclick="laOpsVanBills.send()">ส่งให้เจ้าของรถ</button>')
-          + '<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>')
+    /* N3 (parity 2026-11-27): legacy's sheet (renderVanBill acts) has no send / pay / unsend / unpay step and no state badge:
+       only ✎ แก้ไข and the prints. The server's send/pay commands stay; this screen no longer offers them, as legacy. */
+    else acts = (ro ? '' : '<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>')
       + '<button class="vbx-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
       + (_vb.van ? ('<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · ' + esc(pierS(pier)) + ' · ' + esc(vName(_vb.van)) + ' เท่านั้น</button>')
         : ('<button class="vbx-btn" onclick="vbPrintSplit()" title="ทุกคันในรอบนี้ · คันละหน้า · กดครั้งเดียว">&#128424; พิมพ์แยกคัน</button>'

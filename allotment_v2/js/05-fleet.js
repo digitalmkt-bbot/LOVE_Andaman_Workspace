@@ -19080,6 +19080,7 @@ function flRenderInsights(){
   const allIncs = FL_INCIDENTS||[];
   const allMemos = FL_MEMOS||[];
   let periodJobs = allJobs.filter(j=>inPeriod(j.startDate));
+  const periodJobList = periodJobs;   /* N4 (parity 2026-11-27): the jobs themselves, for Cost by job type (periodJobs may become a count below) */
   const periodIncs = allIncs.filter(i=>inPeriod(i.date));
   let periodSpent = periodJobs.reduce((s,j)=>s+calcCost(j),0);
   const activeJobs = allJobs.filter(j=>j.status==='inprogress' || j.status==='pending');
@@ -19613,7 +19614,7 @@ function flRenderInsights(){
 
   // Cost by type
   const typeMap = {corrective:0, preventive:0, scheduled:0};
-  periodJobs.forEach(j=>{ if(typeMap[j.type]!==undefined) typeMap[j.type] += calcCost(j); });
+  periodJobList.forEach(j=>{ if(typeMap[j.type]!==undefined) typeMap[j.type] += calcCost(j); });
   const totalType = Object.values(typeMap).reduce((s,v)=>s+v, 0) || 1;
   const TYPE_COLOR = {corrective:'#A32D2D', preventive:'#185FA5', scheduled:'#7C5BC4'};
   const TYPE_LABEL = {corrective:'Corrective', preventive:'Preventive', scheduled:'Scheduled'};

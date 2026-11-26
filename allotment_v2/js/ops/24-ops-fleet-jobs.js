@@ -209,7 +209,7 @@
   }
 
   function replaceIncidents(rows){
-    var mapped = (rows || []).map(fromServerIncident);
+    var mapped = (rows || []).map(fromServerIncident).sort(byLegacyId);   /* N4 (parity 2026-11-27): legacy loads fleet_incidents ORDER BY id (server.js §stableOrder), as the jobs */
     var target = listIncidents();
     target.length = 0;
     Array.prototype.push.apply(target, mapped);
