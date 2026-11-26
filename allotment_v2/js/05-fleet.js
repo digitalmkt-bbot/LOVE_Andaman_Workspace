@@ -30761,11 +30761,12 @@ function faRenderParts(kind){
   var _spRank=function(r){ var st=(r.o&&r.o.retired===true)?'broken':(r.st==='damaged'?'broken':r.st); for(var i=0;i<_SPST.length;i++) if(_SPST[i][0]===st) return i; return 0; };
   var _spModel=function(r){ return ((r.brand||'')+' '+((r.o&&r.o.model)||'')).trim()||'ไม่ระบุรุ่น'; };
   if(kind==='eng') groups.forEach(function(g){ if(g.b) return;
-    g.rows.sort(function(a,z){ return (_spRank(a)-_spRank(z)) || _spModel(a).localeCompare(_spModel(z)) || String(a.serial).localeCompare(String(z.serial)); }); });
+    /* §engSpareGrp2 · owner: "แยกประเภทเครื่องยนต์ก่อน แล้วในแต่ละประเภทเรียงตามสถานะ" → รุ่นก่อน แล้วสถานะ */
+    g.rows.sort(function(a,z){ return _spModel(a).localeCompare(_spModel(z)) || (_spRank(a)-_spRank(z)) || String(a.serial).localeCompare(String(z.serial)); }); });
   var selId=K.sel();
   if(!selId || !P.some(function(r){ return r.id===selId; })){ var first=groups.length?groups[0].rows[0]:null; selId=first?first.id:null;
     if(kind==='eng') flSelEngId=selId; else if(kind==='gb') flSelGbId=selId; else flSelPropId=selId; }
-  var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">'+K.title+'</b><span style="font-size:11.5px;color:#8A8F9C">'+shown.length+' '+K.unit+' · ตามเรือ · Port → Std'+(kind==='eng'?' · ไม่ได้ติดเรือ: ตามสถานะและรุ่น':'')+'</span></div>'
+  var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">'+K.title+'</b><span style="font-size:11.5px;color:#8A8F9C">'+shown.length+' '+K.unit+' · ตามเรือ · Port → Std'+(kind==='eng'?' · ไม่ได้ติดเรือ: ตามรุ่น แล้วสถานะ':'')+'</span></div>'
     +'<input class="fa-q" style="width:100%;margin-top:8px" placeholder="ค้นหา serial…" value="'+faE(FA.q[kind]||'')+'" oninput="faPartFilter(\''+kind+'\',this.value)"></div>'
     +'<div class="fa-sc" id="fl-'+kind+'-listpanel">'
     +(groups.length?groups.map(function(g){
@@ -30775,10 +30776,15 @@ function faRenderParts(kind){
           +g.rows.map(function(r,i){ var sh='';
               if(kind==='eng' && !g.b){ var k=_spRank(r)+'|'+_spModel(r), pv=i?(_spRank(g.rows[i-1])+'|'+_spModel(g.rows[i-1])):'';   /* §engSpareGrp · หัวกลุ่มย่อย สถานะ · รุ่น */
                 if(k!==pv){ var S=_SPST[_spRank(r)], n=g.rows.filter(function(x){ return (_spRank(x)+'|'+_spModel(x))===k; }).length;
-                  sh='<div style="display:flex;align-items:center;gap:7px;padding:6px 14px 5px;background:#fff;border-bottom:1px solid #F1F0EB;font-size:11.5px">'
+                  var newM=!i || _spModel(g.rows[i-1])!==_spModel(r), nM=g.rows.filter(function(x){ return _spModel(x)===_spModel(r); }).length;
+                  /* §engSpareGrp2 · หัวรุ่น (แถบเข้ม) ขึ้นครั้งเดียวต่อรุ่น · ใต้รุ่นเป็นหัวสถานะ */
+                  if(newM) sh+='<div style="display:flex;align-items:center;gap:7px;padding:7px 14px 6px;background:#EEF1F6;border-top:1px solid #DFE3EB;border-bottom:1px solid #DFE3EB;font-size:12px">'
+                    +'<i style="width:8px;height:8px;border-radius:4px;background:'+faBrandC(r.brand)+';flex:none"></i>'
+                    +'<b style="font-weight:800;color:#0F1B3D;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+faE(_spModel(r))+'</b>'
+                    +'<span class="mono" style="color:#5E6577;font-weight:600">'+nM+' ลูก</span></div>';
+                  sh+='<div style="display:flex;align-items:center;gap:7px;padding:5px 14px 4px 22px;background:#fff;border-bottom:1px solid #F1F0EB;font-size:11px">'
                     +'<span style="font-weight:700;color:'+S[2]+';background:'+S[3]+';border-radius:999px;padding:1px 8px;white-space:nowrap">'+S[1]+'</span>'
-                    +'<b style="font-weight:700;color:#3E4658;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+faE(_spModel(r))+'</b>'
-                    +'<span class="mono" style="color:#8A8F9C">'+n+'</span></div>'; } }
+                    +'<span style="flex:1"></span><span class="mono" style="color:#8A8F9C">'+n+'</span></div>'; } }
               return sh+'<div data-q="'+faE(String(r.serial).toLowerCase()+' '+String(r.sub||'').toLowerCase())+'">'+faRow(r,selId,K.pick)+'</div>'; }).join(''); }).join('')
       :'<div style="padding:28px;text-align:center;color:#8A8F9C;font-size:12.5px">ไม่มีรายการในกลุ่มนี้</div>')
     +'</div></div>';
