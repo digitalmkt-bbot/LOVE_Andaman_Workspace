@@ -37,18 +37,34 @@
     if(p.level === 'x') return 'หมด ' + d + ' · เกิน ' + (-left) + ' วัน';
     return d + ' · เหลือ ' + left + ' วัน';
   }
-  function line(level, name, value, extra){
-    return '<div class="pj-dl ' + level + '"><span class="nm">' + esc(name) + (extra || '') + '</span><span class="vl">' + esc(value) + '</span></div>';
+  /* parity M5 (2026-11-27) · legacy's card line is §pjDocFt (lk-inbox 2026-10-30): a small floating chip with the short text (the
+     park's short name + days) and the full text on hover, an icon per level. This file still drew the line from before it (nm / vl
+     in a div) and looked for that markup, so the card showed "ใบอนุญาต พีพี" / "ไม่มีใบในระบบ" and lost the licence chip
+     ("ใช้เรือ ไม่มีใบ"). Same markup and wording as legacy's pjDocsHtml now. */
+  var ICON = { x: '⛔ ', d1: '⚠ ', d2: '⚠ ', d3: '⚠ ', renew: '↻ ', none: '', d4: '' };
+  function shortOf(level, t){
+    t = String(t || '');
+    if(level === 'none') return /ไม่ระบุ/.test(t) ? 'ไม่ระบุวัน' : 'ไม่มีใบ';
+    if(level === 'renew') return 'กำลังต่ออายุ';
+    var m = /เกิน\s*(\d+)\s*วัน/.exec(t); if(m) return 'เกิน ' + m[1] + ' วัน';
+    m = /เหลือ\s*(-?\d+)\s*วัน/.exec(t); if(m) return m[1] + ' วัน';
+    return t;
   }
-  /* the permit line the card prints for a permits block */
+  function line(level, name, value, extra, sn){
+    var ic = ICON[level] || '';
+    return '<span class="pj-dl ' + level + '" title="' + esc(name + ' · ' + value) + '">'
+      + '<span class="s">' + ic + esc(sn || name) + ' ' + esc(shortOf(level, value)) + (extra || '') + '</span>'
+      + '<span class="x">' + ic + esc(name) + ' · ' + esc(value) + (extra || '') + '</span></span>';
+  }
+  /* the permit chip the card prints for a permits block; '' when the programme enters no park (legacy prints no chip) */
   function permitLine(P){
     if(!P) return null;
     if(!P.worst){
-      if(P.note === 'not_needed') return line('none', 'ใบเข้าเกาะ', 'โปรแกรมนี้ไม่ต้องใช้ใบอุทยาน');
-      return line('none', 'ใบเข้าเกาะ', 'ไม่มีใบในระบบ');
+      if(P.note === 'not_needed') return '';
+      return line('none', 'ใบเข้าเกาะ', 'ไม่มีใบในระบบ', '', 'ใบเข้าเกาะ');
     }
     var w = P.worst;
-    return line(w.level, 'ใบอนุญาต ' + w.name, textOf(w), P.more > 0 ? ('<span class="pj-dmore">+' + P.more + '</span>') : '');
+    return line(w.level, 'ใบอนุญาต ' + w.name, textOf(w), P.more > 0 ? ('<span class="pj-dmore">+' + P.more + '</span>') : '', w.name);
   }
 
   function permitsOf(boat, date){
@@ -66,9 +82,10 @@
       var legacy = orig.apply(this, arguments);
       if(!enabled()) return legacy;
       var P = permitsOf(boat, date), pl = permitLine(P);
-      if(!pl) return legacy;
-      var m = /^<div class="pj-docs">(<div class="pj-dl[\s\S]*?<\/div>)/.exec(String(legacy));   // the licence line (legacy's) is the first
-      return '<div class="pj-docs">' + (m ? m[1] : '') + pl + '</div>';
+      if(pl === null) return legacy;
+      // the licence chip (legacy's, from the Documents page in the browser) is the first: <span class="pj-dl …"><span class="s">…</span><span class="x">…</span></span>
+      var m = /^<div class="pj-docs ft">(<span class="pj-dl[^"]*"[^>]*><span class="s">[^<]*<\/span><span class="x">[^<]*<\/span><\/span>)/.exec(String(legacy));
+      return '<div class="pj-docs ft">' + (m ? m[1] : '') + pl + '</div>';
     };
     window.pjDocsHtml.__opsPermits = true;
   }

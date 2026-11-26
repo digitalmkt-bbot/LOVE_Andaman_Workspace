@@ -147,6 +147,12 @@
       return O.bookingWrite('PUT', '/v1/bookings/' + enc(sid) + '/insurance', bk || { id: bkId, opsId: sid }, body);
     }).then(function(ob){
       applyBookingResponse(bk, ob);
+      /* a padded traveller's nationality (parity M3): the server put it on the tm-pax row; mirror it in the cache */
+      var pi = parseInt(passengerKey, 10);
+      if(passengerKey !== 'lead' && Number.isFinite(pi) && !(bk && bk.passengers && bk.passengers[pi]) && update && update.nat !== undefined){
+        var rr = tmRows[sid] = tmRows[sid] || {}, cur = rr[String(pi)] = Object.assign({}, rr[String(pi)] || {});
+        cur.nationality = update.nat === '' ? null : String(update.nat);
+      }
       O.wrote('booking-insurance');
       /* not while the person is typing in the list: the redraw would replace the field they are in */
       var typing = document.activeElement, host = document.getElementById('insurance-host');
@@ -651,7 +657,13 @@
   /* the insurer's form values the server keeps: legacy's insEff fields firstName / lastName / nat / age */
   function insForm(bk, pk, field){
     var p = pk === 'lead' ? null : (bk.passengers || [])[parseInt(pk, 10)];
-    if(pk !== 'lead' && !p) return null;
+    /* parity M3 (2026-11-27) · a traveller the ตม. grid pads past the named passengers (legacy tmPaxList) has no passenger row:
+       the server keeps its nationality on the traveller's tm-pax row (GET /v1/tm-pax … nationality) */
+    if(pk !== 'lead' && !p){
+      if(field !== 'nat' || !bk.opsId) return null;
+      var tr = (tmRows[toServerBookingId(bk.id)] || {})[String(pk)];
+      return tr && tr.nationality ? tr.nationality : null;
+    }
     if(field === 'firstName') return pk === 'lead' ? bk.leadInsuranceFirstName : p.insuranceFirstName;
     if(field === 'lastName') return pk === 'lead' ? bk.leadInsuranceLastName : p.insuranceLastName;
     if(field === 'nat') return pk === 'lead' ? bk.leadInsuranceNat : p.insuranceNat;

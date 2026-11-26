@@ -37,8 +37,13 @@
   window.opsVanJobsList = function(date){
     if(!O.enabled()) return null;
     var day = V.dayRead(date); if(!day || !Array.isArray(day.jobs)) return null;
+    /* parity M2 (2026-11-27) · legacy renderVanJobs keeps one fleet side (§rnVan2 laFleetRouteOk: Phuket · Khao Lak, or Ranong) for
+       every booking it walks; the server's day read holds both sides, so the Ranong programmes (Day Trip - Se La Va 57 pax) were
+       counted on the Phuket side. Every list below keeps the side's programmes only. */
+    var sideOk = function(rid){ return typeof window.laFleetRouteOk !== 'function' || window.laFleetRouteOk(rid || ''); };
     var agg = {}, aggRet = {};
     day.jobs.forEach(function(job){
+      if(!sideOk(job.route_id)) return;
       var k = keyOf(job);
       var zones = {}; (job.zones || []).forEach(function(z){ zones[z] = 1; });
       var routes = {}; if(job.route_id) routes[job.route_id] = 1;
@@ -58,17 +63,18 @@
         aggRet[k] = base(job.ret_pax || 0, job.bookings || 0, job.struck || 0);
       }
     });
-    var un = day.unassigned || {}, unByRoute = {};
-    (un.by_route || []).forEach(function(r){ unByRoute[r.route_id || '_'] = r.pax || 0; });
+    var un = day.unassigned || {}, unByRoute = {}, unTot = 0;
+    (un.by_route || []).forEach(function(r){ if(!sideOk(r.route_id)) return; unByRoute[r.route_id || '_'] = r.pax || 0; unTot += (r.pax || 0); });
     var unRetList = [], unRet = 0;
     (day.return_unarranged || []).forEach(function(r){
+      if(!sideOk(r.route_id)) return;
       unRet += (r.pax || 1);
       unRetList.push({ name: r.lead_pax || '-', drop: r.drop || '?', route: r.route_id || '' });
     });
-    var selfWarn = (day.self_arrive || []).map(function(r){
+    var selfWarn = (day.self_arrive || []).filter(function(r){ return r.route_id === undefined || sideOk(r.route_id); }).map(function(r){
       return { vc: r.voucher || r.booking_id || '-', name: r.lead_pax || '-', hotel: r.hotel || '', hasVan: !!r.has_van };
     });
-    return { agg: agg, aggRet: aggRet, unTot: un.pax || 0, unByRoute: unByRoute, unRet: unRet, unRetList: unRetList,
+    return { agg: agg, aggRet: aggRet, unTot: unTot, unByRoute: unByRoute, unRet: unRet, unRetList: unRetList,
              selfWarn: selfWarn, sxTot: day.struck || 0 };
   };
 

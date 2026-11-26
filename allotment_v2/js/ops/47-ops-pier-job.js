@@ -534,7 +534,12 @@
     window.pjPax = function(date, boatId, pier){
       var b = enabled() ? boatOf(pier, date, boatId) : null, p = b && b.booked && b.booked.prep;
       if(!p) return L.pjPax.apply(this, arguments);
-      var langs = {}; Object.keys(p.languages || {}).forEach(function(c){ langs[c] = 1; });
+      /* parity M5 (2026-11-27) · legacy pjPax reads pckGuideLangs: each language through pckLangNorm, once (case-blind), so a typed
+         "Spain" is the chip ES. The server's prep keeps the typed spelling (legacy pjPrep's own count does too). */
+      var langs = {}, seenL = {};
+      Object.keys(p.languages || {}).forEach(function(c){
+        var n = typeof window.pckLangNorm === 'function' ? window.pckLangNorm(c) : c; if(!n || seenL[n.toLowerCase()]) return;
+        seenL[n.toLowerCase()] = 1; langs[n] = 1; });
       return { ad: p.pax.ad, chd: p.pax.chd, inf: p.pax.inf, foc: p.pax.foc, n: p.pax.bookings, langs: langs };
     };
   }
