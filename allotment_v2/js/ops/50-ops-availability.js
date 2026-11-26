@@ -92,12 +92,18 @@
   }
 
   function noBoat(s){ return Array.isArray(s.deployments) ? !s.deployments.length : !(+s.deployed_capacity > 0); }
-  /* legacy's "no limit" shape · the counts stay, for screens that show them */
+  /* legacy's "no limit" shape · the counts stay, for screens that show them.
+     parity F4 (2026-11-26): a marine day with no boat is legacy getAllotment's untouched result (it returns before
+     getSeatsConsumed), so its seatsConsumed is 0 there: Boat Operation's week cell and its "pax" total read it, and
+     legacy shows "·" for Nyaung Oo Phee 28 Nov (20 B2C seats sold Open, no boat), not "⚠ 20 pax no boat".
+     The server's count stays in serverBooked for whoever wants it; a land route (unlimited) keeps its counts. */
   function noLimit(r, s){
     r.hasAllotment = false; r.isFull = false; r.state = 'no-allotment';
     r.totalCapacity = 0; r.availableCapacity = 0; r.seatsAvailable = 0; r.fillPct = 0;
     if(s){
-      r.seatsConsumed = +s.booked_pax || 0; r.lockedSeats = +s.locked_pax || 0; r.charterPax = +s.charter_pax || 0;
+      var boatless = !s.unlimited;
+      r.serverBooked = +s.booked_pax || 0;
+      r.seatsConsumed = boatless ? 0 : (+s.booked_pax || 0); r.lockedSeats = boatless ? 0 : (+s.locked_pax || 0); r.charterPax = +s.charter_pax || 0;
       r.unplacedPax = +s.unplaced_pax || 0; r.unlimited = !!s.unlimited; r.serverAvailable = s.available_seats; r.fromServer = true;
     }
     return r;
