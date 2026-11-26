@@ -20418,7 +20418,7 @@ function _flMaintTimelineInner(m){
       if(it.kind==='note' || it.rows.length<2){
         const txt=it.kind==='note'?it.text:it.raw;
         const sys=isSys(it.by)&&!(it.kind==='wd');
-        return '<div class="mjtl-it'+(sys?' sys':'')+(it.kind==='wd'?' wd':'')+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-tx">'+txt+'</div>'+byLine(it)+'</div>';
+        return '<div class="mjtl-it'+(sys?' sys':'')+(it.kind==='wd'?' wd':'')+(nw?' new':'')+'"><span class="d"></span><div class="mjtl-tx" style="white-space:pre-line">'+txt+'</div>'+byLine(it)+'</div>';   /* §mjNoteLines */
       }
       const rows=it.rows.slice().reverse();
       const tot=rows.reduce((s,r)=>s+r.amt,0), nz=rows.filter(r=>!r.amt).length;
@@ -20768,7 +20768,9 @@ function flRenderMaintDetailPink(){
     <div style="font-size:13px;font-weight:600;margin-bottom:8px">Progress timeline</div>
     <div id="maint-timeline-body-${m.id}" style="background:#FBFAF7;border-radius:10px;padding:12px 14px">${_flMaintTimelineInner(m)}</div>
     ${m.status!=='done'?`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-      <input id="maint-log-text-${m.id}" placeholder="Add progress note..." style="flex:1;min-width:160px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 12px;font-size:11px;outline:none;font-family:inherit"/>
+      <!-- §mjNoteLines (2026-11-26) · owner วางบันทึกช่างหลายบรรทัดแล้ว "มันไม่เรียงให้" · ช่อง input บรรทัดเดียวตัดการขึ้นบรรทัดทิ้งตอนวาง
+           เปลี่ยนเป็น textarea ที่ยืดตามข้อความ · Enter = ขึ้นบรรทัดใหม่ · ไทม์ไลน์แสดงตามบรรทัดที่พิมพ์ (white-space:pre-line) -->
+      <textarea id="maint-log-text-${m.id}" rows="1" placeholder="Add progress note... (Enter = ขึ้นบรรทัดใหม่)" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,260)+'px'" style="flex:1;min-width:160px;min-height:34px;resize:vertical;line-height:1.5;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 12px;font-size:11px;outline:none;font-family:inherit;box-sizing:border-box"></textarea>
       <input type="date" id="maint-log-date-${m.id}" value="${TODAY_STR}" style="width:120px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;color:${dim.ink2}"/>
       <input id="maint-log-by-${m.id}" placeholder="By..." style="width:80px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 12px;font-size:11px;outline:none;font-family:inherit"/>
       <button onclick="flMaintAddLog('${m.id}')" style="background:${SVG_PINK.accent};color:white;border:none;border-radius:10px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer">Log</button>

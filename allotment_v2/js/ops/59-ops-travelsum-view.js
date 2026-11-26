@@ -209,7 +209,9 @@
     var packs = '<button class="h4-gh" data-ops-ts-refpack="1" onclick="laOps.travelRows.printPack(\'ref\')" title="พิมพ์เอกสารประกอบของชุดนี้ · ' + V.ref.length + ' ใบ">เอกสาร <b>' + V.nRefFiles + '</b></button>'
       + (V.slipPending
         ? '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.slipsLoad()" title="อ่านสลิปของ ' + V.slipPending + ' ใบที่มีเงินเข้า">โหลดสลิป <b>' + V.slipPending + '</b></button>'
-        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>');
+        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>')
+      /* §tsPenPack (lk-inbox c0a2f5c6) · the penalty-decision evidence as its own pack, after the others; none when no case has a file */
+      + (V.nPenFiles ? '<button class="h4-gh" data-ops-ts-penpack="1" onclick="laOps.travelRows.printPack(\'pen\')" title="พิมพ์หลักฐานประกอบคำตัดสิน (ยกเลิก / เลื่อนวัน) · ' + V.pens.length + ' เคส">หลักฐาน <b>' + V.nPenFiles + '</b></button>' : '');
     html = html.replace('<button class="h4-pri"', packs + '<button class="h4-pri"');
     return html;
   }
@@ -275,8 +277,9 @@
           + (dec ? '<button class="ts-db del" onclick="tsClear(\'' + id + '\',\'' + d + '\')">ล้าง</button>' : '')
           + '</div>'
           + (part ? '<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป ' + e(lostW) + '</b> &middot; อีก <b>' + e(goW) + '</b> ที่เดินทางจ่ายตามปกติ</div>' : '')
-          + '<input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง"></td>'
-        + '<td class="c">' + (dec
+          + '<input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง">'
+          + penRow(r.id, d, e) + '</td>'   /* §tsPenFile (lk-inbox 661db8cc) · the decision's evidence files, from the server's penalty_files */
+        + '<td class="c">' + penTag(r.id, d, e) + (dec
           ? '<span class="ts-chip ' + (DEC[dec.decision] || DEC.none)[1] + '">' + e(decLbl(dec)) + (dec.decision === 'postpone' ? '' : ' · ' + money(dec.amount)) + '</span>'
             + '<div class="ts-tel" style="margin-top:3px">' + e(dec.by || '') + (dec.at ? ' · ' + e(text(dec.at).slice(0, 16).replace('T', ' ')) : '') + '</div>'
           : '<span class="ts-chip r">รอตัดสิน</span>') + '</td></tr>';
@@ -950,6 +953,39 @@
       redraw();
     }, function(e){ O.fail('Moved row not cleared', e); });
   };
+  /* §tsPenFile (lk-inbox 661db8cc) · evidence files of a penalty / cancel decision. Legacy keeps them on bk.paymentSlips (kind
+     'penalty:<date>'); the server keeps them apart (operation-backend migration 680), per booking and date, listed in /v1/after-trip's
+     penalty_files. Attach: POST /v1/bookings/:id/penalty-files/:date {attachment_id} (no If-Match: evidence added after the fact);
+     remove: DELETE /v1/bookings/:id/penalty-files/:date/:attachment_id, then the file itself (DELETE /v1/attachments/:id).
+     The legacy markup builders (tsPenFileRow, tsPenFileTag) are reused; they read tsPenFiles, answered here from the server. */
+  function penFiles(bkId, date){
+    var a = T() && T().afterRow ? T().afterRow(date, bkId) : null;
+    return ((a && a.penalty_files) || []).map(function(f){ return { id: f.id, name: f.name || f.id, mime: f.mime || '', size: n(f.size), by: f.by || '', at: f.at || '', kind: 'penalty:' + date }; });
+  }
+  function penRow(bkId, date, e){ return call('tsPenFileRow', [bkId, date, e], ''); }
+  function penTag(bkId, date, e){ return call('tsPenFileTag', [bkId, date, e], '').replace(/^<div style="margin-top:4px">/, '<div style="margin-bottom:4px">'); }
+  function penPick(bkId, date, inp){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')){ if(inp) inp.value = ''; return; }
+    var fs = Array.prototype.slice.call((inp && inp.files) || []); if(inp) inp.value = '';
+    if(!fs.length) return;
+    if(typeof window.pckSlipUpload !== 'function'){ alert('แนบไฟล์ไม่ได้ในหน้านี้'); return; }
+    fs.forEach(function(f){ window.pckSlipUpload(f, bkId, function(meta){
+      return O.queue(function(){ return O.call('POST', '/v1/bookings/' + enc(bkId) + '/penalty-files/' + enc(date), { attachment_id: meta.id }); })
+        .then(function(){ O.wrote('penalty-files'); redraw(); }, function(e){ O.fail('Evidence file was not attached', e); return dropUpload(meta.id); });
+    }); });
+  }
+  function penDrop(bkId, date, fid){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return;
+    var f = penFiles(bkId, date).filter(function(x){ return x.id === fid; })[0]; if(!f) return;
+    if(!window.confirm('ลบไฟล์ "' + (f.name || fid) + '" ทิ้งถาวร?\n\nไฟล์จะถูกลบออกจากระบบ · คำตัดสินไม่เปลี่ยน')) return;
+    return O.queue(function(){ return O.call('DELETE', '/v1/bookings/' + enc(bkId) + '/penalty-files/' + enc(date) + '/' + enc(fid)); })
+      .then(function(){ O.wrote('penalty-files'); return dropUpload(fid); }, function(e){ O.fail('Evidence file was not removed', e); })
+      .then(redraw);
+  }
+  wrap('tsPenFiles', function(orig, bkId, date){ return penFiles(bkId, date); });
+  wrap('tsPenFilePick', function(orig, bkId, date, inp){ return penPick(bkId, date, inp); });
+  wrap('tsPenFileDrop', function(orig, bkId, date, fid){ return penDrop(bkId, date, fid); });
+  wrap('tsPenPackList', function(){ return []; });   /* §tsPenPack · printed as its own pack (laOps.travelRows.printPack('pen')), as the other packs here */
   wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
   wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });
   O.onWrite(function(){ last = {}; });

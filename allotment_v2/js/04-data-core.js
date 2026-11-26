@@ -421,7 +421,7 @@ function laJobOverdue(m){ var d=String((m&&m.dueDate)||'').slice(0,10); return !
 /* แถวสถานะที่มาจากใบซ่อม (note "Maintenance Job MJ-xxx" หรือ id sl_sync_<job id>) ยังไม่มีวันจบ และใบยังทำอยู่ → วันสุดท้ายที่นับ · ไม่เข้าเงื่อนไข = '' */
 function laRowDueEnd(e){
   try{
-    if(!e || e.to || (e.s||'available')==='available') return '';
+    if(!e || (e.s||'available')==='available') return '';   /* §mjDueRow · แถวที่มีวันจบก็ถามได้ · คนเรียกเอาวันที่มาก่อน */
     if(typeof FL_MAINT==='undefined' || !Array.isArray(FL_MAINT)) return '';
     var mm=/Maintenance Job (MJ-\d+)/.exec(String(e.note||'')), no=mm?mm[1]:'', id=String(e.id||'');
     if(!no && id.indexOf('sl_sync_')!==0) return '';
@@ -440,7 +440,10 @@ function getStoredStatus(boat,ds){
     .sort((a,b)=> b.e.from.localeCompare(a.e.from) || (b.i-a.i))
     .map(x=>x.e);
   /* §mjDue · แถวซ่อมที่ยังไม่มีวันจบ แต่ใบงานของมันตั้งกำหนดเสร็จไว้ → นับถึงวันกำหนดเสร็จ (ดู laJobDueEnd) */
-  const hit=sorted.find(e=>{ if(e.from>ds) return false; if(e.to) return e.to>=ds; const cap=laRowDueEnd(e); return !cap || cap>=ds; });
+  /* §mjDueRow (2026-11-26) · แถวซ่อมที่ระบบปิดวันจบให้เอง (วันก่อนแถว "พร้อม" ที่วางล่วงหน้า · §bsFuture) เคยไม่ขยับตาม Due
+     เคสจริง MJ-412 Tadeo · Due 27 พ.ย. แต่แถว Fixing จบ 31 ธ.ค. → เรือขึ้นซ่อมทั้งเดือน ธ.ค.
+     ตอนนี้แถวของใบซ่อมที่ยังทำอยู่ จบที่วันที่มาก่อนระหว่างวันจบของแถว กับ Due ของใบ */
+  const hit=sorted.find(e=>{ if(e.from>ds) return false; if(e.to && e.to<ds) return false; const cap=laRowDueEnd(e); return !cap || cap>=ds; });
   if(hit) return hit;
   /* ══ §chWin · "ไม่มีรายการคลุมวันนั้น" แปลไม่เหมือนกันระหว่างเรือสองแบบ ═════════
      log สถานะถูกออกแบบเป็น "รายการข้อยกเว้น" ไม่ใช่ "ปฏิทินว่าเรือมีอยู่วันไหน"
