@@ -78,6 +78,21 @@
   }
   function rcDate(){ try{ return _rcDate || O.today(); }catch(_){ return ''; } }
   function pckDate(){ try{ return _pckDate; }catch(_){ return ''; } }
+  /* K4 (parity 2026-11-26c) · §rcAreaNames on the Booking page too: By trip's pickup cells and area chips name the area
+     (bookingV2GetArea), legacy's database names ("Nang Thong"), not the code's seed ("Nang Thong / La Flora") */
+  (function(){
+    var orig = window.bookingV2Render; if(typeof orig !== 'function' || orig.__k4Areas) return;
+    var tried = false;   // one read: a failed one is not retried on every draw
+    var w = function(){
+      var r = orig.apply(this, arguments);
+      if(!tried && O.enabled() && O.pickup && typeof O.pickup.load === 'function' && !(O.pickup.isReady && O.pickup.isReady())){
+        tried = true;
+        O.pickup.load().then(function(){ O.redrawLater('bookingV2Render'); }, function(e){ try{ console.warn('[ops] pickup areas did not load · ' + (e && e.message)); }catch(_){} });
+      }
+      return r;
+    };
+    w.__k4Areas = true; w.__orig = orig; window.bookingV2Render = w;
+  })();
   after('renderReconfirm', rcDate, 'reconfirm-host');
   after('renderPierCheckin', pckDate, 'piercheckin-host');
 })();

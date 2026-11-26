@@ -141,7 +141,7 @@
     appr.busy = true;
     O.get('/v1/bookings/stats').then(function(j){
       appr.busy = false; if(!j) return;
-      window._opsAllStats = j;
+      /* K5: both pages' count for the tab badge (legacy counts every SB_BOOKINGS); the cards' stats are the page's (bookingV2OpsEnsureSummary) */
       var n = Number(j.by_status && j.by_status.pending_approval) || 0, changed = appr.n !== n;
       appr.n = n; if(changed) redrawBooking();
     }, function(){ appr.busy = false; appr.failedAt = Date.now(); });
@@ -161,7 +161,9 @@
     if(kind === 'booking' && window._opsAllStats){
       clearTimeout(statsTimer);
       statsTimer = setTimeout(function(){
-        O.get('/v1/bookings/stats').then(function(j){ if(j){ window._opsAllStats = j; redraw(); } }, function(){});
+        /* K5: the page's stats again (?land), as bookingV2OpsEnsureSummary reads them */
+        if(typeof window._opsDropBookingAggregates === 'function') window._opsDropBookingAggregates();
+        if(typeof window.bookingV2OpsEnsureSummary === 'function'){ var p = window.bookingV2OpsEnsureSummary(); if(p && p.then) p.then(function(){ redraw(); }, function(){}); }
       }, 400);
     }
   });

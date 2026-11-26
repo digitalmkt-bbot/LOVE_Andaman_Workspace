@@ -34,7 +34,8 @@ function bookingV2TopbarMeta(){
     // use the server aggregate rather than treating that cache length as all-time.
     const ops = window.laOps && typeof window.laOps.enabled === 'function' && window.laOps.enabled();
     const stats = ops ? window._opsAllStats : null;
-    const total = stats && Number.isFinite(Number(stats.total)) ? Number(stats.total) : SB_BOOKINGS.length;
+    /* K5: the page's stats carry all_total, both pages' count (legacy SB_BOOKINGS.length) */
+    const total = stats && Number.isFinite(Number(stats.all_total != null ? stats.all_total : stats.total)) ? Number(stats.all_total != null ? stats.all_total : stats.total) : SB_BOOKINGS.length;
     return `${total} bookings total`;
   }
 }

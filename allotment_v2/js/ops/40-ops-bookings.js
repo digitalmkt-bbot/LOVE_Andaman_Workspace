@@ -1017,7 +1017,14 @@
         if(j && j.next_cursor && all.length < 2000) return page(j.next_cursor);
       });
     }
-    pendingBusy=page(null).then(function(){
+    /* K3 (parity 2026-11-26c): the tab's "ประวัติล่าสุด" draws the newest decided approvals from SB_BOOKINGS, which in ops mode
+       holds only the months in view · GET /v1/bookings/approvals/recent brings those bookings, any travel date, for each page */
+    function recent(land){
+      return O.get('/v1/bookings/approvals/recent', { land: land ? 'true' : 'false', limit: 15 }).then(function(j){
+        Array.prototype.push.apply(all, (j && j.bookings) || []);
+      }, function(e){ try{ console.warn('[ops] recent approvals · ' + (e && e.message)); }catch(_){} });
+    }
+    pendingBusy=Promise.all([page(null), recent(false), recent(true)]).then(function(){
       var n = 0; all.forEach(function(ob){ if(upsert(ob)) n++; });
       if(n) persist(); pendingAt=Date.now();
       try{ console.log('[ops] pending approvals · ' + all.length); }catch(_){}

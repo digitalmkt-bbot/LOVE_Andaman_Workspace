@@ -108,14 +108,24 @@ function bookingV2OpsRetryMonth(month){
   delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to})];
   bookingV2Render();
 }
+/* K5 (parity 2026-11-26c): the All-bookings cards and month chips count the page's bookings (legacy _ctLandBk: the City Tour page
+   its land bookings, the marine page the rest), ?land=true|false; one summary per page, kept apart. The title's total is both pages'. */
+var _opsSummaryBy=Object.create(null);
 function bookingV2OpsEnsureSummary(){
   if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return null;
-  var key='summary';
-  if(_opsBookingRanges[key]) return null;
+  var side=window._bkV2CityTourOnly?'land':'marine', key='summary|'+side, land=side==='land'?'true':'false';
+  if(_opsBookingRanges[key]){
+    var have=_opsSummaryBy[side];
+    if(have){ window._opsAllStats=have.stats; window._opsAllMonthCounts=have.monthCounts; }
+    return null;
+  }
   if(_opsBookingRangeLoads[key]) return _opsBookingRangeLoads[key];
-  function fetchStats(){ return window.laOpsFetch('/v1/bookings/stats').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllStats=j; }); }
-  function fetchMonthCounts(){ return window.laOpsFetch('/v1/bookings/month-counts').then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) window._opsAllMonthCounts=j; }); }
+  var got={};
+  function fetchStats(){ return window.laOpsFetch('/v1/bookings/stats?land='+land).then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) got.stats=j; }); }
+  function fetchMonthCounts(){ return window.laOpsFetch('/v1/bookings/month-counts?land='+land).then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(j) got.monthCounts=j; }); }
   var load=Promise.all([fetchStats(), fetchMonthCounts()]).then(function(){
+    _opsSummaryBy[side]={stats:got.stats, monthCounts:got.monthCounts};
+    if((window._bkV2CityTourOnly?'land':'marine')===side){ window._opsAllStats=got.stats; window._opsAllMonthCounts=got.monthCounts; }
     _opsBookingRanges[key]=true;
     return {stats:window._opsAllStats, monthCounts:window._opsAllMonthCounts};
   }).catch(function(e){
@@ -274,8 +284,8 @@ var _opsBookingWriteHook=false;
    changed booking itself is merged into SB_BOOKINGS, which every screen filters). */
 function _opsDropBookingAggregates(){
   _opsDailyCounts=Object.create(null);
-  delete window._opsAllStats; delete window._opsAllMonthCounts;
-  Object.keys(_opsBookingRanges).forEach(function(k){ if(k==='summary'||k==='all'||k.indexOf('recent|')===0) delete _opsBookingRanges[k]; });
+  delete window._opsAllStats; delete window._opsAllMonthCounts; _opsSummaryBy=Object.create(null);
+  Object.keys(_opsBookingRanges).forEach(function(k){ if(k.indexOf('summary')===0||k==='all'||k.indexOf('recent|')===0) delete _opsBookingRanges[k]; });
 }
 /* Local writes that move OTHER bookings' fields on the server (check-in, van arrival, trip arrangement, deployments,
    pickups): the loaded days are re-read on next use, as before. */
@@ -320,7 +330,7 @@ function bookingV2OpsAttachWriteInvalidation(){
     if(/^remote:/.test(kind)) return;
     if(OPS_WRITE_DROPS_RANGES.test(kind)){
       _opsBookingRanges=Object.create(null); _opsDailyCounts=Object.create(null);
-      delete window._opsAllStats; delete window._opsAllMonthCounts;
+      delete window._opsAllStats; delete window._opsAllMonthCounts; _opsSummaryBy=Object.create(null);
       return;
     }
     if(OPS_WRITE_BOOKING.test(kind)) _opsDropBookingAggregates();
