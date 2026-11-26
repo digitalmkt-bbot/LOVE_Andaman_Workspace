@@ -21054,7 +21054,7 @@ function _flStashPartRecord(rec,isGb,locKey,locLabel,srcNo,note){
   const origin=isGb?(rec.note||rec.pos||'') : (rec.note||'');
   rec.status='spare';
   rec.spareLocation=locKey;
-  if(isGb) rec.engineId=null;   // gearbox detaches from its engine
+  if(isGb){ rec.engineId=null; rec.boatId=null; rec.onBoatId=null; rec.onBoatPos=null; }   // gearbox detaches from its engine · §gbNoEng ออกจากเรือด้วย
   else   { rec.gearboxId=null; rec.boatId=null; }  // propeller detaches from its gearbox · §propNoGb ออกจากเรือด้วย
   if(!rec.log) rec.log=[];
   rec.log.push({date:TODAY_STR,type:'remove',desc:`ถอดเก็บจาก Job ${srcNo}${origin?' · '+origin:''} → ${locLabel}${note?' · '+note:''}`});
@@ -21695,6 +21695,9 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         if(outcome==='success'||outcome==='limited') gb.installHours=installH;
         if(out.gbStatus) gb.status=out.gbStatus;
         else if(gb.status==='fixing') gb.status='ready';
+        /* §gbNoEng (2026-11-26) · เกียร์ที่ถูก "ถอดเก็บ" ไปคลัง/อู่ระหว่างงาน ปิดงานแล้วเคยค้างเป็น Ready ติดเรือ ไม่ผูกเครื่อง
+           (เคสจริง OCE-250D-XXD-C · ตัวอยู่อู่ Honda) · ยังไม่ได้ใส่กลับ = สำรอง ณ ที่เก็บ ไม่อยู่บนเรือ */
+        if(!gb.engineId && !gb.onBoatId && gb.spareLocation && gb.status==='ready'){ gb.status='spare'; gb.boatId=null; }
       }
     }
     if(a.type==='propeller'&&a.propId){
@@ -21718,6 +21721,9 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         gb.log.push({date:TODAY_STR,type:'repair',desc:`${out.icon} ${out.label} · ${m.no} · ${m.title}${noteTxt}`,cost:totalCost,outcome});
         if(out.gbStatus) gb.status=out.gbStatus;
         else if(gb.status==='fixing') gb.status='ready';
+        /* §gbNoEng (2026-11-26) · เกียร์ที่ถูก "ถอดเก็บ" ไปคลัง/อู่ระหว่างงาน ปิดงานแล้วเคยค้างเป็น Ready ติดเรือ ไม่ผูกเครื่อง
+           (เคสจริง OCE-250D-XXD-C · ตัวอยู่อู่ Honda) · ยังไม่ได้ใส่กลับ = สำรอง ณ ที่เก็บ ไม่อยู่บนเรือ */
+        if(!gb.engineId && !gb.onBoatId && gb.spareLocation && gb.status==='ready'){ gb.status='spare'; gb.boatId=null; }
       }
     }
   });
@@ -30829,7 +30835,8 @@ function faPartDetail(r){
   if(r.flags.indexOf('noeng')>=0){   // §eqLink · offer the free engines on the same boat
     var fe=(FL_ENGINES||[]).filter(function(x){ return x.boatId===o.boatId && !(FL_GEARBOXES||[]).some(function(g){ return g.engineId===x.id; }); }).sort(function(a,z){ return flPosRank(a.pos)-flPosRank(z.pos); });
     A.push({k:'red',h:'<b>ต้องเช็ก:</b> ติดอยู่บนเรือแต่ยังไม่ได้ผูกกับเครื่อง — ชั่วโมงเกียร์จะไม่เดิน'+(fe.length?(' · เครื่องที่ว่างบนเรือนี้: '+fe.map(function(x){ return faE(x.serial)+' ('+faE(faPosOf(x.pos)||x.pos||'')+')'; }).join(', ')):' · บนเรือนี้ไม่มีเครื่องว่าง'),
-      b:fe.slice(0,2).map(function(x){ return '<button type="button" class="fa-btn pri" onclick="flEqQuickLink(\''+o.id+'\',\''+x.id+'\')">ผูกกับ '+faE(x.serial)+'</button>'; }).join('')+'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+o.boatId+'\')">เลือกเอง…</button>'}); }
+      b:fe.slice(0,2).map(function(x){ return '<button type="button" class="fa-btn pri" onclick="flEqQuickLink(\''+o.id+'\',\''+x.id+'\')">ผูกกับ '+faE(x.serial)+'</button>'; }).join('')+'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+o.boatId+'\')">เลือกเอง…</button>'
+        +'<button type="button" class="fa-btn" onclick="faGbFix(\''+o.id+'\')">ถอดออกแล้ว → ออกจากเรือ</button>'}); }   /* §gbNoEng */
   if(r.wait) A.push({k:'amb',h:'<b>รอเครื่อง</b> — '+(r.st==='fixing'?'เกียร์ซ่อมอยู่':('คาเรือ'+(o.onBoatPos?(' ที่ '+faE(faPosOf(o.onBoatPos)||o.onBoatPos)):'')+' ระหว่างเครื่องถอดออก'))+' · เมื่อเครื่องลงตำแหน่งนี้จะผูกให้เอง',b:'<button type="button" class="fa-btn" onclick="flEquipOpen(\''+r.boatId+'\')">เปิดหน้าเรือ</button>'});
   if(r.kind==='eng' && o.boatId && !r.gb) A.push({k:'amb',h:'<b>ยังไม่มีเกียร์</b> — เครื่องนี้ติดเรืออยู่แต่ยังไม่ได้ผูกเกียร์',b:'<button type="button" class="fa-btn pri" onclick="flEquipOpenPick(\''+o.boatId+'\',\'gb\',\''+o.id+'\')">ใส่เกียร์</button>'});
   if(r.flags.indexOf('spareonboat')>=0) A.push({k:'amb',h:'สถานะเป็น Spare แต่ยังผูกกับเรือ '+faE(b?b.name:''),b:''});
@@ -31120,6 +31127,15 @@ function faBoatSide(o){
 FA.ov=null;
 function faOvPick(id){ FA.ov=id; flRenderOverview(); }
 function faAllParts(){ return [].concat((FL_ENGINES||[]).map(function(o){ return faPart('eng',o); }),(FL_GEARBOXES||[]).map(function(o){ return faPart('gb',o); }),(FL_PROPELLERS||[]).map(function(o){ return faPart('prop',o); })); }
+function faGbFix(id){   /* §gbNoEng · เกียร์ที่ขึ้นว่าติดเรือแต่ไม่ผูกเครื่อง และตัวจริงถูกถอดออกแล้ว → ออกจากเรือ · ที่เก็บเดิมคงไว้ */
+  var g=(FL_GEARBOXES||[]).find(function(x){ return x.id===id; }); if(!g || g.engineId) return;
+  var wb=g.boatId?((getBoat(g.boatId)||{}).name||g.boatId):'';
+  if(!confirm('เกียร์ '+(g.serial||'')+' ถูกถอดออกจาก '+(wb||'เรือ')+' แล้วใช่ไหม?\n\nระบบจะเอาออกจากเรือ'+(g.spareLocation?(' · ที่เก็บ '+_flEqLocLabel(g.spareLocation)):' · ต้องระบุที่เก็บต่อ'))) return;
+  g.boatId=null; g.onBoatId=null; g.onBoatPos=null; if(g.status==='ready') g.status='spare';
+  _flEquipLog(g,'remove','ออกจาก '+(wb||'เรือ')+' (ถอดออกแล้ว · ไม่ได้ผูกเครื่อง)'+(g.spareLocation?(' · ที่เก็บ '+_flEqLocLabel(g.spareLocation)):' · ระบุที่เก็บต่อ'));
+  (FL_PROPELLERS||[]).forEach(function(pp){ if(pp.gearboxId===g.id) _flEquipPropSync(pp); });
+  if(typeof flSave==='function') flSave(); if(typeof flRenderAsset==='function') flRenderAsset();
+}
 function faPropFix(id,how){   /* §propBoat · user-triggered fix for a Spare propeller still linked to a gearbox */
   var p=(FL_PROPELLERS||[]).find(function(x){ return x.id===id; }); if(!p) return;
   if(how==='on'){ p.status='active'; p.spareLocation=null; _flEquipPropSync(p); _flEquipLog(p,'status','ตั้งเป็น Active (ติดอยู่บนเกียร์)'); }
