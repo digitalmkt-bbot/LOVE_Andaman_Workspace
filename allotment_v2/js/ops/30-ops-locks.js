@@ -45,8 +45,10 @@
       dateFrom: '', dateTo: '', dow: [], releaseDaysBefore: null, releaseTime: '',
       monthFrom: '', monthTo: '', month: '', pendQty: 0, releasedPax: +r.released_pax || 0 };
   }
+  /* K1 (2026-11-27): legacy's `used` counter is the server's used_pax (drawn seats + the drift legacy's counter left, §lkSweep) */
+  function usedOf(r){ return r.used_pax != null ? (+r.used_pax || 0) : (+r.drawn_pax || 0); }
   function one(r){
-    var d = r.service_date, drawn = +r.drawn_pax || 0, o = common(r);
+    var d = r.service_date, drawn = usedOf(r), o = common(r);
     o.id = r.id; o.scope = 'day'; o.date = d; o.month = String(d || '').slice(0, 7);
     o.qty = (+r.pax || 0) - (+r.released_pax || 0); o.used = drawn; o.usedBy = {}; if(drawn) o.usedBy[d] = drawn;
     o.pendQty = +r.pending_pax || 0;
@@ -106,6 +108,7 @@
         if(r.status === 'released') G.releasedDates.push(d);
         else { if(!open) open = r; if(r.state !== 'depleted') anyLeft = true; }
       });
+      if(g.used_pax != null) G.used = +g.used_pax || 0;   /* K1: the bulk lock's counter, its drift included */
       G.releasedPax = open ? (+open.released_pax || 0) : 0;
       G.qty = open ? (+open.pax || 0) - G.releasedPax : (+g.pax || 0);
       G.status = g.state === 'released' ? 'released' : g.state === 'expired' ? 'expired'
@@ -123,7 +126,7 @@
           K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {};
           K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
         }
-        var drawn = +c.drawn_pax || 0; K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
+        var drawn = usedOf(c); K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
         if(drawn){ K.usedBy[c.service_date] = drawn; K.used += drawn; }
       }); });
     });
@@ -131,13 +134,18 @@
   }
 
   /* ── read ─────────────────────────────────────────────────────────────── */
+  /* K1: legacy's sweep (§lkSweep) as the server works it out · GET /v1/seat-locks/sweep, read with the list */
+  var sweepData = null;
   function load(){
     if(loading){ again = true; return loading; }
     // w5-a: CS's embed token may read /v1/seat-locks but not the groups; the page then shows single locks only
-    loading = Promise.all([O.get('/v1/seat-locks', { include: 'log' }), window.__laEmbedToken ? Promise.resolve(null) : O.get('/v1/seat-lock-groups')]).then(function(a){
+    var embed = !!window.__laEmbedToken;
+    loading = Promise.all([O.get('/v1/seat-locks', { include: 'log' }), embed ? Promise.resolve(null) : O.get('/v1/seat-lock-groups'),
+      embed ? Promise.resolve(null) : O.get('/v1/seat-locks/sweep').catch(function(e){ try{ console.warn('[ops] seat-lock sweep · ' + (e && e.message)); }catch(_){} return null; })]).then(function(a){
       var A = locks(); if(!A) return;
       var next = build((a[0] && a[0].seat_locks) || [], (a[1] && a[1].seat_lock_groups) || []);
       A.length = 0; Array.prototype.push.apply(A, next);
+      sweepData = a[2] || null;
       ready = true;
       markHolds();
       if(holdSig === null) holdSig = holdsSig();
@@ -474,8 +482,23 @@
   })();
 
   /* what the server works out on every read · the browser's own sweeps would only fight it */
-  ['bookingV2LockExpireSweep', 'bookingV2LockFixTree', 'bookingV2LockFixUsed', 'bookingV2LockSweepFixAll', 'bookingV2LockHealRange'].forEach(function(n){
+  ['bookingV2LockExpireSweep', 'bookingV2LockFixTree', 'bookingV2LockFixUsed', 'bookingV2LockHealRange'].forEach(function(n){
     def(n, function(){ return 0; });
+  });
+  /* K1: legacy "คืนที่นั่งทั้งหมด" · one command, POST /v1/seat-locks/sweep/fix · legacy's own confirm and alert words */
+  def('bookingV2LockSweepFixAll', function(){
+    if(typeof laGuardEdit === 'function' && !laGuardEdit('operations')) return;
+    var S = window.bookingV2LockSweep();
+    if(!S.nBad){ alert('ไม่มีล็อคไหนที่ตัวนับไม่ตรงกับใบจอง'); return; }
+    if(!confirm('คืนที่นั่งที่ไม่มีใบจองรออยู่ กลับเข้าล็อคทั้งหมด?\n\n'
+      + S.nBad + ' ล็อค · ' + S.seats + ' ที่\n'
+      + '· ใบย้ายวันไปแล้ว ' + S.seatsMoved + ' ที่\n'
+      + '· ใบยกเลิกไปแล้ว ' + S.seatsDead + ' ที่\n\n'
+      + 'จำนวนที่กันไว้ (qty) ไม่เปลี่ยน · แก้เฉพาะตัวนับที่ใช้ไป')) return;
+    return go('Seat locks not reconciled', function(){ return O.post('/v1/seat-locks/sweep/fix', {}); }).then(function(r){
+      if(r) alert('คืนแล้ว ' + (+r.seats || 0) + ' ที่ จาก ' + (+r.locks || 0) + ' ล็อค');
+      render();
+    });
   });
 
   /* ── legacy's lock rules answered from the server's numbers ────────────────
@@ -546,15 +569,29 @@
     var G = l && (l.isGroup ? l : (l.parentId ? find(l.parentId) : null));
     return (G && G.isGroup && G.departures != null) ? { total: +G.departures || 0, past: +G.departuresPast || 0 } : orig(l);
   });
-  /* the server works out drawn_pax from live draws: nothing drifts, so nothing is audited or swept here */
+  /* K1: the counter (used = used_pax) against the seats the server counts drawn · legacy's diff, for the lock manage popup */
+  function liveOf(l){ if(!l || !l.srv || !l.srv.drawn) return Number(l && l.used) || 0; var n = 0; Object.keys(l.srv.drawn).forEach(function(d){ n += +l.srv.drawn[d] || 0; }); return n; }
   defO('bookingV2LockAudit', function(orig, l){
-    var a = orig(l); if(a){ a.live = a.used; a.diff = 0; } return a;
+    var a = orig(l); if(a){ a.used = Number(l && l.used) || 0; a.live = liveOf(l); a.diff = a.used - a.live; } return a;
   });
   defO('bookingV2LockAuditTree', function(orig, p){
     var a = orig(p); if(a){ a.live = a.used; a.diff = 0; a.bad = 0; } return a;
   });
+  /* K1: legacy's sweep · the server's answer (GET /v1/seat-locks/sweep) in legacy's shape; names drawn with legacy's own helpers */
   defO('bookingV2LockSweep', function(orig){
-    return { rows: [], over: [], locks: (locks() || []).length, nBad: 0, nOver: 0, seats: 0, seatsMoved: 0, seatsDead: 0, seatsOver: 0 };
+    var S = sweepData, A = locks() || [];
+    if(!S) return { rows: [], over: [], locks: A.length, nBad: 0, nOver: 0, seats: 0, seatsMoved: 0, seatsDead: 0, seatsOver: 0 };
+    function lockOf(r){ var id = r.lock_id || r.group_id; return A.find(function(x){ return x && x.id === id; }) || null; }
+    function nameOf(r){
+      var L = lockOf(r), nm = L ? bookingV2LockHolderName(L) : (r.agent_id || (r.holder_type === 'global' ? 'Global pool' : 'Office hold'));
+      return nm + ((r.parent_id || (L && L.parentId)) ? (' · ' + ((L && L.subName) || r.sub_name || 'ย่อย')) : '');
+    }
+    return {
+      rows: (S.rows || []).map(function(r){ return { id: r.lock_id || r.group_id, name: nameOf(r), date: r.service_date || '', routeId: r.route_id || '',
+        qty: r.qty, used: r.used, live: r.live, diff: r.diff, moved: r.moved, dead: r.dead, vcs: r.vcs || [] }; }),
+      over: (S.over || []).map(function(r){ return { id: r.lock_id || r.group_id, name: nameOf(r), date: r.service_date || '', routeId: r.route_id || '',
+        qty: r.qty, alloc: r.alloc, unalloc: r.unalloc, used: r.used, over: r.over }; }),
+      locks: +S.locks || 0, nBad: +S.n_bad || 0, nOver: +S.n_over || 0, seats: +S.seats || 0, seatsMoved: +S.seats_moved || 0, seatsDead: +S.seats_dead || 0, seatsOver: +S.seats_over || 0 };
   });
   /* seats held off sale on a route-day: locked_pax from GET /v1/availability when that day is in hand */
   defO('bookingV2LockedTotal', function(orig, routeId, date){
