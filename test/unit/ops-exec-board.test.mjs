@@ -62,6 +62,8 @@ test('the numbers on screen are the answer\'s', async () => {
   const b = board(H);
   let html = await draw(b, { tab: 'gap', gp: 'h' });
   assert.ok(html.includes('>' + A.gap.totals.gap.toLocaleString('en-US') + '</span> ที่นั่ง'), 'gap seats');
+  assert.ok(html.includes('<span>House / Company</span><span class="b"><i style="width:100%"></i></span><span class="n">20 วัน'), 'the lead card is the gap answer\'s lead (legacy leadCompact), longest median first');
+  assert.equal(b.rt.requests.some((r) => r.path.includes('/overview')), false, 'the Gap tab reads no overview for its lead card');
   b.EB.gx = 's1'; b.rt.ctx.ebRender(); html = b.wrap.innerHTML;
   assert.match(html, /eg-sx/, 'a salesperson row opens');
   const m = board(H); html = await draw(m, { tab: 'move' });
