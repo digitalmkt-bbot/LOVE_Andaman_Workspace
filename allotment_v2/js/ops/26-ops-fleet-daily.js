@@ -54,6 +54,7 @@
     loading: null,
     waterByKey: {},
     bookedByKey: {},          // 'date|boat' → the server's pax_booked for that boat-day (flBoatBookingsFor)
+    posByKey: {},             // 'date|boat' → the server's move between piers that day (§drPos flPosGet), null when none counts
     issuesByKey: {},
     extrasByKey: {},
     requestsByKey: {},
@@ -179,6 +180,7 @@
     Object.keys(state.prevMeterByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.prevMeterByKey[k]; });
     Object.keys(state.drBoat).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drBoat[k]; });
     Object.keys(state.drPier).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.drPier[k]; });
+    Object.keys(state.posByKey).forEach(function(k){ if(k.indexOf(ds + '|') === 0) delete state.posByKey[k]; });
     if(Array.isArray(day.charter_boats)) state.drCharters[ds] = day.charter_boats.slice(); else delete state.drCharters[ds];
 
     (Array.isArray(day.boats) ? day.boats : []).forEach(function(b){
@@ -197,6 +199,11 @@
         flags: Array.isArray(b.flags) ? b.flags.slice() : []
       };
       if(b.pax_booked != null) state.bookedByKey[ds + '|' + bid] = num(b.pax_booked);
+      if(b.position !== undefined) state.posByKey[ds + '|' + bid] = b.position ? {
+        from: b.position.from, to: b.position.to, rt: b.position.round_trip ? 1 : 0, fuel: b.position.fuel, note: b.position.note || '',
+        manual: b.position.manual ? 1 : 0, auto: b.position.auto ? 1 : 0
+      } : null;
+      if(b.position) dayBoats[bid].pos = state.posByKey[ds + '|' + bid];
       if(b.pax_effective != null) state.drBoat[ds + '|' + bid] = {
         status: b.status || 'available', operated: !!b.operated, ranDespite: !!b.ran_despite,
         paxEffective: num(b.pax_effective), fuelCost: b.fuel_cost != null ? num(b.fuel_cost) : null
@@ -624,6 +631,49 @@
       redrawDailyAndProjects();
       return day;
     }).catch(function(e){ O.fail('Could not ' + cmd + ' daily log', e); return null; });
+  });
+
+  /* §drPos · ตีเรือ ย้ายท่า (legacy 05-fleet.js:9204). Whether a move counts and its litres are the server's
+     (fleet-daily.ts positionOf): GET /v1/fleet/daily-log gives each listed boat's position. A boat the day's answer did not list
+     falls back to legacy's own check (its pier differs from the day before), which is the same rule.
+       flPosFuel    ⇄ PUT    /v1/fleet/daily-log/{date}/boats/{boat_id}/position {fuel}
+       flPosSaveBtn ⇄ PUT    …/position {from, to, round_trip, fuel, note}
+       flPosDelBtn  ⇄ DELETE …/position   (an automatic move is remembered as not made) */
+  wrap('flPosGet', function(orig, ds, b){
+    var k = String(ds || '') + '|' + String((b && b.id) || '');
+    if(b && Object.prototype.hasOwnProperty.call(state.posByKey, k)) return state.posByKey[k];
+    return orig.apply(this, [].slice.call(arguments, 1));
+  });
+  function putPosition(ds, bid, body, what){
+    return O.queue(function(){
+      return body ? O.call('PUT', '/v1/fleet/daily-log/' + enc(ds) + '/boats/' + enc(bid) + '/position', body)
+        : O.del('/v1/fleet/daily-log/' + enc(ds) + '/boats/' + enc(bid) + '/position');
+    }).then(function(day){
+      applyDailyDay(day);
+      O.wrote('fleet-daily-position');
+      redrawDailyAndProjects();
+      return day;
+    }).catch(function(e){ O.fail('Could not ' + what, e); return null; });
+  }
+  wrap('flPosFuel', function(orig, ds, bid, val){
+    var f = parseFloat(val);
+    return putPosition(ds, bid, { fuel: (isFinite(f) && f > 0) ? f : null }, 'save the move fuel');
+  });
+  wrap('flPosSaveBtn', function(orig){
+    var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+    var P = (typeof _FLX_POS !== 'undefined') ? _FLX_POS : {};
+    var bid = P.bid || g('flx-pb'); if(!bid){ alert('Select a boat first.'); return; }
+    var from = g('flx-pf'), to = g('flx-pt'); if(from === to){ alert('From and to must be different piers.'); return; }
+    var f = parseFloat(g('flx-pfu')), rtEl = document.getElementById('flx-prt');
+    var body = { from: from, to: to, round_trip: !!(rtEl && rtEl.checked), fuel: (isFinite(f) && f > 0) ? f : null, note: String(g('flx-pn') || '').trim() || null };
+    if(typeof window.flxClose === 'function') window.flxClose();
+    return putPosition(P.ds, bid, body, 'save the move');
+  });
+  wrap('flPosDelBtn', function(orig){
+    var P = (typeof _FLX_POS !== 'undefined') ? _FLX_POS : {};
+    if(!P.bid) return;
+    if(typeof window.flxClose === 'function') window.flxClose();
+    return putPosition(P.ds, P.bid, null, 'remove the move');
   });
 
   wrap('flWaterGet', function(orig, ds, bid){
@@ -1444,12 +1494,14 @@
 
   function fuelAggFromReport(r){
     var out = { fuel: num(r.fuel), cost: num(r.cost), pax: num(r.pax), tripDays: num(r.trip_days), byBoat: {}, byFam: {}, missing: [], anomalies: [], weekly: {}, priceMissing: !!r.price_missing };
+    if(num(r.position_fuel) > 0){ out.posFuel = num(r.position_fuel); out.posCost = num(r.position_cost); }
     (r.boats || []).forEach(function(b){
       var routes = {};
       (b.routes || []).forEach(function(x){
         routes[x.route_id || '_none'] = { name: x.name, fuel: num(x.fuel), cost: num(x.cost), pax: num(x.pax), days: num(x.days) };
       });
       out.byBoat[b.boat_id] = { id: b.boat_id, name: b.name, fuel: num(b.fuel), cost: num(b.cost), pax: num(b.pax), runH: num(b.run_hours), days: num(b.days), missing: num(b.missing), fdays: [], routes: routes };
+      if(num(b.position_fuel) > 0){ out.byBoat[b.boat_id].posFuel = num(b.position_fuel); out.byBoat[b.boat_id].posCost = num(b.position_cost); }
     });
     (r.families || []).forEach(function(f){ out.byFam[f.family_id] = { name: f.name, fuel: num(f.fuel), cost: num(f.cost), pax: num(f.pax), rev: num(f.revenue) }; });
     (r.missing || []).forEach(function(m){ out.missing.push({ name: m.name, ds: m.date, route: m.route || '' }); });
