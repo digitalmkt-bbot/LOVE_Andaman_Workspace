@@ -212,9 +212,7 @@
     var packs = '<button class="h4-gh" data-ops-ts-refpack="1" onclick="laOps.travelRows.printPack(\'ref\')" title="พิมพ์เอกสารประกอบของชุดนี้ · ' + V.ref.length + ' ใบ">เอกสาร <b>' + V.nRefFiles + '</b></button>'
       + (V.slipPending
         ? '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.slipsLoad()" title="อ่านสลิปของ ' + V.slipPending + ' ใบที่มีเงินเข้า">โหลดสลิป <b>' + V.slipPending + '</b></button>'
-        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>')
-      /* §tsPenPack (lk-inbox c0a2f5c6) · the penalty-decision evidence as its own pack, after the others; none when no case has a file */
-      + (V.nPenFiles ? '<button class="h4-gh" data-ops-ts-penpack="1" onclick="laOps.travelRows.printPack(\'pen\')" title="พิมพ์หลักฐานประกอบคำตัดสิน (ยกเลิก / เลื่อนวัน) · ' + V.pens.length + ' เคส">หลักฐาน <b>' + V.nPenFiles + '</b></button>' : '');
+        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>');
     html = html.replace('<button class="h4-pri"', packs + '<button class="h4-pri"');
     return html;
   }
@@ -989,7 +987,8 @@
   wrap('tsPenFiles', function(orig, bkId, date){ return penFiles(bkId, date); });
   wrap('tsPenFilePick', function(orig, bkId, date, inp){ return penPick(bkId, date, inp); });
   wrap('tsPenFileDrop', function(orig, bkId, date, fid){ return penDrop(bkId, date, fid); });
-  wrap('tsPenPackList', function(){ return []; });   /* §tsPenPack · printed as its own pack (laOps.travelRows.printPack('pen')), as the other packs here */
+  /* §tsPenPack (lk-inbox c0a2f5c6) · the evidence pages print at the end of the sheet's own print, as legacy; no button of their own */
+  wrap('tsPenPackList', function(orig, date){ return T() && T().penPackList ? T().penPackList(date) : []; });
   wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
   wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });
   O.onWrite(function(){ last = {}; });

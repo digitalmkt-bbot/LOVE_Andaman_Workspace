@@ -239,22 +239,29 @@
     return fetchBlob(id).then(function(b){ var u = URL.createObjectURL(b); if(w) w.location.href = u; else window.open(u, '_blank'); },
       function(e){ if(w) w.close(); O.fail('File did not open', e); });
   }
+  /* §tsPenPack (lk-inbox c0a2f5c6, 08-app.js tsPenPackList) · legacy prints the penalty-decision evidence at the END of the Daily
+     Report's own print (tsPrintSheet → _tsPackPages → _tsPenPage), one page per case that has files, following the pier/route/VAT
+     scope; there is no separate button. Answered here in legacy's shape from the server's penalty_files of the sheet in view, so
+     legacy's _tsPenPage draws the pages and 38-ops-attachments turns their /api/attach/<id> into the server's files. */
+  function penPackList(date){
+    var cur = lastView; if(!cur || cur.date !== date) return [];
+    return (cur.pens || []).map(function(x, i){
+      var d = x.dec, b = x.r.b || {};
+      return { bk: { id: x.r.id, leadPax: b.lead_pax || '', agentId: x.r.agentId || '', voucherRef: b.voucher_ref || '' }, trip: { routeId: x.r.routeId }, ord: i,
+        dec: d ? { decision: d.decision, amount: d.amount, note: d.note || '', by: d.by || '' } : null,
+        imgs: x.files.map(function(f){ return { f: { id: f.id, name: f.name, mime: f.mime, by: f.by }, cap: (f.name || 'ไฟล์') + (f.by ? (' · แนบโดย ' + f.by) : '') }; }) };
+    });
+  }
   /* Print pack: every file of the pack on one printable page, images inline, other types as a note. */
   function printPack(kind){
     var cur = lastView; if(!cur) return Promise.resolve();
     var items = [];
     if(kind === 'ref') cur.ref.forEach(function(r){ (r.b.attachments || []).forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: r.voucher + ' · ' + agentName(r) + ' · ' + f.name }); }); });
-    else if(kind === 'pen') cur.pens.forEach(function(x){   /* §tsPenPack · one case after another: decision, amount, note and who decided, then its files */
-      var d = x.dec, DL = { full: 'เก็บเต็ม', partial: 'เก็บบางส่วน', none: 'ไม่ชาร์จ', postpone: 'เลื่อนวัน' };
-      var res = d ? ((DL[d.decision] || d.decision || '') + (d.decision === 'postpone' ? '' : ' · ' + money(d.amount))) : 'ยังไม่ตัดสิน';
-      var head = x.r.voucher + ' · ' + (x.r.b.lead_pax || '—') + ' · ' + agentName(x.r) + ' · ผลตัดสิน ' + res + (d && d.note ? ' · หมายเหตุ: ' + d.note : '') + (d && d.by ? ' · ตัดสินโดย ' + d.by : '');
-      x.files.forEach(function(f, k){ items.push({ id: f.id, mime: f.mime, cap: head + ' · ' + (k + 1) + '/' + x.files.length + ' ' + (f.name || 'ไฟล์') + (f.by ? ' · แนบโดย ' + f.by : '') }); });
-    });
     else cur.slips.forEach(function(x){ x.files.forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: x.r.voucher + ' · ' + f.cap }); }); });
     if(!items.length) return Promise.resolve();
     var w = window.open ? window.open('', '_blank') : null;
     return Promise.all(items.map(function(it){ return fetchBlob(it.id).then(function(b){ it.url = URL.createObjectURL(b); it.type = b.type || it.mime; }, function(){ it.url = ''; }); })).then(function(){
-      var title = (kind === 'ref' ? 'Reference pack ' : kind === 'pen' ? 'หลักฐานประกอบคำตัดสิน · ยกเลิก / เลื่อนวัน ' : 'Slip pack ') + cur.docNo;
+      var title = (kind === 'ref' ? 'Reference pack ' : 'Slip pack ') + cur.docNo;
       var body = items.map(function(it){
         var img = it.url && /^image\//.test(it.type || '');
         return '<figure style="break-inside:avoid;margin:0 0 18px"><figcaption style="font:12px sans-serif;margin-bottom:4px">' + esc(it.cap) + '</figcaption>'
@@ -437,7 +444,7 @@
   O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; dayAmt = {}; });
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
-    whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack,
+    whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack, penPackList: penPackList,
     afterRow: afterRow, cotPick: cotPick, cotAmt: cotAmt, cotRef: cotRef, cotClear: cotClear, nsPick: nsPick, nsClear: nsClear,
     clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; }
   };
