@@ -1,0 +1,17 @@
+const fs=require('fs');const s=fs.readFileSync(process.argv[2],'utf8');
+const a=s.indexOf('function laJobDueEnd('), b=s.indexOf('function getBoat(id)');
+global.TODAY_STR='2026-11-26';
+global.FL_MAINT=[{id:'mjA',no:'MJ-412',status:'inprogress',dueDate:'2026-11-27'},{id:'mjB',no:'MJ-500',status:'inprogress',dueDate:''},{id:'mjC',no:'MJ-501',status:'done',dueDate:'2026-11-27'},{id:'mjD',no:'MJ-502',status:'inprogress',dueDate:'2026-11-20'}];
+eval(s.slice(a,b)+';global.G=getStoredStatus');
+const row=(id,no,to)=>({id:'sl_sync_'+id,s:'fixing',from:'2026-11-23',to:to,note:'Maintenance Job '+no});
+const T={log:[{id:'x1',s:'available',from:'2027-01-01',to:'2027-05-15'},{id:'x0',s:'available',from:'2026-11-01',to:'2026-11-22'},row('mjA','MJ-412','2026-12-31')]};
+const ok=(c,m)=>{console.log((c?'PASS':'FAIL')+' '+m);if(!c)process.exitCode=1};
+ok(G(T,'2026-11-26').s==='fixing'&&G(T,'2026-11-27').s==='fixing','Tadeo fixing through due 27 Nov');
+ok(G(T,'2026-11-28').s==='available'&&G(T,'2026-12-15').s==='available','Tadeo available from 28 Nov');
+ok(G(T,'2027-02-01').s==='available'&&G(T,'2026-11-10').s==='available','other rows unchanged');
+const B={log:[row('mjB','MJ-500','2026-12-31')]}; ok(G(B,'2026-12-20').s==='fixing'&&G(B,'2027-01-01').s==='available','no due: row end still rules');
+const C={log:[row('mjC','MJ-501','2026-12-31')]}; ok(G(C,'2026-12-20').s==='fixing','closed job: row end untouched');
+const D={log:[row('mjD','MJ-502','2026-12-31')]}; ok(G(D,'2026-11-26').s==='fixing'&&G(D,'2026-11-27').s==='available','overdue job: blocked through today only');
+const E={log:[row('mjA','MJ-412','2026-11-25')]}; ok(G(E,'2026-11-26').s==='available','row ending before due still ends at its own date');
+const F={log:[{id:'m1',s:'unavailable',from:'2026-11-23',to:'2026-12-31',note:'manual'}]}; ok(G(F,'2026-12-20').s==='unavailable','manual row (not from a job) untouched');
+const H={log:[row('mjA','MJ-412',null)]}; ok(G(H,'2026-11-27').s==='fixing'&&G(H,'2026-11-28').s==='available','open-ended row: same as before');
