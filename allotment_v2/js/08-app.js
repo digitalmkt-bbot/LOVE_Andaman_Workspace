@@ -6730,6 +6730,41 @@ function tmMissHtml(b){ if(!b) return ''; var n=0, c=[0,0,0,0,0,0];
   return F.map(function(f,i){ var h=c[i], cls=(h>=n)?'ok':(h>0?'pt':(f[1]?'no':'op'));
     var tip=f[0]+' · '+((h>=n)?('ครบ '+n+' คน'):(h>0?('มี '+h+' จาก '+n+' คน'):(f[1]?('ขาด '+n+' คน'):'ยังไม่ได้กรอก (ไม่บังคับ)')));
     return '<i class="'+cls+'" title="'+tip+'"></i>'; }).join(''); }
+/* §tmQr (2026-11-26) · owner: "ต้องมีระบุว่า ออก QR code ด้วย และมีสัญลักษณ์ให้หน่อย ว่าออกครบแล้ว ยังไม่ได้ออก หรือขาดเท่าไหร่" + "user อยากได้ ไฮไลต์สี ตรงเลข VC"
+   เก็บต่อคน ที่เดียวกับข้อมูล ตม. (insurance_overrides · ช่อง qr = '1' ออกแล้ว / '0' ยังไม่ออก) · ยังไม่เคยติ๊ก แต่ Remark มีคำว่า "ออกแล้ว" (วิธีเดิมของทีม) → นับว่าออกแล้ว
+   ไม่ดึงข้ามใบของออเดอร์หลายวัน (QR นับแยกต่อวันเดินทาง) · ไม่นับรวมในตัวนับ ตม. x/y
+   แสดง 3 ที่: ป้าย QR บนแถวใบจอง (✓ ครบ / 1/2 บางคน / – ยังไม่ออก) · เลข VC พื้นเขียว/เหลือง · ยอดรวมที่แถบโซน */
+var TM_QR_SVG='<svg viewBox="0 0 12 12" width="11" height="11" style="display:block;flex:none"><path fill="none" stroke="currentColor" stroke-width="1.4" d="M1 1h3.6v3.6H1zM7.4 1H11v3.6H7.4zM1 7.4h3.6V11H1z"/><path fill="currentColor" d="M7 7h2v2H7zM9.4 9.4H11V11H9.4zM9.4 7H11v1.4H9.4zM7 9.6h1.4V11H7z"/></svg>';
+function tmQrOn(bkId,p){ var v=insEff(bkId,p.key,'qr',''); if(v==='1'||v===1||v===true) return true; if(v==='0'||v===0||v===false) return false;
+  return /ออกแล้ว/.test(String(insEff(bkId,p.key,'remark','')||'')); }
+function tmQrStatus(b){ var n=0,on=0; try{ tmPaxList(b).forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++; if(tmQrOn(b.id,p)) on++; }); }catch(_){} return {n:n,on:on}; }
+function tmQrCls(st){ return !st.n?'':(st.on>=st.n?'ok':(st.on?'pt':'no')); }
+function tmQrHtml(b){ if(!b) return ''; var st=tmQrStatus(b); if(!st.n) return ''; var c=tmQrCls(st);
+  try{ tmQrZoneQ(); }catch(_){}
+  return '<span class="t2-qr '+c+'" data-tmqr="'+String(b.id).replace(/"/g,'&quot;')+'" data-on="'+st.on+'" data-n="'+st.n+'" title="'+(c==='ok'?('QR ออกครบ '+st.n+' คน'):(c==='pt'?('QR ออกแล้ว '+st.on+' จาก '+st.n+' คน · ขาด '+(st.n-st.on)):('QR ยังไม่ได้ออก · '+st.n+' คน')))+'">'+TM_QR_SVG+(c==='ok'?'&#10003;':(c==='pt'?(st.on+'/'+st.n):'&ndash;'))+'</span>'; }
+function tmQrBtnHtml(on){ return TM_QR_SVG+'<span>'+(on?'ออกแล้ว':'ยังไม่ออก')+'</span>'; }
+function tmQrSync(bkId){ try{
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return; var st=tmQrStatus(b), c=tmQrCls(st);
+  document.querySelectorAll('[data-tmqr="'+bkId+'"]').forEach(function(h){ h.outerHTML=tmQrHtml(b); });
+  document.querySelectorAll('[data-tmqrv="'+bkId+'"]').forEach(function(h){ h.classList.toggle('t2-vqr-ok',c==='ok'); h.classList.toggle('t2-vqr-pt',c==='pt'); });
+  var L=tmPaxList(b); document.querySelectorAll('[data-tmgrid="'+bkId+'"] .tm-qrb').forEach(function(bt){ var p=L.filter(function(x){ return String(x.key)===bt.getAttribute('data-pk'); })[0]; if(!p) return; var on=tmQrOn(bkId,p); bt.classList.toggle('on',on); bt.innerHTML=tmQrBtnHtml(on); });
+  tmQrZoneQ(); }catch(_){} }
+function tmQrToggle(bkId,pk){ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var p=tmPaxList(b).filter(function(x){ return String(x.key)===String(pk); })[0]; if(!p) return;
+  insSetField(bkId,p.key,'qr',tmQrOn(bkId,p)?'0':'1'); tmQrSync(bkId); }
+function tmQrAll(bkId){ var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var L=tmPaxList(b).filter(function(p){ return p.lead || p.pad || (p.name||'').trim(); }); if(!L.length) return;
+  var all=L.every(function(p){ return tmQrOn(bkId,p); }); L.forEach(function(p){ insSetField(bkId,p.key,'qr',all?'0':'1'); }); tmQrSync(bkId); }
+/* ยอด QR ต่อโซน · นับจากป้ายบนแถวที่อยู่ใต้แถบโซนนั้น (หลังวาดตารางเสร็จ) */
+function tmQrZoneQ(){ if(window._tmQrZQ) return; window._tmQrZQ=1; requestAnimationFrame(function(){ window._tmQrZQ=0; try{
+  document.querySelectorAll('tr.t2-zband').forEach(function(zb){ var on=0,n=0, r=zb.nextElementSibling;
+    while(r && !(r.classList && r.classList.contains('t2-zband'))){ var q=r.querySelector && r.querySelector('td.t2-cu [data-tmqr]'); if(q){ on+=(+q.getAttribute('data-on')||0); n+=(+q.getAttribute('data-n')||0); } r=r.nextElementSibling; }
+    var zw=zb.querySelector('.zw'), old=zb.querySelector('.t2-qrsum'); if(!zw) return;
+    if(!n){ if(old) old.remove(); return; }
+    var c=on>=n?'ok':(on?'pt':'no'), h=TM_QR_SVG+'QR '+on+'/'+n;
+    if(!old){ old=document.createElement('span'); var sub=zw.querySelector('.zsub'); if(sub && sub.nextSibling) zw.insertBefore(old, sub.nextSibling); else zw.appendChild(old); }
+    old.className='t2-qr t2-qrsum '+c; old.title='QR ออกแล้ว '+on+' จาก '+n+' คน ในโซนนี้'; old.innerHTML=h; });
+  }catch(_){} }); }
 function tmBtnState(b){ var st=tmBkStatus(b); return !st.n?'':(st.miss===0?'ok':(st.ok===0?'zero':'miss')); }   /* §tmBtn2 */
 function tmChip(b, bare){ var st=tmBkStatus(b); if(!st.n) return '';
   var ok=(st.miss===0);
@@ -6766,10 +6801,10 @@ function tmGridHtml(b){
   var e=function(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var ro=!(typeof window.laCanEditArea!=='function' || window.laCanEditArea('operations') || window.laCanEditArea('pier'));
   var L=tmPaxList(b).filter(function(p){ return p.lead || p.pad || (p.name||'').trim(); });   /* §tmPax3 */
-  var cols='22px 190px 190px 120px 150px 130px 128px minmax(120px,1fr)';   /* §tmPax4 · +สัญชาติ */   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
+  var cols='22px 190px 190px 120px 150px 130px 128px 92px minmax(120px,1fr)';   /* §tmQr · +ออก QR */   /* §tmPax4 · +สัญชาติ */   /* §tmPax2 · ช่องวันเกิดกว้างขึ้นใส่ปุ่มปฏิทิน */
   var h='<div class="tm-grid" data-tmgrid="'+e(b.id)+'" style="font-family:inherit;padding:8px 0 12px;margin:6px 0 14px">'   /* §tmPax7 · owner "ตัดหัวข้อออก · อยากให้มีระยะห่างของขอบล่าง" */
     +'<div style="display:grid;grid-template-columns:'+cols+';gap:6px 8px;font-size:10.5px;font-weight:700;color:#5B6472;padding:2px 0 6px"><span></span>'
-    +TM_FIELDS.map(function(f){ return '<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
+    +TM_FIELDS.map(function(f){ return (f[0]==='remark'?('<span style="display:flex;align-items:center;gap:5px;color:#14233F">ออก QR'+(ro?'':' <a href="javascript:void 0" title="ติ๊ก/ยกเลิก ทุกคนในใบนี้" onclick="event.stopPropagation();tmQrAll(\''+e(b.id)+'\')" style="font-size:9.5px;font-weight:700;color:#185FA5">ทั้งใบ</a>')+'</span>'):'')+'<span>'+e(f[1])+'</span>'; }).join('')+'</div>';
   L.forEach(function(p){
     var ok=tmPaxOk(b.id,p);
     var _pn=L.indexOf(p)+1;   /* §tmPax3 · ลำดับคน */
@@ -6798,6 +6833,7 @@ function tmGridHtml(b){
           +'<button type="button" title="เลือกจากปฏิทิน" onclick="event.stopPropagation();tmDobPick(this)" style="flex:none;width:24px;height:24px;border:1px solid #D9DDE4;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;line-height:1;padding:0">&#128197;</button>'
           +'<input type="date" tabindex="-1" aria-hidden="true" onchange="tmDobPicked(this)" onclick="event.stopPropagation()" style="position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0"></span>';
       }
+      if(k==='remark'){ var _qo=tmQrOn(b.id,p); h+='<button type="button" class="tm-qrb'+(_qo?' on':'')+'" data-pk="'+e(p.key)+'"'+(ro?' disabled':'')+' onclick="event.stopPropagation();tmQrToggle(\''+e(b.id)+'\',\''+e(p.key)+'\')">'+tmQrBtnHtml(_qo)+'</button>'; }   /* §tmQr */
       h+=inp;
     });
     h+='</div>';
@@ -61853,7 +61889,7 @@ function bkV2RenderTab2(){
         const _2nd = a.split && !a.first;   // a non-first split allocation row → hide booking-level cells (Pay/Total/Voucher/Add-on) to avoid duplicating them across the split rows
         return {g:a.g, boat:_rowBid||'', bkid:bk.id, ovnBack:!!(a.ovnBack&&!a.g), html:`
           <tr class="t2-row${r.cxl?' t2-cxl':''}${_tmR?' t2-full':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}${(typeof bkUpgPromise==='function' && bkUpgPromise(bk,date))?' t2-upgpr':''}${(typeof bkV2B2CRowFlag==='function')?bkV2B2CRowFlag(bk):''}"${_rowStyle} data-al="${esc(a.key)}">
-            <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_tog||_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_tog||_bkV2SplitColor(bk.id)}55;background:${_tog||_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
+            <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_tog||_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_tog||_bkV2SplitColor(bk.id)}55;background:${_tog||_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch${(_tmR && typeof tmQrStatus==='function')?({ok:' t2-vqr-ok',pt:' t2-vqr-pt'}[tmQrCls(tmQrStatus(bk))]||''):''}"${_tmR?(' data-tmqrv="'+esc(bk.id)+'"'):''} title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="${laAgencyTabStyle()}cursor:pointer" class="la-agtab">${laAgencyTabInner(22,{tile:40})}</div>`   /* §agTab */:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu${_tog?' t2-tgcell':''}">${_tog?`<span class="t2-tog fl" style="--tgc:${_tog}" data-tog="${esc(bk.id)}" data-al="${esc(a.key)}" data-d="${esc(date)}" onmouseenter="bkV2TogShow(this)" onmouseleave="bkV2TogHide()" onclick="event.stopPropagation();bkV2TogShow(this,true)">&#128101; Together</span>`:''}
               ${(function(){ var _ut=bkUpgTripOn(bk, date, rid); if(!bkUpgActive(_ut)) return ''; var _u=_ut.upg;
@@ -61871,7 +61907,7 @@ function bkV2RenderTab2(){
                 const _spc='';
                 const _lo2=_whoSplit?'':_lo;
                 /* §tmBtnLine (2026-11-06) · owner "เอาไว้ใต้ชื่อ เผื่อกรณีลูกค้ามีเบอร์โทรจะเห็น" · ปุ่ม ตม. ของแถวระนองลงบรรทัดใหม่เสมอ ไม่เบียดชื่อ/เบอร์ */
-                return (_nx||_spc||_tmR)?('<div class="t2-cul2'+(_tmR?' t2-tmline':'')+'">'+_lo2+_spc+((_tmR && typeof tmMissHtml==='function')?('<span class="t2-tmmiss" data-tmmiss="'+esc(bk.id)+'">'+tmMissHtml(bk)+'</span>'):'')+_nx+'</div>'):_lo2; })()}
+                return (_nx||_spc||_tmR)?('<div class="t2-cul2'+(_tmR?' t2-tmline':'')+'">'+_lo2+_spc+((_tmR && typeof tmMissHtml==='function')?('<span class="t2-tmmiss" data-tmmiss="'+esc(bk.id)+'">'+tmMissHtml(bk)+'</span>'+((typeof tmQrHtml==='function')?tmQrHtml(bk):'')):'')+_nx+'</div>'):_lo2; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -63487,6 +63523,17 @@ function bkV2RenderTab2(){
     .t2-tmmiss i.no{background:#D8473C}
     .t2-tmmiss i.pt{background:linear-gradient(90deg,#E8A317 50%,transparent 50%);box-shadow:inset 0 0 0 1.5px #E8A317}
     .t2-tmmiss i.op{box-shadow:inset 0 0 0 1.5px #C3C9D4}
+    /* §tmQr · ป้าย QR (แถว + แถบโซน) · เลข VC ไฮไลต์ · ปุ่มในตารางกรอก */
+    .t2-qr{display:inline-flex;align-items:center;gap:3px;height:19px;padding:0 5px;border-radius:5px;font:500 10px 'DM Mono',monospace;box-sizing:border-box;border:1px solid transparent;flex:none;white-space:nowrap;cursor:default}
+    .t2-qr.ok{background:#E6F5EE;color:#0F6E56}
+    .t2-qr.pt{background:#FDF3DC;color:#8A5A00}
+    .t2-qr.no{border:1px dashed #B5BCC9;color:#5E6577}
+    .t2-qrsum{margin-left:8px}
+    .t2-row.t2-full .t2-vch.t2-vqr-ok{background:#E6F5EE;color:#0F6E56;font-weight:600;border-radius:5px;padding:2px 5px;margin-left:-5px}
+    .t2-row.t2-full .t2-vch.t2-vqr-pt{background:#FDF3DC;color:#8A5A00;font-weight:600;border-radius:5px;padding:2px 5px;margin-left:-5px}
+    .tm-qrb{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:26px;width:100%;min-width:0;box-sizing:border-box;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;border:1px dashed #B5BCC9;background:#fff;color:#5E6577;padding:0 4px;white-space:nowrap}
+    .tm-qrb.on{border:1px solid #17A673;background:#E6F5EE;color:#0F6E56}
+    .tm-qrb:disabled{cursor:default;opacity:.7}
     #bk-nxpop{display:none;position:fixed;z-index:9990;width:290px;max-width:calc(100vw - 16px);background:#fff;border:1px solid #E6E9EF;border-radius:12px;box-shadow:0 12px 34px rgba(20,35,63,.22);padding:10px 12px;font-size:12px;color:#14233F}
     #bk-nxpop h4{margin:0 0 6px;font-size:11px;letter-spacing:.04em;color:#5E6577;font-weight:700}
     #bk-nxpop .r{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #E6E9EF}
