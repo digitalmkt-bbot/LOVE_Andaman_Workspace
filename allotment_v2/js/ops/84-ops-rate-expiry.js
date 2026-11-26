@@ -29,7 +29,9 @@
     try{
       if(O.busy && O.busy()) return;
       if(typeof window.rtExpBanner === 'function') window.rtExpBanner();
-      if(typeof window.rtExpRender === 'function'){ window.rtExpRender('rt-expiry'); window.rtExpRender('rta-exp'); }
+      /* the Rate Types page's #rt-expiry holds legacy's one-line banner (rtExpBanner, §rtAdmin); the full panel is only the
+         Rate Type Management page's #rta-exp. Drawing the panel into #rt-expiry replaced the banner (UI parity 2026-11-26, H16). */
+      if(typeof window.rtExpRender === 'function') window.rtExpRender('rta-exp');
       if(typeof window.renderAgKPI === 'function') window.renderAgKPI();
       var a = document.activeElement;
       var typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && document.getElementById('view-agents') && document.getElementById('view-agents').contains(a);
