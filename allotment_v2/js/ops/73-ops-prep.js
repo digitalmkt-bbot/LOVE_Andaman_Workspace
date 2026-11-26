@@ -67,7 +67,8 @@
               routeId: rid, rt: rt, boatId: c.boat_id || '', mvId: v.id, mvName: v.name,
               ad: n(r.ad), chd: n(r.chd), inf: n(r.inf), foc: n(r.foc), tot: n(r.total), eat: n(r.eat),
               veg: n(r.vegetarian), vegan: n(r.vegan), halal: n(r.halal), allergy: known, alUnk: unk, alList: lines,
-              ovn: !!c.overnight, chtr: !!c.charter, sp: !!r.special });
+              ovn: !!c.overnight, chtr: !!c.charter, sp: !!r.special,
+              mNote: r.meal_note || '' });   /* N4 (parity 2026-11-27): the food note line (legacy §mealNote4, ppChips A.notes) */
           });
         });
       });
