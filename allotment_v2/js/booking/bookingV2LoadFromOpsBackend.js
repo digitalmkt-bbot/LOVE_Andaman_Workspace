@@ -23,6 +23,11 @@ var OPS_BOOKING_PAGE=1000;
 /* §deltaRefresh · when a range last finished loading (an ISO instant, early by a safety margin), so a refresh can ask the
    server only for what changed since (GET /v1/bookings?updated_since=) instead of paging the whole range again. */
 var _opsBookingStamp = Object.create(null);
+/* parity G2/G3 (2026-11-26) · legacy's SB_BOOKINGS is in booking-id order (relLoad: sb_bookings by its key), code unit by code unit:
+   "BK-26090051-W2SC" … "BK-26112867-K0VH", then Love Kingdom's "b2c_LOV-…". Every day list that walks SB_BOOKINGS (van check-in's
+   "ยังไม่จัดรถ" rows, Insurance) is drawn in that order. Loaded here range by range, the array was in load order instead (a month
+   loaded first, its B2C rows on top). Kept in legacy's order after each merge. */
+function bookingV2LegacyOrder(a,b){ var x=String((a&&a.id)||''), y=String((b&&b.id)||''); return x<y?-1:(x>y?1:0); }
 function _opsBookingMerge(mapped){
   var at=Object.create(null);
   SB_BOOKINGS.forEach(function(b,i){ at[b.opsId||b.id]=i; });
@@ -34,6 +39,7 @@ function _opsBookingMerge(mapped){
     Object.assign(SB_BOOKINGS[i],b);
     if(kept) V.put(SB_BOOKINGS[i],kept);
   });
+  SB_BOOKINGS.sort(bookingV2LegacyOrder);
 }
 /* keepLoaded (the boot call): the page may have started loading its month while the boot was still reading the catalogue; that
    load, or its finished result, is real server data, so only the seed bookings go. Without it, boot dropped the in-flight load
