@@ -49,7 +49,7 @@
                  gno: +job.group_number || 0, seq: 1e9, sx: sx, grp: (rnd ? (+job.group_number || 0) : 0), rnd: rnd };
       };
       if(job.has_out || !job.has_ret){
-        /* job.pax = the outbound load: customers plus guides riding along (the server's over_capacity compares it with the seats) */
+        /* job.pax = the outbound customers (legacy vanJobs _E.pax; a guide riding along is not counted here, the server's over_capacity still adds their seats) */
         agg[k] = base(job.pax != null ? job.pax : (job.out_pax || 0), job.bookings || 0, job.struck || 0);
         /* the "↩ ขากลับ N" badge (legacy aggRet): the people who go back on this van but went out on another. The server
            counts them on the job: ret_extra_pax heads in ret_extra_bookings bookings (struck rows left out) */

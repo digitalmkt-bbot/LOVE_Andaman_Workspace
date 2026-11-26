@@ -2,7 +2,7 @@
    §opsPierCashClaims · petty cash claims (ตั้งเบิก) and refund matching on operation-backend
    ────────────────────────────────────────────────────────────────────────
    POST   /v1/pier-cash/{pier}/days/{date}/claims   {name, row_ids}      → {claim, day}
-   GET    /v1/pier-cash/{pier}/claims?month=yyyy-mm                      → {claims, totals}
+   GET    /v1/pier-cash/{pier}/claims                                    → {claims, totals}  every month (legacy pcClmAll)
    PATCH  /v1/pier-cash/claims/{id}                 {name}               → {claim}
    DELETE /v1/pier-cash/claims/{id}                                      → {claim, released, day}
    DELETE /v1/pier-cash/claims/{id}/rows/{row_id}                        → {claim, day}
@@ -11,7 +11,8 @@
    Legacy kept the claims in the blob (po_cash_claims) and put `claim` on rows it held in the browser, so a
    claim lasted on one device and refund matching saw only the days loaded there. In ops mode:
      · a line's claim comes with the day ledger (46-ops-pier-cash.js legacyRow / applyDay)
-     · the month's claims are read here and kept in pcClmArr() (what pcClmOn / pcClmList read)
+     · the pier's claims of every month are read here and kept in pcClmArr() (what pcClmOn / pcClmList / pcClmAll read):
+       legacy holds them all, and the home card "ยังไม่เลือกคนรับเงิน N รายการ · M บรรทัด" counts every month's
      · pcClmRows answers from the claim's server lines (the claim's days may not be loaded)
      · pcClmSave / pcClmDel / pcClmRename / pcClmUnline call the server and redraw from its answer
      · pcRefundMatch is built from the server's answer (it reads the pier's whole ledger)
@@ -46,15 +47,15 @@
     if(c.receipts) st.rcpt[c.id] = c.receipts;
   }
 
-  /* ── the month's claims ─────────────────────────────────────────────── */
-  function loadClaims(pier, ym){
-    var k = pier + '|' + ym, my = st.epoch;
+  /* ── the pier's claims (every month) ───────────────────────────────── */
+  function loadClaims(pier){
+    var k = pier, my = st.epoch;
     st.pendM[k] = true;
-    return O.get('/v1/pier-cash/' + enc(pier) + '/claims', { month: ym }).then(function(j){
+    return O.get('/v1/pier-cash/' + enc(pier) + '/claims').then(function(j){
       delete st.pendM[k];
       if(my !== st.epoch) return false;
       var a = arr();
-      for(var i = a.length - 1; i >= 0; i--) if(a[i] && a[i].pier === pier && String(a[i].date || '').slice(0, 7) === ym) a.splice(i, 1);
+      for(var i = a.length - 1; i >= 0; i--) if(a[i] && a[i].pier === pier) a.splice(i, 1);
       ((j && j.claims) || []).forEach(putClaim);
       st.months[k] = true; return true;
     }, function(e){
@@ -63,10 +64,10 @@
     });
   }
   function ensureClaims(){
-    var p = window._pcPier, ym = window._pcYM; if(!p || !ym) return;
-    var k = p + '|' + ym;
+    var p = window._pcPier; if(!p) return;
+    var k = p;
     if(st.months[k] || st.pendM[k] || st.failM[k]) return;
-    loadClaims(p, ym).then(function(ok){ if(ok) keep(); });
+    loadClaims(p).then(function(ok){ if(ok) keep(); });
   }
   window.renderPierCash = function(){
     var r = L.renderPierCash.apply(this, arguments);
@@ -77,8 +78,8 @@
   O.onWrite(function(){
     st.epoch++; st.months = {}; st.refund = {}; st.failM = {}; st.failR = {};
     if(on() && /^pop-/.test(O.activeView() || '') && window._pcPier && window._pcYM){
-      var p = window._pcPier, ym = window._pcYM;
-      loadClaims(p, ym).then(function(ok){ if(ok) keep(); });
+      var p = window._pcPier;
+      loadClaims(p).then(function(ok){ if(ok) keep(); });
     }
   });
 
