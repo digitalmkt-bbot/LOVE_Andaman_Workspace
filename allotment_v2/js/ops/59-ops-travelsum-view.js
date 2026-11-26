@@ -107,9 +107,12 @@
     var cmp = function(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || ((x.cxlRow ? 1 : 0) - (y.cxlRow ? 1 : 0)) || sortAZ(agName(x.b), agName(y.b)) || (zoneOf(x) - zoneOf(y)) || sortAZ(x.b.voucher_ref || '', y.b.voucher_ref || ''); };
     /* Legacy tsMvRows: a booking moved off the day, as it left (route, pax). Counts nothing; its money went with it. */
     function mv(m){
-      var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone };
+      /* parity G4 · legacy tsMvRows draws the booking (hotel, room, area, zone) and the van and boat of the snapshot it left (O.vanId, O.boatId) */
+      var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone,
+        hotel_name: m.hotel_name || '', room_number: m.room_number || '', pickup_area: m.pickup_area || '' };
       var why = [m.to_date ? 'เลื่อนไป ' + call('ckDayShortTh', [m.to_date], m.to_date) : 'ย้ายวันออกไป', call('ckShortDay', [m.at], ''), m.by || ''].filter(Boolean).join(' · ');
-      return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {} }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
+      return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {}, mvVan: m.van_id || '', mvBoat: m.boat_id || '' }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
+        mvZone: m.zone_group || '',
         a: null, c: null, dec: null, ns: null, ev: [], cxlRow: true, mvRow: true, booked: n(m.pax_total), trav: 0, pb: paxBreak(m.pax), clean: clean,
         amount: null, isCase: false, pend: false, due: false, cotOpen: false, mvTo: m.to_date || '', mvWhy: m.why_text || why };
     }
@@ -688,8 +691,8 @@
   }
   /* Zone (legacy §tsManZone): the group the server judged (OWN / PK / KL / the raw zone) and the pickup area under it */
   function zoneCell(r){
-    var b = r.b, e = esc, zg = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || (r.mvRow ? '' : call('tsManZoneKey', [b, r.t && { date: dateOf() }], ''));
-    if(r.mvRow || !zg) return '<td class="ts-zone"><span style="color:var(--zn400)">&mdash;</span></td>';
+    var b = r.b, e = esc, zg = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || (r.mvRow ? (r.mvZone || '') : call('tsManZoneKey', [b, r.t && { date: dateOf() }], ''));
+    if(!zg) return '<td class="ts-zone"><span style="color:var(--zn400)">&mdash;</span></td>';
     var area = text(b.pickup_area || ''), zl = text(r.t && r.t.zone) && g('bookingV2ZoneLabel') ? window.bookingV2ZoneLabel(r.t.zone) : text(r.t && r.t.zone);
     var tag = '<span class="ts-ztag z-' + e(String(zg).toLowerCase()) + '">' + (zg === 'OWN' ? 'Own' : e(zg)) + '</span>';
     if(zg === 'OWN') return '<td class="ts-zone">' + tag + (area && b.hotel_name ? '<div class="ts-tel">' + e(area) + '</div>' : '') + '</td>';
@@ -698,10 +701,11 @@
   /* Total (legacy tsTotalOf + tsNetOf): what the trip charged plus what was sold on tour, and in brackets what the rate type says
      the trip should cost (the server's net, net_text, net_promo_id) */
   function totalCell(r, total, site){
-    var e = esc, sr = r.sr;
+    // parity G4 · legacy prints the net "(1×2,400)" under a cancelled row's total too (tsNetOf): the server's cancelled row carries it
+    var e = esc, sr = r.cxlRow ? r.cxlSrv : r.sr;
     if(r.mvRow) return '<td class="r ts-mono" style="font-weight:800;color:var(--zn400)">&mdash;</td>';
     var nr = '', tip = '';
-    if(sr && !r.cxlRow && ('net' in sr)){
+    if(sr && ('net' in sr)){
       var pl = sr.net_promo_id ? text(call('laPromoLabel', [call('laPromoById', [sr.net_promo_id], null)], sr.net_promo_id)) : '';
       nr = '<span class="ts-net" title="' + (sr.net != null ? ('ยอด Net ' + money(sr.net) + (pl ? (' · โปร: ' + e(pl)) : ' ตาม Rate Type')) : 'ไม่มีเรตใน Rate Type') + '">(' + (sr.net != null ? e(sr.net_text || '') : '&mdash;') + ')</span>'
         + (pl ? '<span class="ts-net" style="color:#9A5410" title="' + e(pl) + '"> PROMO</span>' : '');
@@ -737,7 +741,7 @@
           + (gX.length ? ' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ ' + gX.length + ' ใบ</b>' : '')
           + (gM.length ? ' · <b style="color:var(--pu700)">เลื่อนวันไปแล้ว ' + gM.length + ' ใบ</b>' : '') + '</span></div></td></tr>';
       }
-      var c = r.c, van = vanOf(t), boat = boatOf(t), pb = r.pb;
+      var c = r.c, van = r.mvRow ? t.mvVan : r.cxlRow ? '' : vanOf(t), boat = r.mvRow ? t.mvBoat : r.cxlRow ? '' : boatOf(t), pb = r.pb;   // parity G4 · legacy tsCxlRows van:'' boat:'' · tsMvRows the snapshot's
       var total = r.amount == null ? null : r.amount + n(c && c.sales && c.sales.total), site = n(c && c.sales && c.sales.total);
       if(r.cxlRow) total = r.mvRow ? null : n(b.total);
       if(!r.cxlRow && gS){
