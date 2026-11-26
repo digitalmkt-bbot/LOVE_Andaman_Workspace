@@ -57,12 +57,23 @@
     });
   });
 
+  /* parity I4 (2026-11-26) · legacy's stamp reads "… · โดย <who>" (LA_UPDATED_BY: who saved the data last). Here: who last changed a
+     booking that travels in the range (the server's updated_by on GET /v1/bookings), none when no booking says. */
+  function lastBy(r){
+    var best = null;
+    (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS) ? SB_BOOKINGS : []).forEach(function(b){
+      if(!b || !b.updatedBy || !b.updatedAt) return;
+      if(!(b.trips || []).some(function(t){ var d = t && (t.date || t.service_date); return d && d >= r.from && d <= r.to; })) return;
+      if(!best || String(b.updatedAt) > String(best.updatedAt)) best = b;
+    });
+    return best ? best.updatedBy : '';
+  }
   wrap('ppUpdatedAt', function(orig){
     var at = loadedAt[key(range())];
     if(!at) return orig.apply(this, [].slice.call(arguments, 1));
     var when;
     try{ when = at.toLocaleString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
     catch(_){ when = String(at); }
-    return { when: when, by: '', live: true };
+    return { when: when, by: lastBy(range()), live: true };
   });
 })();

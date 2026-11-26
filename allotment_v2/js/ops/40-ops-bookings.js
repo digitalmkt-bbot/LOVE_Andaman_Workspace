@@ -447,7 +447,7 @@
   /* ── server booking → client booking ── */
   function fromServer(ob){
     var bk = { id: ob.external_id || ob.id, opsId: ob.id, schemaVer: 2, status: ob.status || 'confirmed',
-               createdAt: ob.booked_at || ob.created_at || '', updatedAt: ob.updated_at || '',
+               createdAt: ob.booked_at || ob.created_at || '', updatedAt: ob.updated_at || '', updatedBy: ob.updated_by || '',
                opsVersion: ob.version != null ? +ob.version : null,        // §opsVersion · sent back as If-Match
                history: [], ops: {}, adjustments: [], _fromOpsBackend: true };
     HEADER.forEach(function(h){ var v = ob[snake(h[0])]; if(v !== undefined) bk[h[0]] = v; });
