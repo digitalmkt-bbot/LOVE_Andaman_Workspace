@@ -1,0 +1,13 @@
+const fs=require('fs');const s=fs.readFileSync(process.argv[2],'utf8');
+const cut=(a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
+global.TODAY_STR='2026-11-26';global.FL_GEARBOXES=[{id:'g1',serial:'G1'}];
+global.FL_PROPELLERS=[{id:'p37',serial:'AC-P-RH-17-01',status:'active',boatId:'b9',gearboxId:null,spareLocation:'shop:prop-shop-phuket'},{id:'pX',serial:'X',status:'active',boatId:'b9',gearboxId:'g1'},{id:'pS',serial:'S',status:'spare',gearboxId:'g1',boatId:'b9'}];
+global.getBoat=id=>({name:'Achilles'});global.flGetGb=id=>FL_GEARBOXES.find(g=>g.id===id);global.flGetEng=()=>null;global.flParseSpareLoc=l=>({label:'ร้านใบจักร Phuket'});
+let saved=0;global.flSave=()=>saved++;global.flRenderAsset=()=>{};global.laBy=()=>'t';
+eval(cut('function _flEquipLog(','function flEquipPropActive')+cut('function _flEqLocLabel(','\n',)+cut('function faPropFix(','var FA_FLAG_TXT')+cut('function _flStashPartRecord(','function flMaintStashOpen')+';global.F=faPropFix;global.ST=_flStashPartRecord');
+const ok=(c,m)=>{console.log((c?'PASS':'FAIL')+' '+m);if(!c)process.exitCode=1};
+F('p37','stash'); let p=FL_PROPELLERS[0]; ok(p.status==='spare'&&p.boatId===null&&p.spareLocation==='shop:prop-shop-phuket'&&/ออกจาก Achilles/.test(p.log[p.log.length-1].desc)&&saved===1,'orphan active prop → spare, off the boat, storage kept, history written');
+F('pX','stash'); ok(FL_PROPELLERS[1].status==='active'&&FL_PROPELLERS[1].boatId==='b9','prop that is on a gearbox is not touched by stash');
+F('pS','off'); ok(FL_PROPELLERS[2].gearboxId===null&&FL_PROPELLERS[2].status==='spare','existing "off" fix unchanged');
+const r={status:'active',boatId:'b9',gearboxId:'g1',note:'Port'}; ST(r,false,'pier:tublamu','คลัง Tub Lamu','MJ-1',''); ok(r.status==='spare'&&r.gearboxId===null&&r.boatId===null,'stash from a job now also clears the boat');
+const g={status:'ready',boatId:'b9',engineId:'e1'}; ST(g,true,'pier:tublamu','คลัง','MJ-1',''); ok(g.engineId===null&&g.boatId==='b9','gearbox stash behaviour unchanged');
