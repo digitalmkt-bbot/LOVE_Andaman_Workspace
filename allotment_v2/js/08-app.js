@@ -6623,8 +6623,9 @@ function tmGet(bkId,pk,f){ var v=String(insEff(bkId,pk,f,'')||'').trim(); if(v) 
   var S=tmSibs(bkId); for(var i=0;i<S.length;i++){ var w=String(insEff(S[i],pk,f,'')||'').trim(); if(w) return w; }
   return ''; }
 function tmSet(bkId,pk,f,val){ var v=String(val||'').trim(); if(f==='idNo') v=tmIdDigits(v); if(f==='idLaser') v=v.toUpperCase().replace(/[^A-Z0-9]/g,''); if(f==='dob') v=tmDobNorm(v); if(f==='nat') v=tmNatNorm(v); insSetField(bkId,pk,f,v); }
-/* ครบ = มี ชื่ออังกฤษ + เลขบัตรถูกต้อง + วันเกิด (ชื่อไทย/เลขหลังบัตร/Remark ไม่บังคับ) */
-function tmPaxOk(bkId,p){ return !!(tmEnDef(bkId,p) && tmIdOk(tmGet(bkId,p.key,'idNo')) && tmDobOk(tmGet(bkId,p.key,'dob'))); }   /* §tmPax2 · รับ p (ใช้ค่าตั้งต้นจากชื่อในใบจอง) */
+/* §tmAll6 (2026-11-26) · owner: "สำคัญทุกคอลัมน์" · ครบ = มีครบทั้ง 6 ช่อง: ชื่อไทย + ชื่ออังกฤษ + สัญชาติ (มีค่าตั้งต้นเสมอ) + เลขบัตรถูกต้อง + เลขหลังบัตร + วันเกิด · Remark ไม่บังคับ
+   (เดิม: ชื่ออังกฤษ + เลขบัตร + วันเกิด) */
+function tmPaxOk(bkId,p){ return !!(tmThDef(bkId,p) && tmEnDef(bkId,p) && tmIdOk(tmGet(bkId,p.key,'idNo')) && tmGet(bkId,p.key,'idLaser') && tmDobOk(tmGet(bkId,p.key,'dob'))); }   /* §tmPax2 · รับ p (ใช้ค่าตั้งต้นจากชื่อในใบจอง) */
 /* §tmPax3 (2026-11-04) · owner "อันนี้มี 10 คน ต้องขึ้นให้ใส่ 10 คน" · ใบจองมี N คนแต่ใส่ชื่อมาแค่หัวหน้า → เติมแถวว่างให้ครบ N (key = ลำดับผู้โดยสาร เก็บที่เดิม insurance_overrides) */
 function tmPaxList(b){
   var L=(typeof insBkPax==='function')?insBkPax(b):[]; var N=0;
@@ -6719,13 +6720,13 @@ function tmBkMiss(b){ var o={en:0,id:0,dob:0};
 function tmMissText(b){ var m=tmBkMiss(b), a=[]; if(m.en) a.push('ชื่ออังกฤษ '+m.en); if(m.id) a.push('เลขบัตร '+m.id); if(m.dob) a.push('วันเกิด '+m.dob); return a.join(' · '); }
 /* §btFull3 (2026-11-26) · owner ดู §btFull2 แล้ว: "ตอนนี้มันรกมาก… ต้องกระชับกว่านี้ คือถ้ามันมี 6 คอลัมน์ ก็ เครื่องหมาย 6 อันเรียงกันเลย User จดจำได้เองว่าตำแหน่งไหนเป็นอะไร"
    เครื่องหมาย 6 ช่อง เรียงตามคอลัมน์ในตารางกรอก: ชื่อไทย · ชื่ออังกฤษ · สัญชาติ | เลขบัตร · เลขหลังบัตร · วันเกิด (ค่าที่นับ = ค่าเดียวกับที่ตารางแสดง รวมค่าตั้งต้นจากใบจอง)
-   เขียว = ครบทุกคน · เหลืองครึ่งช่อง = มีบางคน · แดง = ยังไม่มีเลย (ช่องบังคับ: ชื่ออังกฤษ เลขบัตร วันเกิด) · กรอบเทา = ว่างแต่ไม่บังคับ · ชี้แล้วบอกว่าขาดกี่คน */
+   เขียว = ครบทุกคน · เหลืองครึ่งช่อง = มีบางคน · แดง = ยังไม่มีเลย · ชี้แล้วบอกว่าขาดกี่คน · §tmAll6 บังคับทั้ง 6 ช่อง (ไม่มีกรอบเทา "ไม่บังคับ" แล้ว) */
 function tmMissHtml(b){ if(!b) return ''; var n=0, c=[0,0,0,0,0,0];
   try{ tmPaxList(b).forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++;
     if(tmThDef(b.id,p)) c[0]++; if(tmEnDef(b.id,p)) c[1]++; if(tmNatDef(b.id,p,b)) c[2]++;
     if(tmIdOk(tmGet(b.id,p.key,'idNo'))) c[3]++; if(tmGet(b.id,p.key,'idLaser')) c[4]++; if(tmDobOk(tmGet(b.id,p.key,'dob'))) c[5]++; }); }catch(_){ return ''; }
   if(!n) return '';
-  var F=[['ชื่อไทย',0],['ชื่ออังกฤษ',1],['สัญชาติ',0],['เลขบัตร',1],['เลขหลังบัตร',0],['วันเกิด',1]];
+  var F=[['ชื่อไทย',1],['ชื่ออังกฤษ',1],['สัญชาติ',1],['เลขบัตร',1],['เลขหลังบัตร',1],['วันเกิด',1]];
   return F.map(function(f,i){ var h=c[i], cls=(h>=n)?'ok':(h>0?'pt':(f[1]?'no':'op'));
     var tip=f[0]+' · '+((h>=n)?('ครบ '+n+' คน'):(h>0?('มี '+h+' จาก '+n+' คน'):(f[1]?('ขาด '+n+' คน'):'ยังไม่ได้กรอก (ไม่บังคับ)')));
     return '<i class="'+cls+'" title="'+tip+'"></i>'; }).join(''); }
@@ -6739,7 +6740,7 @@ function tmChip(b, bare){ var st=tmBkStatus(b); if(!st.n) return '';
 function tmInputLive(el){
   var f=el.getAttribute('data-f'), v=el.value;
   if(f==='idNo'){ var d=tmIdDigits(v); var ok=d.length===13 && tmIdOk(d); el.style.borderColor=(d.length===13 && !ok)?'#D92D20':(ok?'#0F766E':'#EBA6A6'); el.style.background=ok?'#F0FDF9':'#FFF5F5'; el.title=(d.length===13 && !ok)?'เลขท้ายไม่ถูกต้อง · ตรวจอีกครั้ง':''; }
-  else if(f==='enName'){ el.style.borderColor=v.trim()?'#D9DDE4':'#EBA6A6'; el.style.background=v.trim()?'#fff':'#FFF5F5'; }
+  else if(f==='enName'||f==='thName'||f==='idLaser'){ el.style.borderColor=v.trim()?'#D9DDE4':'#EBA6A6'; el.style.background=v.trim()?'#fff':'#FFF5F5'; }   /* §tmAll6 */
   else if(f==='dob'){ var dk=tmDobOk(v); el.style.borderColor=dk?'#D9DDE4':(v.trim()?'#D92D20':'#EBA6A6'); el.style.background=dk?'#fff':'#FFF5F5'; el.title=(v.trim()&&!dk)?'รูปแบบ วว/ดด/ปปปป เช่น 12/05/1990':''; }   /* §tmPax2 */
 }
 function tmInputChange(el, bkId, pk){
@@ -6779,7 +6780,7 @@ function tmGridHtml(b){
       if(k==='thName') v=tmThDef(b.id,p); else if(k==='enName') v=tmEnDef(b.id,p); else if(k==='dob') v=tmDobNorm(v); else if(k==='nat') v=tmNatDef(b.id,p,b);   /* §tmPax2 · ชื่อไทยในใบจอง → ช่องไทย */
       var ph=(k==='dob')?'วว/ดด/ปปปป':f[1];
       var mono=(k==='idNo'||k==='idLaser'||k==='dob');
-      var need=(k==='enName'&&!v)||(k==='dob'&&!tmDobOk(v))||(k==='idNo'&&!tmIdOk(v));
+      var need=((k==='enName'||k==='thName'||k==='idLaser')&&!v)||(k==='dob'&&!tmDobOk(v))||(k==='idNo'&&!tmIdOk(v));   /* §tmAll6 */
       var bad=(k==='idNo'&&tmIdDigits(v).length===13&&!tmIdOk(v))||(k==='dob'&&!!v&&!tmDobOk(v));
       var iid='tmi-'+String(b.id+'-'+p.key+'-'+k).replace(/[^A-Za-z0-9_-]/g,'_');   /* §tmPax2 · มี id ให้ _laRerender คืนโฟกัส/เคอร์เซอร์ได้ */
       var inp='<input id="'+iid+'" data-f="'+k+'" value="'+e(v)+'" placeholder="'+e(ph)+'"'+(ro?' disabled':'')+(k==='idNo'?' inputmode="numeric" maxlength="17"':'')+(k==='dob'?' maxlength="10" autocomplete="off"':'')+(k==='nat'?' list="tm-natlist" autocomplete="off" title="'+e((typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(v):'')+'"':'')
