@@ -187,7 +187,7 @@ const PROBE = {
     const TOG_CLASS = /(^|[-_ ])(tab|tabs|seg|chip|pill|toggle|filter|mode|btn-group|switch|utab|dchip)([-_ ]|$)|tab-btn|seg-|-seg|chip|pill/i;
     const ACTIVE = /(^|[-_ ])(active|on|sel|selected|cur|current)([-_ ]|$)/;
     const label = (e) => norm(e.innerText || e.value || e.title || e.getAttribute('aria-label') || '').slice(0, 60);
-    const fn = (e) => { const o = e.getAttribute('onclick') || e.getAttribute('onchange') || ''; const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(o); return m ? m[1] : ''; };
+    const fn = (e) => { const o = e.getAttribute('onclick') || e.getAttribute('onchange') || ''; const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(o); return m ? m[1].replace(/^bookingV2/, 'bkV2') : ''; /* the new frontend renamed bkV2* to bookingV2*: one name for both */ };
     const clickables = [...root.querySelectorAll('[onclick]')].filter(vis);
     const toggles = [], dialogs = [];
     for (const e of clickables) {
@@ -224,7 +224,7 @@ const PROBE = {
   clickKey: (key) => {
     const root = document.querySelector('.view.active') || document.body;
     const norm = (s) => String(s || '').replace(/\d{1,2}:\d{2}:\d{2}/g, 'HH:MM:SS').replace(/[ \t\u00a0]+/g, ' ').trim();
-    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onclick') || ''); return m ? m[1] : ''; };
+    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onclick') || ''); return m ? m[1].replace(/^bookingV2/, 'bkV2') : ''; /* the new frontend renamed bkV2* to bookingV2*: one name for both */ };
     const k = (e) => ((norm(e.innerText || e.value || e.title || e.getAttribute('aria-label') || '').slice(0, 60)).replace(/[0-9]+/g, '#') || '∅') + '|' + fn(e);
     const el = [...root.querySelectorAll('[onclick]')].find((e) => e.getClientRects().length && k(e) === key);
     if (!el) return false;
@@ -232,7 +232,7 @@ const PROBE = {
   },
   select: ({ key, value }) => {
     const root = document.querySelector('.view.active') || document.body;
-    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onchange') || ''); return m ? m[1] : ''; };
+    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onchange') || ''); return m ? m[1].replace(/^bookingV2/, 'bkV2') : ''; /* the new frontend renamed bkV2* to bookingV2*: one name for both */ };
     const s = [...root.querySelectorAll('select')].find((x) => x.getClientRects().length && ((x.id || x.name || fn(x) || 'select') === key));
     if (!s) return false;
     if (![...s.options].some((o) => o.value === value)) return 'no-option';
@@ -241,7 +241,7 @@ const PROBE = {
   check: (key) => {
     const root = document.querySelector('.view.active') || document.body;
     const norm = (s) => String(s || '').replace(/[ \t\u00a0]+/g, ' ').trim();
-    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onclick') || e.getAttribute('onchange') || ''); return m ? m[1] : ''; };
+    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onclick') || e.getAttribute('onchange') || ''); return m ? m[1].replace(/^bookingV2/, 'bkV2') : ''; /* the new frontend renamed bkV2* to bookingV2*: one name for both */ };
     const c = [...root.querySelectorAll('input[type=checkbox], input[type=radio]')].find((x) => x.getClientRects().length && ((x.id || x.name || fn(x) || norm(x.closest('label')?.innerText || '').slice(0, 40) || 'check') === key));
     if (!c) return false;
     c.click(); return true;
