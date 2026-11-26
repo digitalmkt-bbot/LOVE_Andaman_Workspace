@@ -104,4 +104,31 @@
     };
     rw.__pkMonthWait = true; rw.__orig = origRender; window.renderPierPark = rw;
   }
+
+  /* §pkNearOps (2026-11-26, UI parity L2) · the day view's month card (pk2Near: 3 days either side, "ลำ · ตั๋ว · รอชื่อ") asked
+     pkTkData(day) for each neighbour, which in ops mode holds only the day the page loaded, so every other day read 0 boats
+     (Ranong 27 Nov: legacy "2 · 57 · 56", here "0 · 0 · —"). The neighbours now come from the same month read as the month view
+     (boats = the day's boats, tot = its tickets to issue, miss = names still missing); a window across two months asks both.
+     The day on screen keeps the figures the page passes in (legacy). No answer yet: legacy's own function runs. */
+  var origNear = window.pk2Near;
+  if(typeof origNear === 'function' && !origNear.__ops){
+    var near = function(ds, pier, today){
+      if(!O.enabled()) return origNear.apply(this, arguments);
+      var d0 = new Date(ds + 'T12:00:00'), keys = [], months = {};
+      for(var i = -3; i <= 3; i++){
+        var d = new Date(d0); d.setDate(d.getDate() + i);
+        var k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        keys.push(k); months[k.slice(0, 7)] = 1;
+      }
+      var J = {}, all = true;
+      Object.keys(months).forEach(function(m){ J[m] = ask(m, pier); if(!J[m]) all = false; });
+      if(!all) return origNear.apply(this, arguments);
+      return keys.map(function(k){
+        if(k === ds) return { ds: k, boats: today.boats, tot: today.tot, miss: today.miss };
+        var D = (J[k.slice(0, 7)].days || []).filter(function(x){ return x.date === k; })[0];
+        return D ? { ds: k, boats: (D.boats || []).length, tot: n(D.tickets), miss: n(D.miss) } : { ds: k, boats: 0, tot: 0, miss: 0 };
+      });
+    };
+    near.__ops = true; near.__orig = origNear; window.pk2Near = near;
+  }
 })();

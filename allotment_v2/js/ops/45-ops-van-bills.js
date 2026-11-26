@@ -170,7 +170,9 @@
   function ovView(){ var h = cache[overviewKey()]; return h ? h.view : null; }
   function ovTabs(){ var v = ovView(); return v ? (v.tabs || []) : []; }
   function carCost(x){ return x && x.car_cost != null ? n(x.car_cost) : n(x.bill) - n(x.ex) + n(x.cut); }   /* §w7c · the server's car_cost; the subtraction only for an answer without it */
-  function shellV2(inner){ return css() + (function(){ try{ return typeof vbxCss === 'function' ? vbxCss() : ''; }catch(_){ return ''; } })() + '<div class="vbx" data-ops-van-bills="1">' + inner + '</div>'; }
+  function shellV2(inner){ return css() + (function(){ try{ return typeof vbxCss === 'function' ? vbxCss() : ''; }catch(_){ return ''; } })()
+    + (function(){ try{ return typeof pcVbCss === 'function' ? '<style>' + pcVbCss() + '</style>' : ''; }catch(_){ return ''; } })()   /* §pcVanPay */
+    + '<div class="vbx" data-ops-van-bills="1">' + inner + '</div>'; }
 
   function tabHtml(t){
     var p = t.pier, all = p == null, col = all ? '#16265C' : pierC(p), on = (_vb.pier || '') === (all ? '' : p);
@@ -277,7 +279,9 @@
     rows.forEach(function(r){
       if(r.date !== last){
         var nd = rows.filter(function(y){ return y.date === r.date; }).length;
-        body += '<tr class="vbx-day"><td class="rn"></td><td colspan="14">' + esc(dayLbl(r.date)) + ' · ' + nd + ' คัน</td></tr>';
+        var unp = rows.filter(function(y){ return y.date === r.date && n(y.bill) > 0 && !cashOf(y).lines.length; });   /* §pcVanPay */
+        body += '<tr class="vbx-day"><td class="rn"></td><td colspan="15">' + esc(dayLbl(r.date)) + ' · ' + nd + ' คัน'
+          + (unp.length > 1 ? ('<a class="vbp-day" onclick="vbPayOpen(' + esc(JSON.stringify(unp.map(function(y){ return y.key; }))) + ')">&#128181; จ่ายสดทั้งวัน · ' + unp.length + ' คัน</a>') : '') + '</td></tr>';
         last = r.date;
       }
       var rt = route(r.route_id), rn = (rt && rt.name) || r.route_id || '—', ov0 = r.override || {};
@@ -307,6 +311,7 @@
         + '<td class="i n">' + IN(set('ex'), n(r.ex) || '', r.key + '|ex', ri, 'ex', 0, dk) + '</td>'
         + '<td class="i n">' + IN(set('cut'), n(r.cut) || '', r.key + '|cut', ri, 'cut', 1, dk) + '</td>'
         + '<td class="s n bill">' + (hasMoney ? N(r.bill) : '<span class="vbx-mut">ยังไม่มีเรต</span>') + '</td>'
+        + '<td class="s vbp">' + payCell(r.key, r.bill, cashOf(r)) + '</td>'   /* §pcVanPay */
         + '<td class="i n">' + IN(set('per'), ov0.per != null ? ov0.per : '', r.key + '|per', ri, 'per', 0, dk)
           + ((ov0.per == null && n(r.per_pax)) ? '<div class="vbx-sub">' + n(r.per_pax) + ' ทั้งรอบ</div>' : '') + '</td>'
         + '<td class="s n">' + (r.return_only ? '<span class="vbx-mut">ค่ารถอย่างเดียว</span>' : (n(r.sale) ? N(r.sale) : '<span class="vbx-mut">·</span>')) + '</td>'
@@ -329,27 +334,36 @@
         + '<td class="i n">' + IN(fn('ex'), x.ex || '', k('ex'), ri, 'ex', 0, dx) + '</td>'
         + '<td class="i n">' + IN(fn('cut'), x.cut || '', k('cut'), ri, 'cut', 1, dx) + '</td>'
         + '<td class="s n bill">' + N(x.bill) + '</td>'
+        + '<td class="s vbp">' + payCell('x' + x.id, x.bill, cashOf(x)) + '</td>'   /* §pcVanPay */
         + '<td class="i n">' + IN(fn('per_pax'), x.per_pax || '', k('per_pax'), ri, 'per', 0, dx) + '</td>'
         + '<td class="s n">' + N(x.sale) + '</td>'
         + '<td class="s n">' + (ED ? ('<a onclick="laOpsVanBills.delExtra(this.getAttribute(\'data-x\'))" ' + dx + ' style="color:#B42318;cursor:pointer;font-weight:700">ลบแถว</a>') : '') + '</td></tr>';
       ri++;
     });
-    var L = 'ABCDEFGHIJKLMN';
-    var H = ['วันที่', 'รหัส', 'งาน', 'รถ', 'จุดรับ', 'จุดส่ง (ขากลับ)', 'คน', 'เรต/คัน', 'Extra', 'หัก', 'เรียกเก็บ', 'ขาย/คน', 'ราคาขาย', 'กำไร'];
-    var MAN = { 7: 1, 8: 1, 9: 1, 11: 1 };
+    var L = 'ABCDEFGHIJKLMNO';
+    var H = ['วันที่', 'รหัส', 'งาน', 'รถ', 'จุดรับ', 'จุดส่ง (ขากลับ)', 'คน', 'เรต/คัน', 'Extra', 'หัก', 'เรียกเก็บ', 'จ่ายสด', 'ขาย/คน', 'ราคาขาย', 'กำไร'];   /* §pcVanPay · column O */
+    var MAN = { 7: 1, 8: 1, 9: 1, 12: 1 };
     var thead = '<thead><tr class="lt"><th></th>' + H.map(function(_, i){ return '<th>' + L[i] + '</th>'; }).join('') + '</tr>'
       + '<tr><th style="width:30px">#</th>' + H.map(function(h, i){ return '<th class="' + (MAN[i] ? 'man' : '') + '">' + h + '</th>'; }).join('') + '</tr></thead>';
-    var foot = (ro ? '' : '<tr class="vbx-add"><td class="rn">' + (ri + 1) + '</td><td colspan="14"><a onclick="laOpsVanBills.addExtra()">+ เพิ่มแถว · รถนอก / งานที่ไม่ได้ผ่านใบงาน (' + esc(pierS(pier)) + ')</a></td></tr>')
+    var PS = v.cash_totals || { paid: 0, due: 0, rows_paid: 0, rows_due: 0, differs: 0 };   /* §pcVanPay · legacy vbPaySum, the server's */
+    var unpaidAll = rows.filter(function(y){ return n(y.bill) > 0 && !cashOf(y).lines.length; }).map(function(y){ return y.key; })
+      .concat(extras.filter(function(x){ return n(x.bill) > 0 && !cashOf(x).lines.length; }).map(function(x){ return 'x' + x.id; }));
+    var payStrip = (n(PS.rows_paid) || n(PS.rows_due)) ? ('<div class="vbp-sum">&#128181; จ่ายสดหน้าท่าแล้ว <b class="ok">฿' + N(PS.paid) + '</b><span class="mut">· ' + n(PS.rows_paid) + ' แถว</span>'
+        + (n(PS.rows_due) ? ('<span class="mut">·</span> ยังไม่จ่าย <b class="due">฿' + N(PS.due) + '</b><span class="mut">· ' + n(PS.rows_due) + ' แถว</span>') : '<span class="mut">· ครบทุกแถว</span>')
+        + (n(PS.differs) ? ('<span class="due">&#9888; ยอดไม่ตรง ' + n(PS.differs) + ' แถว</span>') : '')
+        + (n(PS.rows_due) > 1 ? ('<button onclick="vbPayOpen(' + esc(JSON.stringify(unpaidAll)) + ')">&#128181; จ่ายสดที่เหลือ · ' + n(PS.rows_due) + ' แถว</button>') : '') + '</div>') : '';
+    var foot = (ro ? '' : '<tr class="vbx-add"><td class="rn">' + (ri + 1) + '</td><td colspan="15"><a onclick="laOpsVanBills.addExtra()">+ เพิ่มแถว · รถนอก / งานที่ไม่ได้ผ่านใบงาน (' + esc(pierS(pier)) + ')</a></td></tr>')
       + '<tr class="vbx-tot"><td class="rn">&Sigma;</td><td colspan="6">รวม ' + n(T.vans) + ' เที่ยว · ' + esc(pierL(pier)) + '</td>'
       + '<td class="n">' + n(T.pax) + '<div style="font-size:9.5px;font-weight:600;opacity:.75;white-space:normal">' + n(T.ad) + ' AD · ' + n(T.chd) + ' CHD · ' + n(T.inf) + ' INF · ' + n(T.foc) + ' FOC</div></td>'
       + '<td class="n">' + N(carCost(T)) + '</td><td class="n">' + N(T.ex) + '</td>'
       + '<td class="n">' + (n(T.cut) ? ('-' + N(T.cut)) : '0') + '</td><td class="n">' + N(T.bill) + '</td>'
+      + '<td class="n" style="font-size:11px">' + (n(PS.paid) ? ('สด ' + N(PS.paid)) : '') + '</td>'   /* §pcVanPay */
       + '<td></td><td class="n">' + N(T.sale) + '</td><td class="n" style="color:' + (pl < 0 ? '#FCA5A5' : '#86EFAC') + '">' + B(pl).replace('฿', '') + '</td></tr>';
     var table = '<div class="vbx-fx"><span class="ref" id="vbx-ref">—</span><span class="f">fx</span><span class="v" id="vbx-fv">คลิกช่องในตารางเพื่อดูสูตรของแถวนั้น</span>'
       + '<span class="h">Enter/↓ ลงล่าง · ↑ ขึ้น · Tab ไปขวา · Ctrl+D เติมจากแถวบน · วางช่วงจาก Excel ได้</span></div>'
       + '<div class="vbx-xlw"><table class="vbx-xl">' + thead + '<tbody>'
-      + (body || '<tr><td class="rn"></td><td colspan="14" style="padding:22px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ที่' + esc(pierS(pier)) + 'ในรอบบิลนี้</td></tr>')
-      + foot + '</tbody></table></div>'
+      + (body || '<tr><td class="rn"></td><td colspan="15" style="padding:22px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ที่' + esc(pierS(pier)) + 'ในรอบบิลนี้</td></tr>')
+      + foot + '</tbody></table></div>' + payStrip
       + '<div class="vbx-sheets">' + PIERS.filter(function(p){ return p === pier || mine(p) || p === 'panwa' || p === 'tublamu'; }).map(function(p){
           var g = mine(p);
           return '<button class="' + (p === pier ? 'on' : '') + '" onclick="vbSetPier(\'' + p + '\')">' + esc(pierL(p)) + (g ? (' · ' + n(g.trips)) : '') + '</button>'; }).join('') + '</div>'
@@ -411,7 +425,9 @@
           : '<button class="vbx-btn" onclick="laOpsVanBills.send()">ส่งให้เจ้าของรถ</button>')
           + '<button class="vbx-btn" onclick="vbEdit()">&#9998; แก้ไขช่องที่กรอกแล้ว</button>')
       + '<button class="vbx-btn" onclick="vbPrint(1)" title="มีราคาขายและกำไร · ใช้ภายใน ห้ามส่งให้เจ้าของรถ">ฉบับภายใน</button>'
-      + '<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · ' + esc(pierS(pier)) + '</button>';
+      + (_vb.van ? ('<button class="vbx-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล · ' + esc(pierS(pier)) + ' · ' + esc(vName(_vb.van)) + ' เท่านั้น</button>')
+        : ('<button class="vbx-btn" onclick="vbPrintSplit()" title="ทุกคันในรอบนี้ · คันละหน้า · กดครั้งเดียว">&#128424; พิมพ์แยกคัน</button>'
+          + '<button class="vbx-btn pri" onclick="vbPrint()" title="ทุกคันรวมในใบเดียว (แบบเดิม)">&#128424; พิมพ์รวม · ' + esc(pierS(pier)) + '</button>'));   /* §vbSplit */
     var settle = '';
     if(v.sent) settle += '<div style="font-size:11px;color:#185FA5;margin-top:3px">ส่งแล้ว ' + esc(text(v.sent.at).slice(0, 10)) + ' · ' + B(v.sent.bill)
       + (v.sent.changed_since_sent ? ' · <b style="color:#A32D2D">ยอดเปลี่ยนหลังส่ง</b>' : '') + '</div>';
@@ -426,7 +442,7 @@
       + '<div style="flex:1;min-width:0"><div class="n">' + esc(_vb.sup) + ' <span class="vbx-pp" style="color:' + col + '">' + esc(pierL(pier)) + '</span>'
       + '<span class="by">' + (v.updated_by ? (' · แก้ล่าสุด ' + esc(v.updated_by) + (v.updated_at ? (' ' + esc(text(v.updated_at).slice(0, 10))) : '')) : '') + '</span></div>'
       + '<div class="vbx-vc">' + vchips + '</div>' + settle + '</div>' + stPill + '</div>'
-      + rateStrip + kpi + table + sum;
+      + rateStrip + kpi + table + sum + dailyHtml(v, vName);
   }
   /* legacy §vbMix lines of one code, from the server's mix */
   function mixHtml(c){
@@ -795,6 +811,93 @@
     return key === 'van_rates' ? vrWrite(val) : orig.apply(this, [].slice.call(arguments, 1));
   });
 
+  /* ── §pcVanPay "💵 จ่ายสด" (parity L3, 2026-11-26) ──
+     The server keeps the link (pier_cash_rows.van_bill) and works out each row's `cash` and the sheet's `cash_totals`:
+       POST …/cash/plan { pier, keys }   the dialog's lines, prefilled and grouped (legacy vbPaySingles + vbPayGroup)
+       POST …/cash { items }             makes the petty-cash lines and links them (legacy vbPaySave)
+       DELETE …/cash/{key}               cancels a row's payment (legacy vbPayUndo)
+     The dialog itself is legacy's (vbPayPaint over window._vbPay, with vbPaySet / vbPayDrop); only what reads or writes the
+     blob (po_cash_vanlink) is answered from the server here. */
+  function cashOf(x){ return (x && x.cash) || { lines: [], paid: 0, diff: n(x && x.bill), state: 'none' }; }
+  function payCell(k, bill, S){
+    if(!S.lines.length){
+      if(!(n(bill) > 0)) return '<span class="vbx-mut">·</span>';
+      return '<button type="button" class="vbp-btn" data-vbk="pay|' + esc(k) + '" onclick="event.stopPropagation();vbPayOpen([this.getAttribute(\'data-k\')])" data-k="' + esc(k) + '" title="สร้างบรรทัดจ่ายใน Petty Cash จากแถวนี้ · ยอด ' + N(bill) + '">&#128181; จ่ายสด ' + N(bill) + '</button>';
+    }
+    var ok = n(S.diff) === 0, r0 = S.lines[0];
+    var who = S.lines.map(function(r){ return r.by; }).filter(Boolean)[0] || '';
+    var lbl = ok ? ('&#10003; จ่ายแล้ว ฿' + N(S.paid)) : ('&#9888; จ่ายสด ฿' + N(S.paid) + ' · ต่าง ' + N(Math.abs(n(S.diff))));
+    return '<span class="vbp-chip ' + (ok ? 'ok' : 'warn') + '" data-row="' + esc(r0.row_id) + '" onclick="event.stopPropagation();vbPayGo(this.getAttribute(\'data-row\'))" title="' + (ok ? 'ยอดในสมุดตรงกับยอดจ่ายของแถวนี้' : ('บิล ' + N(bill) + ' · สมุด ' + N(S.paid))) + ' · ' + esc(who) + '">' + lbl
+      + '<small>' + esc(pierS(r0.pier)) + ' ' + esc(r0.date.slice(8, 10) + '/' + r0.date.slice(5, 7)) + (n(r0.vans) > 1 ? (' · รวมใบ ' + n(r0.vans) + ' คัน ฿' + N(r0.total)) : '') + (S.lines.length > 1 ? (' · ' + S.lines.length + ' บรรทัด') : '') + '</small></span>'
+      + '<a class="vbp-x" data-k="' + esc(k) + '" onclick="event.stopPropagation();vbPayUndo(this.getAttribute(\'data-k\'))" title="ยกเลิกจ่ายสด · ลบบรรทัดที่สร้างไว้ในสมุดออก">&times;</a>';
+  }
+  /* legacy §vbDaily: the sheet's daily summary (the rows shown: one van when one is picked) */
+  function dailyHtml(v, vName){
+    var DY = v.days || [], T = v.totals || {}, pier = _vb.pier || v.pier || 'panwa', pl = n(T.pl);
+    if(!DY.length) return '';
+    var lbl = function(ds){ if(!ds) return 'ไม่ระบุวัน'; try{ return new Date(ds + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }); }catch(_){ return ds; } };
+    return '<div class="vbx-dy"><div class="hh"><b>สรุปรายวัน</b><span>' + DY.length + ' วัน · ' + esc(_vb.sup) + ' · ' + esc(pierS(pier)) + (_vb.van ? (' · เฉพาะ ' + esc(vName(_vb.van))) : '') + '</span><i></i>'
+      + '<button class="vbx-btn sm" onclick="vbPrint(1,1)" title="มีราคาขายและกำไร · ใช้ภายใน">ฉบับภายใน</button>'
+      + '<button class="vbx-btn sm pri" onclick="vbPrint(0,1)">&#128424; พิมพ์สรุปรายวัน' + (_vb.van ? (' · ' + esc(vName(_vb.van))) : '') + '</button></div>'
+      + '<table><thead><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th class="b">เรียกเก็บ</th><th>ราคาขาย</th><th>กำไร</th></tr></thead><tbody>'
+      + DY.map(function(g){ var gp = n(g.pl);
+          return '<tr><td class="l">' + esc(lbl(g.date)) + '</td><td>' + n(g.trips) + '</td><td>' + n(g.pax) + '</td><td>' + (g.avg_pax_per_van != null ? n(g.avg_pax_per_van).toFixed(2) : '—') + '</td><td>' + N(g.car_cost) + '</td>'
+            + '<td>' + (n(g.ex) ? N(g.ex) : '<span class="vbx-mut">—</span>') + '</td><td>' + (n(g.cut) ? ('-' + N(g.cut)) : '<span class="vbx-mut">—</span>') + '</td><td class="b">' + N(g.bill) + '</td>'
+            + '<td>' + N(g.sale) + '</td><td style="color:' + (gp < 0 ? '#B42318' : '#0F7A4E') + ';font-weight:700">' + B(gp).replace('฿', '') + '</td></tr>'; }).join('')
+      + '<tr class="t"><td class="l">รวม</td><td>' + n(T.vans) + '</td><td>' + n(T.pax) + '</td><td>' + n(T.avg_pax_per_van).toFixed(2) + '</td><td>' + N(carCost(T)) + '</td><td>' + N(T.ex) + '</td><td>' + (n(T.cut) ? ('-' + N(T.cut)) : '0') + '</td><td class="b">' + N(T.bill) + '</td>'
+      + '<td>' + N(T.sale) + '</td><td style="font-weight:800;color:' + (pl < 0 ? '#B42318' : '#0F7A4E') + '">' + B(pl).replace('฿', '') + '</td></tr></tbody></table></div>';
+  }
+  /* the server's plan item in legacy's dialog shape (window._vbPay.items[], read by vbPayPaint / vbPaySet / vbPayDrop) */
+  function payItem(x){ return { ks: x.keys.slice(), parts: x.parts || {}, ds: x.date, pier: x.pier, txt: x.text, amt: n(x.amount), who: x.payee || '', van: n(x.vans), subs: x.subs || [], base: n(x.base), ex: n(x.ex), cut: n(x.cut) }; }
+  function payPlan(keys){ return O.post(address() + '/cash/plan', { pier: _vb.pier || 'panwa', keys: keys }).then(function(j){ return (j.items || []).map(payItem); }); }
+  /* the answer is one pier's part of the bill, not the whole one a write builds on (bills[]): the reads are made again */
+  function payAfter(){ if(O.wrote) O.wrote('van-bill-cash'); return answered(address())({}); }
+  wrap('vbPayOpen', function(orig, keys){
+    if(typeof pcGuard === 'function' && !pcGuard()) return;
+    payPlan(keys || []).then(function(items){
+      if(!items.length){ alert('Nothing to pay: these rows already have a Petty Cash line.'); return; }
+      window._vbPay = { items: items }; if(typeof vbPayPaint === 'function') vbPayPaint();
+    }, function(e){ if(e && (e.status === 409 || /nothing to pay/i.test(e.message || ''))) alert('Nothing to pay: these rows already have a Petty Cash line.'); else O.fail('Pay in cash could not open', e); });
+  });
+  wrap('vbPaySplit', function(orig, i){
+    var W = window._vbPay; if(!W || !W.items[i] || W.items[i].ks.length < 2) return;
+    var ks = W.items[i].ks.slice();
+    Promise.all(ks.map(function(k){ return payPlan([k]).then(function(a){ return a[0]; }); })).then(function(parts){
+      W.items.splice.apply(W.items, [i, 1].concat(parts.filter(Boolean))); if(typeof vbPayPaint === 'function') vbPayPaint();
+    }, function(e){ O.fail('Could not split the line', e); });
+  });
+  wrap('vbPaySave', function(orig){
+    var W = window._vbPay; if(!W) return;
+    if(typeof pcGuard === 'function' && !pcGuard()) return;
+    for(var i = 0; i < W.items.length; i++){ if(!(W.items[i].amt > 0)){ alert('Row ' + (i + 1) + ': amount must be more than 0.'); return; } if(!W.items[i].txt){ alert('Row ' + (i + 1) + ': description is empty.'); return; } }
+    var body = { items: W.items.map(function(it){ return { keys: it.ks, pier: it.pier, date: it.ds, text: it.txt, amount: it.amt, payee: it.who || '' }; }) };
+    var q = '?pier=' + enc(_vb.pier || 'panwa') + (_vb.van ? '&van_id=' + enc(_vb.van) : '');
+    O.post(address() + '/cash' + q, body).then(function(j){
+      if(typeof ckReasonClose === 'function') ckReasonClose(); window._vbPay = null;
+      payAfter(j);
+      if(j && !n(j.created)) alert('No line was created: these rows already have a Petty Cash line.');
+    }, function(e){ O.fail('Pay in cash was not saved', e); });
+  });
+  wrap('vbPayUndo', function(orig, k){
+    if(typeof pcGuard === 'function' && !pcGuard()) return;
+    var v = current() || {}, x = (v.rows || []).filter(function(r){ return r.key === k; })[0] || (v.extra_lines || []).filter(function(e){ return 'x' + e.id === k; })[0];
+    var R = cashOf(x).lines; if(!R.length){ render(); return; }
+    var tot2 = 0, grp = 0; R.forEach(function(r){ tot2 += n(r.total); if(n(r.vans) > 1) grp = Math.max(grp, n(r.vans)); });
+    if(!confirm('Cancel cash payment for this row?\nThis deletes ' + R.length + ' Petty Cash line(s) totalling ' + tot2.toLocaleString('en-US') + ' that were created from the bill.' + (grp ? ('\nNote: the line covers ' + grp + ' vans — all of them go back to "pay cash".') : ''))) return;
+    var q = '?pier=' + enc(_vb.pier || 'panwa') + (_vb.van ? '&van_id=' + enc(_vb.van) : '');
+    O.del(address() + '/cash/' + enc(k) + q).then(payAfter, function(e){ O.fail('The cash payment was not cancelled', e); });
+  });
+  /* legacy vbPayGo: open the petty-cash day of the line (the line's pier and day come with the row's cash) */
+  wrap('vbPayGo', function(orig, rowId){
+    var v = current() || {}, hit = null;
+    (v.rows || []).concat(v.extra_lines || []).forEach(function(x){ cashOf(x).lines.forEach(function(l){ if(!hit && l.row_id === rowId) hit = l; }); });
+    if(!hit){ alert('This Petty Cash line no longer exists.'); render(); return; }
+    window._pcPier = hit.pier; window._pcDate = hit.date; window._pcYM = hit.date.slice(0, 7); window._pcTab = 0; window._pcJump = false;
+    var el = document.querySelector('.nav-item[data-view="pop-' + hit.pier + '"]');
+    if(el && typeof nav === 'function') nav(el); else if(typeof renderPierCash === 'function') renderPierCash(hit.pier);
+    setTimeout(function(){ try{ var r = document.getElementById(typeof pcSelRowId === 'function' ? pcSelRowId('out', rowId) : ''); if(r){ r.scrollIntoView({ block: 'center' }); r.classList.add('pcp-on'); } }catch(_){} }, 60);
+  });
+
   /* ── print (legacy vbPrint) ──
      The paper is made by the server and only laid out here with legacy's print CSS:
        GET /v1/van-bills/summary?month=&period=&pier=                         the round summary (internal)
@@ -932,18 +1035,55 @@
       + printSig(['ผู้วางบิล', 'เจ้าของรถ'], ['ผู้รับวางบิล', 'LOVE ANDAMAN'], ['ผู้อนุมัติจ่าย', ''])
       + '<div class="foot"><span>พิมพ์ ' + esc(stamp) + '</span><span>' + esc(doc.partner) + ' · ' + esc(VB_PIER_LBL[pier] || pier) + ' · ' + esc(rnd) + '</span></div>';
   }
-  wrap('vbPrint', function(orig, internal){
+  /* legacy §vbDaily: the daily summary paper of one note (all vans of the pier, or the van picked) */
+  function printDaily(doc, stamp){
+    var IN2 = !!doc.internal, pier = doc.pier, rnd = vbPeriod().label + ' ' + vbMoLbl(), DY = doc.days || [], T = doc.totals || {};
+    var vTag = doc.van_id ? (' · ' + text(doc.van_name) + (doc.van_plate ? (' (' + text(doc.van_plate) + ')') : '')) : '';
+    var dlong = function(ds){ if(!ds) return 'ไม่ระบุวัน'; try{ return new Date(ds + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'short' }); }catch(_){ return ds; } };
+    var TR = 0, TO = 0; DY.forEach(function(g){ TR += n(g.trips); TO += n(g.outbound); });
+    var dcols = IN2 ? 10 : 8, pl = n(T.pl);
+    return printHead('สรุปรายวันค่ารถร่วม', 'DAILY SUMMARY · VAN SUPPLIER', IN2 ? '<div class="tag in">ฉบับภายใน · ห้ามส่งให้เจ้าของรถ</div>' : '<div class="tag">ฉบับเจ้าของรถ</div>')
+      + '<div class="meta"><div style="grid-column:span 2"><i>เจ้าของรถ</i><b>' + esc(doc.partner) + esc(vTag) + '</b><div class="sub">รถที่วิ่ง ' + esc((doc.van_names || []).join(' · ') || '—') + '</div></div>'
+      + '<div><i>ท่า</i><b>' + esc(VB_PIER_LBL[pier] || pier) + '</b></div><div><i>รอบบิล</i><b>' + esc(rnd) + '</b></div>'
+      + '<div><i>อ้างอิงใบวางบิล</i><b>' + esc(doc.doc_no) + '</b></div></div>'
+      + '<table><tr><th class="l">วันที่</th><th>เที่ยว</th><th>คน</th><th>คน/คัน</th><th>ค่ารถ</th><th>Extra</th><th>หัก</th><th>เรียกเก็บ</th>' + (IN2 ? '<th>ราคาขาย</th><th>กำไร</th>' : '') + '</tr>'
+      + (DY.length ? DY.map(function(g, k){ var gp = n(g.sale) - n(g.bill);
+          return '<tr class="' + (k % 2 ? 'z' : '') + '"><td class="l"><b>' + esc(dlong(g.date)) + '</b><div class="sub">' + esc((g.van_ids || []).map(vanName).join(' · ')) + '</div></td>'
+            + '<td>' + n(g.trips) + '</td><td>' + n(g.pax) + '</td><td>' + (n(g.outbound) ? (n(g.pax) / n(g.outbound)).toFixed(2) : '—') + '</td><td>' + N(g.car_cost) + '</td><td>' + (n(g.ex) ? N(g.ex) : '—') + '</td><td>' + (n(g.cut) ? ('-' + N(g.cut)) : '—') + '</td><td><b>' + N(g.bill) + '</b></td>'
+            + (IN2 ? ('<td>' + N(g.sale) + '</td><td class="' + (gp < 0 ? 'neg' : 'pos') + '">' + (gp < 0 ? '-' : '') + N(Math.abs(gp)) + '</td>') : '') + '</tr>'; }).join('')
+        : '<tr><td colspan="' + dcols + '" style="text-align:center;padding:20px;color:#6B7280">ไม่มีงานในรอบนี้</td></tr>')
+      + '<tr class="tot"><td class="l">รวม ' + DY.length + ' วัน</td><td>' + TR + '</td><td>' + n(T.pax) + '</td><td>' + (TO ? (n(T.pax) / TO).toFixed(2) : '—') + '</td><td>' + N(T.car_cost) + '</td><td>' + N(T.ex) + '</td><td>' + (n(T.cut) ? ('-' + N(T.cut)) : '0') + '</td><td>' + N(T.bill) + '</td>'
+      + (IN2 ? ('<td>' + N(T.sale) + '</td><td class="' + (pl < 0 ? 'neg' : 'pos') + '">' + (pl < 0 ? '-' : '') + N(Math.abs(pl)) + '</td>') : '') + '</tr></table>'
+      + '<div class="words"><b>ยอดเรียกเก็บรวม (ตัวอักษร)</b> &nbsp; ' + printWords(T.bill) + '</div>'
+      + '<div class="note">เที่ยว = จำนวนคันที่วิ่ง (รวมขากลับ) · คน = ลูกค้าที่ขึ้นรถจริง · รายละเอียดทีละเที่ยวอยู่ในใบวางบิลเลขที่อ้างอิงด้านบน</div>'
+      + printSig(['ผู้จัดทำ', 'ฝ่ายปฏิบัติการ'], ['ผู้ตรวจสอบ', IN2 ? 'ฝ่ายบัญชี' : 'เจ้าของรถ'], ['ผู้อนุมัติ', ''])
+      + '<div class="foot"><span>พิมพ์ ' + esc(stamp) + '</span><span>' + esc(doc.partner) + esc(vTag) + ' · ' + esc(VB_PIER_LBL[pier] || pier) + ' · ' + esc(rnd) + ' · สรุปรายวัน</span></div>';
+  }
+  /* legacy §vbSplit vbPrintSplit: every van of the pier, one page each, in one document (the server lists the vans in name order) */
+  wrap('vbPrintSplit', function(orig, internal, daily){
+    var pier = _vb.pier || 'panwa';
+    var w = window.open('', '_blank'); if(!w) return;
+    return O.get(address() + '/billing-notes?pier=' + enc(pier) + '&copy=' + (internal ? 'internal' : 'supplier')).then(function(doc){
+      var notes = doc.notes || [], stamp = printStamp(notes[0]);
+      var css = '@page{size:A4 portrait;margin:11mm}' + VB_PRINT_CSS + '.vbpg{page-break-after:always}.vbpg:last-child{page-break-after:auto}';
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (daily ? 'สรุปรายวัน ' : 'ใบวางบิล ') + esc(_vb.sup) + ' · แยกคัน ' + notes.length + '</title>'
+        + '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
+        + '<style>' + css + '</style></head><body>' + notes.map(function(nd){ return '<div class="vbpg">' + (daily ? printDaily(nd, stamp) : printNote(nd, stamp)) + '</div>'; }).join('') + '</body></html>');
+      w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 700);
+    }, function(e){ try{ w.close(); }catch(_){} if(e && e.status === 409) alert('No van trips in this period.'); else O.fail('Van bills could not be printed', e); return null; });
+  });
+  wrap('vbPrint', function(orig, internal, daily){
     var ov = _vb.mode === 'ov', pier = _vb.pier || 'panwa';
     var url = ov
       ? '/v1/van-bills/summary?month=' + enc(_vb.ym) + '&period=' + enc(_vb.per) + (_vb.pier ? '&pier=' + enc(_vb.pier) : '')
-      : address() + '/billing-note?pier=' + enc(pier) + '&copy=' + (internal ? 'internal' : 'supplier');
+      : address() + '/billing-note?pier=' + enc(pier) + '&copy=' + (internal ? 'internal' : 'supplier') + (_vb.van ? '&van_id=' + enc(_vb.van) : '');
     var w = window.open('', '_blank'); if(!w) return;
     return O.get(url).then(function(doc){
       var stamp = printStamp(doc);
       var css = '@page{size:A4 ' + (ov ? 'landscape' : 'portrait') + ';margin:11mm}' + VB_PRINT_CSS;
       w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (ov ? 'สรุปรอบบิลรถร่วม' : ('ใบวางบิล ' + esc(_vb.sup))) + '</title>'
         + '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">'
-        + '<style>' + css + '</style></head><body>' + (ov ? printSummary(doc, stamp) : printNote(doc, stamp)) + '</body></html>');
+        + '<style>' + css + '</style></head><body>' + (ov ? printSummary(doc, stamp) : (daily ? printDaily(doc, stamp) : printNote(doc, stamp))) + '</body></html>');
       w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 600);
     }, function(e){ try{ w.close(); }catch(_){} O.fail('Van bill could not be printed', e); return null; });
   });

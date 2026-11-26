@@ -13,7 +13,7 @@
   function refresh(){ try{ window._PC_ARR=null; if(typeof window.pcSync==='function') window.pcSync(); }catch(_){} }
   function redraw(){ try{ L.renderPierCash(window._pcPier); }catch(_){} }
   function put(a, match, add){ for(var i=a.length-1;i>=0;i--) if(match(a[i])) a.splice(i,1); (add||[]).forEach(function(x){ a.push(x); }); }
-  function legacyRow(r){ return {id:r.id,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:({longtail:'lt',park:'pk',dock:'dock'})[r.source]||'',bid:r.boat_id||'',claim:(r.claim&&r.claim.id)||'',srvRefund:r.refund===undefined?undefined:!!r.refund,srvBal:(typeof r.balance==='number')?r.balance:undefined}; }   /* srvBal: the balance after the row (w5c, pcRunBal) */   /* claim: the claim the line is in (pcClmOn) · srvRefund: the server matched it as a refund (money back from the office) */
+  function legacyRow(r){ return {id:r.id,vb:r.van_bill||null,pier:r.pier,date:r.date,kind:r.kind,txt:r.description||'',amt:+r.amount||0,at:r.time||'',by:r.created_by||'',ts:r.created_at||'',src:({longtail:'lt',park:'pk',dock:'dock'})[r.source]||'',bid:r.boat_id||'',claim:(r.claim&&r.claim.id)||'',srvRefund:r.refund===undefined?undefined:!!r.refund,srvBal:(typeof r.balance==='number')?r.balance:undefined}; }   /* srvBal: the balance after the row (w5c, pcRunBal) */   /* claim: the claim the line is in (pcClmOn) · srvRefund: the server matched it as a refund (money back from the office) */
   /* pcIsRefund: the server says which in-rows are refunds (isRefund in pier-cash-claims.ts); the browser regex is only the answer for a row the server has not sent yet */
   var isRefundLegacy=window.pcIsRefund;
   if(typeof isRefundLegacy==='function') window.pcIsRefund=function(x){ if(on()&&x&&typeof x.srvRefund==='boolean') return x.srvRefund; return isRefundLegacy.apply(this,arguments); };
@@ -270,5 +270,29 @@
       fail('Petty cash certificate not loaded',e);
     });
   };
+  /* §pcVanPay (parity L3, 2026-11-26) · a line made from a van bill's "💵 จ่ายสด" carries the server's van_bill (pier_cash_rows.van_bill):
+     the chip "🚐 <owner> · <vans>" and its jump back to the bill read it instead of the blob key po_cash_vanlink. Deleting the line is
+     the server's (a deleted line pays nothing), so legacy's unlink on delete has nothing to do. */
+  var vbName=function(id){ try{ var v=(typeof window.vehGet==='function')?window.vehGet(id):null; return (v&&v.name)||id; }catch(_){ return id; } };
+  var chipLegacy=window.pcVbChip, goLegacy=window.pcVbGo, delLegacy=window.pcVbOnDel;
+  if(typeof chipLegacy==='function') window.pcVbChip=function(k,x){
+    if(!on()) return chipLegacy.apply(this,arguments);
+    if(k!=='out'||!x||!x.vb) return '';
+    var E=typeof window.pcE==='function'?window.pcE:function(t){ return String(t==null?'':t); }, L=x.vb;
+    var names=(L.keys||[]).map(function(kk,i){ kk=String(kk||''); if(kk.charAt(0)==='x') return 'รถนอก'; var vid=(L.van_ids||[])[i]||kk.split('~')[2]||''; return vid?vbName(vid):'?'; });
+    var lbl=names.length>3?(names.slice(0,3).join(', ')+' +'+(names.length-3)):names.join(', ');
+    return '<em class="pc-vb" title="สร้างจากใบวางบิล '+E(L.partner||'')+' · '+E(names.join(', '))+' · กดไปดูแถวในบิล" onclick="event.stopPropagation();pcVbGo(\''+E(String(x.id))+'\')">&#128656; '+E(L.partner||'บิล')+' · '+E(lbl)+'</em>';
+  };
+  if(typeof goLegacy==='function') window.pcVbGo=function(rowId){
+    if(!on()) return goLegacy.apply(this,arguments);
+    var x=rows().filter(function(r){ return r&&String(r.id)===String(rowId); })[0], L=x&&x.vb; if(!L) return;
+    var ds=L.date||x.date, dd=+ds.slice(8,10);
+    if(typeof window._vb!=='undefined'){ window._vb.sup=L.partner||window._vb.sup; window._vb.ym=ds.slice(0,7); window._vb.per=(dd<=10)?1:(dd<=20?2:3); window._vb.pier=x.pier||window._vb.pier; window._vb.mode='one'; window._vb.van=''; }
+    var el=document.querySelector('.nav-item[data-view="vanbill"]');
+    if(el&&typeof window.nav==='function') window.nav(el); else if(typeof window.renderVanBill==='function') window.renderVanBill();
+    var k0=String((L.keys||[])[0]||'').replace(/"/g,'');
+    setTimeout(function(){ try{ var c=document.querySelector('#vanbill-host [data-vbk="pay|'+k0+'"]')||document.querySelector('#vanbill-host [data-k="'+k0+'"]'); if(c) c.scrollIntoView({block:'center'}); }catch(_){} },600);
+  };
+  if(typeof delLegacy==='function') window.pcVbOnDel=function(){ if(!on()) return delLegacy.apply(this,arguments); };
   window.laOps.pierCash={loadCurrent:loadCurrent,applyDay:applyDay,applySheet:applySheet,cache:cache};
 })();
