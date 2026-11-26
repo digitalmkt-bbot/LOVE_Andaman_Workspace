@@ -71,17 +71,41 @@
     var no = dayNo(date), start = no - (((no % WIN) + WIN) % WIN), key = boatId + '@' + start;
     if(REQ[key] === epoch) return;
     REQ[key] = epoch;
-    O.get('/v1/boats/' + enc(boatId) + '/capacity-overrides', { from: ymdOf(start), to: ymdOf(start + WIN - 1), all: 'true' }).then(function(j){
-      var fresh = false;
-      ((j && j.overrides) || []).forEach(function(d){
-        if(!d || !d.service_date) return;
-        var k = d.service_date + '::' + boatId;
-        if(d.overridden){ if(O.capOverrides && O.capOverrides.applyDay) O.capOverrides.applyDay(d); }
-        else PLAIN[k] = { capacity: +d.capacity || 0, normal: +d.normal || 0, ceiling: +d.ceiling || 0 };
-        fresh = true;
+    /* §capAllOne (2026-11-26, UI parity: 155 reads) · the boats a draw asks about are gathered and read in ONE request per window:
+       GET /v1/capacity-overrides?all=true&boat_ids=… answers each boat's days, byte for byte its own …/capacity-overrides?all=true
+       (a failed batch: each boat is then read on its own, as before). */
+    (WANT[start] || (WANT[start] = [])).push(boatId);
+    if(!wantTimer) wantTimer = setTimeout(flushWant, 0);
+  }
+  var WANT = {}, wantTimer = null;
+  function takeDays(list, boatId){
+    var fresh = false;
+    (list || []).forEach(function(d){
+      if(!d || !d.service_date) return;
+      var k = d.service_date + '::' + (d.boat_id || boatId);
+      if(d.overridden){ if(O.capOverrides && O.capOverrides.applyDay) O.capOverrides.applyDay(d); }
+      else PLAIN[k] = { capacity: +d.capacity || 0, normal: +d.normal || 0, ceiling: +d.ceiling || 0 };
+      fresh = true;
+    });
+    return fresh;
+  }
+  function warn(e){ try{ console.warn('[ops] boat seats of a day: the server did not answer, the boat record stays · ' + (e && e.message)); }catch(_){} }
+  function flushWant(){
+    wantTimer = null;
+    var wins = WANT; WANT = {};
+    Object.keys(wins).forEach(function(s){
+      var ids = wins[s], from = ymdOf(+s), to = ymdOf(+s + WIN - 1);
+      O.get('/v1/capacity-overrides', { from: from, to: to, all: 'true', boat_ids: ids.join(',') }).then(function(j){
+        if(!j || !Array.isArray(j.overrides)) throw new Error('no overrides in the answer');
+        if(takeDays(j.overrides)) redraw();
+      }).catch(function(){
+        ids.forEach(function(boatId){
+          O.get('/v1/boats/' + enc(boatId) + '/capacity-overrides', { from: from, to: to, all: 'true' }).then(function(j){
+            if(takeDays(j && j.overrides, boatId)) redraw();
+          }, warn);
+        });
       });
-      if(fresh) redraw();
-    }, function(e){ try{ console.warn('[ops] boat seats of a day: the server did not answer, the boat record stays · ' + (e && e.message)); }catch(_){} });
+    });
   }
   wrap('boatCapInfo', function(orig, self, boatId, date){
     if(!boatId || !date) return undefined;

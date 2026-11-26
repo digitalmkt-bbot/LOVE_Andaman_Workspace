@@ -70,7 +70,7 @@
       if(!O.enabled()) return r;
       var d = ymd(dateOf());
       var again = function(changed){
-        if(changed && ymd(dateOf()) === d && document.getElementById(hostId) && typeof window[name] === 'function') window[name]();
+        if(changed && ymd(dateOf()) === d && document.getElementById(hostId) && typeof window[name] === 'function') O.redrawLater(name);   // §redrawLater: one draw for the reads that land together
       };
       if(d) Promise.all([loadDay(d), cat, areas]).then(function(x){ again(x[0] || x[1] || x[2]); });
       return r;

@@ -60,7 +60,7 @@
     if(!enabled() || (O.busy && O.busy())) return;
     var v = O.activeView ? O.activeView() : '';
     try{
-      if(v === 'piercheckin' && typeof window.renderPierCheckin === 'function') window.renderPierCheckin();
+      if(v === 'piercheckin' && typeof window.renderPierCheckin === 'function') O.redrawLater('renderPierCheckin', 'piercheckin');   // §redrawLater
       else if(typeof window._laRerender === 'function') window._laRerender();
     }catch(_){}
   }

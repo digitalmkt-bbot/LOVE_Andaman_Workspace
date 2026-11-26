@@ -7,6 +7,7 @@ const SOURCES = ['42-ops-pier-core.js', '43-ops-pier-lists.js', '47-ops-pier-job
 const J = (x) => JSON.parse(JSON.stringify(x === undefined ? null : x));
 const PIER = 'panwa', DATE = '2026-10-12';
 const JOB = (b) => `/v1/pier-office/${PIER}/days/${DATE}/boats/${b}/job`;
+const JOBS = `/v1/pier-office/${PIER}/days/${DATE}/jobs`;
 const STAFF = ['ps_cap', 'ps_new', 'ps_t', 'ps_t1', 'ps_a', 'ps_x', 'ps_g', 'ps_old', 'ps_c1', 'ps_c3'].map((id, i) => ({ id, pier: PIER, nick: id, name: id, role: null, phone: null, active: true, default_code: null, section_id: null, note: null, sort: i }));
 const LISTS = { item_kinds: [], items: [], attendance_codes: [], sections: [], staff: STAFF, license_types: [], license_classes: [] };
 
@@ -22,7 +23,7 @@ const UNREC = view({ boat_id: 'b2', recorded: false, captain_id: 'ps_t', crew: [
 const CORE = fs.readFileSync('allotment_v2/js/ops/00-ops-core.js', 'utf8');
 const ANYWAY_SRC = CORE.slice(CORE.indexOf('function anyway(send, rules, preset){'), CORE.indexOf('/* one write at a time'));
 
-function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
+function runtime({ enabled = true, answers = {}, confirmAnswer = true, batch = false } = {}) {
   const calls = [], fails = [], wrote = [], legacy = [], asked = [];
   const req = (method, path, body) => {
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
@@ -39,10 +40,12 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true } = {}) {
     ['GET ' + JOB('b2')]: () => state.b2,
     ['GET /v1/pier-office/' + PIER + '/days/' + DATE + '/boats']: { boats: [], fleet: [] },   // w5-f: the day's boats read by the job page
   };
+  // §jobsOne: the day's jobs in one read (…/jobs?boat_ids=); without `batch` it is refused, as a server without it would, and each boat is read
+  if (batch) defaults['GET ' + JOBS] = () => ({ pier: PIER, date: DATE, jobs: { b1: state.b1, b2: state.b2 } });
   Object.keys(defaults).forEach((k) => { if (answers[k] === undefined) answers[k] = defaults[k]; });
   const win = {
     laOps: {
-      enabled: () => enabled, onWrite: () => {}, onChange: () => {}, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
+      enabled: () => enabled, redrawLater: (name) => setTimeout(() => { if (typeof win[name] === 'function') win[name](); }, 0), onWrite: () => {}, onChange: () => {}, get: (p) => req('GET', p), call: req, queue: (fn) => Promise.resolve().then(fn),
       anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       anyway: new Function('confirm', ANYWAY_SRC + '; return anyway;')((q) => { asked.push(q); return confirmAnswer; }),
       wrote: (k) => wrote.push(k), fail: (title, e) => fails.push({ title, code: e && e.code, message: e && e.message, body: e && e.body }), toast: () => {},
@@ -78,10 +81,10 @@ test('legacy mode: pjLockMiss, pjWbOf and pjSubList are legacy\'s and nothing is
   assert.deepEqual(rt.calls, []);
 });
 
-test('load: a job per boat; a recorded one fills PIER_JOB, an unrecorded one only the team; duty, missing, wristband, substitutes are the server\'s', async () => {
-  const rt = runtime();
+test('load: the day\'s jobs in ONE read (§jobsOne); a recorded one fills PIER_JOB, an unrecorded one only the team; duty, missing, wristband, substitutes are the server\'s', async () => {
+  const rt = runtime({ batch: true });
   await open(rt);
-  assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path).sort(), [JOB('b1'), JOB('b2')]);
+  assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path), [JOBS], 'one read for both boats, none per boat');
   assert.deepEqual(J(rt.w.PIER_JOB[K1]), { cap: 'ps_cap', asst: '', crew: ['ps_c1', '', 'ps_c3'], island: [], note: 'n', wb: '', wbc: '', lock: 0, mv: 'mv1', wc: '', lb: {}, dep: '', itin: '', itinc: '' });
   assert.equal(rt.w.PIER_JOB[K2], undefined);
   assert.deepEqual(J(rt.w.PIER_TEAM.b2), { cap: 'ps_t', asst: '', crew: ['ps_t1'] }, 'no job: the team is what the card shows');
@@ -92,7 +95,15 @@ test('load: a job per boat; a recorded one fills PIER_JOB, an unrecorded one onl
   assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '#7C3AED', t: 'purple', from: '2026-10-10' });
   assert.deepEqual(J(rt.w.pjSubList(DATE, 'b1')), { crew0: 'ps_old' });
   rt.w.renderPierJob(); await rt.flush();
-  assert.equal(rt.calls.filter((c) => c.path === JOB('b1')).length, 1, 'read once per day');
+  assert.equal(rt.calls.filter((c) => c.path === JOBS).length, 1, 'read once per day');
+});
+
+test('load (§jobsOne): a refused day read falls back to one read per boat, with the same result', async () => {
+  const rt = runtime();
+  await open(rt);
+  assert.deepEqual(rt.calls.filter((c) => c.path.includes('/job')).map((c) => c.path), [JOBS, JOB('b1'), JOB('b2')]);
+  assert.equal(rt.w.PIER_JOB[K1].cap, 'ps_cap');
+  assert.deepEqual(rt.w.pjLockMiss(DATE, 'b2'), ['WB']);
 });
 
 test('a save: only the changed facts are PATCHed, then the card is read back', async () => {
@@ -283,7 +294,7 @@ test('typed names: the usual team is PUT with typed names beside the staff ids',
 });
 
 test('§wbCarryRead: Pier check-in asks pjWbOf for a boat the job sheet never opened: one job read, the carried colour, then a redraw', async () => {
-  const rt = runtime();
+  const rt = runtime({ batch: true });
   let draws = 0;
   rt.w.renderPierCheckin = () => { draws++; };
   rt.w.pckHostEl = () => ({ offsetParent: {} });
@@ -291,12 +302,27 @@ test('§wbCarryRead: Pier check-in asks pjWbOf for a boat the job sheet never op
   rt.w.SB_BOOKINGS = [{ id: 'x', trips: [{ date: DATE, routeId: 'r1' }], ops: { boatId: 'b1' } }];
   assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '', t: '', from: '' }, 'nothing until the read lands');
   await rt.flush();
-  assert.deepEqual(rt.calls.map((c) => c.path), [JOB('b1')]);
+  assert.deepEqual(rt.calls.map((c) => c.path), [JOBS], 'the day read (§jobsOne)');
   assert.equal(draws, 1);
   assert.deepEqual(J(rt.w.pjWbOf(DATE, 'b1')), { c: '#7C3AED', t: 'purple', from: '2026-10-10' });
   await rt.flush();
   assert.equal(rt.calls.length, 1, 'read once');
   assert.deepEqual(rt.w.PIER_JOB, {}, 'the job sheet state is untouched');
+});
+
+test('§jobsOne: two boats asked in the same draw are read in ONE request and Pier check-in is drawn again ONCE', async () => {
+  const rt = runtime({ batch: true });
+  let draws = 0;
+  rt.w.renderPierCheckin = () => { draws++; };
+  rt.w.pckHostEl = () => ({ offsetParent: {} });
+  rt.w.pckPierOf = () => PIER;
+  rt.state.b2 = view({ boat_id: 'b2', wristband_carried: { colour: '#16A34A', text: 'green', from_date: '2026-10-11' } });
+  rt.w.SB_BOOKINGS = [{ id: 'x', trips: [{ date: DATE, routeId: 'r1' }], ops: { boatSplits: [{ boatId: 'b1' }, { boatId: 'b2' }] } }];
+  rt.w.pjWbOf(DATE, 'b1'); rt.w.pjWbOf(DATE, 'b2');
+  await rt.flush();
+  assert.deepEqual(rt.calls.map((c) => c.path), [JOBS]);
+  assert.equal(draws, 1);
+  assert.deepEqual([rt.w.pjWbOf(DATE, 'b1').c, rt.w.pjWbOf(DATE, 'b2').c], ['#7C3AED', '#16A34A']);
 });
 
 test('§wbCarryRead: the day\'s own colour wins over the carried one; a boat on no route of the day and no pier office is not read', async () => {
