@@ -42182,6 +42182,14 @@ function rtAddonTypeDelete(key){
   rtAddonTypesRenderBody();
 }
 
+/* §rtProgOrder (2026-11-25) · owner ดูการ์ดเอเจนต์ (Seat rates): "หน้านี้ เรียงโปรแกรม ตามที่เรียงใน โปรแกรมได้ไหม"
+   ของเดิมเรียงตามลำดับที่ route ถูกเพิ่มเข้า Rate Type · เรียงใหม่ตามลำดับของหน้า Programs (ลำดับใน ROUTES · ลากจัดได้ที่ Settings)
+   route ที่ไม่อยู่ใน ROUTES แล้ว ไปอยู่ท้ายตามลำดับเดิม · รับได้ทั้ง id และ object ที่มี .id · ไม่แตะข้อมูลที่เก็บ */
+function laRouteProgOrder(list){
+  var idx={}; ((typeof ROUTES!=='undefined'&&ROUTES)||[]).forEach(function(r,i){ if(r && idx[r.id]==null) idx[r.id]=i; });
+  return (list||[]).map(function(x,i){ var id=(x&&typeof x==='object')?x.id:x; return { x:x, k:(idx[id]!=null?idx[id]:1e6+i) }; })
+    .sort(function(a,b){ return a.k-b.k; }).map(function(o){ return o.x; });
+}
 function rtBuildDetailBody(rt){
   // Pure builder · returns § 1 Seat / § 2 Charter / § 3 Add-on detail HTML for a Rate Type.
   // Shared by rtRenderDetail (Rate Type page) and agTabPrices (Agent · Pricing Matrix).
@@ -42203,7 +42211,7 @@ function rtBuildDetailBody(rt){
   const SUPER = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹'];
   let seatRows = '';
   const bundleFootnotes = [];   // [{n, rId, text}]
-  (rt.routes||[]).forEach(rId => {
+  laRouteProgOrder(rt.routes||[]).forEach(rId => {   /* §rtProgOrder */
     const rr = rt.seatRates && rt.seatRates[rId];
     if(!rr) return;
     const rv = _rv[rId] || {};
@@ -42254,7 +42262,7 @@ function rtBuildDetailBody(rt){
   // Charter rates — Balance Sheet style · validity INHERITED from § 1 routeValidity
   let charterRows = '';
   const dash = '<span style="color:#9b9590">—</span>';
-  Object.keys(rt.charterRates||{}).forEach(rId => {
+  laRouteProgOrder(Object.keys(rt.charterRates||{})).forEach(rId => {   /* §rtProgOrder */
     const cr = rt.charterRates[rId];
     Object.keys(cr).forEach(bt => {
       const ch = cr[bt];
@@ -45953,7 +45961,7 @@ function agTabPrices(a){
     var _PR=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[])
       .filter(function(c){ return c && c.agentId===a.id && c.kind==='promo'
         && c.status!=='void' && c.status!=='cancelled' && c.status!=='expired'; });
-    var routes=(inBoth||[]);
+    var routes=laRouteProgOrder(inBoth||[]);   /* §rtProgOrder */
     if(!routes.length) return;
     var fd=function(x){ return x?((typeof _rtFmtDate==='function')?(_rtFmtDate(x)||x):x):'…'; };
     var rows='', nCov=0, nSkip=0;

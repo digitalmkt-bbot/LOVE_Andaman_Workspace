@@ -13762,6 +13762,15 @@ function bopDBoat(id){ return (BOATS||[]).find(function(x){ return x && x.id===i
 function bopDName(id){ var b=bopDBoat(id); return (b&&b.name)||id; }
 function bopDRouteName(id){ var r=(ROUTES||[]).find(function(x){ return x && x.id===id; }); return (r&&r.name)||id; }
 function bopDFixed(op){ return !op || opLocked(op) || !!op.swap || op.type==='rescue' || op.type==='charter'; }
+/* §bopDChHeld (2026-11-25) · owner: "สบายดีทัวร์เป็นเหมาลำเหมือนกัน · มาจาก B2C sync เลือกเรือไม่ได้ · ต้องแก้ที่ระบบ"
+   กระดานนี้รู้ว่าเหมาลำจากช่องของเรือ (op.type / charterBookingId) อย่างเดียว
+   ใบเหมาลำจาก B2C เข้ามาโดยไม่มีเรือเหมา (b2c-map: charterBoatId = null · ops เลือกเรือในแอป)
+   พอจัดเรือให้ทีหลัง ช่องของเรือยังเป็น "รอบปกติ" · ชิปจึงไม่มี ⚓ หน้าตาเหมือนเรือขายที่นั่ง และลากได้
+   (สบายดีทัวร์ 26 พ.ย. · b2c_LOV-1601617_1) · ยอดที่นั่งขายถูกอยู่แล้ว เพราะ getAllotment ดูจากใบจองด้วย
+   ถามตัวเดียวกับที่ getAllotment ใช้ (baCharterBoatIds) · ลำที่มีใบเหมาลำอยู่ = เหมาลำ ไม่ว่าผูกเรือด้วยวิธีไหน */
+function bopDHeld(d, bid){
+  try{ return (typeof baCharterBoatIds==='function') && !!bid && baCharterBoatIds(d).has(bid); }catch(_){ return false; }
+}
 function bopDDayLbl(d){ var t=new Date(d+'T12:00:00'); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.getDay()]+' '+t.getDate(); }
 function bopDStatusOk(b, d){
   try{
@@ -13787,8 +13796,8 @@ function bopDPlan(src, tgt){
   if(tgt.kind==='chip'){
     if(tgt.bid===src.bid){ return out; }
     var tOp=W[tgt.bid], T=bopDBoat(tgt.bid); if(!T) return out;
-    if(sOp && bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
-    if(tOp && bopDFixed(tOp)){ out.text=T.name+' เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · สลับไม่ได้'; return out; }
+    if(sOp && (bopDFixed(sOp) || bopDHeld(d, src.bid))){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
+    if(tOp && (bopDFixed(tOp) || bopDHeld(d, tgt.bid))){ out.text=T.name+' เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · สลับไม่ได้'; return out; }
     var sp=bopDPax(d, src.bid), tp=bopDPax(d, tgt.bid);
     if(sOp && tOp){
       if(sOp.route===tOp.route){ out.text='ทั้งสองลำอยู่โปรแกรมเดียวกัน · ไม่มีอะไรเปลี่ยน'; return out; }
@@ -13824,7 +13833,7 @@ function bopDPlan(src, tgt){
   }
   if(tgt.kind==='route'){
     if(tgt.closed){ out.text='โปรแกรมปิดวันนี้'; return out; }
-    if(sOp && bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
+    if(sOp && (bopDFixed(sOp) || bopDHeld(d, src.bid))){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ลากไม่ได้'; return out; }
     if(sOp && sOp.route===tgt.route) return out;
     var e4=pierChk(S, tgt.route); if(e4){ out.text=e4; return out; }
     var p0=bopDPax(d, src.bid);
@@ -13837,7 +13846,7 @@ function bopDPlan(src, tgt){
   }
   if(tgt.kind==='free'){
     if(!sOp) return out;
-    if(bopDFixed(sOp)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ถอดไม่ได้'; return out; }
+    if(bopDFixed(sOp) || bopDHeld(d, src.bid)){ out.text='ลำนี้เหมาลำ / ล็อค / อยู่ในบันทึกเปลี่ยนเรือ · ถอดไม่ได้'; return out; }
     var p1=bopDPax(d, src.bid);
     if(p1>0){ out.text=S.name+' มีลูกค้า '+p1+' คน · ถอดออกไม่ได้ · ลากเรือว่างมาวางทับเพื่อเปลี่ยนแทน'; return out; }
     out.ok=true; out.kind='unassign';
@@ -13940,21 +13949,21 @@ function bopDSave(){
 function bopDChip(d, bid, op, pierKey){
   var b=bopDBoat(bid); if(!b) return '';
   var E=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
-  var past=bop2IsPast(d), fixed=op?bopDFixed(op):false;
+  var past=bop2IsPast(d), held=op?bopDHeld(d,bid):false, fixed=op?(bopDFixed(op)||held):false;   /* §bopDChHeld */
   var pax=op?bopDPax(d,bid):0, cap=bop2Cap(b,d), r=cap?pax/cap:0;
   var col=(typeof bop2BoatColor==='function')?bop2BoatColor(bid):'#64748B';
   var bc=!pax?'#CBD5E1':(r<.5?'#0891B2':(r<.9?'#D97706':(r<=1?'#EA580C':'#DC2626')));
   var orig=(TRIPS[d]||{})[bid], changed=_bopD.work[d] && (JSON.stringify(orig||null)!==JSON.stringify(op||null) || (op && bopDPax(d,bid)!==(bopDOrigPax(d)[bid]||0)));
   var drag=!past && !fixed;
   var tip=b.name+' · '+(op?(bopDRouteName(op.route)+' · '+pax+'/'+cap+' คน'):('ว่าง · '+cap+' ที่นั่ง'))
-    +(fixed?(' · '+(op.charterBookingId?'เหมาลำ':op.boatLockId?'ล็อคทั้งลำ':'บันทึกเปลี่ยนเรือ')+' · ลากไม่ได้'):'')+(past?' · วันผ่านมาแล้ว':'');
+    +(fixed?(' · '+((op.charterBookingId||held)?'เหมาลำ':op.boatLockId?'ล็อคทั้งลำ':'บันทึกเปลี่ยนเรือ')+' · ลากไม่ได้'):'')+(past?' · วันผ่านมาแล้ว':'');
   return '<div class="ch'+(op?'':' fr')+(fixed?' fx':'')+(changed?' pend':'')+'" data-bopd="chip" data-d="'+d+'" data-bid="'+E(bid)+'"'
     +(drag?(' draggable="true" ondragstart="bopDDragStart(event,\''+d+'\',\''+E(bid)+'\')" ondragend="bopDDragEnd(event)"'):'')
     +' title="'+E(tip)+'">'
     +(drag?'<span class="gr">⋮⋮</span>':'')+'<i class="dt" style="background:'+col+'"></i><b>'+E(b.name)+'</b>'
     +(op?('<span class="pc" style="color:'+(r>1?'#DC2626':'#B45309')+'">'+pax+'/'+cap+'</span><i class="br"><b style="width:'+Math.min(100,Math.round(r*100))+'%;background:'+bc+'"></b></i>')
         :('<span class="pc fr">'+cap+'</span>'))
-    +(fixed?'<span class="lk">'+(op.charterBookingId?'⚓':op.swap||op.type==='rescue'?'🔁':'🔒')+'</span>':'')
+    +(fixed?'<span class="lk">'+((op.charterBookingId||held)?'⚓':op.swap||op.type==='rescue'?'🔁':'🔒')+'</span>':'')
     +'</div>';
 }
 function bopDHtml(){
