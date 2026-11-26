@@ -120,14 +120,38 @@
   /* ── pjGdLead: who leads the guide order ────────────────────────────── */
   var lead = {}, leadLoading = {};
   O.onWrite(function(){ Object.keys(lead).forEach(function(k){ lead[k].old = true; }); });
+  /* §sheetsOne (2026-11-26, UI parity: 28 sheet reads) · the asks of one draw go as ONE read per day:
+     GET /v1/guide-orders/{date}/sheets?boat_ids=a,b → { sheets: { bid: <…/{bid}/sheet, byte for byte> } }; a refused batch
+     (an older server) asks each boat's sheet as before. The job page is drawn again once. */
+  var leadQ = {}, leadTimer = null;
+  function gotLead(k, j){
+    var id = j && j.lead_guide && j.lead_guide.id || '', was = lead[k];
+    lead[k] = { id: id, old: false, shown: was ? was.shown : undefined };
+    delete leadLoading[k];
+    return !was || was.shown !== id;
+  }
+  function noLead(k){ delete leadLoading[k]; if(lead[k]) lead[k].old = false; }
+  function flushLead(){
+    leadTimer = null;
+    var days = leadQ; leadQ = {};
+    Object.keys(days).forEach(function(date){
+      var ids = days[date];
+      var one = function(){
+        return Promise.all(ids.map(function(bid){
+          var k = date + '::' + bid;
+          return O.get('/v1/guide-orders/' + enc(date) + '/' + enc(bid) + '/sheet').then(function(j){ return gotLead(k, j); }, function(){ noLead(k); return false; });
+        }));
+      };
+      O.get('/v1/guide-orders/' + enc(date) + '/sheets', { boat_ids: ids.join(',') }).then(function(j){
+        if(!j || !j.sheets || typeof j.sheets !== 'object') throw new Error('no sheets in the answer');
+        return ids.map(function(bid){ return gotLead(date + '::' + bid, j.sheets[bid]); });
+      }).catch(one).then(function(changed){ if(changed.some(Boolean)) again(); });
+    });
+  }
   function askLead(date, bid){
     var k = date + '::' + bid; if(leadLoading[k]) return; leadLoading[k] = true;
-    O.get('/v1/guide-orders/' + enc(date) + '/' + enc(bid) + '/sheet').then(function(j){
-      var id = j && j.lead_guide && j.lead_guide.id || '', was = lead[k];
-      lead[k] = { id: id, old: false, shown: was ? was.shown : undefined };
-      delete leadLoading[k];
-      if(!was || was.shown !== id) again();
-    }, function(){ delete leadLoading[k]; if(lead[k]) lead[k].old = false; });
+    (leadQ[date] || (leadQ[date] = [])).push(bid);
+    if(!leadTimer) leadTimer = setTimeout(flushLead, 0);
   }
   wrap('pjGdLead', function(orig, bid){
     var date = window._poDate, k = date + '::' + bid, c = lead[k];

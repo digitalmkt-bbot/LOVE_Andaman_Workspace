@@ -62,7 +62,12 @@
   function mapRoute(s, local){
     var o = { id: s.id, name: s.name };
     put(o, 'kind', s.kind);                       // §opsCalendar (2026-10-08) · laRouteKind prefers it over the pier guess
-    put(o, 'pier', s.pier); put(o, 'color', s.color);
+    // no pier (the server leaves the key out) = legacy's '' (43 routes): the pickup-setup pier chip then reads "— · 43", not "undefined · 43"
+    o.pier = s.pier == null ? '' : s.pier;
+    put(o, 'color', s.color);
+    // legacy's extId (a B2C-catalogue route, 43 of 61): the rate-type dialog leaves it out of "Routes covered" (§b2cNoRateType),
+    // bookingV2Routes shows it with no rate (§b2cNoRateVisible), the van sheet reads TR-OTHER (UI parity 2026-11-26, H16)
+    put(o, 'extId', s.ext_id || null);
     if(s.zone !== undefined) o.zone = s.zone;      // w6-d · 'PK' | 'KL' | null, the server's reading of the pier (_vehRouteZone)
     // the server's null family = "no family" (hidden from the booking calendar). '' tells bookingV2RouteFamily not to guess one from the name
     o.familyId = s.family_id == null ? '' : s.family_id;
@@ -100,6 +105,9 @@
     put(o, 'code', s.code); put(o, 'market', s.market_id); put(o, 'sub', s.sub_market); put(o, 'sales', s.sales_id);
     put(o, 'color', s.color); put(o, 'payType', payTypeIn(s.pay_type)); put(o, 'creditLimit', s.credit_limit);
     put(o, 'rateTypeId', s.rate_type_id); put(o, 'contractStatus', s.contract_status); put(o, 'contractEnd', s.contract_end);
+    // the agent Table's "เครดิต (วัน)" and "Contract Tmpl" columns for every row (UI parity 2026-11-26, H17): the list carries them now
+    if('credit_days' in s) o.creditDays = s.credit_days;
+    if('contract_template_id' in s) o.contractTemplateId = s.contract_template_id || '';
     if(Array.isArray(s.program_route_ids)) o.programs = s.program_route_ids.slice();
     if('contract_days_left' in s){ o.contractDaysLeft = s.contract_days_left; o.contractExpiring = !!s.contract_expiring; o.contractExpired = !!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.alerts)) o.serverAlerts = s.alerts;      // the server's pricing alerts (16-ops-agents.js: agAlerts, agHdIssues)

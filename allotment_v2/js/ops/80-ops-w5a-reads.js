@@ -6,9 +6,7 @@
 
    _dashBkDay          the day a booking "entered the system" is the BANGKOK day (the server filters the live feed by +07:00
                        day bounds: GET /v1/bookings/recent created_from / created_to), not the browser's local day.
-   getRouteStatusNow   today's season of a route, from the server's calendar (GET /v1/routes?from&to days[date]: override,
-   (isRouteActiveToday  season, outside-all-seasons) like getDayStatus; a route with no season keeps legacy's "no data".
-    follows)
+   (getRouteStatusNow  not wrapped: legacy reads the server's seasons only, no override; see below)
    getSeatsConsumed    seats sold on a route-day = GET /v1/availability booked_pax (a no-show keeps its seat: decision Q52);
                        the three direct callers (Dashboard, Boat Operation, booking form) read it.
    getAllotment        the seat POOL, the chartered seats and the sold share (fillPct, state) from the server's deployments
@@ -46,19 +44,12 @@
     return new Date(t + 7 * 3600 * 1000).toISOString().slice(0, 10);
   });
 
-  /* ── getRouteStatusNow · today's status of a route from the server calendar ── */
-  wrap('getRouteStatusNow', function(orig, self, r){
-    var today = (typeof TODAY_STR !== 'undefined') ? TODAY_STR : O.today();
-    var days = r && window.OPS_ROUTE_DAYS && window.OPS_ROUTE_DAYS[r.id];
-    var d = days && days[today];
-    if(!d) return orig.call(self, r);
-    if(d.source === 'no-seasons') return null;                       // legacy: a route with no season says "no data"
-    if(d.source === 'season'){
-      var s = (r.seasons || []).find(function(x){ return x.from <= today && x.to >= today; });
-      if(s) return s;
-    }
-    return { type: d.open ? 'open' : 'closed', source: d.source };   // an override, or outside every season
-  });
+  /* ── getRouteStatusNow · NOT wrapped (parity 2026-11-26, C2) ──
+     Legacy's getRouteStatusNow (04-data-core.js:11746) reads the route's SEASONS only: a day override or "outside every
+     season" belongs to getDayStatus, not to it. Its callers (Settings "Open today / Closed today", the pickup-setup Time
+     Matrix "N of 61 routes", "Hide closed-season") count seasons. r.seasons are the server's seasons (ops/10 replaces the
+     local ones with GET /v1/routes), so legacy's own function already gives the server's season answer. The earlier wrapper
+     returned the day's override and counted 4 routes closed today that legacy counts open. */
 
   /* ── getSeatsConsumed · the server's sold seats ── */
   wrap('getSeatsConsumed', function(orig, self, routeId, dateStr, excludeBkId){

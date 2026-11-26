@@ -47,7 +47,7 @@
       return false;
     });
     return d.loading.then(function(changed){
-      if(changed === true && curDate() === date && typeof window.renderPierCheckin === 'function') window.renderPierCheckin();
+      if(changed === true && curDate() === date && typeof window.renderPierCheckin === 'function') O.redrawLater('renderPierCheckin', 'piercheckin');   // §redrawLater
       return d;
     });
   }

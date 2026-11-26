@@ -134,7 +134,10 @@
       try{
         if(!O.enabled() || (O.activeView && O.activeView()) !== 'dashboard') return;
         if(typeof _dashCalView === 'function' && _dashCalView() !== 'prog') return;
-        if((window._dashProgDate || window._dashDate || window.TODAY_STR) !== date) return;
+        /* TODAY_STR is a top-level const of 04-data-core.js: a global binding, NOT a window property (window.TODAY_STR is undefined),
+           so the card opened on today never redrew when the answer landed and showed "0 booking · 0 pax" (UI parity 2026-11-26, H3) */
+        var today = (typeof TODAY_STR !== 'undefined') ? TODAY_STR : (O.today && O.today());
+        if((window._dashProgDate || window._dashDate || today) !== date) return;
         if(O.busy && O.busy()) return;
         if(typeof window.renderDash === 'function') window.renderDash();
       }catch(_){}

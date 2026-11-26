@@ -42,6 +42,11 @@
     var w = function(pier){
       // the pier office lists are read by the pier screens; petty cash can be the first screen opened: read them now (the sheet is drawn again)
       if(O.enabled() && !O.pier.loaded && typeof O.pier.ensure === 'function') O.pier.ensure('renderPierCash');
+      /* §daysOne (2026-11-26) · the month (pc2LT) reads every day's boats in ONE request (47-ops-pier-job.js wantRange), not one per day */
+      if(name === 'pc2LT' && on() && O.pier.dayBoats.wantRange && /^\d{4}-\d{2}$/.test(String(window._pcYM || ''))){
+        var ym = String(window._pcYM), last = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+        O.pier.dayBoats.wantRange(pier, ym + '-01', ym + '-' + String(last).padStart(2, '0'));
+      }
       var prev = ctx; ctx = { pier: pier };
       try{ return orig.apply(this, arguments); } finally { ctx = prev; }
     };

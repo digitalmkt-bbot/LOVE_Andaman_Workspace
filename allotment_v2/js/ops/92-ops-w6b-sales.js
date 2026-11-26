@@ -73,8 +73,16 @@
   function bookingOf(id, r){
     var list = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : [];
     var b = list.find(function(x){ return x && (x.opsId === id || x.id === id); });
-    if(b) return (b.code || !r || !r.booking_code) ? b : Object.assign({}, b, { code: r.booking_code });
-    return { id: id, voucherRef: (r && r.voucher_ref) || '', code: (r && r.booking_code) || '' };
+    /* the name column (legacy leadPax || customerName || '—') is the server's lead_pax: most of the year's company bookings are
+       not among the few this browser holds, so the column read — (parity 2026-11-26, G15) */
+    var lead = (r && r.lead_pax) || '';
+    if(b){
+      var extra = {};
+      if(!b.code && r && r.booking_code) extra.code = r.booking_code;
+      if(!b.leadPax && lead) extra.leadPax = lead;
+      return Object.keys(extra).length ? Object.assign({}, b, extra) : b;
+    }
+    return { id: id, voucherRef: (r && r.voucher_ref) || '', code: (r && r.booking_code) || '', leadPax: lead };
   }
   wrap('laInternalRows', function(orig, year){
     var d = read('internal|' + year, '/v1/reports/internal-trips', { year: year }, function(){
