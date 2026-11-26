@@ -25768,6 +25768,10 @@ function flSaveGearbox(){
   const data={brand,model,serial,buyDate,baseHours,note,status,engineId,spareLocation,modelSuffix,shaftLength,rotation,gearRatio,oilCapacity,serviceInterval,lastServiceDate};
   if(flEditGbId){const g=flGetGb(flEditGbId);if(g)Object.assign(g,data);}
   else FL_GEARBOXES.push({id:LA_UID('g'),...data});
+  /* §gbSaveBoat (2026-11-26) · ผูกเกียร์กับเครื่องจากหน้าต่างนี้ บันทึกแต่ engineId ไม่ได้ตั้งลำ
+     เกียร์จึงขึ้น "ไม่ได้ติดเรือ · ไม่ได้ระบุที่เก็บ" ทั้งที่เครื่องอยู่บนเรือ จนกว่าจะโหลดหน้าใหม่ (ตัวซ่อมตอนโหลด §gbBoat)
+     เคสจริง: เกียร์ Yamaha 4 ลูกของ Aluminous1 · ให้ลำตามเครื่องทันทีตอนบันทึก */
+  if(engineId && typeof flGbBoatHeal==='function') try{ flGbBoatHeal([engineId]); }catch(_){ }
   flSave();closeModal('fl-modal-gearbox');
   // ใช้ flRenderAsset() เพื่อ refresh tab ปัจจุบัน (รวม Overview · Gearboxes · etc.)
   if(typeof flRenderAsset==='function') flRenderAsset();

@@ -1,0 +1,13 @@
+const fs=require('fs');const s=fs.readFileSync(process.argv[2],'utf8');
+const cut=(a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
+const V={'fl-gb-brand':'Yamaha','fl-gb-model':'F250S','fl-gb-serial':'AL1-NEW','fl-gb-buydate':'','fl-gb-base-hours':'0','fl-gb-note':'','fl-gb-engine-sel':'e1','fl-gb-suffix':'','fl-gb-shaft':'XX','fl-gb-rotation':'','fl-gb-ratio':'','fl-gb-oil-cap':'','fl-gb-svc-interval':'100','fl-gb-last-svc':''};
+global.document={getElementById:id=>({value:V[id]||''})};
+global.FL_ENGINES=[{id:'e1',serial:'S1',boatId:'b1'},{id:'e2',serial:'S2',boatId:null}];global.FL_GEARBOXES=[{id:'gOld',serial:'OLD',engineId:null,boatId:null,spareLocation:'pier:x'}];global.FL_PROPELLERS=[];
+global.flGetEng=id=>FL_ENGINES.find(e=>e.id===id);global.flGetGb=id=>FL_GEARBOXES.find(g=>g.id===id);global.getBoat=id=>({name:'Boat '+id});global.TODAY_STR='2026-11-26';
+global.flStValues=['ready','spare'];global.flSelSts={gb:0};global.flEditGbId=null;global.LA_UID=p=>p+'NEW';let saved=0;global.flSave=()=>saved++;global.closeModal=()=>{};global.flRenderAsset=()=>{};global._flEquipPropSync=()=>{};
+eval(cut('function flGbBoatHeal(','function flEquip')+cut('function flSaveGearbox(){','function flOpenAddPropModal')+';global.S=flSaveGearbox');
+const ok=(c,m)=>{console.log((c?'PASS':'FAIL')+' '+m);if(!c)process.exitCode=1};
+S(); let g=FL_GEARBOXES.find(x=>x.id==='gNEW'); ok(g&&g.boatId==='b1'&&g.engineId==='e1','new gearbox linked to engine gets the engine boat at once');
+ok(FL_GEARBOXES[0].boatId===null&&FL_GEARBOXES[0].spareLocation==='pier:x','other gearbox untouched');
+flEditGbId='gOld'; V['fl-gb-engine-sel']='e2'; S(); ok(FL_GEARBOXES[0].engineId==='e2'&&!FL_GEARBOXES[0].boatId,'engine with no boat: gearbox stays off boat');
+V['fl-gb-engine-sel']=''; S(); ok(FL_GEARBOXES[0].engineId===null,'unlink still works'); ok(saved===3,'saved each time');
