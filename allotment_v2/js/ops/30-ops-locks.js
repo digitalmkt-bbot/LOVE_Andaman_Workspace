@@ -43,7 +43,9 @@
       holderType: r.holder_type || (r.agent_id ? 'agent' : 'office'), holderId: r.agent_id || null,
       reason: r.reason || '', expiry: r.expiry || '', createdAt: r.created_at || '', createdBy: r.created_by || '', log: Array.isArray(r.log) ? r.log.map(logLine) : [],
       dateFrom: '', dateTo: '', dow: [], releaseDaysBefore: null, releaseTime: '',
-      monthFrom: '', monthTo: '', month: '', pendQty: 0, releasedPax: +r.released_pax || 0 };
+      monthFrom: '', monthTo: '', month: '', pendQty: 0, releasedPax: +r.released_pax || 0,
+      /* N1 (parity 2026-11-27): the name legacy held an office hold for (migration 705), shown as its holder */
+      holderName: r.holder_name || '' };
   }
   /* K1 (2026-11-27): legacy's `used` counter is the server's used_pax (drawn seats + the drift legacy's counter left, §lkSweep) */
   function usedOf(r){ return r.used_pax != null ? (+r.used_pax || 0) : (+r.drawn_pax || 0); }
@@ -112,8 +114,11 @@
         else { if(!open) open = r; if(r.state !== 'depleted') anyLeft = true; }
       });
       if(g.used_pax != null) G.used = +g.used_pax || 0;   /* K1: the bulk lock's counter, its drift included */
-      G.releasedPax = open ? (+open.released_pax || 0) : 0;
-      G.qty = open ? (+open.pax || 0) - G.releasedPax : (+g.pax || 0);
+      /* N1 (parity 2026-11-27): legacy's qty is what is still held (asked − released), also when every round is released and the
+         lock stays active (lkmvxqf2a8qrrt4: legacy 4, not the 37 asked): the last round answers when no round is open */
+      var ref = open || deps[deps.length - 1] || null;
+      G.releasedPax = ref ? (+ref.released_pax || 0) : 0;
+      G.qty = ref ? (+ref.pax || 0) - G.releasedPax : (+g.pax || 0);
       G.status = g.state === 'released' ? 'released' : g.state === 'expired' ? 'expired'
         : (G.used > 0 && open && !anyLeft) ? 'depleted' : 'active';
       out.push(G);
@@ -513,6 +518,12 @@
     def(name, function(){ return fn.apply(this, [o0].concat([].slice.call(arguments))); });
   }
   function srvAt(l, key, date){ return (l && l.srv && date && l.srv[key] && l.srv[key][date] !== undefined) ? l.srv[key][date] : undefined; }
+
+  /* N1 (parity 2026-11-27): a lock legacy held for a free-text name shows that name (legacy bkV2LockHolderName: holderId when it
+     is no agent), here the server's holder_name; the lock stays an office hold for every write */
+  defO('bookingV2LockHolderName', function(orig, l){
+    return (l && l.holderName) ? l.holderName : orig(l);
+  });
 
   /* release cutoff: the server's instant (Asia/Bangkok), not the browser's local clock · CutoffPassed and Overdue derive from it */
   defO('bookingV2LockReleaseCutoff', function(orig, l, tripDate){

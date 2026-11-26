@@ -378,7 +378,7 @@ test('van bills: a refused edit shows the server message and the screen keeps th
   assert.match(rt.toasts[0].sub, /undo the payment/);
   const html = rt.hosts['vanbill-host'].innerHTML;
   assert.match(html, /1,700/);
-  assert.match(html, /ยกเลิกการจ่าย/);
+  assert.doesNotMatch(html, />(ยกเลิกการจ่าย|ส่งให้เจ้าของรถ)</, 'N3 (parity 2026-11-27): the legacy sheet has no send / pay step');
   assert.doesNotMatch(html, /<input /, 'a paid bill has no input');
   assert.doesNotMatch(html, /vbEdit\(\)/, 'and no edit button');
 });
@@ -395,7 +395,7 @@ test('van bills: send, pay and pull-rates go to their endpoints', async () => {
   Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
   rt.ctx.renderVanBill(); await rt.settle();
   rt.ctx.laOpsVanBills.send(); await rt.settle();
-  assert.match(rt.hosts['vanbill-host'].innerHTML, /บันทึกว่าจ่ายแล้ว/);
+  assert.doesNotMatch(rt.hosts['vanbill-host'].innerHTML, />(บันทึกว่าจ่ายแล้ว|ส่งให้เจ้าของรถ|ดึงกลับเป็นร่าง)</, 'N3: the commands stay, the screen offers no send / pay button (legacy)');
   assert.match(rt.hosts['vanbill-host'].innerHTML, /ส่งแล้ว 2026-10-13/);
   rt.ctx.laOpsVanBills.pay(); await rt.settle();
   const pay = rt.requests.find((r) => r.path.endsWith('/pay'));
