@@ -6602,7 +6602,26 @@ function tmIdDigits(v){ return String(v||'').replace(/[^0-9]/g,'').slice(0,13); 
 function tmIdOk(v){ var d=tmIdDigits(v); if(d.length!==13) return false; var sum=0; for(var i=0;i<12;i++) sum+=(+d[i])*(13-i); return ((11-(sum%11))%10)===(+d[12]); }
 function tmIdFmt(v){ var d=tmIdDigits(v); return d.length===13 ? (d[0]+'-'+d.slice(1,5)+'-'+d.slice(5,10)+'-'+d.slice(10,12)+'-'+d[12]) : d; }
 function tmIdSpaced(v){ var d=tmIdDigits(v); return d.length===13 ? (d[0]+' '+d.slice(1,5)+' '+d.slice(5,10)+' '+d.slice(10,12)+' '+d[12]) : d; }
-function tmGet(bkId,pk,f){ return String(insEff(bkId,pk,f,'')||'').trim(); }
+/* §tmSib (2026-11-26) · owner ดู By trip 6 ธ.ค. (ใบที่มีป้าย "← 5." ยังขึ้น ตม. 0/2): "รายชื่อ รายละเอียด มันควรขึ้นให้ครบนะ"
+   ออเดอร์ B2C ที่จองหลายวัน = หลายใบ (b2c_LOV-xxx_1, _2 …) คนชุดเดียวกัน · ข้อมูล ตม. เก็บแยกต่อใบ → กรอกวันแรกแล้ว วันถัดไปว่าง ต้องกรอกซ้ำ
+   ช่องที่ใบนี้ยังไม่มีค่า → ใช้ค่าของใบพี่น้องในออเดอร์เดียวกัน (voucher เดียวกัน · เส้นทางระนอง · คนละวันเดินทาง · จำนวนคนเท่ากัน) ลำดับคนเดียวกัน
+   ใบพี่น้องที่เดินทางวันเดียวกัน (กรุ๊ปเดียวแยกสองลำ เช่น 27 + 30 คน) เป็นคนละคน ไม่ดึงข้ามกัน · พิมพ์ทับในใบนี้เมื่อไหร่ ค่าของใบนี้ชนะ */
+function tmSibs(bkId){
+  try{
+    var C=window._tmSibC, stamp=((typeof SB_BOOKINGS!=='undefined'&&SB_BOOKINGS)?SB_BOOKINGS.length:0)+':'+Math.floor(Date.now()/4000);
+    if(!C || C.stamp!==stamp){ C=window._tmSibC={ stamp:stamp, byRef:null, out:{} }; }
+    if(C.out[bkId]) return C.out[bkId];
+    if(!C.byRef){ C.byRef={}; (SB_BOOKINGS||[]).forEach(function(x){ var r=String(x.voucherRef||'').trim(); if(!r || ['cancelled','rejected','cancelled_weather'].includes(x.status)) return;
+      var t=(x.trips||[]).filter(function(t){ return t && tmIsRanongRoute(t.routeId); })[0]; if(!t) return;
+      (C.byRef[r]=C.byRef[r]||[]).push({ id:x.id, d:t.date||'', n:(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0 }); }); }
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }), ref=b?String(b.voucherRef||'').trim():'', L=ref?(C.byRef[ref]||[]):[];
+    var me=L.filter(function(x){ return x.id===bkId; })[0];
+    return (C.out[bkId]=me?L.filter(function(x){ return x.id!==bkId && x.d!==me.d && x.n===me.n; }).sort(function(a,z){ return a.d<z.d?-1:1; }).map(function(x){ return x.id; }):[]);
+  }catch(_){ return []; }
+}
+function tmGet(bkId,pk,f){ var v=String(insEff(bkId,pk,f,'')||'').trim(); if(v) return v;
+  var S=tmSibs(bkId); for(var i=0;i<S.length;i++){ var w=String(insEff(S[i],pk,f,'')||'').trim(); if(w) return w; }
+  return ''; }
 function tmSet(bkId,pk,f,val){ var v=String(val||'').trim(); if(f==='idNo') v=tmIdDigits(v); if(f==='idLaser') v=v.toUpperCase().replace(/[^A-Z0-9]/g,''); if(f==='dob') v=tmDobNorm(v); if(f==='nat') v=tmNatNorm(v); insSetField(bkId,pk,f,v); }
 /* ครบ = มี ชื่ออังกฤษ + เลขบัตรถูกต้อง + วันเกิด (ชื่อไทย/เลขหลังบัตร/Remark ไม่บังคับ) */
 function tmPaxOk(bkId,p){ return !!(tmEnDef(bkId,p) && tmIdOk(tmGet(bkId,p.key,'idNo')) && tmDobOk(tmGet(bkId,p.key,'dob'))); }   /* §tmPax2 · รับ p (ใช้ค่าตั้งต้นจากชื่อในใบจอง) */
