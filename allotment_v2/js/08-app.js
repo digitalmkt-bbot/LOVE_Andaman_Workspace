@@ -5679,6 +5679,7 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     drop:_rcDrop(bk),   /* §rcDrop */
+    alt:_rcAlt(bk, (t&&t.date)||bk.travelDate||''),   /* §rcAlt */
     /* §rcArea · ย่านรับจริง เช่น Patong / Kalim / Karon
        ของเดิมใช้โซนใหญ่ PK/KL ซึ่งแปลได้แค่ "Phuket" ทั้งคอลัมน์
        ไม่มีย่านค่อยถอยไปใช้โซนใหญ่ ดีกว่าเว้นว่าง */
@@ -5686,6 +5687,32 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
 /* ══ §rcDrop (2026-10-14) · owner "กรณีที่มี Drop off ให้ขึ้นด้วย" ══════════════════════
    จุดส่งที่ไม่ใช่ที่เดิม · ระดับใบ (dropoffSame=false) และรายคน (altPickups[i].dropSame=false · §altDrop)
    อ่านผ่าน bkDropOf ตัวเดียวกับใบงานรถ จะได้ตรงกัน · ไม่มี = '' (ช่องโรงแรมเหมือนเดิม) */
+/* ══ §rcAlt (2026-11-25) · owner ดูหน้า Re-confirmation (PEGAS): "กรณีแยกที่รับมันควรขึ้นด้วย และในหน้า sheet ควรขึ้นด้วย"
+   ใบที่มีจุดรับเพิ่ม (altPickups ที่มีสถานที่/ย่านของตัวเอง) เดิมขึ้นแค่โรงแรมหลัก · เอเจนต์ไม่เห็นว่าอีกกลุ่มรับที่ไหน กี่โมง
+   คืน array ข้อความต่อจุด: "ชื่อ: 2 pax · โรงแรม (ย่าน) · เวลา" · เวลารับอ่านจากก้อนแยกของจุดนั้น (ops.vanSplits · §splitPickTime) ถ้าตั้งไว้
+   แถวที่รับที่เดิมแต่ส่งคนละที่ ไม่นับ (อยู่ใน §rcDrop แล้ว) */
+function _rcAlt(bk, date){
+  try{
+    var out=[], A=Array.isArray(bk.altPickups)?bk.altPickups:[];
+    if(!A.length) return out;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(bk,date):(bk.ops||{}), SP=Array.isArray(O&&O.vanSplits)?O.vanSplits:[];
+    A.forEach(function(a){
+      if(!a) return; var place=String(a.place||'').trim(); if(!place && !a.areaId) return;
+      var n=(typeof bkAltPax==='function'&&typeof bkPaxSum==='function')?bkPaxSum(bkAltPax(a)):(+a.qty||0); if(!(n>0)) return;
+      var ar=(a.areaId&&typeof bookingV2GetArea==='function')?bookingV2GetArea(a.areaId):null, an=(ar&&ar.name)||'';
+      var sp=SP.filter(function(x){ return x && !x.main && (x.pickAreaId||'')===(a.areaId||'') && String(x.pickHotel||'').trim()===place; })[0];
+      var tm=(sp&&typeof bkSplitPickTime==='function')?bkSplitPickTime(sp):'', who=String(a.who||'').trim();
+      /* §rcAlt2 · คืนเป็นก้อนข้อมูล · หน้าจอและใบ Sheet วาดเป็นแถวย่อยใต้ใบ (ชื่อ · จำนวนคน · เวลา · โรงแรม · ย่าน · ทะเบียนรถของจุดนั้น) */
+      var plate='';
+      try{ if(sp && sp.vanId){ var _vi=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(sp.vanId,date):{}, _vh=(typeof vehGet==='function'?vehGet(sp.vanId):null)||{}; plate=(_vi.plate||_vh.plate||''); if(plate==='-') plate=''; } }catch(_){}
+      out.push({ who:who, n:n, place:(place||an), area:an, tm:tm, plate:plate,
+        txt:(who?(who+': '):'')+n+' pax \u00b7 '+(place||an)+((place&&an&&an!==place)?(' ('+an+')'):'')+(tm?(' \u00b7 '+tm):'') });
+    });
+    return out;
+  }catch(_){ return []; }
+}
+function _rcAltN(d){ return (d.alt||[]).reduce(function(s,a){ return s+(+a.n||0); },0); }
+function _rcAltHtml(d, esc){ return (d.alt&&d.alt.length)?d.alt.map(function(x){ return '<div class="drop" style="background:#E3EEFB;color:#143F73">&#10133; Extra pick-up: '+esc(x.txt)+'</div>'; }).join(''):''; }
 function _rcDrop(bk){
   try{
     var out=[];
@@ -5812,14 +5839,23 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td class="mono nowrap">'+esc(d.phone||'—')+'</td>'
         +'<td class="ctr mono">'+(d.ad||0)+'</td><td class="ctr mono">'+(d.chd||0)+'</td><td class="ctr mono">'+(d.inf||0)+'</td><td class="ctr mono" style="color:'+((d.foc||0)?'#993C1D':'#c9c7c0')+'">'+(d.foc||0)+'</td>'
         +'<td class="mono nowrap">'+esc(d.time)+'</td>'
-        +'<td>'+esc(d.hotel||'—')+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
+        +'<td>'+esc(d.hotel||'—')+((d.alt&&d.alt.length&&d.pax-_rcAltN(d)>0)?(' <span class="altn">'+(d.pax-_rcAltN(d))+' pax</span>'):'')+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':'')+'</td>'
         +'<td class="ctr mono">'+esc(d.room||'—')+'</td>'
         +'<td>'+esc(d.zone)+'</td>'
         +'<td class="nowrap">'+_rcVanSheet(d.van, esc)+'</td>'   /* §rcPlate */
         +'<td>'+(d.addon?'<span class="ao">'+esc(d.addon)+'</span>':'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.special?esc(d.special):'<span class="mut">—</span>')+'</td>'
         +'<td>'+(d.cot?'<span class="cot">'+esc(d.cot)+'</span>':'<span class="mut">—</span>')+'</td>'
-        +'</tr>';
+        +'</tr>'
+        /* §rcAlt2 · จุดรับเพิ่ม = แถวย่อยใต้ใบ · เวลา/โรงแรม/ย่าน/ทะเบียน อยู่ตรงคอลัมน์ของมันเอง */
+        +((d.alt||[]).map(function(a){ return '<tr class="altr"><td></td><td></td>'
+          +'<td colspan="2" class="nowrap"><span class="alta">&#8627;</span> '+esc(a.who||'Extra pick-up')+'</td>'
+          +'<td colspan="4" class="ctr nowrap"><span class="altn">'+a.n+' pax</span></td>'
+          +'<td class="mono nowrap">'+esc(a.tm||'—')+'</td>'
+          +'<td>'+esc(a.place||'—')+'</td><td></td>'
+          +'<td>'+esc(a.area||'')+'</td>'
+          +'<td class="nowrap">'+(a.plate?('<b class="mono">'+esc(a.plate)+'</b>'):'<span class="mut">—</span>')+'</td>'
+          +'<td></td><td></td><td></td></tr>'; }).join(''));
     }).join('');
     /* §rcColor · สีของเส้นทางนี้จริง ๆ ไม่ใช่เขียวฟิกซ์เหมือนกันทุกแถบ */
     var _T=_rcSecTint(route&&route.color);
@@ -5839,7 +5875,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
           +'<div class="ph2">'+(d.phone?esc(d.phone):'<span class="mut">Phone &mdash;</span>')+'</div>'
           +'<dl>'
             +cell('Pick-up',esc(d.time),'t')
-            +cell('Hotel',(esc(d.hotel)||M)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
+            +cell('Hotel',(esc(d.hotel)||M)+_rcAltHtml(d,esc)+(d.drop?'<div class="drop">&#8617; Drop-off: '+esc(d.drop)+'</div>':''))
             +cell('Room',d.room?esc(d.room):M,'m')
             +cell('Zone',d.zone?esc(d.zone):M)
             +cell('Plate',_rcVanSheet(d.van, esc))
@@ -5900,6 +5936,7 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.dt{width:100%;border-collapse:collapse;font-size:12.5px}.dt td{padding:3px 0;vertical-align:top}.dt .lbl{color:#9a988f;width:100px}.mut{color:#9a988f}'
     +'.ft{padding:14px 24px;border-top:1px solid #EEECE6;font-size:12px;color:#5F5E5A}'
     +'.gt .drop{display:inline-block;font-size:10.5px;color:#7A4A00;background:#FFF1D6;border-radius:4px;padding:1px 6px;margin-top:3px;white-space:nowrap}'   /* §rcDrop */
+    +'.gt tr.altr td{background:#F3F8FE;color:#143F73;border-top:0;padding-top:4px;padding-bottom:4px}.gt .alta{color:#5B8FD0;font-weight:700;margin-right:2px}.gt .altn{display:inline-block;font-size:10px;font-weight:700;color:#143F73;background:#DCEAFB;border-radius:999px;padding:1px 7px;white-space:nowrap}'   /* §rcAlt2 */
     +'.gt{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}.gt th{text-align:left;padding:6px 8px;background:#F4F7F5;color:#5F5E5A;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #E3E1DA}.gt td{padding:6px 8px;border-bottom:1px solid #F0EEE8;vertical-align:top}.gt .num{color:#9a988f;width:24px}.gt .ctr{text-align:center}.gt th.ctr{text-align:center}.nowrap{white-space:nowrap}.mono{font-variant-numeric:tabular-nums}.cot{color:#993C1D;font-variant-numeric:tabular-nums;font-size:11px}.ao{color:#185FA5}.plate{font-family:\'DM Mono\',monospace;font-weight:700;letter-spacing:.02em}.vn{display:block;font-size:10px;color:#9a988f}'
     +'.bar{max-width:1440px;margin:10px auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 8px}.bar .sp{flex:1}'
     +'.seg{display:inline-flex;background:#fff;border:1px solid #d8d6cf;border-radius:9px;padding:3px;gap:2px}'
@@ -6063,7 +6100,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* §rcDropFt (2026-10-14) · owner: "ทำเป็น Popup ลอยขึ้นมาไหม จะได้ไม่กินเนื้อที่" · บรรทัด Drop-off ใต้ชื่อโรงแรม
        ทำให้แถวสูงขึ้นทั้งแถวเพื่อข้อมูลที่นาน ๆ มีที · เหลือป้ายเล็กลอยมุมขวาของช่อง เอาเมาส์ชี้ค่อยกางเป็นที่ส่งเต็ม
        (แบบเดียวกับป้ายลอยใน By trip · Compact) · ใบพิมพ์ (บรรทัด 'drop' ข้างบน) ยังพิมพ์เต็มเหมือนเดิม */
-    case 'hotel': return d.drop
+    case 'hotel': return d.drop   /* §rcAlt2 · จุดรับเพิ่มย้ายไปเป็นแถวย่อยใต้ใบ (rowFor) · ป้ายลอยเหลือเฉพาะจุดส่ง */
       ? '<div class="rc-hc'+(d.room?' rm':'')+'"><span class="rc-hn">'+esc(d.hotel||'—')+'</span>'   /* §rcDropFt3 · มีเลขห้อง = ไม่ล้นไปบัง */
         +'<span class="rc-ft" title="จุดส่งขากลับต่างจากจุดรับ"><span class="s">&#8617; ส่ง</span><span class="x">&#8617; Drop-off: '+esc(d.drop)+'</span></span></div>'
       : esc(d.hotel||'—');
@@ -6087,7 +6124,18 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
     }
     var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis');
-    if(c.k==='hotel' && d.drop) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
+    if(c.k==='hotel' && d.drop) ex=';overflow:visible';   /* §rcDropFt · ป้ายลอยต้องกางออกนอกช่องได้ · ชื่อโรงแรมตัดด้วย .rc-hn เอง */ if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'
+    /* §rcAlt2 (2026-11-25) · owner "ปรับให้มันสวย และดูเข้าใจหน่อย" · จุดรับเพิ่ม = แถวย่อยสีฟ้าอ่อนใต้ใบ · ข้อมูลอยู่ตรงคอลัมน์เดียวกับแถวหลัก */
+    +((d.alt||[]).map(function(a){ var T2=TD+';background:#F3F8FE;color:#143F73;padding-top:4px;padding-bottom:4px';
+      return '<tr class="rc-alt" data-s="'+esc(_rcSearchText(d))+'">'+cols.map(function(c){ var v='', x='';
+        if(c.k==='prog') v='<span style="color:#5B8FD0;font-weight:700;padding-left:14px">&#8627; จุดรับเพิ่ม</span>';
+        else if(c.k==='lead') v=esc(a.who||'—');
+        else if(c.k==='pax'||c.k==='ad'){ v='<span style="font-size:10px;font-weight:700;background:#DCEAFB;border-radius:999px;padding:1px 7px">'+a.n+' pax</span>'; x=';text-align:center;overflow:visible'; }
+        else if(c.k==='time') v='<span style="'+MONO+'">'+esc(a.tm||'—')+'</span>';
+        else if(c.k==='hotel'){ v=esc(a.place||'—'); x=';overflow:hidden;text-overflow:ellipsis'; }
+        else if(c.k==='zone') v=esc(a.area||'');
+        else if(c.k==='van') v=a.plate?('<b style="'+MONO+'">'+esc(a.plate)+'</b>'):'<span style="color:#9AA8BD">—</span>';
+        return '<td style="'+T2+x+'">'+v+'</td>'; }).join('')+'</tr>'; }).join('')); }
   /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
      ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
   var out='<style id="rc-skin">'
@@ -7019,7 +7067,7 @@ function renderDailyPFM(){
       /* §สลิป · ปุ่มนี้เคยโผล่เฉพาะตอนมีสลิปอยู่แล้ว (_nSlip>0) และการแนบทำได้ที่ Record modal ที่เดียว
          ซึ่งหายไปทันทีที่จ่ายครบ → บุ๊กกิ้งที่ลืมแนบสลิป หรือแนบผิด ไม่มีทางกลับเข้าไปแก้ได้เลย
          ตอนนี้โผล่เสมอเมื่อออกใบแจ้งหนี้แล้ว · 0 ไฟล์ = "+ สลิป" (ขาว) · มีแล้ว = นับจำนวน (เขียว) */
-      const _nSlip=((b.paymentSlips)||[]).length;
+      const _nSlip=laPaySlips(b).length;   /* §tsPenFile · ไม่นับหลักฐานค่าปรับ */
       act+=` <button onclick="pfmViewSlips('${b.id}')" title="${_nSlip?('ดู / แนบเพิ่ม / ลบสลิป ('+_nSlip+' ไฟล์)'):'ยังไม่มีสลิป · กดเพื่อแนบ'}" style="${_obtn};color:${_nSlip?'#0F6E56':'#8a8a82'}">\u{1F9FE} ${_nSlip?('สลิป '+_nSlip):'+ สลิป'}</button>`;
       act+=` <button onclick="acctOpenDoc('${inv.id}','invoice')" title="ดู/พิมพ์ใบแจ้งหนี้" style="${_obtn}">View</button>`;
       /* §pfmEdit · บันทึกรับเงินผิด (ยอด/วันที่/ช่องทาง) หรือกด Issue PFM ผิดใบ → เดิมไม่มีทางแก้จากหน้านี้ */
@@ -24539,6 +24587,65 @@ function tsCotCell(b, M, date, money, e, r){
 }
 var _tsOnlyIssue=false;
 function tsToggleFilter(){ _tsOnlyIssue=!_tsOnlyIssue; tsAfter(); }
+/* §tsPenFile (2026-11-25) · แนบหลักฐานของคำตัดสินค่าปรับ (ใบรับรองแพทย์ · แชต · อีเมลจากเอเจนต์)
+   เดิมเขียนได้แค่หมายเหตุ "ยกเลิกไม่ชาร์จ มีใบรับรองแพทย์" แต่ตัวใบรับรองไปอยู่ในไลน์ · บัญชี/ผู้อนุมัติตามหาเอง
+   ตาราง travel_sum ไม่มีคอลัมน์เก็บไฟล์ (ใส่ไปจะหายเงียบตอนขึ้นเซิร์ฟเวอร์) จึงเก็บ ref ไว้ที่ใบจอง
+   (b.paymentSlips · มีคอลัมน์อยู่แล้ว) โดยติด kind 'penalty:<วันเดินทาง>' · ไฟล์จริงอยู่ที่ /api/attach
+   - ไม่ใช่สลิปเงิน → laPaySlips() ตัดออกจากตัวนับ/หน้าดูสลิปการชำระ
+   - แนบได้ทั้งก่อนและหลังกดตัดสิน · กด "ล้าง" คำตัดสินแล้วไฟล์ยังอยู่ */
+function tsPenKind(date){ return 'penalty:'+String(date||''); }
+function laSlipIsPenalty(f){ return !!(f && /^penalty:/.test(String(f.kind||''))); }
+function laPaySlips(b){ return ((b&&Array.isArray(b.paymentSlips))?b.paymentSlips:[]).filter(function(f){ return !laSlipIsPenalty(f); }); }
+function tsPenFiles(bkId,date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }), k=tsPenKind(date);
+  return ((b&&Array.isArray(b.paymentSlips))?b.paymentSlips:[]).filter(function(f){ return f && f.id && f.kind===k; });
+}
+function tsPenFilePick(bkId,date,inp){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')){ if(inp) inp.value=''; return; }
+  var fs=Array.prototype.slice.call((inp&&inp.files)||[]); if(inp) inp.value='';
+  if(!fs.length) return;
+  if(typeof pckSlipUpload!=='function'){ alert('แนบไฟล์ไม่ได้ในหน้านี้'); return; }
+  var k=tsPenKind(date);
+  fs.forEach(function(f){ pckSlipUpload(f, bkId, function(meta){
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; });
+    if(b){ (b.paymentSlips||[]).forEach(function(ps){ if(ps.id===meta.id) ps.kind=k; });   // pckSlipUpload ลงเป็น 'pier' · เปลี่ยนเป็นหลักฐานค่าปรับ
+           try{ acctPersistBookings(); }catch(_){ }
+           if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','แนบหลักฐานค่าปรับ/ยกเลิก ('+date+'): '+(meta.name||''),'Operation'); }
+    tsAfter();
+  }); });
+}
+function tsPenFileDrop(bkId,date,fid){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var f=tsPenFiles(bkId,date).find(function(x){ return x.id===fid; }); if(!f) return;
+  if(!confirm('ลบไฟล์ "'+(f.name||fid)+'" ทิ้งถาวร?\n\nไฟล์จะถูกลบออกจากระบบ · คำตัดสินไม่เปลี่ยน')) return;
+  fetch('/api/attach/'+encodeURIComponent(fid),{method:'DELETE'}).then(function(r){ return r.json(); })
+    .then(function(j){ if(j&&j.error) alert('ลบไฟล์บนเซิร์ฟเวอร์ไม่สำเร็จ: '+j.error); }).catch(function(){});
+  b.paymentSlips=(b.paymentSlips||[]).filter(function(x){ return x.id!==fid; });
+  try{ acctPersistBookings(); }catch(_){ }
+  if(typeof bookingV2AddHistory==='function') bookingV2AddHistory(b,'edit','ลบหลักฐานค่าปรับ/ยกเลิก ('+date+'): '+(f.name||fid),'Operation');
+  tsAfter();
+}
+function tsPenFileRow(bkId,date,e){
+  var ss=tsPenFiles(bkId,date), lb='หลักฐานประกอบคำตัดสิน';
+  var chips=ss.map(function(f,i){
+    var nm=String(f.name||('ไฟล์ '+(i+1))); if(nm.length>22) nm=nm.slice(0,12)+'…'+nm.slice(-8);
+    return '<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(ss, lb, i)
+      +' title="'+e((f.name||'')+(f.by?(' · '+f.by):'')+' · กดเพื่อเปิดดู')+'">&#128206; '+e(nm)+'</span>'
+      +'<a class="ts-slipx" onclick="tsPenFileDrop(\''+bkId+'\',\''+date+'\',\''+e(f.id)+'\')" title="ลบไฟล์นี้"'
+      +' style="color:var(--rs700);cursor:pointer;font-size:11px;font-weight:800;align-self:center;margin-right:4px">&times;</a>';
+  }).join('');
+  var add='<label class="ts-slipb" title="'+e('แนบหลักฐาน เช่น ใบรับรองแพทย์ · แชต/อีเมลจากเอเจนต์ (รูป หรือ PDF · ไม่เกิน 6MB ต่อไฟล์)')+'">&#128206; '+(ss.length?'เพิ่มไฟล์':'แนบไฟล์')
+    +'<input type="file" multiple accept="image/*,application/pdf" style="display:none"'
+    +' onchange="tsPenFilePick(\''+bkId+'\',\''+date+'\',this)"></label>';
+  return '<div class="ts-slips">'+chips+add+'</div>';
+}
+/* ป้ายสั้นในช่อง "ผล" · ติดไปกับกระดาษตอนพิมพ์ ให้คนอนุมัติรู้ว่ามีหลักฐานในระบบ */
+function tsPenFileTag(bkId,date,e){
+  var ss=tsPenFiles(bkId,date); if(!ss.length) return '';
+  return '<div style="margin-top:4px"><span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(ss,'หลักฐานประกอบคำตัดสิน')
+    +' title="กดเพื่อเปิดดู">&#128206; หลักฐาน '+ss.length+' ไฟล์</span></div>';
+}
 function tsPick(bkId,date,kind,amt){
   const el=document.getElementById('ts-note-'+bkId);
   tsSet(bkId,date,kind,amt,el?el.value:'');
@@ -25099,7 +25206,7 @@ function tsInvSlips(b){
   /* สลิปที่แนบเพิ่มทีหลังจากปุ่ม "+ สลิป" ของ Daily PFM · อยู่ที่ใบจอง ไม่ได้อยู่ที่รายการรับเงิน
      kind 'pier' คือสำเนาของสลิปหน้าท่า (อาจเป็นของวันอื่น) · ทางหน้าท่าดึงของวันนั้นเองอยู่แล้ว */
   (Array.isArray(b.paymentSlips)?b.paymentSlips:[]).forEach(function(f){
-    if(!f || !f.id || seen[f.id] || f.kind==='pier') return; seen[f.id]=1;
+    if(!f || !f.id || seen[f.id] || f.kind==='pier' || laSlipIsPenalty(f)) return; seen[f.id]=1;
     out.list.push({ f:f, cap:'สลิปที่แนบกับใบจอง'+(iv?(' · บิล '+(iv.number||'')):'')
       +((+f.amount||0)>0?(' · ฿'+num(f.amount)):'')+(f.by?(' · '+f.by):'') });
   });
@@ -25214,7 +25321,51 @@ function _tsSlipPage(r, i, total, seq, date, kicker){
    เพื่อจับสลิปให้ตรงใบ · ตอนนี้หน้าสลิปของใบไหน วางต่อจากหน้าเอกสารของใบนั้นเลย
    ใบที่มีสลิปแต่ไม่มีในชุดเอกสาร (เช่น walk-in ไม่มีไฟล์แนบ) ยังพิมพ์อยู่ · ต่อท้ายตามลำดับเดิม
    เลข # เดินตามเส้นทางเหมือนเดิม · หน้าสลิปใช้เลขเดียวกับหน้าเอกสารของใบนั้น = เป็นคู่กัน */
-function _tsPackPages(refList, slipList, date, kicker, slipKicker){
+/* §tsPenPack (2026-11-25) · ชุดหลักฐานประกอบคำตัดสิน (ยกเลิก / เลื่อนวัน) ต่อท้ายเล่ม
+   ไฟล์ที่แนบจากส่วน 02 (§tsPenFile) ไม่ใช่สลิปเงิน จึงไม่ปนในชุดสลิป · แยกเป็นชุดของตัวเองท้ายสุด
+   เดินตามชิปกรองท่าเรือ/เส้นทาง/VAT ชุดเดียวกับใบสรุป · เคสที่ไม่มีไฟล์ไม่มีหน้า */
+function tsPenPackList(date){
+  var rows=tsRows(date);
+  rows=rows.filter(function(r){ return tsScopeKeep(r.routeId); });
+  if(_tsVatF) rows=rows.filter(function(r){ return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b); });
+  var out=[];
+  rows.forEach(function(r,i){
+    var ss=tsPenFiles(r.b.id,date); if(!ss.length) return;
+    out.push({ bk:r.b, trip:r.t, ord:i, dec:tsGet(r.b.id,date),
+               imgs:ss.map(function(f){ return { f:f, cap:(f.name||'ไฟล์')+(f.by?(' · แนบโดย '+f.by):'') }; }) });
+  });
+  return out;
+}
+function _tsPenPage(r, i, total, seq, date, kicker){
+  var e=_docPackEsc, b=r.bk, t=r.trip, d=r.dec;
+  var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
+  var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var DL={full:'เก็บเต็ม', partial:'เก็บบางส่วน', none:'ไม่ชาร์จ', postpone:'เลื่อนวัน'};
+  var res=d ? ((DL[d.decision]||d.decision||'')+(d.decision==='postpone'?'':(' · ฿'+num(d.amount)))) : 'ยังไม่ตัดสิน';
+  var n=r.imgs.length, grid=(n<=1)?'one':(n===2)?'two':(n<=4)?'four':'many';
+  var body='<div class="grid '+grid+'">'+r.imgs.map(function(x,k){
+    var f=x.f||{}, url='/api/attach/'+encodeURIComponent(f.id);
+    var isImg=/^image\//.test(f.mime||'');
+    var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
+    var box=isImg?('<img src="'+url+'" alt="">')
+           :isPdf?('<canvas class="pdfc" data-pdf="'+url+'"></canvas>'
+                  +'<div class="pdfw">&#128196; '+e(f.name||'file')+' &middot; กำลังเปิดไฟล์ PDF…</div>')
+                 :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
+    return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(x.cap)+'</figcaption></figure>';
+  }).join('')+'</div>';
+  return '<section class="pg">'
+    + '<header><span>LOVE Andaman &middot; '+e(kicker||'หลักฐานประกอบคำตัดสิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
+    + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>ผลตัดสิน &middot; '+e(res)+'</span></div>'
+    +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
+    +   ((d&&d.note)?(' &middot; หมายเหตุ: '+e(d.note)):'')
+    +   ((d&&d.by)?(' &middot; ตัดสินโดย '+e(d.by)):'')+'</div></div>'
+    + '<div class="body">'+body+'</div>'
+    + '<footer><span>&#9744; ตรวจหลักฐานแล้ว</span><span>ผู้อนุมัติ ________________</span></footer>'
+    + '</section>';
+}
+function _tsPackPages(refList, slipList, date, kicker, slipKicker, penList, penKicker){
   var items=[];
   /* ทั้งสองลิสต์เป็นส่วนหนึ่งของแถวชุดเดียวกัน · เรียงด้วย ord แล้วเอกสารมาก่อนสลิปของใบเดียวกัน */
   (refList||[]).forEach(function(r,i){ items.push({ k:'doc',  r:r, ord:(r.ord==null?i:+r.ord), sub:0 }); });
@@ -25225,7 +25376,8 @@ function _tsPackPages(refList, slipList, date, kicker, slipKicker){
     var id=String(((it.r||{}).bk||{}).id||'');
     it.pair=!!(p && it.k==='slip' && p.k==='doc' && id && String(((p.r||{}).bk||{}).id||'')===id);
   });
-  var total=items.length, lastRoute=null, seq=0, html='';
+  var pens=penList||[];   /* §tsPenPack · ต่อท้ายสุด ไม่แทรกกลางชุดเอกสาร/สลิป */
+  var total=items.length+pens.length, lastRoute=null, seq=0, html='';
   items.forEach(function(it,i){
     var R=((typeof getRoute==='function'?getRoute(it.r.trip.routeId):null)||{});
     if(!it.pair){                                  /* หน้าสลิปที่ต่อจากเอกสารใบเดียวกัน ไม่กินเลขใหม่ */
@@ -25235,6 +25387,7 @@ function _tsPackPages(refList, slipList, date, kicker, slipKicker){
     html += (it.k==='doc') ? _docPackPage(it.r, i, total, seq, date, kicker)
                            : _tsSlipPage(it.r, i, total, seq, date, slipKicker);
   });
+  pens.forEach(function(r,j){ html += _tsPenPage(r, items.length+j, total, j+1, date, penKicker); });
   return html;
 }
 /* ══ §tsDoc (2026-10-05) · หน้าพิมพ์ "สรุปการเดินทางประจำวัน" โครงใหม่ ══════════════════════
@@ -25515,9 +25668,11 @@ function tsPrintSheet(){
   var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
   var _kick=(_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
           + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : (_tsPier ? (' · '+tsPierName(_tsPier)) : ''));
-  var pack=((list.length||slipL.length) && typeof _tsPackPages==='function')
+  var penL=(typeof tsPenPackList==='function')?tsPenPackList(date):[];   /* §tsPenPack */
+  var pack=((list.length||slipL.length||penL.length) && typeof _tsPackPages==='function')
     ? _tsPackPages(list, slipL, date, 'Reference · เอกสารประกอบ'+_kick,
-                   'Payment slip · สลิปการชำระเงิน'+_kick) : '';
+                   'Payment slip · สลิปการชำระเงิน'+_kick,
+                   penL, 'หลักฐานประกอบคำตัดสิน · ยกเลิก / เลื่อนวัน'+_kick) : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
@@ -29217,8 +29372,9 @@ function renderTravelSum(){
         +'</div>'
         +(_part?('<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป '+e(_lostW)+'</b> &middot; อีก <b>'+e(_goW)+'</b> ที่เดินทางจ่ายตามปกติ</div>'):'')   /* §tsLostPart2 */
         +'<input id="ts-note-'+id+'" class="ts-note" type="text" value="'+e(dec?dec.note:'')+'" placeholder="หมายเหตุ / เลขอ้างอิง"'
-        +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')"></td>'
-      +'<td class="c">'+(dec
+        +' onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')">'
+        +tsPenFileRow(id,date,e)+'</td>'   /* §tsPenFile */
+      +'<td class="c">'+tsPenFileTag(id,date,e).replace(/^<div style="margin-top:4px">/,'<div style="margin-bottom:4px">')+(dec
         ? ('<span class="ts-chip '+DEC[dec.decision][1]+'">'+e(_decLbl(dec))+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
            +'<div class="ts-tel" style="margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(laAtLocal(dec.at,16))):'')+'</div>')
         : (r.tb   /* §turnBack3 · ข้อตกลงเงินที่บันทึกจากหน้าท่า · แก้ที่ปุ่ม ⛵ ในหน้าเช็คอิน */
@@ -34705,6 +34861,7 @@ function pxFlow(e, sp){
     C=null;
   }
   if(!C && a3<=0) return { ok:false, why:'ช่วงนี้มีขั้นที่ขาดทุน แผนภาพเส้นไหลวาดยอดติดลบไม่ได้ จึงแสดงเป็นตารางแทน' };
+  return pxFlow2(e, sp, note, C, loss);   /* §pxFlow2 · แบบใหม่ พื้นขาว ทั้ง Profit by step และ Forecast · โค้ดวาดเดิมด้านล่างไม่ถูกเรียกแล้ว */
   var G='#2E9B63', GD='#1E7A4C', R='#C8473C', RD='#A8362D', K='#0F172A', A='#E0A21A', AD='#8A5A00', MU='#475569',
       PC={ panwa:'#0F7F71', tublamu:'#2460B0', ranong:'#7C4DBD', other:'#5B6472' }, PT={ panwa:'#0B6557', tublamu:'#2460B0', ranong:'#6B3FAE', other:'#475569' },
       PN={ panwa:'Visit Panwa', tublamu:'Tub Lamu', ranong:'Ranong', other:'Other' };
@@ -34833,6 +34990,149 @@ function pxFlow(e, sp){
     +'<div style="overflow-x:auto;background:#F3F4F6;border-radius:12px"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="แผนภาพเส้นไหล รายได้ ต้นทุน และกำไร" style="display:block;width:100%;min-width:1040px;height:auto;font-family:inherit">'+svg+rects+txt+'</svg></div>'
     +'<div style="font-size:11px;color:#64748B;padding:6px 4px 8px">ความหนาของเส้น = จำนวนเงิน · % คือสัดส่วนต่อรายได้ทัวร์'
       +(hasOi?' · แถบสีเหลือง = รายได้อื่น ไม่ผ่านการหักต้นทุนทัวร์':'')+(loss?' · แถบลายขีดสีแดง = ส่วนที่ขาด (ค่าใช้จ่ายส่วนกลางก้อนที่กำไรจากทริปจ่ายไม่พอ)':'')+' · ตัวเลขชุดเดียวกับตาราง</div>' };
+}
+/* ══ §pxFlow2 (2026-11-25) · owner ส่งภาพ customer-journey flow → mockup 4 รอบใน Artifact → "ทำ ขอพื้นหลังขาวเหมือน Mockup เลย"
+   → "ของ Forecast ไม่ถูกปรับนะ" → ใช้แบบเดียวกันทั้ง Profit by step และ Forecast by step (โค้ดวาดเดิมใน pxFlow ไม่ถูกเรียกแล้ว)
+     ขั้นค่าใช้จ่าย: 1 Operation cost · 2 ค่าจ้าง (รายการย่อยอยู่ข้างแท่งแดง เส้นเชื่อมโค้ง) แล้วต่อด้วย
+       Trip P&L  → ค่าเสื่อมเรือ → กำไรระดับทริป
+       Forecast  → ค่าใช้จ่ายคงที่ → ควบคุมได้ → ซ่อมเรือ (ค่าเสื่อม + บรรทัดซ่อมเรือ) → EBITDA ทัวร์ → + รายได้อื่น (เหลือง) = EBITDA รวม
+     เขียว = เงินที่เหลือ (โค้งขึ้นทีละขั้น · ตำแหน่งแนวตั้งเป็นการจัดวาง ความสูงแท่งคือสัดส่วนเงินจริง) · แดง = ต้นทุนที่หักออก
+     EBITDA ทัวร์ติดลบ (loss) → แท่งแดงส่วนที่กำไรจากทริปจ่ายไม่พอ = ลายขีดกรอบเส้นประ ไม่มีเส้นไหลเข้า · ขั้นสุดท้ายบอกยอดที่ขาด
+     แถวล่างใต้ทุกขั้น: หักออกกี่ % ของรายได้ · เส้นประแบ่งขั้น · ตัวเลขหลัก 3 ตัวด้านบน · พื้นขาว ══ */
+function pxFlow2(e, sp, note, C, loss){
+  var rev=+sp.rev||0, a3=rev-sp.op-sp.wage-sp.dep;
+  var PC={ panwa:'#0F7F71', tublamu:'#2460B0', ranong:'#7C4DBD', other:'#5B6472' }, PN={ panwa:'Visit Panwa', tublamu:'Tub Lamu', ranong:'Ranong', other:'Other' };
+  var G='#2E9B63', GD='#1E7A4C', R='#C8473C', K='#0F172A', MU='#5B6478', GU='#B4BECF', A='#E0A21A', AD='#8A5A00';
+  var H=330, S=H/rev, BW=14, xp=176, xq=318, xr=452, G0=84, rb='', nd='', tt='', bot=0, gid={}, gx=[], feet=[];
+  function f1(n){ return Math.round(n*10)/10; }
+  function P(v){ return (v/rev*100).toFixed(1)+'%'; }
+  function neg(v){ return '−'+pxSkM(v); }
+  function grad(c){ var id='pxg'+c.replace('#',''); gid[id]=c; return id; }
+  function rib(x0,a0,b0,x1,a1,b1,c){ var d=(x1-x0)*0.6, c0=f1(x0+d), c1=f1(x1-d);
+    rb+='<path d="M'+x0+' '+f1(a0)+' C'+c0+' '+f1(a0)+' '+c1+' '+f1(a1)+' '+x1+' '+f1(a1)+' L'+x1+' '+f1(b1)+' C'+c1+' '+f1(b1)+' '+c0+' '+f1(b0)+' '+x0+' '+f1(b0)+' Z" fill="url(#'+grad(c)+')"/>'; }
+  function tx(x,y,t,c,size,w,anchor){ tt+='<text x="'+f1(x)+'" y="'+f1(y)+'" fill="'+c+'" font-size="'+size+'" font-weight="'+(w||500)+'" text-anchor="'+(anchor||'start')+'">'+t+'</text>'; bot=Math.max(bot,y+4); }
+  function bar(x,y,h,c){ h=Math.max(h,3); nd+='<rect x="'+x+'" y="'+f1(y)+'" width="'+BW+'" height="'+f1(h)+'" rx="'+f1(Math.min(BW/2,h/2))+'" fill="'+c+'"/>'; bot=Math.max(bot,y+h); }
+  function cmpS(v,p){ if(!sp.cmp) return ''; if(!(p>0)) return (v>0?'ใหม่':''); var d=(v/p-1)*100; return (d>=0?'+':'−')+Math.abs(d).toFixed(0)+'%'; }
+  /* ขั้นค่าใช้จ่าย · รายการย่อยจาก sp.ln (ชื่อเดียวกับตาราง) · ส่วนที่รายการย่อยรวมไม่ถึงยอดขั้น = "อื่น ๆ" */
+  function subOf(defs, total){ var L=[], sum=0;
+    (defs||[]).forEach(function(d){ var v=+((sp.ln||{})[d[0]])||0; if(v>0){ L.push([d[1],v]); sum+=v; } });
+    if(total-sum>1) L.push(['อื่น ๆ', total-sum]);
+    L.sort(function(a,b){ return b[1]-a[1]; }); return { L:L, k:(sum>total && sum>0)?(total/sum):1 }; }
+  var stages=[{ n:'Operation cost', v:+sp.op||0, sub:subOf((typeof PX_ST_OP!=='undefined')?PX_ST_OP:[], +sp.op||0) },
+              { n:'ค่าจ้าง', v:+sp.wage||0, sub:subOf((typeof PX_ST_WG!=='undefined')?PX_ST_WG:[], +sp.wage||0) }];
+  /* §pxFlowDet (2026-11-25) · owner ดูหน้าจริงแล้ว: "รายละเอียดค่าใช้จ่ายที่เหลือควรระบุด้วย" → ขั้นส่วนกลางมีรายการย่อยด้วย (C.fxL / C.ctL / C.mtL จาก §pxForecast)
+     คอลัมน์ส่วนกลางห่างกันแค่ 150 → รายการย่อยวางใต้แท่ง ไล่ลงเป็นขั้นบันไดไม่ให้ทับกัน (narrow) */
+  function subL(L0, total){ var L=[], sum=0;
+    (L0||[]).forEach(function(d){ var v=+d[1]||0; if(v>0){ var nm=String(d[0]||'').replace(/\s*\(.*\)\s*$/,''); if(nm.length>23) nm=nm.slice(0,22)+'\u2026'; L.push([nm,v]); sum+=v; } });
+    if(total-sum>1 && L.length) L.push(['อื่น ๆ', total-sum]);
+    L.sort(function(a,b){ return b[1]-a[1]; }); return { L:L, k:(sum>total && sum>0)?(total/sum):1 }; }
+  if(C) stages.push({ n:'ค่าใช้จ่ายคงที่', v:+C.fx||0, sub:subL(C.fxL,+C.fx||0), narrow:1 }, { n:'ควบคุมได้', v:+C.ct||0, sub:subL(C.ctL,+C.ct||0), narrow:1 },
+                    { n:'ซ่อมเรือ', v:+C.mt||0, sub:subL(C.mtL,+C.mt||0), narrow:1 });
+  else stages.push({ n:'ค่าเสื่อมเรือ', v:+sp.dep||0 });
+  stages=stages.filter(function(s){ return s.v>0; });
+  var hasOi=!!(C && C.oi>0), oh=hasOi?Math.max(C.oi*S,3):0;
+  /* §pxFlowOi (2026-11-25) · owner: "รายได้อื่นๆ ควรจะเริ่มจากต้นทางเหมือนกันไหม" → เริ่มที่คอลัมน์โปรแกรม (เหนือโปรแกรมทัวร์)
+     วิ่งเป็นแถบเหลืองเหนือแถบเขียวผ่านทุกขั้นโดยไม่ถูกหักต้นทุนทัวร์ ไปรวมที่คอลัมน์สุดท้าย (แบบเดียวกับแผนภาพเดิม) */
+  var ys=96, y0=102+16*stages.length+(hasOi?(oh+8):0);
+  function abar(x,y){ nd+='<rect x="'+x+'" y="'+f1(y)+'" width="'+BW+'" height="'+f1(oh)+'" rx="'+f1(Math.min(BW/2,oh/2))+'" fill="'+A+'"/>'; }
+  /* โปรแกรม → ท่าเรือ → รายได้ */
+  var fams=(sp.fams||[]).filter(function(f){ return f.v>0; }), piers=[], nP=0;
+  ['panwa','tublamu','ranong','other'].forEach(function(p){ var L=fams.filter(function(f){ return (f.pier||'other')===p; }).sort(function(a,b){ return b.v-a.v; });
+    if(L.length){ piers.push({ p:p, L:L }); nP+=L.length; } });
+  var pg=16, ps=22, qg=44, totP=H+pg*(nP-piers.length)+ps*Math.max(0,piers.length-1);
+  var py=Math.max(hasOi?(ys+oh+34):96, y0+(H-totP)/2), qy=Math.max(hasOi?(ys+oh+52):118, y0-qg*Math.max(0,piers.length-1)/2), ry=y0;
+  if(hasOi){ abar(xp,ys); abar(xq,ys); abar(xr,y0-oh);
+    rib(xp+BW,ys,ys+oh,xq,ys,ys+oh,A); rib(xq+BW,ys,ys+oh,xr,y0-oh,y0,A);
+    tx(xp-12,ys+Math.min(oh/2+4,14),'รายได้อื่น  '+pxSkM(C.oi),AD,12.5,700,'end'); }
+  piers.forEach(function(p){ var c=PC[p.p]||PC.other, pv=0, qin=qy;
+    p.L.forEach(function(f){ var h=f.v*S; pv+=f.v;
+      rib(xp+BW,py,py+h,xq,qin,qin+h,c); bar(xp,py,h,c); qin+=h;
+      var cy=py+h/2, cm=cmpS(f.v,f.p), nm=String(f.name||'').replace(/^Day Trip\s*-\s*/,''); if(nm.length>21) nm=nm.slice(0,20)+'…';
+      if(h<30) tx(xp-12,cy+4,e(nm.length>15?(nm.slice(0,14)+'…'):nm)+'  '+pxSkM(f.v),c,12.5,700,'end');   /* บรรทัดเดียว · ชื่อยาวตัดให้ไม่ล้นขอบซ้าย */
+      else { tx(xp-12,cy-2,e(nm),c,13,700,'end'); tx(xp-12,cy+14,pxSkM(f.v)+(cm?('  '+cm):''),K,12,600,'end'); }
+      py+=Math.max(h,3)+pg; });
+    py+=ps-pg;
+    var ph=pv*S; bar(xq,qy,ph,c); rib(xq+BW,qy,qy+ph,xr,ry,ry+ph,c);
+    tx(xq+BW/2,qy-22,PN[p.p]||p.p,c,12.5,700,'middle'); tx(xq+BW/2,qy-7,pxSkM(pv),K,12,600,'middle');
+    qy+=Math.max(ph,3)+qg; ry+=ph; });
+  gx.push(xp,xq,xr);
+  tx(xp+BW/2,72,'โปรแกรม',MU,12,700,'middle'); tx(xq+BW/2,72,'ท่าเรือ',MU,12,700,'middle'); tx(xr+BW/2,72,'รายได้',K,12.5,700,'middle');
+  bar(xr,y0,H,K); tx(xr+BW+7,y0+15,pxSkM(rev),K,12.5,700);
+  feet.push([xp,'s','ลูกค้า',Math.round(sp.pax||0).toLocaleString(),nP+' โปรแกรม'],[xq,'s','ท่าเรือ',String(piers.length),'ท่า'],[xr,'s','รายได้','100%','('+pxSkM(rev)+')']);
+  /* ขั้นที่มีรายการย่อยกินที่ทางขวา 224 · ขั้นที่ไม่มี 150 */
+  var left=rev, px=xr, pt=y0, x=xr+200, gapN=0;
+  stages.forEach(function(c,i){ var avail=Math.max(left,0), take=Math.min(avail,c.v), need=c.v-take, nl=left-c.v,
+        hN=Math.max(nl,0)*S, hT=take*S, hC=c.v*S, top=y0-16*(i+1), cy=top+Math.max(hN,3)+66, last=(i===stages.length-1);
+    if(nl>0){ rib(px+BW,pt,pt+hN,x,top,top+hN,G); bar(x,top,hN,GD); tx(x+BW+7,top+15,((C && last)?'EBITDA ทัวร์ ':'')+pxSkM(nl),GD,12.5,700); }
+    if(take>0) rib(px+BW,pt+hN,pt+avail*S,x,cy,cy+hT,R);
+    if(hasOi){ rib(px+BW,pt-oh,pt,x,top-oh,top,A); abar(x,top-oh); }
+    if(need>0){ if(hT>0) bar(x,cy,hT,R);
+      nd+='<rect x="'+x+'" y="'+f1(cy+hT)+'" width="'+BW+'" height="'+f1(Math.max(need*S,3))+'" rx="3" fill="url(#pxhx2)" stroke="'+R+'" stroke-width="1.2" stroke-dasharray="4 3"/>'; bot=Math.max(bot,cy+hC); }
+    else bar(x,cy,hC,R);
+    gx.push(x);
+    tx(x+BW/2,72,(i+1)+' · '+c.n,K,12.5,700,'middle');
+    tx(x-8,cy+Math.min(hC/2+4,16),neg(c.v),R,13,700,'end');
+    var hasL=!!(c.sub && c.sub.L.length>1); c._x=x; c._cy=cy; c._hC=hC; c._hasL=hasL;
+    feet.push([x,'r','หักออก',P(c.v),'('+pxSkM(c.v)+')']);
+    left=nl; px=x; pt=top; gapN=(hasL && !c.narrow)?224:150; x+=gapN; });
+  /* รายการย่อยข้างแท่งแดง · วาดหลังรู้ตำแหน่งทุกขั้น · ขั้น narrow เริ่มใต้แท่งแดงของขั้นถัดไปและใต้รายการของขั้นก่อนหน้า */
+  var lFloor=0;
+  stages.forEach(function(c,i){ if(!c._hasL) return;
+    var X0=c._x, sy=c._cy, fl=0, ax=c.narrow?250:212;
+    if(c.narrow){ fl=lFloor; for(var j=i+1;j<stages.length;j++) fl=Math.max(fl, stages[j]._cy+Math.max(stages[j]._hC,3)+22); }
+    var ly=Math.max(c._cy-6, fl-18);
+    c.sub.L.forEach(function(q,j){ var h=q[1]*c.sub.k*S, mid=sy+h/2; ly=Math.max(mid+4, ly+18);
+      if(j) nd+='<line x1="'+X0+'" x2="'+(X0+BW)+'" y1="'+f1(sy)+'" y2="'+f1(sy)+'" stroke="#fff" stroke-width="1"/>';
+      var ex=X0+BW+24, ey=ly-4;
+      tt+='<path d="M'+(X0+BW+2)+' '+f1(mid)+' C'+(X0+BW+15)+' '+f1(mid)+' '+(X0+BW+11)+' '+f1(ey)+' '+ex+' '+f1(ey)+'" fill="none" stroke="'+R+'" stroke-opacity=".6" stroke-width="1.2" stroke-linecap="round"/>'
+        +'<circle cx="'+ex+'" cy="'+f1(ey)+'" r="1.8" fill="'+R+'"/>';
+      tx(X0+BW+31,ly,e(q[0]),K,11.5,500); tx(X0+BW+ax,ly,pxSkM(q[1])+'  '+P(q[1]),MU,11,600,'end');
+      sy+=h; });
+    if(c.narrow) lFloor=ly+18; });
+  var xf=x; gx.push(xf);
+  if(!C){
+    rib(px+BW,pt,pt+left*S,xf,pt,pt+left*S,G); bar(xf,pt,left*S,GD);
+    tx(xf+BW/2,72,'กำไรระดับทริป',GD,12.5,700,'middle');
+    tx(xf+BW+7,pt+15,pxSkM(a3),GD,14,700);
+    tx(xf+BW+7,pt+31,((typeof pxB==='function')?pxB(a3/Math.max(1,sp.pax)):pxSkM(a3/Math.max(1,sp.pax)))+' ต่อคน',MU,11,500);
+    feet.push([xf,'g','เหลือ',P(a3),'('+pxSkM(a3)+')']);
+  } else if(left>0){
+    var hE=left*S, yE=pt;
+    rib(px+BW,pt,pt+hE,xf,yE,yE+hE,G); bar(xf,yE,hE,GD);
+    if(hasOi){ rib(px+BW,pt-oh,pt,xf,yE-oh,yE,A); abar(xf,yE-oh); }
+    tx(xf+BW/2,72,'EBITDA รวม',GD,12.5,700,'middle');
+    tx(xf+BW+7,yE-oh+15,pxSkM(C.eb),GD,14,700);
+    tx(xf+BW+7,yE-oh+31,'ทัวร์ '+pxSkM(C.core),MU,11,500);
+    if(hasOi) tx(xf+BW+7,yE-oh+46,'+ รายได้อื่น '+pxSkM(C.oi),AD,11,700);
+    feet.push([xf,'g','เหลือ',P(C.eb),'('+pxSkM(C.eb)+')']);
+  } else {
+    tx(xf+BW/2,72,'EBITDA ทัวร์',R,12.5,700,'middle');
+    if(hasOi){ rib(px+BW,pt-oh,pt,xf,pt-oh,pt,A); abar(xf,pt-oh); }
+    tx(xf+BW+7,pt+15,'ขาด '+neg(C.core),R,14,700);
+    if(hasOi) tx(xf+BW+7,pt-oh+Math.min(oh/2+4,12)-(oh<16?4:0),'+ รายได้อื่น '+pxSkM(C.oi),AD,11,700);
+    tx(xf+BW+7,pt+33,'EBITDA รวม '+(C.eb<0?neg(C.eb):('+'+pxSkM(C.eb))),(C.eb<0)?R:GD,12.5,700);
+    feet.push([xf,'r','ขาด',P(-C.core),'('+neg(C.core)+')']);
+  }
+  /* แถวสรุปใต้ทุกขั้น + เส้นประแบ่งขั้น */
+  var FY=Math.max(bot+44, y0+H+70), gd='', W=xf+BW+156, Hh=FY+92;
+  gx.forEach(function(v){ gd+='<line x1="'+(v+BW/2)+'" y1="'+G0+'" x2="'+(v+BW/2)+'" y2="'+f1(FY-18)+'" stroke="'+GU+'" stroke-dasharray="3 4" stroke-width="1"/>'; });
+  feet.forEach(function(f){ var cx=f[0]+BW/2, k=f[1], c=(k==='r')?R:(k==='g')?G:K, tc=(k==='r')?R:(k==='g')?GD:MU;
+    tt+='<circle cx="'+cx+'" cy="'+f1(FY)+'" r="10" fill="'+c+'"/>'
+      +(k==='g' ? '<path d="M'+(cx-4.5)+' '+f1(FY)+' l3 3 l6 -6.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+       : k==='r' ? '<path d="M'+cx+' '+f1(FY-5)+' v9.5 m-4 -4 l4 4 l4 -4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+       : '<circle cx="'+cx+'" cy="'+f1(FY)+'" r="3.2" fill="#fff"/>');
+    tx(cx,FY+32,f[2],tc,10,700,'middle'); tx(cx,FY+55,f[3],(k==='s')?K:tc,16,600,'middle'); tx(cx,FY+73,f[4],MU,11,500,'middle'); });
+  var df='<defs><pattern id="pxhx2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="'+R+'" fill-opacity=".10"/><rect width="2.4" height="6" fill="'+R+'" fill-opacity=".5"/></pattern>'
+    +Object.keys(gid).map(function(id){ var c=gid[id];
+    return '<linearGradient id="'+id+'" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="'+c+'" stop-opacity=".42"/><stop offset=".5" stop-color="'+c+'" stop-opacity=".2"/><stop offset="1" stop-color="'+c+'" stop-opacity=".36"/></linearGradient>'; }).join('')+'</defs>';
+  function kpi(l,v,c){ return '<div style="display:flex;align-items:baseline;gap:9px"><span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;color:'+MU+'">'+l+'</span><b style="font-size:17px;font-weight:700;color:'+(c||K)+'">'+v+'</b></div>'; }
+  return { ok:true, html:(note?('<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border:1px solid #F5D98B;border-radius:8px;padding:7px 11px;margin:0 0 8px">'+e(note)+'</div>'):'')
+    +'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+    +'<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px 80px;padding:16px 12px 0">'+kpi('รายได้',pxSkM(rev))+kpi('ลูกค้า',Math.round(sp.pax||0).toLocaleString()+' คน')
+      +(C ? kpi('EBITDA รวม',(C.eb<0?neg(C.eb):pxSkM(C.eb)),(C.eb<0)?R:GD) : kpi('กำไรระดับทริป',P(a3),GD))+'</div>'
+    +'<div style="overflow-x:auto"><svg viewBox="0 0 '+W+' '+Math.ceil(Hh)+'" role="img" aria-label="แผนภาพเส้นไหล รายได้ ต้นทุน และกำไร" style="display:block;width:100%;min-width:1100px;height:auto;font-family:inherit;font-variant-numeric:tabular-nums">'+df+gd+rb+nd+tt+'</svg></div></div>'
+    +'<div style="font-size:11px;color:#64748B;padding:6px 4px 8px">สีเขียว = เงินที่ยังเหลือ · สีแดง = ต้นทุนที่หักออกในขั้นนั้น · ความสูงของแท่ง = จำนวนเงิน · % คือสัดส่วนต่อรายได้ทัวร์'
+      +(sp.cmp?(' · % ข้างโปรแกรม = เทียบ '+e(sp.cmp)):'')+(hasOi?' · สีเหลือง = รายได้อื่น ไม่ผ่านการหักต้นทุนทัวร์':'')+(loss?' · แท่งลายขีด = ส่วนที่กำไรจากทริปจ่ายไม่พอ':'')+' · ตัวเลขชุดเดียวกับตาราง</div>' };
 }
 /* Profit by step · จบที่กำไรระดับทริป */
 function pxSankey(e, M){
@@ -35202,10 +35502,12 @@ function pxForecast(e){
   var _fcSk='', _fcHide=false;
   if(pxStViewGet()==='s'){
     var _ln={}; PX_ST_OP.forEach(function(dn){ _ln[dn[0]]=Vln(dn[0]).c; });
+    if(typeof PX_ST_WG!=='undefined') PX_ST_WG.forEach(function(dn){ _ln[dn[0]]=Vln(dn[0]).c; });   /* §pxFlowDet · รายการย่อยของค่าจ้าง */
     var _cen=null;
-    if(hasCen && cv){ var _fx=0, _ct=0;
-      PX_FC_CEN.forEach(function(c){ if(c[2] || c[0]==='bm') return; var v=+cv[c[0]]||0; if(c[3]==='f') _fx+=v; else _ct+=v; });
-      _cen={ fx:_fx, ct:_ct, mt:DP.c+(+cv.bm||0), oi:oiV, core:CORE, eb:EB }; }
+    if(hasCen && cv){ var _fx=0, _ct=0, _fxL=[], _ctL=[], _bm=(+cv.bm||0);
+      PX_FC_CEN.forEach(function(c){ if(c[2] || c[0]==='bm') return; var v=+cv[c[0]]||0; if(c[3]==='f'){ _fx+=v; _fxL.push([c[1],v]); } else { _ct+=v; _ctL.push([c[1],v]); } });
+      _cen={ fx:_fx, ct:_ct, mt:DP.c+_bm, oi:oiV, core:CORE, eb:EB, fxL:_fxL, ctL:_ctL,
+             mtL:(_bm>0 ? [['ค่าเสื่อมเรือที่หักไว้',DP.c],['ซ่อมจริงส่วนที่เกินค่าเสื่อม',_bm]] : []) }; }
     var _fr=pxFlow(e, { rev:REV.c, op:OP.c, wage:WG.c, dep:DP.c, pax:PAX.c, n:V(function(T){ return T.n; }).c, ln:_ln,
       prev:{ rev:REV.p, op:OP.p, wage:WG.p }, cmp:pLbl.slice(0,3), cen:_cen,
       fams:Object.keys(famK).map(function(k){ var X=V(function(T,M){ return (M.fam[k]||{}).rev||0; });
@@ -51920,7 +52222,7 @@ function pfmSlipsClose(){ _pfmSlipBk=null; const ov=document.getElementById('pfm
 function pfmSlipsRender(){
   const ov = document.getElementById('pfm-slipview'); if(!ov || !_pfmSlipBk) return;
   const b = (SB_BOOKINGS||[]).find(x => x.id===_pfmSlipBk); if(!b) return;
-  const ss = (b.paymentSlips||[]);
+  const ss = laPaySlips(b);   /* §tsPenFile */
   const e = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const tot = ss.reduce((s,x)=> s + (+x.amount||0), 0);
   const _mac = (typeof _bkV2IsMac==='function') ? _bkV2IsMac() : true;
@@ -52082,7 +52384,7 @@ function pfmPrintReport(){
     const bal = inv ? ((typeof acctInvoiceBalance==='function') ? acctInvoiceBalance(inv) : 0) : tot;
     const paid = Math.max(0, tot - bal);
     const pct  = tot>0 ? Math.round(paid/tot*100) : 0;
-    const ss   = (b.paymentSlips||[]);
+    const ss   = laPaySlips(b);
     const pays = inv ? (SB_PAYMENTS||[]).filter(p => p.invoiceId===inv.id && p.type!=='refund') : [];
 
     /* §pfmPrepay · ใบเครดิตที่จ่ายล่วงหน้า · นับเฉพาะก้อนที่รับแล้ว ไม่นับส่วนที่เหลือเป็นค้างชำระ */

@@ -14,6 +14,8 @@
      PUT    /v1/bookings/:id/noshow-charges/:date      one no-show decision (full | partial | none | postpone)
      DELETE /v1/bookings/:id/noshow-charges/:date
      GET    /v1/attachments/:id                        one file (opened on click; all of a pack in the print window)
+     POST   /v1/bookings/:id/penalty-files/:date       §tsPenFile · a penalty decision's evidence file (penalty_files in /v1/after-trip)
+     DELETE /v1/bookings/:id/penalty-files/:date/:attachment_id
 
    Scope state stays in the legacy globals (_tsPier, _tsRoute, _tsVatF) so the legacy
    chip handlers (tsPickPier / tsPickRoute / tsPickVat) keep working. Writes are server
@@ -242,11 +244,17 @@
     var cur = lastView; if(!cur) return Promise.resolve();
     var items = [];
     if(kind === 'ref') cur.ref.forEach(function(r){ (r.b.attachments || []).forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: r.voucher + ' · ' + agentName(r) + ' · ' + f.name }); }); });
+    else if(kind === 'pen') cur.pens.forEach(function(x){   /* §tsPenPack · one case after another: decision, amount, note and who decided, then its files */
+      var d = x.dec, DL = { full: 'เก็บเต็ม', partial: 'เก็บบางส่วน', none: 'ไม่ชาร์จ', postpone: 'เลื่อนวัน' };
+      var res = d ? ((DL[d.decision] || d.decision || '') + (d.decision === 'postpone' ? '' : ' · ' + money(d.amount))) : 'ยังไม่ตัดสิน';
+      var head = x.r.voucher + ' · ' + (x.r.b.lead_pax || '—') + ' · ' + agentName(x.r) + ' · ผลตัดสิน ' + res + (d && d.note ? ' · หมายเหตุ: ' + d.note : '') + (d && d.by ? ' · ตัดสินโดย ' + d.by : '');
+      x.files.forEach(function(f, k){ items.push({ id: f.id, mime: f.mime, cap: head + ' · ' + (k + 1) + '/' + x.files.length + ' ' + (f.name || 'ไฟล์') + (f.by ? ' · แนบโดย ' + f.by : '') }); });
+    });
     else cur.slips.forEach(function(x){ x.files.forEach(function(f){ items.push({ id: f.id, mime: f.mime, cap: x.r.voucher + ' · ' + f.cap }); }); });
     if(!items.length) return Promise.resolve();
     var w = window.open ? window.open('', '_blank') : null;
     return Promise.all(items.map(function(it){ return fetchBlob(it.id).then(function(b){ it.url = URL.createObjectURL(b); it.type = b.type || it.mime; }, function(){ it.url = ''; }); })).then(function(){
-      var title = (kind === 'ref' ? 'Reference pack ' : 'Slip pack ') + cur.docNo;
+      var title = (kind === 'ref' ? 'Reference pack ' : kind === 'pen' ? 'หลักฐานประกอบคำตัดสิน · ยกเลิก / เลื่อนวัน ' : 'Slip pack ') + cur.docNo;
       var body = items.map(function(it){
         var img = it.url && /^image\//.test(it.type || '');
         return '<figure style="break-inside:avoid;margin:0 0 18px"><figcaption style="font:12px sans-serif;margin-bottom:4px">' + esc(it.cap) + '</figcaption>'
@@ -410,7 +418,9 @@
     }
     var noSlipRows = collect.filter(function(c){ return keep[c.booking_id] && n(c.no_slip) > 0; }).length;
     var no = docNo(date, st);
-    lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds };
+    var after = roster.after || {}, pens = kept.filter(function(r){ var a = after[r.id]; return a && (a.penalty_files || []).length; })
+      .map(function(r){ var a = after[r.id]; return { r: r, dec: a.noshow || null, files: a.penalty_files.map(function(f){ return { id: f.id, name: f.name || f.id, mime: f.mime || '', by: f.by || '' }; }) }; });
+    lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds, pens: pens };
     return {
       state: st, scoped: !!(st.pier || st.route || st.vat), docNo: no, keep: keep, inScope: inScope, kept: kept, serverScope: sv ? sv.SC : null, nAllServer: sv ? sv.nAll : null,
       cancelled: sv && sv.cancelled ? sv.cancelled : (roster.cancelled || []).filter(function(r){ return scopeKeep(st, r.routeId) && vatKeep(st, r); }),
@@ -419,7 +429,8 @@
       movedListed: Array.isArray(d.moved_rows),
       nVat: nVat, nNoVat: sv ? sv.nNoVat : inScope.length - nVat, vatGap: sv && sv.vatGap ? sv.vatGap : vatGap(inScope), after: roster.after || null, vans: roster.vans || {},
       ref: ref, nRefFiles: ref.reduce(function(s, r){ return s + (r.b.attachments || []).length; }, 0),
-      slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows, packServer: packFromServer
+      slips: slips, nSlipFiles: slips.reduce(function(s, x){ return s + x.files.length; }, 0), slipPending: pendingIds.length, noSlipRows: noSlipRows, packServer: packFromServer,
+      pens: pens, nPenFiles: pens.reduce(function(s, x){ return s + x.files.length; }, 0)
     };
   }
 

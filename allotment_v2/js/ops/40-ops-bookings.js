@@ -246,7 +246,10 @@
     var r = {};
     var c = ob.cancellation;
     if(c){
-      r.cancellation = { category: c.category, categoryLabel: catLabel(c.category), group: c.group, note: c.note || '', reason: c.note || '',
+      /* parity G1 (2026-11-26) · legacy's cancellation.reason is the display text (bkV2CancelLabel + ' · ' + note, cxwSave / the cancel
+         modal), which the pier and van check-in rows print after "ยกเลิก <when> · <who>" (ckStrandWhy): the server keeps it as cancellation_reason */
+      var why = ob.cancellation_reason || (c.category ? catLabel(c.category) + (c.note ? ' · ' + c.note : '') : (c.note || ''));
+      r.cancellation = { category: c.category, categoryLabel: catLabel(c.category), group: c.group, note: c.note || '', reason: why,
                          chargeType: c.charge_type, chargeAmount: +c.charge_amount || 0, at: c.at, by: c.by || '' };
       r.cancelCategory = c.category; r.cancelledAt = c.at;
     }
@@ -607,7 +610,10 @@
       if(seen[ob.id] === s) return false;
       mergeInto(cur, ob); seen[ob.id] = s; return true;
     }
-    list.push(fromServer(ob)); seen[ob.id] = s; return true;
+    // parity G2 · at its place in legacy's booking-id order (bookingV2LegacyOrder), not at the end
+    var nb = fromServer(ob), at = list.length;
+    if(typeof bookingV2LegacyOrder === 'function'){ at = 0; while(at < list.length && bookingV2LegacyOrder(list[at], nb) <= 0) at++; }
+    list.splice(at, 0, nb); seen[ob.id] = s; return true;
   }
   /* §opsVersion · after 409 stale_version: the server's copy replaces this one, whatever was merged
      before · then the screen is redrawn so the person sees what changed and can do it again */

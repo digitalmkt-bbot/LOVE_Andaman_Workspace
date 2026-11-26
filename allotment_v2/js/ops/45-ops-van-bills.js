@@ -192,7 +192,10 @@
   }
   /* the codes of one line, as little chips with their money (legacy: the line's code map; "นอก" for the typed lines) */
   function codeChips(g){
-    var out = (g.by_code || []).map(function(c){
+    /* parity H3 · legacy vbAggP draws the codes in the order the owner's rows first use them (Object.keys(g.code)): the server's code_order */
+    var ord = Array.isArray(g.code_order) ? g.code_order : null, list = (g.by_code || []).slice();
+    if(ord) list.sort(function(x, y){ var i = ord.indexOf(x.code), j = ord.indexOf(y.code); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });
+    var out = list.map(function(c){
       return '<span class="vbx-cd" style="background:' + codeCol(c.code) + '">' + esc(c.code) + '</span>' + (n(c.bill) ? ('<span class="vbx-cdv">' + N(c.bill) + '</span>') : '');
     });
     if(g.extra_totals && n(g.extra_totals.vans)) out.push('<span class="vbx-cd" style="background:#5B6570">นอก</span>' + (n(g.extra_totals.bill) ? ('<span class="vbx-cdv">' + N(g.extra_totals.bill) + '</span>') : ''));

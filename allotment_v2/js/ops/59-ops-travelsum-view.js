@@ -107,9 +107,12 @@
     var cmp = function(x, y){ return sortAZ(routeName(x.routeId), routeName(y.routeId)) || ((x.cxlRow ? 1 : 0) - (y.cxlRow ? 1 : 0)) || sortAZ(agName(x.b), agName(y.b)) || (zoneOf(x) - zoneOf(y)) || sortAZ(x.b.voucher_ref || '', y.b.voucher_ref || ''); };
     /* Legacy tsMvRows: a booking moved off the day, as it left (route, pax). Counts nothing; its money went with it. */
     function mv(m){
-      var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone };
+      /* parity G4 · legacy tsMvRows draws the booking (hotel, room, area, zone) and the van and boat of the snapshot it left (O.vanId, O.boatId) */
+      var b = { id: m.booking_id, external_id: m.code, code: m.code, voucher_ref: m.voucher_ref, agent_id: m.agent_id || '', lead_pax: m.lead_pax, lead_phone: m.lead_phone,
+        hotel_name: m.hotel_name || '', room_number: m.room_number || '', pickup_area: m.pickup_area || '' };
       var why = [m.to_date ? 'เลื่อนไป ' + call('ckDayShortTh', [m.to_date], m.to_date) : 'ย้ายวันออกไป', call('ckShortDay', [m.at], ''), m.by || ''].filter(Boolean).join(' · ');
-      return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {} }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
+      return { id: m.booking_id, b: b, t: { route_id: m.route_id || '', pax: m.pax || {}, pax_total: n(m.pax_total), operations: {}, mvVan: m.van_id || '', mvBoat: m.boat_id || '' }, routeId: m.route_id || '', voucher: m.voucher_ref || '—',
+        mvZone: m.zone_group || '',
         a: null, c: null, dec: null, ns: null, ev: [], cxlRow: true, mvRow: true, booked: n(m.pax_total), trav: 0, pb: paxBreak(m.pax), clean: clean,
         amount: null, isCase: false, pend: false, due: false, cotOpen: false, mvTo: m.to_date || '', mvWhy: m.why_text || why };
     }
@@ -209,7 +212,9 @@
     var packs = '<button class="h4-gh" data-ops-ts-refpack="1" onclick="laOps.travelRows.printPack(\'ref\')" title="พิมพ์เอกสารประกอบของชุดนี้ · ' + V.ref.length + ' ใบ">เอกสาร <b>' + V.nRefFiles + '</b></button>'
       + (V.slipPending
         ? '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.slipsLoad()" title="อ่านสลิปของ ' + V.slipPending + ' ใบที่มีเงินเข้า">โหลดสลิป <b>' + V.slipPending + '</b></button>'
-        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>');
+        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>')
+      /* §tsPenPack (lk-inbox c0a2f5c6) · the penalty-decision evidence as its own pack, after the others; none when no case has a file */
+      + (V.nPenFiles ? '<button class="h4-gh" data-ops-ts-penpack="1" onclick="laOps.travelRows.printPack(\'pen\')" title="พิมพ์หลักฐานประกอบคำตัดสิน (ยกเลิก / เลื่อนวัน) · ' + V.pens.length + ' เคส">หลักฐาน <b>' + V.nPenFiles + '</b></button>' : '');
     html = html.replace('<button class="h4-pri"', packs + '<button class="h4-pri"');
     return html;
   }
@@ -275,8 +280,9 @@
           + (dec ? '<button class="ts-db del" onclick="tsClear(\'' + id + '\',\'' + d + '\')">ล้าง</button>' : '')
           + '</div>'
           + (part ? '<div class="ts-tel" style="margin:5px 0 4px;line-height:1.45;font-family:inherit">ตัดสินเฉพาะ<b>คนที่ไม่ได้ไป ' + e(lostW) + '</b> &middot; อีก <b>' + e(goW) + '</b> ที่เดินทางจ่ายตามปกติ</div>' : '')
-          + '<input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง"></td>'
-        + '<td class="c">' + (dec
+          + '<input id="ts-note-' + e(r.id) + '" class="ts-note" type="text" value="' + e(dec ? dec.note : '') + '" placeholder="หมายเหตุ / เลขอ้างอิง">'
+          + penRow(r.id, d, e) + '</td>'   /* §tsPenFile (lk-inbox 661db8cc) · the decision's evidence files, from the server's penalty_files */
+        + '<td class="c">' + penTag(r.id, d, e) + (dec
           ? '<span class="ts-chip ' + (DEC[dec.decision] || DEC.none)[1] + '">' + e(decLbl(dec)) + (dec.decision === 'postpone' ? '' : ' · ' + money(dec.amount)) + '</span>'
             + '<div class="ts-tel" style="margin-top:3px">' + e(dec.by || '') + (dec.at ? ' · ' + e(text(dec.at).slice(0, 16).replace('T', ' ')) : '') + '</div>'
           : '<span class="ts-chip r">รอตัดสิน</span>') + '</td></tr>';
@@ -685,8 +691,8 @@
   }
   /* Zone (legacy §tsManZone): the group the server judged (OWN / PK / KL / the raw zone) and the pickup area under it */
   function zoneCell(r){
-    var b = r.b, e = esc, zg = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || (r.mvRow ? '' : call('tsManZoneKey', [b, r.t && { date: dateOf() }], ''));
-    if(r.mvRow || !zg) return '<td class="ts-zone"><span style="color:var(--zn400)">&mdash;</span></td>';
+    var b = r.b, e = esc, zg = (r.sr && r.sr.zone_group) || (r.cxlSrv && r.cxlSrv.zone_group) || (r.mvRow ? (r.mvZone || '') : call('tsManZoneKey', [b, r.t && { date: dateOf() }], ''));
+    if(!zg) return '<td class="ts-zone"><span style="color:var(--zn400)">&mdash;</span></td>';
     var area = text(b.pickup_area || ''), zl = text(r.t && r.t.zone) && g('bookingV2ZoneLabel') ? window.bookingV2ZoneLabel(r.t.zone) : text(r.t && r.t.zone);
     var tag = '<span class="ts-ztag z-' + e(String(zg).toLowerCase()) + '">' + (zg === 'OWN' ? 'Own' : e(zg)) + '</span>';
     if(zg === 'OWN') return '<td class="ts-zone">' + tag + (area && b.hotel_name ? '<div class="ts-tel">' + e(area) + '</div>' : '') + '</td>';
@@ -695,10 +701,11 @@
   /* Total (legacy tsTotalOf + tsNetOf): what the trip charged plus what was sold on tour, and in brackets what the rate type says
      the trip should cost (the server's net, net_text, net_promo_id) */
   function totalCell(r, total, site){
-    var e = esc, sr = r.sr;
+    // parity G4 · legacy prints the net "(1×2,400)" under a cancelled row's total too (tsNetOf): the server's cancelled row carries it
+    var e = esc, sr = r.cxlRow ? r.cxlSrv : r.sr;
     if(r.mvRow) return '<td class="r ts-mono" style="font-weight:800;color:var(--zn400)">&mdash;</td>';
     var nr = '', tip = '';
-    if(sr && !r.cxlRow && ('net' in sr)){
+    if(sr && ('net' in sr)){
       var pl = sr.net_promo_id ? text(call('laPromoLabel', [call('laPromoById', [sr.net_promo_id], null)], sr.net_promo_id)) : '';
       nr = '<span class="ts-net" title="' + (sr.net != null ? ('ยอด Net ' + money(sr.net) + (pl ? (' · โปร: ' + e(pl)) : ' ตาม Rate Type')) : 'ไม่มีเรตใน Rate Type') + '">(' + (sr.net != null ? e(sr.net_text || '') : '&mdash;') + ')</span>'
         + (pl ? '<span class="ts-net" style="color:#9A5410" title="' + e(pl) + '"> PROMO</span>' : '');
@@ -734,7 +741,7 @@
           + (gX.length ? ' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ ' + gX.length + ' ใบ</b>' : '')
           + (gM.length ? ' · <b style="color:var(--pu700)">เลื่อนวันไปแล้ว ' + gM.length + ' ใบ</b>' : '') + '</span></div></td></tr>';
       }
-      var c = r.c, van = vanOf(t), boat = boatOf(t), pb = r.pb;
+      var c = r.c, van = r.mvRow ? t.mvVan : r.cxlRow ? '' : vanOf(t), boat = r.mvRow ? t.mvBoat : r.cxlRow ? '' : boatOf(t), pb = r.pb;   // parity G4 · legacy tsCxlRows van:'' boat:'' · tsMvRows the snapshot's
       var total = r.amount == null ? null : r.amount + n(c && c.sales && c.sales.total), site = n(c && c.sales && c.sales.total);
       if(r.cxlRow) total = r.mvRow ? null : n(b.total);
       if(!r.cxlRow && gS){
@@ -950,6 +957,39 @@
       redraw();
     }, function(e){ O.fail('Moved row not cleared', e); });
   };
+  /* §tsPenFile (lk-inbox 661db8cc) · evidence files of a penalty / cancel decision. Legacy keeps them on bk.paymentSlips (kind
+     'penalty:<date>'); the server keeps them apart (operation-backend migration 680), per booking and date, listed in /v1/after-trip's
+     penalty_files. Attach: POST /v1/bookings/:id/penalty-files/:date {attachment_id} (no If-Match: evidence added after the fact);
+     remove: DELETE /v1/bookings/:id/penalty-files/:date/:attachment_id, then the file itself (DELETE /v1/attachments/:id).
+     The legacy markup builders (tsPenFileRow, tsPenFileTag) are reused; they read tsPenFiles, answered here from the server. */
+  function penFiles(bkId, date){
+    var a = T() && T().afterRow ? T().afterRow(date, bkId) : null;
+    return ((a && a.penalty_files) || []).map(function(f){ return { id: f.id, name: f.name || f.id, mime: f.mime || '', size: n(f.size), by: f.by || '', at: f.at || '', kind: 'penalty:' + date }; });
+  }
+  function penRow(bkId, date, e){ return call('tsPenFileRow', [bkId, date, e], ''); }
+  function penTag(bkId, date, e){ return call('tsPenFileTag', [bkId, date, e], '').replace(/^<div style="margin-top:4px">/, '<div style="margin-bottom:4px">'); }
+  function penPick(bkId, date, inp){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')){ if(inp) inp.value = ''; return; }
+    var fs = Array.prototype.slice.call((inp && inp.files) || []); if(inp) inp.value = '';
+    if(!fs.length) return;
+    if(typeof window.pckSlipUpload !== 'function'){ alert('แนบไฟล์ไม่ได้ในหน้านี้'); return; }
+    fs.forEach(function(f){ window.pckSlipUpload(f, bkId, function(meta){
+      return O.queue(function(){ return O.call('POST', '/v1/bookings/' + enc(bkId) + '/penalty-files/' + enc(date), { attachment_id: meta.id }); })
+        .then(function(){ O.wrote('penalty-files'); redraw(); }, function(e){ O.fail('Evidence file was not attached', e); return dropUpload(meta.id); });
+    }); });
+  }
+  function penDrop(bkId, date, fid){
+    if(typeof window.laGuardEdit === 'function' && !window.laGuardEdit('operations')) return;
+    var f = penFiles(bkId, date).filter(function(x){ return x.id === fid; })[0]; if(!f) return;
+    if(!window.confirm('ลบไฟล์ "' + (f.name || fid) + '" ทิ้งถาวร?\n\nไฟล์จะถูกลบออกจากระบบ · คำตัดสินไม่เปลี่ยน')) return;
+    return O.queue(function(){ return O.call('DELETE', '/v1/bookings/' + enc(bkId) + '/penalty-files/' + enc(date) + '/' + enc(fid)); })
+      .then(function(){ O.wrote('penalty-files'); return dropUpload(fid); }, function(e){ O.fail('Evidence file was not removed', e); })
+      .then(redraw);
+  }
+  wrap('tsPenFiles', function(orig, bkId, date){ return penFiles(bkId, date); });
+  wrap('tsPenFilePick', function(orig, bkId, date, inp){ return penPick(bkId, date, inp); });
+  wrap('tsPenFileDrop', function(orig, bkId, date, fid){ return penDrop(bkId, date, fid); });
+  wrap('tsPenPackList', function(){ return []; });   /* §tsPenPack · printed as its own pack (laOps.travelRows.printPack('pen')), as the other packs here */
   wrap('tsCotSlipPick', function(orig, bkId, date, inp){ return cotSlipPick(bkId, date, inp); });
   wrap('tsCotSlipDrop', function(orig, bkId, date){ return cotSlipDrop(bkId, date); });
   O.onWrite(function(){ last = {}; });
