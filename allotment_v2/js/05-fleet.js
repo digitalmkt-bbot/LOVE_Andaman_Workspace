@@ -30754,17 +30754,32 @@ function faRenderParts(kind){
   var groups=[]; boats.forEach(function(b){ if(boatSel && boatSel!==b.id) return; var L=cntB(b.id); if(L.length) groups.push({b:b,rows:L}); });
   if(!boatSel||boatSel==='-'){ var L0=cntB('-'); if(L0.length) groups.push({b:null,rows:L0}); }
   groups.forEach(function(g){ g.rows.sort(function(a,z){ return (flPosRank(a.pos)-flPosRank(z.pos))||String(a.serial).localeCompare(String(z.serial)); }); });
+  /* §engSpareGrp (2026-11-26) · owner ดูรายการ "ไม่ได้ติดเรือ" ของหน้า Engines: "จัดแยกประเภทเครื่องยนต์ และ สถานะให้หน่อย"
+     เครื่องที่ไม่ได้ติดเรือ เดิมเรียงตามตำแหน่งเก่า (Port → Std) ซึ่งไม่มีความหมายแล้ว · ของพร้อมใช้ปนกับของเสีย คนละรุ่นปนกัน
+     → แบ่งกลุ่มย่อยตาม สถานะ (พร้อมใช้ → สำรอง → ซ่อมอยู่ → เสีย/ปลดระวาง) แล้วตามรุ่น (ยี่ห้อ + รุ่น) · มีหัวกลุ่มย่อยบอกจำนวน */
+  var _SPST=[['ready','พร้อมใช้','#0F6E56','#E4F3EC'],['spare','สำรอง','#185FA5','#E6F0FA'],['fixing','ซ่อมอยู่','#854F0B','#FAEEDA'],['broken','เสีย / ปลดระวาง','#A32D2D','#FCEBEB']];
+  var _spRank=function(r){ var st=(r.o&&r.o.retired===true)?'broken':(r.st==='damaged'?'broken':r.st); for(var i=0;i<_SPST.length;i++) if(_SPST[i][0]===st) return i; return 0; };
+  var _spModel=function(r){ return ((r.brand||'')+' '+((r.o&&r.o.model)||'')).trim()||'ไม่ระบุรุ่น'; };
+  if(kind==='eng') groups.forEach(function(g){ if(g.b) return;
+    g.rows.sort(function(a,z){ return (_spRank(a)-_spRank(z)) || _spModel(a).localeCompare(_spModel(z)) || String(a.serial).localeCompare(String(z.serial)); }); });
   var selId=K.sel();
   if(!selId || !P.some(function(r){ return r.id===selId; })){ var first=groups.length?groups[0].rows[0]:null; selId=first?first.id:null;
     if(kind==='eng') flSelEngId=selId; else if(kind==='gb') flSelGbId=selId; else flSelPropId=selId; }
-  var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">'+K.title+'</b><span style="font-size:11.5px;color:#8A8F9C">'+shown.length+' '+K.unit+' · ตามเรือ · Port → Std</span></div>'
+  var mid='<div class="fa-card"><div style="padding:12px 14px 10px"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:14px;font-weight:800">'+K.title+'</b><span style="font-size:11.5px;color:#8A8F9C">'+shown.length+' '+K.unit+' · ตามเรือ · Port → Std'+(kind==='eng'?' · ไม่ได้ติดเรือ: ตามสถานะและรุ่น':'')+'</span></div>'
     +'<input class="fa-q" style="width:100%;margin-top:8px" placeholder="ค้นหา serial…" value="'+faE(FA.q[kind]||'')+'" oninput="faPartFilter(\''+kind+'\',this.value)"></div>'
     +'<div class="fa-sc" id="fl-'+kind+'-listpanel">'
     +(groups.length?groups.map(function(g){
         var fx=g.rows.filter(function(r){ return r.st==='fixing'; }).length, bad=g.rows.filter(function(r){ return r.flags.length; }).length;
         var w=fx?(fx+' fixing'):(bad?(bad+' ต้องเช็ก'):'');
         return '<div class="fa-grp">'+(g.b?faAv(g.b,22):'<span style="width:22px;height:22px;border-radius:11px;border:1.5px dashed #B9BDC7;box-sizing:border-box"></span>')+'<span>'+faE(g.b?g.b.name:'ไม่ได้ติดเรือ')+'</span><em style="color:'+(fx?'#854F0B':'#A32D2D')+'">'+w+'</em></div>'
-          +g.rows.map(function(r){ return '<div data-q="'+faE(String(r.serial).toLowerCase()+' '+String(r.sub||'').toLowerCase())+'">'+faRow(r,selId,K.pick)+'</div>'; }).join(''); }).join('')
+          +g.rows.map(function(r,i){ var sh='';
+              if(kind==='eng' && !g.b){ var k=_spRank(r)+'|'+_spModel(r), pv=i?(_spRank(g.rows[i-1])+'|'+_spModel(g.rows[i-1])):'';   /* §engSpareGrp · หัวกลุ่มย่อย สถานะ · รุ่น */
+                if(k!==pv){ var S=_SPST[_spRank(r)], n=g.rows.filter(function(x){ return (_spRank(x)+'|'+_spModel(x))===k; }).length;
+                  sh='<div style="display:flex;align-items:center;gap:7px;padding:6px 14px 5px;background:#fff;border-bottom:1px solid #F1F0EB;font-size:11.5px">'
+                    +'<span style="font-weight:700;color:'+S[2]+';background:'+S[3]+';border-radius:999px;padding:1px 8px;white-space:nowrap">'+S[1]+'</span>'
+                    +'<b style="font-weight:700;color:#3E4658;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+faE(_spModel(r))+'</b>'
+                    +'<span class="mono" style="color:#8A8F9C">'+n+'</span></div>'; } }
+              return sh+'<div data-q="'+faE(String(r.serial).toLowerCase()+' '+String(r.sub||'').toLowerCase())+'">'+faRow(r,selId,K.pick)+'</div>'; }).join(''); }).join('')
       :'<div style="padding:28px;text-align:center;color:#8A8F9C;font-size:12.5px">ไม่มีรายการในกลุ่มนี้</div>')
     +'</div></div>';
   var sel=P.filter(function(r){ return r.id===selId; })[0]||null;
