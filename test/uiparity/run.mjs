@@ -79,6 +79,11 @@ kids.push({ kill: () => browser.close() });
 // ── one side = one page + its own buffers ──
 async function side(name) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'th-TH', timezoneId: 'Asia/Bangkok' });
+  // Legacy takes "today" from the browser's clock in UTC (04-data-core.js fmt = toISOString), so before 07:00
+  // Bangkok it shows yesterday. Then both sides' browsers start at 10:00 Bangkok of today's Bangkok date and
+  // run on from there, so a run need not wait for 07:00. The servers keep the real clock: same Bangkok date.
+  const bkk = new Date(Date.now() + 7 * 3600e3);
+  if (bkk.getUTCHours() < 7) await ctx.clock.install({ time: new Date(bkk.toISOString().slice(0, 10) + 'T10:00:00+07:00') });
   const S = { name, ctx, errors: [], failed: [], writes: [], dialogs: [], pending: 0 };
   if (name === 'new') {
     await ctx.addInitScript((t) => { try { sessionStorage.setItem('la_ops_token', t); } catch (_) {} }, TOKEN);
