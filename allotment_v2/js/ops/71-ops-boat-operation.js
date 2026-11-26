@@ -209,6 +209,11 @@
         ovnHold: { bkId: clientBookingId(u.ovn_hold.booking_id), from: u.ovn_hold.from, to: u.ovn_hold.to, routeId: u.ovn_hold.route_id || '' } });
       else out.unavailable.push({ boat: b, reason: u.reason, overdue: !!u.overdue, jobNos: u.job_nos || [] });
     });
+    /* parity M1 (2026-11-27) · legacy walks BOATS and pushes in that order (bop2FleetStatus): the panel lists Aluminous1, Achilles,
+       BMP, Artemis… as BOATS has them, not the server's name order */
+    var at = (typeof BOATS !== 'undefined' && Array.isArray(BOATS)) ? BOATS : [];
+    var byBoats = function(x, y){ return at.indexOf(x.boat) - at.indexOf(y.boat); };
+    out.assigned.sort(byBoats); out.available.sort(byBoats); out.unavailable.sort(byBoats);
     return ok ? out : sc(orig, self, [dateStr]);   // a boat the browser does not know: legacy's own list
   });
   wrapGlobal('bop2FreeByPier', function(orig, self, dateStr){
@@ -245,6 +250,20 @@
     var day = ds || ((typeof _bop2 !== 'undefined' && _bop2 && _bop2.selDate) || (typeof TODAY_STR !== 'undefined' ? TODAY_STR : O.today()));
     ensure([day], function(){ if(document.getElementById('bop2ar-boat') && typeof window.bop2UpdateAssignBoatOpts === 'function') window.bop2UpdateAssignBoatOpts(); });
     return sc(orig, self, [].slice.call(arguments, 2));
+  });
+  /* parity M1 (2026-11-27) · the drag board's day header "13 boats · N pax" and its chips count the heads on each boat from
+     the bookings this browser holds (legacy bopDOrigPax: bkBoatIdsOn + bkBoatPaxOnBoat over every booking). In ops mode the
+     browser holds a window of bookings, so a day outside it read 0 (2 Dec: LKC66's charter, 32 pax). The server's booked
+     heads per boat (boat-operation booked.pax, the same rule: splits, else the dispatch boat, else the charter boat) answer
+     instead once the day is here; until then legacy's own count runs. */
+  wrapGlobal('bopDOrigPax', function(orig, self, d){
+    var day = enabled() ? dayOf(d) : null;
+    if(!day){ ensure([d]); return orig.call(self, d); }
+    var m = {};
+    ['assigned', 'available', 'unavailable'].forEach(function(k){
+      (day[k] || []).forEach(function(x){ var p = x && x.booked ? +x.booked.pax || 0 : 0; if(p > 0) m[x.boat_id] = (m[x.boat_id] || 0) + p; });
+    });
+    return m;
   });
   wrapGlobal('bop2RenderHeatmapRow', function(orig, self){ return sc(orig, self, [].slice.call(arguments, 2)); });
   wrapGlobal('bop2RouteDaysNeedingBoats', function(orig, self){ return sc(orig, self, [].slice.call(arguments, 2)); });

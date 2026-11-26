@@ -29,3 +29,20 @@ test('a return-only job still counts its whole return load', () => {
   assert.deepEqual([out.aggRet['veh3~r2'].pax, out.aggRet['veh3~r2'].bk, out.aggRet['veh3~r2'].sx], [6, 2, 1]);
   assert.equal(out.agg['veh3~r2'], undefined);
 });
+
+test('parity M2: one fleet side only (legacy §rnVan2 laFleetRouteOk): a Ranong programme is left out of the Phuket side', () => {
+  const ctx = { console, Object, Array, String, Number, JSON, Math };
+  ctx.window = ctx;
+  ctx.laFleetRouteOk = (rid) => rid !== 'rRN';
+  const day = { jobs: [{ van_id: 'v1', route_id: 'r6', has_out: true, pax: 4, bookings: 1, struck: 0 }, { van_id: 'v2', route_id: 'rRN', has_out: true, pax: 9, bookings: 1, struck: 0 }],
+    unassigned: { pax: 96, by_route: [{ route_id: 'r6', pax: 39 }, { route_id: 'rRN', pax: 57 }] },
+    return_unarranged: [{ route_id: 'rRN', pax: 2, lead_pax: 'X' }], self_arrive: [{ route_id: 'rRN', booking_id: 'b1' }, { route_id: 'r6', booking_id: 'b2' }], struck: 0 };
+  ctx.laOps = { enabled: () => true, vanJobs: { dayRead: () => day, jobKey: (d, k) => d + '::' + k } };
+  vm.runInNewContext(SOURCE, ctx);
+  const out = ctx.opsVanJobsList(D);
+  assert.equal(out.unTot, 39, 'a wrong 96 counts the Ranong side');
+  assert.deepEqual(Object.keys(out.unByRoute), ['r6']);
+  assert.deepEqual(Object.keys(out.agg), ['v1~r6']);
+  assert.equal(out.unRet, 0);
+  assert.deepEqual(out.selfWarn.map((r) => r.vc), ['b2']);
+});
