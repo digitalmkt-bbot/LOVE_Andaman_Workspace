@@ -220,7 +220,7 @@ const PROBE = {
     return {
       title: norm((root.querySelector('h1,h2,.page-title,.view-title') || {}).innerText || '').slice(0, 80),
       lines: lines.slice(0, opt && opt.maxLines || 600), lineCount: lines.length,
-      rows: root.querySelectorAll('tbody tr, tr').length, cards: root.querySelectorAll('[class*="card"]').length,
+      rows: [...root.querySelectorAll('tr')].filter(vis).length, // visible rows only: a hidden table another page left filled is not on the screen cards: root.querySelectorAll('[class*="card"]').length,
       inputs: root.querySelectorAll('input, select, textarea').length,
       empty: lines.length === 0, buttons, toggles: toggles.slice(0, 80), dialogs: dialogs.slice(0, 40), selects: selects.slice(0, 8), checks, modal,
     };
