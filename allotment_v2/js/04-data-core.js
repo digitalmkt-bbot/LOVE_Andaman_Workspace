@@ -11369,8 +11369,22 @@ function bop2RenderHeatmapRow(route, dates){
     const selClass = isSel ? ' sel' : '';
 
     // boats that can actually run that day (status available) — a boat broken/unavailable after being assigned doesn't count
-    const usableBoats = boats.filter(bo => bo.boat && (typeof getCurStatus!=='function' || getCurStatus(bo.boat,d).s==='available')
+    /* §bopRanFix (2026-11-26) · owner ดูช่อง Oceanus 9 พ.ย. (ลายขีด + ประแจ): "ตัวเลขจำนวน ลค ก็ควรขึ้นปกติ และอาจจะต้องมีสัญลักษณ์บอกก็พอ อันนี้งง"
+       เรือวิ่งทริปวันนั้นแล้ว เจอปัญหาตอนเย็น เปิดงานซ่อมวันเดียวกัน → สถานะเป็น Fixing ตั้งแต่วันนั้น → ช่องขึ้น "ต้องเปลี่ยนเรือ" ทั้งที่ทริปจบไปแล้ว
+       ถ้ามีหลักฐานว่าเรือวิ่งวันนั้นจริง (บันทึกน้ำมัน/ชั่วโมงเครื่องของวันนั้น · หรือสถานะจดว่า "วิ่งวันนี้แล้ว") = นับเป็นเรือที่ใช้ได้ของวันนั้น
+       ช่องแสดงตัวเลขปกติ + ประแจเล็กข้างตัวเลข บอกว่าเริ่มซ่อมวันนั้นหลังวิ่ง · วันในอนาคตไม่เข้าเงื่อนไขนี้ (ยังต้องเปลี่ยนเรือ) */
+    const _ranFix = (bo) => { try{
+        if(!bo.boat || d > TODAY_STR) return false;
+        const st = (typeof getCurStatus==='function') ? getCurStatus(bo.boat,d) : null;
+        if(!st || st.s==='available') return false;
+        const fd = (typeof FL_DAILY!=='undefined' && FL_DAILY && FL_DAILY[d]) ? FL_DAILY[d][bo.boat.id] : null;
+        const logged = !!(fd && ((+fd.fuel>0) || (fd.trips && Object.keys(fd.trips).length)));
+        return logged || (String(st.note||'').indexOf('วิ่งวันนี้แล้ว')>=0 && st.from===d);
+      }catch(_){ return false; } };
+    const usableBoats = boats.filter(bo => bo.boat && (typeof getCurStatus!=='function' || getCurStatus(bo.boat,d).s==='available' || _ranFix(bo))
       && !bop2PierIssue(bo.boat, route.id, d));                                 /* §bopPier · อยู่อีกท่า = วิ่งไม่ได้เหมือนกัน */
+    const _fxBoats = boats.filter(_ranFix);
+    const _fxMark = _fxBoats.length ? `<span title="${escapeHTML(_fxBoats.map(b=>b.boat.name).join(', '))} · วิ่งทริปวันนี้แล้ว เริ่มซ่อมหลังวิ่ง" style="font-size:8px;margin-left:2px;vertical-align:1px">&#128295;</span>` : '';
 
     // ─── ALERT STATE · boat WAS assigned but is now broken/unavailable → must reassign (flag even with 0 pax — the schedule is invalid) ───
     if(boats.length > 0 && usableBoats.length === 0){
@@ -11422,7 +11436,7 @@ function bop2RenderHeatmapRow(route, dates){
       const dots = boats.map(b => bop2PierIssue(b.boat, route.id, d)                /* §bopPier */
         ? `<span title="${escapeHTML(b.boat.name)} is at ${bop2PierEn(bop2PierIssue(b.boat, route.id, d))} this day" style="font-size:8px;line-height:5px;color:#C44A36;font-weight:800">!</span>`
         : `<span style="width:5px;height:5px;border-radius:50%;background:${b.isCharter?'#6B289A':bop2BoatColor(b.boat.id)};${b.isCharter?'box-shadow:inset 0 0 0 1px #fff':''}"></span>`).join('');
-      cellInner = `<div style="font-family:Manrope,sans-serif;font-size:11px;color:${color};font-weight:700;line-height:1">${paxStr}</div>${dots ? `<div style="display:flex;gap:1px;margin-top:2px">${dots}</div>` : ''}`;
+      cellInner = `<div style="font-family:Manrope,sans-serif;font-size:11px;color:${color};font-weight:700;line-height:1">${paxStr}${_fxMark}</div>${dots ? `<div style="display:flex;gap:1px;margin-top:2px">${dots}</div>` : ''}`;
     } else {
       // Week: pax number + full boat names stacked
       const paxStr = (hasCharter && al.availableCapacity === 0) ? '⚓ Charter' : `${al.seatsConsumed}`;
@@ -11433,7 +11447,7 @@ function bop2RenderHeatmapRow(route, dates){
         return `<div${_wp ? ` title="${escapeHTML(b.boat.name)} is at ${bop2PierEn(_wp)} this day - change the boat"` : ''} style="font-size:9px;color:${c};font-weight:600;${_wp?'text-decoration:line-through;':''}line-height:1.15;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ic}${escapeHTML(b.boat.name)}</div>`;
       }).join('');
       const more = boats.length > 3 ? `<div style="font-size:8px;color:${color};font-style:italic">+${boats.length-3}</div>` : '';
-      cellInner = `<div style="font-family:Manrope,sans-serif;font-size:13px;color:${color};font-weight:700;line-height:1">${paxStr}</div><div style="margin-top:3px;width:100%">${names}${more}</div>`;
+      cellInner = `<div style="font-family:Manrope,sans-serif;font-size:13px;color:${color};font-weight:700;line-height:1">${paxStr}${_fxMark}</div><div style="margin-top:3px;width:100%">${names}${more}</div>`;
     }
 
     const _wxClosed=(typeof bkV2IsWeatherClosed==='function')&&bkV2IsWeatherClosed(route.id,d);
