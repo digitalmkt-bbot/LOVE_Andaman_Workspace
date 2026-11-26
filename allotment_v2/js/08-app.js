@@ -6717,10 +6717,18 @@ function tmBkMiss(b){ var o={en:0,id:0,dob:0};
     if(!tmEnDef(b.id,p)) o.en++; if(!tmIdOk(tmGet(b.id,p.key,'idNo'))) o.id++; if(!tmDobOk(tmGet(b.id,p.key,'dob'))) o.dob++; });
   return o; }
 function tmMissText(b){ var m=tmBkMiss(b), a=[]; if(m.en) a.push('ชื่ออังกฤษ '+m.en); if(m.id) a.push('เลขบัตร '+m.id); if(m.dob) a.push('วันเกิด '+m.dob); return a.join(' · '); }
-/* §btFull2 · แถบสถานะ 3 ช่องใต้ปุ่ม ตม. · ขึ้นครบทั้ง 3 เสมอ (เขียว ✓ / แดง ✗N) · ครบทั้งใบ = ไม่ต้องขึ้น */
-function tmMissHtml(b){ if(!b) return ''; var st=tmBkStatus(b); if(!st.n || !st.miss) return ''; var m=tmBkMiss(b);
-  var one=function(lb,full,n){ return n ? ('<i class="no" title="ยังขาด'+full+' '+n+' คน">'+lb+' <b>&#10007;'+n+'</b></i>') : ('<i class="ok" title="'+full+'ครบทุกคน">'+lb+' &#10003;</i>'); };
-  return one('ชื่อ EN','ชื่อ-สกุล อังกฤษ',m.en)+one('เลขบัตร','เลขบัตรประชาชน',m.id)+one('วันเกิด','วันเกิด',m.dob); }
+/* §btFull3 (2026-11-26) · owner ดู §btFull2 แล้ว: "ตอนนี้มันรกมาก… ต้องกระชับกว่านี้ คือถ้ามันมี 6 คอลัมน์ ก็ เครื่องหมาย 6 อันเรียงกันเลย User จดจำได้เองว่าตำแหน่งไหนเป็นอะไร"
+   เครื่องหมาย 6 ช่อง เรียงตามคอลัมน์ในตารางกรอก: ชื่อไทย · ชื่ออังกฤษ · สัญชาติ | เลขบัตร · เลขหลังบัตร · วันเกิด (ค่าที่นับ = ค่าเดียวกับที่ตารางแสดง รวมค่าตั้งต้นจากใบจอง)
+   เขียว = ครบทุกคน · เหลืองครึ่งช่อง = มีบางคน · แดง = ยังไม่มีเลย (ช่องบังคับ: ชื่ออังกฤษ เลขบัตร วันเกิด) · กรอบเทา = ว่างแต่ไม่บังคับ · ชี้แล้วบอกว่าขาดกี่คน */
+function tmMissHtml(b){ if(!b) return ''; var n=0, c=[0,0,0,0,0,0];
+  try{ tmPaxList(b).forEach(function(p){ if(!(p.name||'').trim() && !p.lead && !p.pad) return; n++;
+    if(tmThDef(b.id,p)) c[0]++; if(tmEnDef(b.id,p)) c[1]++; if(tmNatDef(b.id,p,b)) c[2]++;
+    if(tmIdOk(tmGet(b.id,p.key,'idNo'))) c[3]++; if(tmGet(b.id,p.key,'idLaser')) c[4]++; if(tmDobOk(tmGet(b.id,p.key,'dob'))) c[5]++; }); }catch(_){ return ''; }
+  if(!n) return '';
+  var F=[['ชื่อไทย',0],['ชื่ออังกฤษ',1],['สัญชาติ',0],['เลขบัตร',1],['เลขหลังบัตร',0],['วันเกิด',1]];
+  return F.map(function(f,i){ var h=c[i], cls=(h>=n)?'ok':(h>0?'pt':(f[1]?'no':'op'));
+    var tip=f[0]+' · '+((h>=n)?('ครบ '+n+' คน'):(h>0?('มี '+h+' จาก '+n+' คน'):(f[1]?('ขาด '+n+' คน'):'ยังไม่ได้กรอก (ไม่บังคับ)')));
+    return '<i class="'+cls+'" title="'+tip+'"></i>'; }).join(''); }
 function tmBtnState(b){ var st=tmBkStatus(b); return !st.n?'':(st.miss===0?'ok':(st.ok===0?'zero':'miss')); }   /* §tmBtn2 */
 function tmChip(b, bare){ var st=tmBkStatus(b); if(!st.n) return '';
   var ok=(st.miss===0);
@@ -59939,7 +59947,7 @@ function bkOtherTrips(bk, date, rid){
   add(bk); _bkOrderLines(bk).forEach(function(x){ if(x.id!==bk.id) add(x); });
   return out.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
 }
-function bkOtherTripsChip(bk, date, rid){
+function bkOtherTripsChip(bk, date, rid, shortPop){
   if(!bk) return '';
   var L=bkOtherTrips(bk, date, rid); if(!L.length) return '';
   var esc=function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
@@ -59950,9 +59958,43 @@ function bkOtherTripsChip(bk, date, rid){
   var arr=pick.date>date?'→':pick.date<date?'←':'+';
   var tip='ทริปอื่นของลูกค้าคนนี้: '
     +L.map(function(x){ return dt(x.date)+' '+rn(x.rid)+(x.bk.id!==bk.id?' ('+code(x.bk)+')':''); }).join(' · ')+' · คลิกไปที่วันนั้น';
+  /* §btFull3 · แถวระนอง: ป้ายสั้นบอกแค่วัน · รายละเอียดลอยเป็น popup (ชี้หรือกด) */
+  if(shortPop) return '<span class="t2-nxt t2-nxp" data-nxt="'+esc(pick.date)+'" data-bk="'+esc(bk.id)+'" data-d="'+esc(date)+'" data-r="'+esc(rid)+'" onmouseenter="bkNxtPop(this)" onmouseleave="bkNxtPopOut()" onclick="event.stopPropagation();bkNxtPop(this,1)">'
+    +'<i>'+arr+'</i><span>'+esc(dt(pick.date))+'</span>'+(L.length>1?'<b>+'+(L.length-1)+'</b>':'')+'</span>';
   return '<span class="t2-nxt" data-nxt="'+esc(pick.date)+'" title="'+esc(tip)+'" onclick="event.stopPropagation();bkOtherTripGo(\''+esc(pick.date)+'\',\''+esc(code(pick.bk))+'\')">'
     +'<i>'+arr+'</i><span>'+esc(pick.date===date?'':dt(pick.date)+' ')+esc(rn(pick.rid))+'</span>'+(L.length>1?'<b>+'+(L.length-1)+'</b>':'')+'</span>';
 }
+/* §btFull3 · popup ลอยของป้ายทริปต่อเนื่อง · กล่องเดียวติดที่ body (ไม่โดนตารางตัด) · ชี้ = เปิดชั่วคราว · กด = ค้างไว้ · กดที่อื่น/เลื่อนหน้า = ปิด */
+function bkNxtPop(el, pin){
+  try{
+    var P=document.getElementById('bk-nxpop');
+    if(pin && P && P._el===el && P._pin){ bkNxtPopHide(); return; }
+    var A=(typeof SB_BOOKINGS!=='undefined'&&SB_BOOKINGS)||[], bk=A.find(function(x){ return x.id===el.getAttribute('data-bk'); }); if(!bk) return;
+    var date=el.getAttribute('data-d'), rid=el.getAttribute('data-r');
+    var esc=function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    var rn=function(id){ return String((typeof bkV2RouteShort==='function')?bkV2RouteShort(id):id).replace(/^Day Trip\s*-\s*/i,''); };
+    var dt=function(d){ var x=new Date(d+'T00:00'); return isNaN(x)?d:x.toLocaleDateString('en-GB',{day:'numeric',month:'short'}).replace('Sept','Sep'); };
+    var code=function(b){ return (typeof bkV2DisplayCode==='function'&&/^b2c_/.test(b.id))?bkV2DisplayCode(b):(b.voucherRef||b.id); };
+    var L=bkOtherTrips(bk,date,rid).concat([{bk:bk,date:date,rid:rid,me:1}]).sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:(a.me?-1:1); });
+    var h='<h4>ทริปของออเดอร์ '+esc(String(code(bk)).replace(/-\d+$/,''))+'</h4>'+L.map(function(x){
+      var tm=''; try{ if(typeof tmIsRanongRoute==='function' && tmIsRanongRoute(x.rid)){ var st=tmBkStatus(x.bk); if(st.n) tm=' · ตม. '+st.ok+'/'+st.n; } }catch(_){}
+      return '<div class="r"><b>'+esc(dt(x.date))+'</b><span class="t">'+esc(rn(x.rid))+'<small>'+esc(code(x.bk))+tm+'</small></span>'
+        +(x.me?'<span class="now">วันนี้</span>':('<span class="go" onclick="event.stopPropagation();bkNxtPopHide();bkOtherTripGo(\''+esc(x.date)+'\',\''+esc(code(x.bk))+'\')">ไปวันนั้น →</span>'))+'</div>'; }).join('');
+    if(!P){ P=document.createElement('div'); P.id='bk-nxpop'; document.body.appendChild(P);
+      P.addEventListener('mouseenter', function(){ clearTimeout(window._nxPopT); });
+      P.addEventListener('mouseleave', function(){ bkNxtPopOut(); });
+      document.addEventListener('click', function(ev){ var q=document.getElementById('bk-nxpop'); if(q && q.style.display!=='none' && !q.contains(ev.target) && !(ev.target.closest && ev.target.closest('.t2-nxp'))) bkNxtPopHide(); });
+      window.addEventListener('scroll', function(ev){ var q=document.getElementById('bk-nxpop'); if(q && !(ev.target && q.contains && ev.target.nodeType===1 && q.contains(ev.target))) bkNxtPopHide(); }, true);
+    }
+    clearTimeout(window._nxPopT);
+    P.innerHTML=h; P._el=el; P._pin=!!pin || (P._pin && P._el===el); P.style.display='block';
+    var r=el.getBoundingClientRect(), w=P.offsetWidth, hh=P.offsetHeight, x=Math.min(Math.max(8,r.left), window.innerWidth-w-8), y=r.bottom+6;
+    if(y+hh>window.innerHeight-8) y=Math.max(8, r.top-hh-6);
+    P.style.left=x+'px'; P.style.top=y+'px';
+  }catch(_){}
+}
+function bkNxtPopOut(){ clearTimeout(window._nxPopT); window._nxPopT=setTimeout(function(){ var P=document.getElementById('bk-nxpop'); if(P && !P._pin) bkNxtPopHide(); }, 180); }
+function bkNxtPopHide(){ var P=document.getElementById('bk-nxpop'); if(P){ P.style.display='none'; P._pin=false; P._el=null; } }
 // §splitOwn · แถวแยก (ไม่ใช่จุดหลัก) ที่จุดรับเป็นโซนมาเอง · ไม่ต้องมีรถไปรับ
 function bkV2SplitIsSelf(s){
   if(!s || s.main) return false;
@@ -61823,12 +61865,12 @@ function bkV2RenderTab2(){
                       return `<button class="t2-more t2-tmgo" data-tm="${_tms}" title="${_ok?'ข้อมูล ตม. ครบทุกคน · กดเพื่อดู/แก้':('ข้อมูล ตม. ยังไม่ครบ '+_st.miss+' คน · กดเพื่อกรอก')}" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block${_pxOpen?';transform:rotate(180deg)':''}">▾</span> <span data-tmchip="${esc(bk.id)}" data-tmbare="1">${tmChip(bk,true)||('ตม. · '+(others.length+1)+' คน')}</span></button>`; })()
                   : (others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block${_pxOpen?';transform:rotate(180deg)':''}">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>');
                 /* §tripNext · มีทริปอื่น → บรรทัดที่สองเป็นแถวเดียว [lead only / +N][→ วัน ทริป] ชื่อทริปยาวตัดด้วย … ไม่ดันแถวให้สูงขึ้น */
-                const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid):'';
+                const _nx=(!r.cxl && typeof bkOtherTripsChip==='function')?bkOtherTripsChip(bk,date,rid,_tmR):'';
                 /* §together · ป้าย Together ลอยที่มุมบนของช่องลูกค้า (เหมือนป้าย ⚠ รถกลับ) · อยู่ต้น <td> ข้างบน · บรรทัดนี้ไม่มีแล้ว */
                 const _spc='';
                 const _lo2=_whoSplit?'':_lo;
                 /* §tmBtnLine (2026-11-06) · owner "เอาไว้ใต้ชื่อ เผื่อกรณีลูกค้ามีเบอร์โทรจะเห็น" · ปุ่ม ตม. ของแถวระนองลงบรรทัดใหม่เสมอ ไม่เบียดชื่อ/เบอร์ */
-                return (_nx||_spc||_tmR)?('<div class="t2-cul2'+(_tmR?' t2-tmline':'')+'">'+_lo2+_spc+_nx+((_tmR && typeof tmMissHtml==='function')?('<span class="t2-tmmiss" data-tmmiss="'+esc(bk.id)+'">'+tmMissHtml(bk)+'</span>'):'')+'</div>'):_lo2; })()}
+                return (_nx||_spc||_tmR)?('<div class="t2-cul2'+(_tmR?' t2-tmline':'')+'">'+_lo2+_spc+((_tmR && typeof tmMissHtml==='function')?('<span class="t2-tmmiss" data-tmmiss="'+esc(bk.id)+'">'+tmMissHtml(bk)+'</span>'):'')+_nx+'</div>'):_lo2; })()}
             </td>
             ${a.split
               ? (function(){ const _b=a.bd||{ad:a.head,chd:0,inf:0,foc:0};   /* §pax breakdown · เดิมยัดทั้งก้อนลง AD แล้ว CHD/INF/FOC ฮาร์ดโค้ด 0 → เด็กกลายเป็นผู้ใหญ่ */
@@ -63431,15 +63473,28 @@ function bkV2RenderTab2(){
        แถบสถานะ: เขียว ✓ = ครบทุกคน · แดง ✗N = ยังขาด N คน · ครบทั้งใบแล้วแถบนี้หายไป (ปุ่มขึ้น ✓ ครบ) · voucher บรรทัดเดียวไม่ตัด */
     .t2-row.t2-full .t2-vch{max-width:none;overflow:visible;text-overflow:clip;white-space:nowrap;font-size:.88em;letter-spacing:-.02em}   /* ย่อเล็กน้อยให้เลขเต็ม (เช่น LOV-0473026-1) อยู่ในช่องบรรทัดเดียว */
     .t2-row.t2-full .t2-lead{white-space:normal;max-width:none;overflow:visible;text-overflow:clip;display:inline;line-height:1.35}
-    .t2-row.t2-full .t2-cul2{display:flex!important;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 1px!important}
-    body.btc #view-booking tr.t2-row.t2-full>td.t2-cu .t2-cul2{display:flex!important;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 1px!important}   /* มุมมอง Compact · ชนะกฎ inline-flex เดิม */
-    .t2-row.t2-full .t2-nxt{max-width:100%;margin-left:0}
-    .t2-tmmiss{display:flex;flex-wrap:wrap;gap:3px 4px;flex:0 0 100%;min-width:0}
+    /* §btFull3 · บรรทัดสองของช่องลูกค้าอยู่แถวเดียว: [ปุ่ม ตม.] [เครื่องหมาย 6 ช่อง] [→ วัน] · ไม่ขึ้นบรรทัดใหม่ */
+    .t2-row.t2-full .t2-cul2{display:flex!important;flex-wrap:nowrap;align-items:center;gap:7px;margin:4px 0 1px!important;max-width:none!important;overflow:visible!important}
+    body.btc #view-booking tr.t2-row.t2-full>td.t2-cu .t2-cul2{display:flex!important;flex-wrap:nowrap;align-items:center;gap:7px;margin:4px 0 1px!important;max-width:none;overflow:visible}   /* มุมมอง Compact · ชนะกฎ inline-flex เดิม */
+    .t2-row.t2-full .t2-nxt{max-width:none;margin-left:0;flex:none;overflow:visible}
+    body.btc #view-booking tr.t2-row.t2-full>td.t2-cu .t2-cul2 .t2-nxt{flex:none;max-width:none;overflow:visible}
+    .t2-tmmiss{display:inline-flex;align-items:center;gap:3px;flex:none}
     .t2-tmmiss:empty{display:none}
-    .t2-tmmiss i{font-style:normal;display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;line-height:1;height:16px;padding:0 6px;border-radius:4px;white-space:nowrap}
-    .t2-tmmiss i.ok{color:#0F6E56;background:#E6F5EE}
-    .t2-tmmiss i.no{color:#A32D2D;background:#FCEBEB}
-    .t2-tmmiss i b{font-family:'DM Mono',monospace;font-weight:500}
+    .t2-tmmiss i{width:11px;height:11px;border-radius:3px;display:inline-block;box-sizing:border-box;cursor:help}
+    .t2-tmmiss i:nth-child(3){margin-right:3px}
+    .t2-tmmiss i.ok{background:#17A673}
+    .t2-tmmiss i.no{background:#D8473C}
+    .t2-tmmiss i.pt{background:linear-gradient(90deg,#E8A317 50%,transparent 50%);box-shadow:inset 0 0 0 1.5px #E8A317}
+    .t2-tmmiss i.op{box-shadow:inset 0 0 0 1.5px #C3C9D4}
+    #bk-nxpop{display:none;position:fixed;z-index:9990;width:290px;max-width:calc(100vw - 16px);background:#fff;border:1px solid #E6E9EF;border-radius:12px;box-shadow:0 12px 34px rgba(20,35,63,.22);padding:10px 12px;font-size:12px;color:#14233F}
+    #bk-nxpop h4{margin:0 0 6px;font-size:11px;letter-spacing:.04em;color:#5E6577;font-weight:700}
+    #bk-nxpop .r{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #E6E9EF}
+    #bk-nxpop .r b{font:500 11.5px 'DM Mono',monospace;min-width:44px}
+    #bk-nxpop .r .t{flex:1;min-width:0;line-height:1.35}
+    #bk-nxpop .r .t small{display:block;color:#5E6577;font:400 10.5px 'DM Mono',monospace}
+    #bk-nxpop .go{font-size:10.5px;font-weight:700;color:#185FA5;white-space:nowrap;cursor:pointer}
+    #bk-nxpop .go:hover{text-decoration:underline}
+    #bk-nxpop .now{font-size:10px;font-weight:700;color:#5E6577;background:#F1F3F7;border-radius:4px;padding:1px 6px}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:transparent;color:#2F4E77;border-radius:0;padding:0;white-space:nowrap}
     /* §zoneSlim · คอลัมน์ Zone แคบลงเหลือ 96 · ชื่อท่ายาว ("Grand Andaman Pier", "Visit Panwa Pier") ขึ้นสองบรรทัดแทนการตัด … */
