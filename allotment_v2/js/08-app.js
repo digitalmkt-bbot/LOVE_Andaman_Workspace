@@ -91030,6 +91030,8 @@ function pc2CSS3(S){
     'body.btc #view-booking tr.t2-row>td.t2-cu .t2-cul2.t2-tmline{display:flex!important;margin-left:0;margin-top:3px}',   /* §tmBtnLine · ระนอง: ปุ่ม ตม. ใต้ชื่อแม้ในโหมดกระชับ */
     'body.btc #view-booking tr.t2-row>td:first-child>*{display:inline-block;vertical-align:middle;margin-right:4px}',
     'body.btc #view-booking tr.t2-row>td:first-child{overflow:hidden;text-overflow:ellipsis}',
+    /* §btNxVc · มุมมอง Compact/Layer จับลูกในช่อง VC เรียงแถวเดียวแล้วตัดส่วนเกิน → ป้ายทริปต่อเนื่องหลุดขอบหาย · บังคับให้ลงบรรทัดใหม่ใต้เลข VC */
+    'body.btc #view-booking tr.t2-row.t2-full>td:first-child>.t2-vnx{display:block;margin:3px 0 0}',
     'body.btc #view-booking tr.t2-row>td.t2-ag img{max-height:18px;width:auto}',
     'body.btc #view-booking tr.t2-row>td.t2-ag>div{max-height:30px;overflow:hidden}',
     'body.btc #view-booking tr.t2-row>td.t2-r .btc-paid{display:none}',
