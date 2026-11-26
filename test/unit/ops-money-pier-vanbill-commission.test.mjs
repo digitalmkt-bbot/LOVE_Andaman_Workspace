@@ -258,7 +258,8 @@ test('van bills: the owner\'s sheet is laid out as legacy, every figure from the
   const html = rt.hosts['vanbill-host'].innerHTML;
   assert.match(html, /<button class="on" onclick="vbPick\('van',''\)">ทุกคัน <em>2<\/em><\/button>/, 'van chips: all vans, with the pier\'s row count');
   assert.match(html, /11–20/); assert.match(html, /ตุลาคม 2569/);
-  assert.match(html, /onclick="vbEdit\(\)">&#9998; แก้ไขช่องที่กรอกแล้ว/); assert.match(html, /onclick="vbPrint\(\)">&#128424; พิมพ์ใบวางบิล/);
+  assert.match(html, /onclick="vbEdit\(\)">&#9998; แก้ไขช่องที่กรอกแล้ว/); assert.match(html, /onclick="vbPrint\(\)" title="[^"]*">&#128424; พิมพ์รวม · panwa/);
+  assert.match(html, /onclick="vbPrintSplit\(\)"[^>]*>&#128424; พิมพ์แยกคัน/);   // legacy §vbSplit (parity L3): all vans → split or one bill
   assert.match(html, /มี 1 แถวที่เพิ่งโผล่หลังจากกรอกบิลใบนี้ไปแล้ว/);
   assert.match(html, /<span class="vbx-cd" style="background:#C0392B"[^>]*>PP<\/span>/);
   assert.match(html, /9 AD · 2 CHD · 1 INF/, 'pax types of a row');
@@ -442,4 +443,32 @@ test('commissions: a refused payout shows the server message and reloads', async
   rt.ctx.laOpsCommissions.payOut(); await rt.settle();
   assert.match(rt.toasts[0].sub, /Already paid/);
   assert.equal(rt.requests.filter((r) => r.path.startsWith('/v1/commissions')).length, 2, 'reloaded after the refusal');
+});
+
+test('van bills (parity L3): column O, the cash strip and the daily summary come from the server; "จ่ายสด" asks the server\'s plan', async () => {
+  const paid = { ...bill().rows[0], key: '2026-10-13~r10~veh1', date: '2026-10-13', bill: 1700,
+    cash: { lines: [{ row_id: 'pc1', pier: 'panwa', date: '2026-10-13', amount: 1700, total: 1700, vans: 1, by: 'AC' }], paid: 1700, diff: 0, state: 'paid' } };
+  const open = { ...bill().rows[0], bill: 1750, cash: { lines: [], paid: 0, diff: 1750, state: 'none' } };
+  const rt = runtime({ handlers: {
+    'GET /v1/van-bills': overview(['Co A']),
+    [WHOLE]: { body: bill({ rows: [open, paid], cash_totals: { paid: 1700, due: 1750, rows_paid: 1, rows_due: 1, differs: 0 },
+      days: [{ date: '2026-10-12', trips: 1, outbound: 1, pax: 5, avg_pax_per_van: 5, car_cost: 1700, ex: 100, cut: 50, bill: 1750, sale: 1000, pl: -750, vans: 1, van_ids: ['veh1'] }] }) },
+    'POST /v1/van-bills/Co%20A/2026-10/2/cash/plan': { body: { items: [{ keys: ['2026-10-12~r10~veh1'], parts: {}, date: '2026-10-12', pier: 'panwa', text: 'ค่ารถตู้ภูเก็ต PP 12/10/26 (1คัน) Somchai', amount: 1750, payee: 'Somchai', vans: 1, subs: ['VAN1'], base: 1700, ex: 100, cut: 50 }] } },
+  } });
+  Object.assign(rt.ctx._vb, { ym: '2026-10', per: 2, mode: 'one', sup: 'Co A' });
+  rt.ctx.renderVanBill(); await rt.settle();
+  const html = rt.hosts['vanbill-host'].innerHTML;
+  assert.match(html, /<th class="">จ่ายสด<\/th>/);
+  assert.match(html, /&#128181; จ่ายสด 1,750<\/button>/, 'the unpaid row');
+  assert.match(html, /vbp-chip ok[^>]*>&#10003; จ่ายแล้ว ฿1,700/, 'the paid row');
+  assert.match(html, /จ่ายสดหน้าท่าแล้ว <b class="ok">฿1,700<\/b><span class="mut">· 1 แถว<\/span>/);
+  assert.match(html, /ยังไม่จ่าย <b class="due">฿1,750<\/b>/);
+  assert.match(html, /<b>สรุปรายวัน<\/b><span>1 วัน · Co A/);
+  assert.match(html, /onclick="vbPrint\(0,1\)">&#128424; พิมพ์สรุปรายวัน/);
+  let painted = null;
+  rt.ctx.vbPayPaint = function(){ painted = rt.ctx._vbPay; };
+  rt.ctx.vbPayOpen(['2026-10-12~r10~veh1']); await rt.settle();
+  const req = rt.requests.find((r) => r.path === '/v1/van-bills/Co%20A/2026-10/2/cash/plan');
+  assert.ok(req, 'the plan is the server\'s');
+  assert.deepEqual(JSON.parse(JSON.stringify(painted.items.map((i) => [i.ks, i.amt, i.who, i.ds]))), [[['2026-10-12~r10~veh1'], 1750, 'Somchai', '2026-10-12']], 'in legacy\'s dialog shape');
 });
