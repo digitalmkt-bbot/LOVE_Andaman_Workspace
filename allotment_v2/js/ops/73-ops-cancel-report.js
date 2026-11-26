@@ -9,6 +9,9 @@
    Period: the screen's month. The server windows a cancellation by the day it was MADE (not by the trip's travel date,
    as legacy did) and counts as the base the bookings SOLD in the window; the line above the cards therefore says
    "Cancelled in:" where legacy said "Travel period:". Reversible: this one string.
+   K2 (parity 2026-11-26c): legacy's tab counts every booking, all time (bookingV2RenderCancelReport walks SB_BOOKINGS with no window;
+   its "Travel period" line only exists in ops mode). Now ?all=true: every booking of the page, all time, no period line, as legacy shows it.
+   The count next to the tab title is every cancelled booking of both pages (legacy bookingV2TopbarMeta filters SB_BOOKINGS only).
    w6-d: the City Tour page and the marine page are the server's too: GET /v1/reports/cancellations?land=true|false (a booking with a land trip is on
    the City Tour page, any other on the marine page; one that has both is on both, as legacy's own simplification).
    Classic script, after 73-ops-srv-reads.js.
@@ -28,16 +31,15 @@
 
   var w = function(){
     if(!on() || typeof window._opsBookingMonthRange !== 'function') return orig.apply(this, arguments);
-    var month = (_bkV2.month && /^\d{4}-\d{2}$/.test(_bkV2.month)) ? _bkV2.month : window.bookingV2LocalYMD(new Date()).slice(0, 7);
     var land = !!window._bkV2CityTourOnly;
-    var range = window._opsBookingMonthRange(month), key = 'cxl|' + range.from + '|' + range.to + '|' + (land ? 'land' : 'marine');
-    var j = O.srv.read(key, '/v1/reports/cancellations', { from: range.from, to: range.to, land: land ? 'true' : 'false' }, repaint);
+    var key = 'cxl|all|' + (land ? 'land' : 'marine');
+    var j = O.srv.read(key, '/v1/reports/cancellations', { all: 'true', land: land ? 'true' : 'false' }, repaint);
     var st = O.srv.status(key);
     if(!j){
       if(st === 'failed') return orig.apply(this, arguments);      // legacy's own report, with its booking loads
       return '<div class="bkv2" style="padding:18px">Loading cancellation report…</div>';
     }
-    var period = '<div style="font-size:12px;margin-bottom:12px">Cancelled in: ' + esc(range.from) + ' → ' + esc(range.to) + '</div>';
+    var period = '';   /* K2: legacy's report has no period line (all time) */
     if(j.empty){
       return '<div class="bkv2" style="padding:40px;text-align:center;color:var(--ink-soft,#888)">' + period + '<div style="font-size:14px;font-weight:600;margin-bottom:4px">No cancellations yet</div><div style="font-size:12px">Cancelled bookings will be analysed here by reason, fault side, agent and month.</div></div>';
     }
@@ -75,8 +77,7 @@
   if(typeof meta === 'function' && !meta.__w4fc){
     var wm = function(){
       if(on() && window._bkV2 && window._bkV2.tab === 'cancel' && typeof window._opsBookingMonthRange === 'function'){
-        var month = (_bkV2.month && /^\d{4}-\d{2}$/.test(_bkV2.month)) ? _bkV2.month : window.bookingV2LocalYMD(new Date()).slice(0, 7), r = window._opsBookingMonthRange(month);
-        var j = O.srv.peek('cxl|' + r.from + '|' + r.to + '|' + (window._bkV2CityTourOnly ? 'land' : 'marine'));
+        var j = O.srv.read('cxl|all|both', '/v1/reports/cancellations', { all: 'true' }, repaint);
         if(j) return j.cancellations + ' cancellation' + (j.cancellations === 1 ? '' : 's');
       }
       return meta.apply(this, arguments);
