@@ -112,6 +112,7 @@ function loadPos(server = {}) {
     laBlob: () => blob,
     renderPosSales: () => { drawn++; },
     pslAnData: (pier, mon) => Object.keys(window.laBlob()).filter((k) => /^pos_sales_\d{6}$/.test(k)).map((k) => [k, window.ctRead(k)]),
+    pslOvSeries: (pier, mon) => Object.keys(window.laBlob()).filter((k) => /^pos_sales_\d{6}$/.test(k)).map((k) => [k, window.ctRead(k)]),
   };
   const document = { querySelector: () => null };
   vm.runInNewContext(src, { window, document, console, JSON, Object, Array, String, Date, Promise, encodeURIComponent, setTimeout });
@@ -159,4 +160,14 @@ test('§posSales analysis: pslAnData sees the months read here, not the blob\'s;
   assert.ok(p.window.laBlob().pos_sales_202611, 'laBlob is legacy\'s again afterwards');
   p.window.renderPosSales('panwa');
   assert.ok(p.calls.some((c) => c[0] === 'ensureDays' && c[1][0] === '2026-11-12'));
+});
+
+test('§pslV2 overview: pslOvSeries (the daily bars, the other pier days) sees the months read here, not the blob (parity 11-27, "0–0 พ.ย.")', async () => {
+  const p = loadPos({ 'panwa|2026-11': { days: [{ pier: 'panwa', date: '2026-11-03', items: [{ n: 'A', q: 1, net: 1, pf: 0 }] }] }, 'tublamu|2026-11': { days: [{ pier: 'tublamu', date: '2026-11-04', items: [] }] } });
+  p.window.pslOvSeries('panwa', '2026-11');
+  await tick(); await tick(); await tick();
+  const out = p.window.pslOvSeries('panwa', '2026-11');
+  assert.deepEqual(out.map((x) => x[0]), ['pos_sales_202611']);
+  assert.deepEqual(Object.keys(out[0][1]).sort(), ['panwa|2026-11-03', 'tublamu|2026-11-04'], 'both piers of the month, as legacy month key holds');
+  assert.ok(p.window.laBlob().pos_sales_202611['panwa|2026-11-01'].local, 'laBlob is legacy again afterwards');
 });
