@@ -1525,7 +1525,11 @@
   function fuelWkFromReport(r){
     var out = {};
     (r.trend || []).forEach(function(t){
-      var tot = accOf((r.boats || []).find(function(b){ return b.boat_id === t.boat_id; }));
+      /* parity V3 (2026-11-27) · legacy _fuelWkAgg's month total counts a move's (ตีเรือ) ฿ but not its litres, so L/hr, L/วัน and
+         L/pax read the sailing litres only: the trend's own month (Tadeo Nov 106.6, Aluminous2 91.7), not the boat row whose fuel
+         adds the move litres (110.3, 101.4). The boat row stays the fallback for a report without the month. */
+      var own = (t.months || []).find(function(m){ return m.month === r.month; });
+      var tot = accOf(own || (r.boats || []).find(function(b){ return b.boat_id === t.boat_id; }));
       if(!tot) return;
       out[t.boat_id] = { id: t.boat_id, name: t.name, w: (t.weeks || []).map(accOf), tot: tot };
     });
