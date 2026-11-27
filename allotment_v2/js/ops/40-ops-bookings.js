@@ -874,6 +874,8 @@
           else if(j){ Object.assign(bk, records(j, bk.trips)); bk.status = j.status || bk.status; if(j.total != null) bk.total = +j.total; bk.updatedAt = j.updated_at; persist(); }
         } finally { free(bk.id); }
         O.wrote('booking');
+        /* the open detail reads the server's history again: its line for this command (legacy's bkV2AddHistory) and the older ones */
+        try{ detailAt[bk.id] = 0; }catch(_){ }
         render();
         return j;
       }, function(e){ free(bk.id); O.fail((title || kind) + ' refused · nothing changed', e); render(); return null; });
