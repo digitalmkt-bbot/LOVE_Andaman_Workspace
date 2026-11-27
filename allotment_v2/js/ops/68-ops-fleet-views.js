@@ -127,7 +127,9 @@
     } else if(kind === 'gb' && s.gearboxes){
       var G = s.gearboxes;
       put(0, G.total, G.honda + ' Honda · ' + G.suzuki + ' Suzuki'); put(1, G.ready); put(2, G.fixing);
-      put(3, G.spare); put(4, G.not_on_boat); put(5, G.no_engine);
+      put(3, G.spare); put(4, G.not_on_boat);
+      // tile 5 is "รอเครื่อง" (legacy's own count, its sub-line too); 6 is "ไม่ผูกเครื่อง" (parity 2026-11-27: no_engine went into 5, 1 not 8)
+      put(6, G.no_engine);
     } else if(s.propellers){
       var R = s.propellers;
       put(0, R.total); put(1, R.active); put(2, R.spare); put(3, R.fixing); put(4, R.damaged_broken); put(5, R.data_to_fix);
