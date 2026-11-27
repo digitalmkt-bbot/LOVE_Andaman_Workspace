@@ -10,8 +10,8 @@
                                         projects it as ops.boatPulled). A booking not saved to the server yet: legacy's test.
      bookingV2CharterBoatHeal(date)     no-op: the server puts a charter's boat on the trip when it saves (dispatch.ts charterSynced)
      bookingV2HealSelfArrivePickup(date) no-op: the server clears a clock pickup time off a self-arrive trip on every write
-     baCharterBoatMap(date)             the chartered boats of the day from the boat-operation panel (assigned[].is_charter +
-                                        charter_booking_id) and the server's overnight holds (bkOvnHoldMap, already the server's)
+     baCharterBoatMap(date)             the chartered boats of the day from the boat-operation panel (the day's charter_taken,
+                                        legacy baCharterBoatMap, not the cell is_charter) and the server's overnight holds (bkOvnHoldMap, already the server's)
      boatCapInfo(boatId, date)          the server's day object {capacity, normal, ceiling, reason, set_by, set_at} of an overridden
                                         day (cached by 49-ops-capacity-overrides.js); boatCapFor reads it through boatCapInfo
 
@@ -62,9 +62,12 @@
       return undefined;                                 // legacy's walk until the day's panel is here
     }
     var m = new Map();
-    day.assigned.forEach(function(a){
-      if(a && a.is_charter && a.charter_booking_id && a.boat_id && !m.has(a.boat_id)) m.set(a.boat_id, clientBookingId(a.charter_booking_id));
-    });
+    /* parity booking 2026-11-28: legacy's map is every boat a charter takes, however (bkBoatIdsOn, else the charter boat), whatever
+       the boat's status: the panel's day charter_taken {boat → booking}. assigned[].is_charter is only the Boat Operation cell since
+       parity M1 (a dispatched charter boat keeps a plain cell) and lists ready boats only, so Tadeo (in the shop, BK-26091059-U8M5
+       by dispatch) stayed among Early Phi Phi Bamboo's boats ("1 boat"). */
+    var taken = day.charter_taken || {};
+    Object.keys(taken).forEach(function(id){ if(taken[id] && !m.has(id)) m.set(id, clientBookingId(taken[id])); });
     var holds = (typeof window.bkOvnHoldMap === 'function') ? window.bkOvnHoldMap(date) : null;
     if(holds && holds.forEach) holds.forEach(function(h, id){ if(!m.has(id)) m.set(id, h.bkId); });
     return m;

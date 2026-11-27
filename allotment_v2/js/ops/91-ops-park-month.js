@@ -26,10 +26,10 @@
     O.whenFree(function(){ try{ if(document.getElementById('pk-host-' + pier)) window.renderPierPark(); }catch(_){} });   // §busyVisible
   }
   O.onWrite(function(){ Object.keys(cache).forEach(function(k){ stale[k] = true; }); failed = {}; });
-  function ask(m, pier){
+  function ask(m, pier, q){
     var k = pier + '|' + m;
     if((!cache[k] || stale[k]) && !loading[k] && !failed[k]){
-      loading[k] = O.get('/v1/pier-office/' + encodeURIComponent(pier) + '/park-tickets/month', { month: m }).then(function(j){
+      loading[k] = O.get('/v1/pier-office/' + encodeURIComponent(pier) + '/park-tickets/month', q || { month: m }).then(function(j){
         if(!j || !Array.isArray(j.days)) throw new Error('invalid park month response');
         cache[k] = j; delete stale[k];
       }).catch(function(e){ failed[k] = true; O.fail('Park month did not load', e);
@@ -109,7 +109,9 @@
      pkTkData(day) for each neighbour, which in ops mode holds only the day the page loaded, so every other day read 0 boats
      (Ranong 27 Nov: legacy "2 · 57 · 56", here "0 · 0 · —"). The neighbours now come from the same month read as the month view
      (boats = the day's boats, tot = its tickets to issue, miss = names still missing); a window across two months asks both.
-     The day on screen keeps the figures the page passes in (legacy). No answer yet: legacy's own function runs. */
+     The day on screen keeps the figures the page passes in (legacy). No answer yet: legacy's own function runs.
+     §pkNearWeek (2026-11-28, UI parity pok-tublamu): the card asks its own 7 days (?from=&to=, a week's bookings) unless the months
+     are already here: Tub Lamu's November read took 2-5 s (12 s under load) and the card drew legacy's zeros until it landed. */
   var origNear = window.pk2Near;
   if(typeof origNear === 'function' && !origNear.__ops){
     var near = function(ds, pier, today){
@@ -121,11 +123,12 @@
         keys.push(k); months[k.slice(0, 7)] = 1;
       }
       var J = {}, all = true;
-      Object.keys(months).forEach(function(m){ J[m] = ask(m, pier); if(!J[m]) all = false; });
-      if(!all) return origNear.apply(this, arguments);
+      Object.keys(months).forEach(function(m){ var c = cache[pier + '|' + m]; J[m] = (c && !stale[pier + '|' + m]) ? c : null; if(!J[m]) all = false; });
+      var W = all ? null : ask(keys[0] + '..' + keys[6], pier, { from: keys[0], to: keys[6] });
+      if(!all && !W) return origNear.apply(this, arguments);
       return keys.map(function(k){
         if(k === ds) return { ds: k, boats: today.boats, tot: today.tot, miss: today.miss };
-        var D = (J[k.slice(0, 7)].days || []).filter(function(x){ return x.date === k; })[0];
+        var D = ((W || J[k.slice(0, 7)]).days || []).filter(function(x){ return x.date === k; })[0];
         return D ? { ds: k, boats: (D.boats || []).length, tot: n(D.tickets), miss: n(D.miss) } : { ds: k, boats: 0, tot: 0, miss: 0 };
       });
     };
