@@ -52,7 +52,7 @@ function runtime({ enabled = true, answers = {}, confirmAnswer = true, modalOpen
 
   const req = (method, path, body) => {
     // the going heads by nationality come from the pier day's boats (read next to the park tickets); not part of what the tests count
-    if (method === 'GET' && path === '/v1/pier-office/tublamu/days/' + DATE + '/boats') return Promise.resolve(J({ boats: [] }));
+    if (method === 'GET' && path === '/v1/pier-office/tublamu/days/' + DATE + '/boats') return Promise.resolve(J({ boats: state.boats || [] }));
     calls.push(body === undefined ? { method, path } : { method, path, body: J(body) });
     const key = method + ' ' + path;
     const a = answers[key];
@@ -384,4 +384,25 @@ test('cancel breakdown (pkCx): the boat carries the server\'s cx in legacy shape
   assert.deepEqual(J(rt.w.pkCxPax(DATE, 'nope', 'tublamu')), { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 });
   const none = runtime(); none.w.renderPierPark(); await none.flush();
   assert.deepEqual(J(none.w.pkTkData(DATE, 'tublamu'))[0].boats[0].cx, { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 }, 'a boat with nothing taken off has the empty split, as legacy');
+});
+
+test('the petty-cash heads (pcPax, the boats read) give cntPc / totPc / pcDiff by the ticket-type channels (parity 11-27, pok-tublamu)', async () => {
+  const rt = runtime();
+  // the pier counted 2 aboard (one Thai adult, one Thai FOC): the sheet's 3 tickets are one over, as legacy's reconcile shows
+  rt.state.boats = [{ boat_id: 'b1', booked: { nationality: { ad_th: 1, chd_th: 0, inf_th: 0, foc_th: 1, ad_fr: 0, chd_fr: 0, inf_fr: 0, foc_fr: 0, tot: 2 } } }];
+  rt.w.renderPierPark();
+  await rt.flush(); await rt.flush();
+  const B = J(rt.w.pkTkData(DATE, 'tublamu'))[0].boats[0];
+  assert.deepEqual(B.cntPc, { adTH: 2, chTH: 0, adFR: 0, chFR: 0, inf: 0 }, 'FOC Thai heads go under Thai adults, as PK_CATS adTH ch [ad_th, foc_th]');
+  assert.equal(B.totPc, 2);
+  assert.equal(B.tot, 3);
+  assert.equal(B.pcDiff, true, 'เงินสดย่อยนับต่าง counts this boat');
+});
+
+test('with no petty-cash heads for a boat, the sheet counts stand and nothing differs', async () => {
+  const rt = runtime();
+  rt.w.renderPierPark();
+  await rt.flush(); await rt.flush();
+  const B = J(rt.w.pkTkData(DATE, 'tublamu'))[0].boats[0];
+  assert.deepEqual([B.totPc, B.pcDiff], [3, false]);
 });
