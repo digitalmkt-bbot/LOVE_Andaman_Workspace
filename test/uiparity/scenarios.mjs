@@ -1,6 +1,9 @@
 // UI parity · check 4, action scenarios: the same staff task done through the UI on both systems
 //
-//   node test/uiparity/scenarios.mjs [--only=name,name] [--out=dir] [--keep-dbs]
+//   node test/uiparity/scenarios.mjs [--only=name,name] [--out=dir] [--one-copy] [--keep-dbs]
+//   --one-copy  one fresh pair for the whole batch instead of one per scenario (a slow disk: a copy of legacy can take
+//               20 minutes). Only for scenarios that touch disjoint records (each its own lead name / booking / day).
+//   --keep-dbs  leave the last pair in place to inspect · --reuse-dbs  run on the pair left in place (iterating on a scenario)
 //
 // Each scenario (scenarios/*.mjs) is a list of steps run on legacy and on the new frontend from the same
 // starting data. Before each scenario the runner makes fresh databases from the pipeline's templates:
@@ -163,7 +166,7 @@ for (const f of files) {
   let H;
   try {
     log(`── ${sc.name} · fresh databases …`);
-    if (!arg('keep-dbs', false) || !results.indexOf(res)) await freshDbs();
+    if (!arg('reuse-dbs', false) && (!arg('one-copy', false) || !results.indexOf(res))) await freshDbs();
     const R = { legacy: await reader(DB.legacy), ops: await reader(DB.ops) };
     const vars = sc.prepare ? await sc.prepare({ ...R, today, addDays }) : {};
     res.vars = vars;
