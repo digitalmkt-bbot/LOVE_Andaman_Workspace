@@ -377,7 +377,8 @@
     var ym = days && days.length ? String(days[0]).slice(0, 7) : '', e = ym ? S.rent[ym] : null, R = e && e.data;
     if(!R || !Array.isArray(R.rows)) return orig(days);
     return R.rows.map(function(r){
-      return { bid:r.boat_id, name:r.name, RN:{ to:r.open_ended ? '' : r.to, name:r.name }, SP:{ from:r.from, to:r.to, due:n(r.due), opDays:n(r.days_plan) }, slots:n(r.slots), sail:n(r.sailed),
+      /* §qsRent (2026-11-27) · perTrip / trips: legacy's "ต้องวิ่งเพิ่มอีก N วัน" divides the gap by them (it showed "NaN วัน" without) */
+      return { bid:r.boat_id, name:r.name, RN:{ to:r.open_ended ? '' : r.to, name:r.name, perTrip:n(r.per_trip), trips:Math.max(1, n(r.trips_per_day)) }, SP:{ from:r.from, to:r.to, due:n(r.due), opDays:n(r.days_plan) }, slots:n(r.slots), sail:n(r.sailed),
                daysRan:n(r.days_ran), opPlan:n(r.days_plan), booked:n(r.booked), due:n(r.due), gap:n(r.gap) };
     });
   });

@@ -3766,12 +3766,18 @@ function mdTabOps(days){
   const latest=days[days.length-1]; const arrByCode={}; Object.entries(latest.in||{}).forEach(([n,v])=>{ const c=MD_NAT_TH2CODE[n]; if(c) arrByCode[c]=(arrByCode[c]||0)+v; });
   const lang=mdLangBuckets(arrByCode); const langRows=[{label:'🇷🇺 Russian guide',val:lang.Russian,col:'#A32D2D'},{label:'🇨🇳 Chinese guide',val:lang.Chinese,col:'#BA7517'},{label:'🇬🇧 English guide',val:lang.English,col:'#185FA5'}];
   // pickup zone demand from our bookings
-  const zone={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ const z=t.zone||b.pickupZone||'NoTransfer'; const pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; zone[z]=(zone[z]||0)+pax; }); });
+  const zone=mdZoneDemand();
   const zlab=z=>({PK:'Phuket (PK)',KL:'Khao Lak (KL)',RN:'Ranong (RN)',NoTransfer:'No transfer',NT:'No transfer'})[z]||z;   /* §rnZone */
   const zoneRows=Object.entries(zone).sort((a,b)=>b[1]-a[1]).map(([z,v])=>({label:zlab(z),val:v,col:'#0F6E56'}));
   return mdNote('Guide-language demand is estimated from arrival nationalities (latest day) — Russian/Chinese get their own guide, the rest map to English. Pickup-zone demand comes from your bookings.')
     +mdCard('Guide-language demand','from arrivals · '+latest.date,mdHbars(langRows,Math.max(lang.Russian,lang.Chinese,lang.English,1)))
     +mdCard('Pickup-zone demand','our bookings',zoneRows.length?mdHbars(zoneRows,Math.max(...zoneRows.map(r=>r.val),1)):'<div style="font-size:12px;color:var(--fd-ink-soft)">No bookings yet</div>');
+}
+/* §qsZone (2026-11-27) · pax by pickup zone over every live booking · in operation mode the server's answer
+   (GET /v1/market-stats/our-mix pickup_zones, ops/73-ops-our-mix.js): the browser holds only some bookings */
+function mdZoneDemand(){
+  const zone={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ const z=t.zone||b.pickupZone||'NoTransfer'; const pax=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; zone[z]=(zone[z]||0)+pax; }); });
+  return zone;
 }
 // ── TAB: Sales & Agents (theme 5) ──
 function mdTabSales(days){
@@ -51667,6 +51673,9 @@ function natLearnBootstrap(){
   if(localStorage.getItem('_nat_bootstrap_done') === '1') return;
   // §natBoot · embed / view-only sessions never sync the result, so there is nothing to seed
   if(window.__laEmbed || (typeof laCanEdit === 'function' && !laCanEdit())) return;
+  // §qsNat (2026-11-27) · in operation mode the table is the server's (migration 720, imported from legacy's nat_learn); the booking
+  //   saves add their votes there (ops/73-ops-our-mix.js). Seeding it again from the few bookings loaded here would count them twice.
+  if(window.laOps && typeof window.laOps.enabled === 'function' && window.laOps.enabled()) return;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return;
   // §natBoot · mark done BEFORE the work: a tab closed mid-run must not start over on every load
   localStorage.setItem('_nat_bootstrap_done', '1');
