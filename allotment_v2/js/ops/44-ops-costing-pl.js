@@ -813,6 +813,9 @@
   /* ctTiers · the five price tiers: the stored ones, else the price spread (the server's tiers_effective); ctTierSpread keeps the names
      and spreads the price (tiers_spread) */
   wrapCalc('ctTiers', function(orig, pl){
+    /* parity round 9 (2026-11-27): the sheet is asked without the tiers (calcBody), so its tiers_effective is always the spread;
+       a plan's own five tiers come first, as legacy ctTiers (p7assvo: 1,750 / 1,540 / 1,400 / 1,300 / 1,200, not spread from 1,600) */
+    if(pl && Array.isArray(pl.tiers) && pl.tiers.length === 5) return orig(pl);
     var a = pl && typeof pl === 'object' ? answer(pl, undefined, true) : null;
     return a && Array.isArray(a.tiers_effective) && a.tiers_effective.length === 5 ? a.tiers_effective.map(function(x){ return { n:x.n, p:x.p }; }) : orig(pl);
   });
