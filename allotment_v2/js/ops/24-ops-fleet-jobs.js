@@ -55,7 +55,10 @@
       date: l.date || '',
       text: l.text || '',
       by: l.by || '',
-      createdOn: l.created_on || null
+      createdOn: l.created_on || null,
+      /* parity X (2026-11-28) · legacy's log line carries the day it was written as `createdAt` (flAddProgress, backdated) and the
+         timeline prints "· บันทึกย้อนหลังเมื่อ <day>" from it (_flMaintTimelineInner); `createdOn` alone left that note out */
+      createdAt: l.created_on || undefined
     };
   }
 

@@ -197,7 +197,8 @@
       refNote: m.ref_note || '',
       supplier: m.supplier || '',
       note: m.note || '',
-      date: m.memo_date || '',
+      /* parity X (2026-11-28) · no `date`: legacy's memo has createdDate only, so the project panel's memo line (flProjOpen,
+         `${mo.date||''} · Project overhead`) shows no date there; a `date` here printed 2026-06-22 legacy never shows */
       createdDate: m.memo_date || '',
       maintId: m.job_id || null,
       jobId: m.job_id || null,
@@ -264,6 +265,9 @@
     var byId = {};
     target.forEach(function(x){ if(x && x.id) byId[x.id] = x; });
     var mapped = (rows || []).map(function(s){ return fromServerMemo(s, byId[s.id] || null); });
+    /* parity X (2026-11-28) · legacy loads FL_MEMOS in its table's key order (id) and the screens sort stably on top of that, so memos
+       with the same last date keep id order (Inventory → Memo, Nov 23: MO-594, 595 … 603, 607). The server lists newest first. */
+    mapped.sort(function(a, b){ return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
     target.length = 0;
     Array.prototype.push.apply(target, mapped);
     return mapped;

@@ -68,14 +68,14 @@ test('stock, consumable, and memo mappers preserve server movement-derived quant
   });
 });
 
-function createRuntime(){
+function createRuntime(opts = {}){
   const calls = [];
   let nextResolver = null;
   let serverItems = [{
     id: 'inv_1', name: 'Filter', part_no: 'F-1', category: 'engine', unit: 'ชิ้น', min_qty: 2, cost: 300,
     total_qty: 10, primary_warehouse: 'tublamu', stocks: [{ warehouse: 'tublamu', warehouse_name: 'คลัง Tub Lamu', qty: 10 }]
   }];
-  let serverMemos = [{
+  let serverMemos = opts.memos || [{
     id: 'mo_1', no: 'MO-001', title: 'Buy filters', boat_id: 'b1', memo_type: 'parts', scope: 'vessel',
     memo_date: '2026-10-10', status: 'pending_approval', current_step: 1, amount: 3000,
     lines: [{ id: 'ml_1', name: 'Filter', qty: 10, price: 300, discount_pct: 0, category: 'parts', unit: 'ชิ้น', item_id: 'inv_1', received_qty: 0 }]
@@ -239,4 +239,14 @@ test('legacy mode delegates to original stock/memo/consumable functions without 
   assert.equal(window.flSaveReceive(), 'legacy');
   assert.equal(window.flConsumeSubmit(), 'legacy');
   assert.equal(calls.includes('api'), false);
+});
+
+test('parity X: memos keep legacy key order (id) and carry no `date` (the project panel prints none)', async () => {
+  const memo = (id, no, d) => ({ id, no, title: no, memo_type: 'parts', scope: 'vessel', memo_date: d, status: 'received', current_step: 5, amount: 1, lines: [] });
+  // the server lists newest first; legacy's FL_MEMOS is its table read ORDER BY id, and the list sorts stably on top of it
+  const rt = createRuntime({ memos: [memo('mmwucds5', 'MO-607', '2026-11-23'), memo('mmwu71x0', 'MO-603', '2026-11-23'), memo('mmwsxy1b', 'MO-594', '2026-11-22')] });
+  await rt.tick(); await rt.tick();
+  assert.deepEqual(rt.FL_MEMOS.map((m) => m.no), ['MO-594', 'MO-603', 'MO-607']);
+  assert.equal(rt.FL_MEMOS[0].createdDate, '2026-11-22');
+  assert.equal('date' in rt.FL_MEMOS[0], false, 'legacy memo has createdDate only');
 });

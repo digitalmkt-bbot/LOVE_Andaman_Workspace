@@ -36,41 +36,38 @@ async function run(extra = {}) {
   return h;
 }
 const btn = (html, k) => new RegExp('data-ops-ts-' + k + '="1"[^>]*>([^<]*)<b>(\\d+)</b>').exec(html);
+const plain = (x) => JSON.parse(JSON.stringify(x));
 
-test('reference pack lists bookings with documents or an agent; the bar shows its file count', async () => {
+test('no reference-pack button on the bar; the print gets bookings with documents or an agent, in legacy shape', async () => {
   const { host, ctx } = await run();
-  assert.deepEqual(btn(host.innerHTML, 'refpack').slice(1), ['เอกสาร ', '2']);
-  assert.match(host.innerHTML, /data-ops-ts-refpack="1"[^>]*title="[^"]*2 ใบ"/, 'two bookings: b1 (files) and b3 (agent)');
-  assert.doesNotMatch(host.innerHTML, /voucher-b1\.jpg/, 'the file list is not drawn on the page');
-  assert.equal(typeof ctx.laOps.travelRows.printPack, 'function');
+  assert.doesNotMatch(host.innerHTML, /data-ops-ts-refpack/, 'legacy has no pack button');
+  assert.doesNotMatch(host.innerHTML, /voucher-b1.jpg/, 'the file list is not drawn on the page');
+  const ref = plain(ctx.tsRefPackList(DATE));
+  assert.deepEqual(ref.map((r) => r.bk.id), ['b1', 'b3'], 'b1 (files) and b3 (agent), not the walk-in b2');
+  assert.deepEqual(ref[0].bk.attachments.map((f) => f.id), ['att1', 'att2']);
+  assert.equal(ref[0].trip.routeId, 'r_pw');
+  assert.ok(ref[0].ord < ref[1].ord, 'ord is the place in the sheet');
 });
 
 test('the reference pack follows the pier scope', async () => {
-  const { host } = await run({ _tsPier: 'tublamu' });
-  assert.deepEqual(btn(host.innerHTML, 'refpack').slice(1), ['เอกสาร ', '0']);
-  assert.match(host.innerHTML, /data-ops-ts-refpack="1"[^>]*title="[^"]*1 ใบ"/);
+  const { ctx } = await run({ _tsPier: 'tublamu' });
+  assert.deepEqual(plain(ctx.tsRefPackList(DATE)).map((r) => r.bk.id), ['b3']);
 });
 
-test('slip pack asks before reading, then counts every slip file of the selection', async () => {
+test('slip pack: "load slips" is offered while slips are unread, then the print gets every slip file', async () => {
   const h = await run();
   assert.deepEqual(btn(h.host.innerHTML, 'slippack').slice(1), ['โหลดสลิป ', '2'], 'b1 paid at the pier, b3 sold on tour');
   assert.equal(h.calls.filter(([p]) => p.endsWith('/pier-money')).length, 0, 'nothing is read until asked');
   await h.ctx.laOps.travelRows.slipsLoad();
   const reads = h.calls.filter(([p]) => p.endsWith('/pier-money')).map(([p, q]) => p + '?' + q.date).sort();
   assert.deepEqual(reads, ['/v1/bookings/b1/pier-money?' + DATE, '/v1/bookings/b3/pier-money?' + DATE]);
-  assert.deepEqual(btn(h.host.innerHTML, 'slippack').slice(1), ['สลิป ', '3'], 'transfer slip, card slip, booking slip');
+  assert.doesNotMatch(h.host.innerHTML, /data-ops-ts-slippack/, 'once read, no button: the slips print behind the sheet');
+  const slips = plain(h.ctx.tsSlipPackList(DATE));
+  assert.deepEqual(slips.flatMap((x) => x.imgs.map((i) => i.f.id)).sort(), ['att5', 'att6', 'att9'], 'transfer slip, card slip, booking slip');
 });
 
-test('a booking paid without a slip is named on the slip action, from the server no_slip', async () => {
-  const h = await run();
-  await h.ctx.laOps.travelRows.slipsLoad();
-  assert.match(h.host.innerHTML, /data-ops-ts-slippack="1"[^>]*title="[^"]*1 ใบยังไม่มีสลิป"/);
-});
-
-test('the legacy print does not append packs built from browser bookings in ops mode', async () => {
+test('off ops mode legacy answers the pack lists', async () => {
   const { ctx } = await run();
-  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsRefPackList('2026-10-14'))), []);
-  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsSlipPackList('2026-10-14'))), []);
   ctx.laOps.enabled = () => false;
-  assert.deepEqual(JSON.parse(JSON.stringify(ctx.tsRefPackList('2026-10-14'))), ['legacy']);
+  assert.deepEqual(plain(ctx.tsRefPackList('2026-10-14')), ['legacy']);
 });
