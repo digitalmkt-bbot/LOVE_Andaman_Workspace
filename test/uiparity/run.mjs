@@ -137,8 +137,10 @@ async function walkPage(P, i, it) {
   }
 }
 
+// coverage evidence so far, after every page: a run that dies half-way still counts what it saw
+const seenNow = () => { const o = { calls: {}, dialogIds: {}, pages: {} }; for (const s of states) { const w = s.page + ' · ' + s.toggle; for (const c of s.legacy.calls || []) o.calls[c] = o.calls[c] || w; for (const d of s.legacy.openIds || []) o.dialogIds[d] = o.dialogIds[d] || w; if (s.kind === 'page' && s.navOk && s.navOk.legacy === true) o.pages[s.page] = true; } return o; };
 let next = 0;
-await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++; try { await walkPage(P, i, items[i]); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } } }));
+await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++; try { await walkPage(P, i, items[i]); fs.writeFileSync(path.join(OUT, 'seen.json'), JSON.stringify({ partial: true, ...seenNow() }, null, 1)); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } } }));
 const order = (pg) => items.findIndex((it) => it.view + (it.citytour ? '#citytour' : '') === pg);
 states.sort((x, y) => order(x.page) - order(y.page));
 inventory.sort((x, y) => order(x.page) - order(y.page));
