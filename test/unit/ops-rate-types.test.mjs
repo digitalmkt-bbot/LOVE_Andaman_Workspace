@@ -109,3 +109,13 @@ test('§rtLegacyOrder: the rate types are kept in id order (legacy ORDER BY id),
   await ctx.laOps.rateTypes.ready();
   assert.deepEqual(ctx.SB_RATE_TYPES.map((r) => r.id), ['rt001', 'rt002', 'rt003']);
 });
+
+test('a zone with selling prices and no net has no seat-rate cell, so its card reads Not set as legacy; the save keeps its tiers', () => {
+  const c = compat();
+  const legacy = c.fromServer({ id: 'rt125931', routes: [{ route_id: 'r11', zones: { PK: { net: { ad_th: 2500 } }, KL: { sell: { ad_th: 4000, chd_th: 3200 } } } }] });
+  assert.equal(legacy.seatRates.r11.KL, undefined, 'parity 11-27 rate-types: "KL NOT SET", not "KL 0 0 0 0"');
+  assert.equal(legacy.seatRates.r11.PK['adult-thai'], 2500);
+  assert.equal(legacy.priceTiers.r11.KL['adult-thai'].sell, 4000);
+  const body = c.toCreateBody(legacy);
+  assert.deepEqual(JSON.parse(JSON.stringify(body.routes[0].zones.KL)), { sell: { ad_th: 4000, chd_th: 3200 } }, 'a save sends the tier-only zone back unchanged');
+});

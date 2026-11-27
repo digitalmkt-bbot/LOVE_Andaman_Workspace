@@ -118,13 +118,25 @@
   function cxFrom(c){ return c && c.tot ? { p8: c.cells || {}, tot: c.tot, cxl: c.cxl || 0, ns: c.ns || 0, mv: c.mv || 0 } : null; }
   var CX0 = function(){ return { p8: {}, tot: 0, cxl: 0, ns: 0, mv: 0 }; };
   O.parkCx = cxFrom;
+  /* legacy pkTkData's cntPc / totPc / pcDiff: the petty-cash heads of the boat (pcPax, the same split as pax8) folded into the ticket
+     types by PK_CATS' channels, and whether they differ from the sheet's tickets ("เงินสดย่อยนับต่าง N ลำ", the reconcile column). They
+     were the sheet's own counts here, so a boat whose pier count took a head off (Romeo 1 Nov: 18 aboard, 19 tickets) showed
+     no difference (parity 11-27, pok-tublamu pkOvGoDay). The heads are the server's (GET …/days/{date}/boats booked.nationality). */
+  function pcCnt(p8){
+    if(!p8) return {};
+    var cats = Array.isArray(window.PK_CATS) ? window.PK_CATS : Array.isArray(window.PK_BASE) ? window.PK_BASE : null, out = {}, tot = 0;
+    if(!cats) return {};
+    cats.forEach(function(C){ var v = 0; (C.ch || []).forEach(function(k){ v += +p8[k] || 0; }); out[C.k] = v; tot += v; });
+    return { cnt: out, tot: tot };
+  }
   function convBoat(b){
+    var pc = pcCnt(st.nat[b.boat_id]);
     var cnt = {
       adTH: b.counts.adTH || 0, chTH: b.counts.chTH || 0, adFR: b.counts.adFR || 0, chFR: b.counts.chFR || 0, inf: b.counts.inf || 0
     };
     return {
       bid: b.boat_id, boat: { id: b.boat_id, name: b.boat_name }, dep: b.departure || '',   // the job's own time, else the route's first (server)
-      cnt: cnt, tot: b.tot, cntPc: cnt, totPc: b.tot, pcDiff: false, pax8: st.nat[b.boat_id] || {},
+      cnt: cnt, tot: b.tot, cntPc: pc.cnt || cnt, totPc: pc.cnt ? pc.tot : b.tot, pcDiff: pc.cnt ? pc.tot !== b.tot : false, pax8: st.nat[b.boat_id] || {},
       cx: cxFrom(b.cx) || CX0(),
       booked: b.booked, people: (b.people || []).map(convPerson), miss: b.miss || {}, missTot: b.miss_total || 0,
       orphan: (b.orphans || []).map(function(o){ return { full: o.full, cat: o.cat, seq: o.seq, bkId: o.booking_id, vc: '', lead: '' }; }),

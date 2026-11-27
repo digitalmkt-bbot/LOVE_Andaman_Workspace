@@ -153,6 +153,19 @@
     finally{ window.laBlob = real; }
   });
 
+  /* §pslV2 (lk-inbox 11-19) · the overview's daily bars and its "<other pier> มีข้อมูล N วัน" come from pslOvSeries, which also lists
+     its months from laBlob()'s keys: unwrapped it saw none, so the tile read "ยอดขายสุทธิ · 0–0 พ.ย." with no bars (parity 11-27,
+     pos-panwa / pos-tublamu pslTab). Show it the months read here, as pslAnData. */
+  wrap('pslOvSeries', function(orig, pier, mon){
+    if(!active()) return orig.apply(this, [].slice.call(arguments, 1));
+    if(/^\d{4}-\d{2}$/.test(String(mon || ''))) readMonth('pos_sales_' + mon.replace('-', ''));
+    var keys = Object.keys(M).filter(function(k){ return mon === 'all' || k === 'pos_sales_' + String(mon || '').replace('-', ''); });
+    var real = window.laBlob;
+    window.laBlob = function(){ var o = {}; keys.forEach(function(k){ o[k] = 1; }); return o; };
+    try{ return orig.apply(this, [].slice.call(arguments, 1)); }
+    finally{ window.laBlob = real; }
+  });
+
   /* §pslProd (lk-inbox 11-13) · the product registry lists every product of every uploaded POS file, from laBlob()'s pos_sales_* keys.
      Here those months live in M: read every month of both piers once (the registry is shared), and show it the months read. */
   var regLoading = null, regFailAt = 0;

@@ -8,7 +8,7 @@ const SOURCE = fs.readFileSync('allotment_v2/js/ops/27-ops-sales-board.js', 'utf
 const BOARD = {
   month: '2026-10', previous_month: '2026-09', total_pax: 30,
   sales: [
-    { sales_id: 's2', name: 'Bee', pax: 20, foc: 2, target: 15, streak: 3, rank: 1, previous_rank: 2, bookings: 7 },
+    { sales_id: 's2', name: 'Bee', pax: 20, foc: 2, target: 15, streak: 3, rank: 1, previous_rank: 2, bookings: 7, route_pax: { r2: 15, r3: 5 }, route_value: { r2: 30000, r3: 9000.5 }, value: 39000.5 },
     { sales_id: 's1', name: 'Nok', pax: 10, foc: 0, target: null, streak: 0, rank: 2, previous_rank: 1, bookings: 0 },
   ],
   agents: [
@@ -149,13 +149,14 @@ test('a non-sales write marks the cache stale so the next render refetches', asy
   assert.equal(rt.calls.length, 2);
 });
 
-test('booking counts come from the server board; the route mix is not summed from the partial booking cache', async () => {
+test('booking counts and the route mix come from the server board, never summed from the partial booking cache', async () => {
   const off = runtime({ enabled: false, respond: ok });
   assert.equal(off.window.salesBookingCounts('2026-10'), 'legacy:salesBookingCounts');
   assert.equal(off.window.salesPersonMix('s2', '2026-10'), 'legacy:salesPersonMix');
   const rt = runtime({ respond: ok });
   await rt.window.renderSalesBoard();
   assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesBookingCounts('2026-10'))), { s2: 7 });
-  assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesPersonMix('s2', '2026-10'))), { routePax: {}, routeVal: {}, value: null });
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesPersonMix('s2', '2026-10'))), { routePax: { r2: 15, r3: 5 }, routeVal: { r2: 30000, r3: 9000.5 }, value: 39000.5 }, 'the server row route mix and sold value (parity 11-27 sbPickWho)');
+  assert.deepEqual(JSON.parse(JSON.stringify(rt.window.salesPersonMix('s1', '2026-10'))), { routePax: {}, routeVal: {}, value: null }, 'a row without the mix: none, not a sum of the partial cache');
   assert.ok(!rt.legacy.includes('salesBookingCounts') && !rt.legacy.includes('salesPersonMix'));
 });

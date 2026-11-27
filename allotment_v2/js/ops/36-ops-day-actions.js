@@ -53,6 +53,8 @@
       O.bookings.upsert(ob);
     }
     var target = bk || findBooking(ob.external_id || ob.id);
+    // §opsVersionRace · a copy older than the one already applied (a read that crossed a write) changes nothing
+    if(target && target.opsVersion != null && ob.version != null && +ob.version < +target.opsVersion) return target;
     if(target){
       if(ob.version != null) target.opsVersion = +ob.version;
       // the answer is the whole booking: a field the server omits is cleared there
