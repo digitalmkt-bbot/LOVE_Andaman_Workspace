@@ -675,7 +675,7 @@
   }
   function sreqOf(b, t){
     var up = t && t.operations && t.operations.upgrade, u = Array.isArray(up) ? up[up.length - 1] : up, bits = [];
-    if(u && u.from_route_id) bits.push('\u2934 Upgrade จาก ' + routeName(u.from_route_id) + (u.reason ? ' \u00b7 ' + u.reason : '') + (n(u.charge) > 0 ? ' \u00b7 +\u0e3f' + n(u.charge).toLocaleString() : ''));
+    if(u && u.from_route_id) bits.push((u.kind === 'promise' ? '★ ' : '') + '\u2934 Upgrade จาก ' + routeName(u.from_route_id) + (u.reason ? ' \u00b7 ' + u.reason : '') + (n(u.charge) > 0 ? ' \u00b7 +\u0e3f' + n(u.charge).toLocaleString() : ''));
     var note = text(b.special_request || b.notes || b.note).trim(); if(note) bits.push(note);
     return bits.join(' \u00b7 ');
   }
