@@ -1,4 +1,5 @@
 // Parity round 12 (agent AA, 2026-11-28), booking "By trip · date" on 28 Nov:
+//  · an imported sub-group is one child per legacy lock, not per name (legacy has 60 parent/name pairs with two locks).
 //  · "2 holders · 4 locks": a sub-group of a bulk lock whose parent's round is released stays active, as legacy's own status
 //    (lkmwk3d9wt4263x, lkmw39dd62vj5bk on r10), so bookingV2LocksFor counts it (ops/30-ops-locks.js build).
 //  · no "1 boat" on Early Phi Phi Bamboo: baCharterBoatMap is every boat a charter takes (the panel's day charter_taken),
@@ -19,17 +20,21 @@ test('a bulk sub-group keeps legacy\'s own status when its parent\'s round is re
   const ctx = vm.createContext({ SB_AGENTS: [], Date });
   vm.runInContext(block + '\nthis.build = build;', ctx);
   const dep = (d, status) => ({ id: `lg_P_${d}`, route_id: 'r10', service_date: d, pax: 8, released_pax: status === 'released' ? 8 : 0, agent_id: 'a01', holder_type: 'agent', status, state: status, group_id: 'lg_P', version: 1 });
-  const kid = (d, status, state, sub) => ({ id: `lg_${sub}_${d}`, route_id: 'r10', service_date: d, pax: 4, released_pax: 2, agent_id: 'a01', holder_type: 'agent', status, state, group_id: 'lg_P', parent_id: `lg_P_${d}`, sub_name: sub, created_at: '2026-11-17', version: 1 });
+  const kid = (d, status, state, sub, legacyId = sub) => ({ id: `lg_${legacyId}_${d}`, route_id: 'r10', service_date: d, pax: 4, released_pax: 2, agent_id: 'a01', holder_type: 'agent', status, state, group_id: 'lg_P', parent_id: `lg_P_${d}`, sub_name: sub, created_at: '2026-11-17', version: 1 });
   const rows = [dep('2026-11-19', 'released'), dep('2026-11-28', 'released'),
     // the server: a sub-group of a released departure is 'released' (seat-locks.ts), its own row stays active
     kid('2026-11-19', 'active', 'released', 'Aura'), kid('2026-11-28', 'active', 'released', 'Aura'),
     // a sub-group legacy released itself stays released
-    kid('2026-11-19', 'released', 'released', 'Gone')];
+    kid('2026-11-19', 'released', 'released', 'Gone'),
+    // legacy holds two locks named "Pilyn": one released, one live (lkmwja93j8s29nt, lkmwk3cfajvrpfl): two children, not one
+    kid('2026-11-19', 'released', 'released', 'Pilyn', 'lkOLD'), kid('2026-11-19', 'active', 'released', 'Pilyn', 'lkNEW')];
   const group = { id: 'lg_P', route_id: 'r10', holder_type: 'agent', agent_id: 'a01', date_from: '2026-11-19', date_to: '2026-11-30', weekdays: [], pax: 8, state: 'active', version: 1 };
   const out = J(ctx.build(rows, [group]));
   const by = (sub) => out.find((l) => l.parentId === 'lg_P' && l.subName === sub);
   assert.equal(by('Aura').status, 'active', 'a wrong released is the parent\'s released round (legacy: releasedDates on the parent only)');
   assert.equal(by('Gone').status, 'released');
+  const pilyn = out.filter((l) => l.parentId === 'lg_P' && l.subName === 'Pilyn').map((l) => [l.id, l.status]);
+  assert.deepEqual(pilyn, [['lg_lkOLD_2026-11-19', 'released'], ['lg_lkNEW_2026-11-19', 'active']], 'one child here is the two merged by name, the live one lost');
   assert.deepEqual(out.find((l) => l.id === 'lg_P').releasedDates, ['2026-11-19', '2026-11-28'], 'the parent\'s rounds stay released');
 });
 
