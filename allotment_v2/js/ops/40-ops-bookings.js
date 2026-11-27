@@ -672,6 +672,10 @@
   /* server copy over a booking already on screen · keeps what the server doesn't hold
      (van/boat/check-in ops, invoices, approval notes, weather follow-up…) */
   function mergeInto(bk, ob){
+    /* §opsVersionRace (parity 11-27, insurance) · a read sent while a write of this booking was on its way can answer after the write
+       did, with the copy from before it: taken, it put the older version back and the next write was refused 409 stale_version
+       ("you have version 6, it is now 7"). A copy older than the one already applied changes nothing. */
+    if(bk && ob && bk.opsVersion != null && ob.version != null && +ob.version < +bk.opsVersion) return bk;
     var fresh = fromServer(ob);
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
