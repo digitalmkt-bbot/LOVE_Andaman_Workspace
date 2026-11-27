@@ -6,6 +6,7 @@
 // servers get a clean environment (PATH-like variables only).
 import { serve } from '../ui/_harness.mjs';
 import { chromium } from 'playwright';
+import { countUpDone, maskLines, tiePairs } from './noise.mjs';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -290,6 +291,8 @@ export async function snapBoth(P, state, opt = {}) {
 }
 function STILL_LOADING() {
   const root = document.querySelector('.view.active') || document.body;
+  // noise.mjs rule 4 (actionboard page open): the ops placeholder counts as loading whatever its label says
+  if (root.querySelector('.la-ops-loading, [data-ops-loading="1"]')) return false;
   return !/(^|\n)[^\n]{0,30}(Loading|กำลังโหลด|กำลังดึง)[^\n]{0,90}(…|\.\.\.)/i.test(root.innerText || '');
 }
 export async function settle(H, S, wait = 300) {
@@ -300,6 +303,9 @@ export async function settle(H, S, wait = 300) {
   S.loadMs = Date.now() - t;
   if (!ok) S.errors.push(`still loading after ${H.LOAD_MS / 1000}s`);
   else if (S.loadMs > 300) await quiet(S, H.QUIET_MS);
+  // noise.mjs rule 3 (sales-board): a count-up animation is read once it shows its final numbers (5 s at most; past that
+  // the numbers are read as they are and any difference shows)
+  await S.page.waitForFunction(countUpDone, null, { timeout: 5000, polling: 150 }).catch(() => {});
 }
 // a page that draws in steps (legacy's booking page renders 15,000 bookings after the nav returns): wait until the open view
 // stops changing · its text length and its control count the same on 3 looks 400 ms apart, at most maxMs (run.mjs, after each page nav)
@@ -323,15 +329,21 @@ const NUM = /-?\d[\d,]*(\.\d+)?/g;
 // a booking code's random suffix (legacy bkV2GenerateBookingCode BK-YYMMNNNN-XXXX; the server copies it) is a value, like a number, never layout
 const CODE = /\bBK-?(\d{8,})-[0-9A-Z]{4}\b/g;
 export function compare(s) {
-  const L = s.legacy, N = s.new;
+  const L0 = s.legacy, N0 = s.new;
+  // noise.mjs rule 1: the PR/PO "updated at HH:MM · by <user>" stamp is compared with its time and user masked
+  const L = { ...L0, lines: maskLines(L0.lines) }, N = { ...N0, lines: maskLines(N0.lines) };
   const lines = { a: set(L.lines), b: set(N.lines) };
-  const missing = [...lines.a].filter((x) => !lines.b.has(x)), extra = [...lines.b].filter((x) => !lines.a.has(x));
-  const union = new Set([...lines.a, ...lines.b]).size || 1;
+  let missing = [...lines.a].filter((x) => !lines.b.has(x)), extra = [...lines.b].filter((x) => !lines.a.has(x));
+  // noise.mjs rule 2: rows tied on the same numbers in another order are paired (reported in tiePairs), not differences
+  const ties = tiePairs(missing, extra);
+  const tm = new Set(ties.map((t) => t[0])), te = new Set(ties.map((t) => t[1]));
+  missing = missing.filter((x) => !tm.has(x)); extra = extra.filter((x) => !te.has(x));
+  const union = (new Set([...lines.a, ...lines.b]).size - ties.length) || 1;
   const sim = (union - missing.length - extra.length) / union;
   const shape = (x) => x.replace(CODE, 'BK-$1-XXXX').replace(NUM, '#');
   const sa = set(missing.map(shape)), sb = set(extra.map(shape));
   // layout = the lines with every number replaced by # · "same layout, other numbers" is a data difference
-  const shA = set((L.lines || []).map(shape)), shB = set((N.lines || []).map(shape));
+  const shA = set((L.lines || []).filter((x) => !tm.has(x)).map(shape)), shB = set((N.lines || []).filter((x) => !te.has(x)).map(shape));
   const layMissing = [...shA].filter((x) => !shB.has(x)), layExtra = [...shB].filter((x) => !shA.has(x));
   const layUnion = new Set([...shA, ...shB]).size || 1;
   const laySim = (layUnion - layMissing.length - layExtra.length) / layUnion;
@@ -368,7 +380,7 @@ export function compare(s) {
     else cls = 'review: layout differs';
   }
   return { page: s.page, section: s.section, label: s.label, toggle: s.toggle, kind: s.kind, key: s.key, verdict, cls, why: why.join(' · '), sim: +sim.toFixed(3), laySim: +laySim.toFixed(3), layMissing: layMissing.slice(0, 25), layExtra: layExtra.slice(0, 25),
-    rows: [L.rows, N.rows], loadMs: [L.loadMs || 0, N.loadMs || 0], lineCount: [L.lineCount, N.lineCount], missing: missing.slice(0, 25), extra: extra.slice(0, 25), btnMissing: btnMissing.slice(0, 20), btnExtra: btnExtra.slice(0, 20),
+    tiePairs: ties.slice(0, 10), rows: [L.rows, N.rows], loadMs: [L.loadMs || 0, N.loadMs || 0], lineCount: [L.lineCount, N.lineCount], missing: missing.slice(0, 25), extra: extra.slice(0, 25), btnMissing: btnMissing.slice(0, 20), btnExtra: btnExtra.slice(0, 20),
     newErrors: newErr.slice(0, 8), legacyErrors: (L.errors || []).slice(0, 5), failed: (N.failed || []).slice(0, 10), legacyFailed: (L.failed || []).slice(0, 5),
     writes: { legacy: L.writes, new: N.writes }, dialogs: { legacy: L.dialogs, new: N.dialogs }, modal: [!!L.modal, !!N.modal] };
 }

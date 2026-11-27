@@ -53,7 +53,12 @@
     var catRows = j.by_reason.slice().sort(function(a, b){ return b.count - a.count; });
     var maxC = Math.max.apply(null, [1].concat(catRows.map(function(v){ return v.count; })));
     var grpColor = function(g){ return g === 'operator' ? '#185FA5' : g === 'other' ? '#8a8a82' : '#A32D2D'; };
-    var label = function(r){ return typeof window.bookingV2CancelLabel === 'function' ? window.bookingV2CancelLabel(r.code) : r.label; };
+    // Legacy catLabel (bookingV2RenderCancelReport.js §tcxBkWhy): a trip-cancel code reads "Trip cancelled · <reason>".
+    var label = function(r){
+      var code = String(r.code || '');
+      if (/^tcx_/.test(code) && typeof TCX_R !== 'undefined') return 'Trip cancelled · ' + ((TCX_R[code.slice(4)] || TCX_R.other).en);
+      return typeof window.bookingV2CancelLabel === 'function' ? window.bookingV2CancelLabel(r.code) : r.label;
+    };
     var catHtml = card('<div style="font-size:13px;font-weight:700;color:#1B2A55;margin-bottom:10px">By reason</div>' + catRows.map(function(v){
       var g = v.group || 'other', wd = Math.round(v.count / maxC * 100);
       return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + esc(label(v)) + ' <span style="font-size:9px;color:#fff;background:' + grpColor(g) + ';padding:1px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em">' + g + '</span></span><span style="font-family:\'DM Mono\',monospace;color:#5A5A52">' + v.count + ' &middot; ' + v.pax + ' pax &middot; ' + fmt(v.fee) + '</span></div><div style="height:7px;border-radius:4px;background:#f0eee8"><div style="width:' + wd + '%;height:100%;border-radius:4px;background:' + grpColor(g) + '"></div></div></div>';
