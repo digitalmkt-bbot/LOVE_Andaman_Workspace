@@ -12,10 +12,23 @@
 //    read mid-way (7,641 vs 7,580). `countUpDone` is what settle() waits for: every `.sb-cnt` shows its `data-pax`.
 // 4. actionboard (page open, round 8: 947 vs 922 lines): read while the new side still showed its loading line.
 //    `opsLoading` is what settle() also waits on: the ops placeholder (`.la-ops-loading`, `[data-ops-loading]`).
+// 5. operation "Visit Panwa" / "Week" / "Month" / "ตัดสินใจ ▾" (2026-11-27T16-32-31, round 10): "สรุปช่วงออกเรือ · พยากรณ์ล่าสุด
+//    23:32" vs "23:33" is the minute the forecast was last read on each side. Only the HH:MM of that exact line is masked; the
+//    weather summary lines under it are compared as they are.
+// 6. execboard (every state): "ศุกร์ 27 พ.ย. 2026 · อัปเดต 23:37 · วาดใหม่ทุก 1 นาที" is the clock of the board's last redraw (once
+//    a minute). Only the HH:MM after "อัปเดต" is masked; the date before it and the rest of the line must still match.
 
 const STAMP = /^(ข้อมูลอัพเดตเวลา )\d{1,2} \S+ \d{4} \d{1,2}:\d{2}( · โดย ).+$/;
-/** A line with its volatile part masked (rule 1); any other line as it is. */
-export const maskLine = (line) => (typeof line === 'string' && STAMP.test(line) ? line.replace(STAMP, '$1<เวลา>$2<ผู้ใช้>') : line);
+const FORECAST = /^(สรุปช่วงออกเรือ · พยากรณ์ล่าสุด )\d{1,2}:\d{2}$/;              // rule 5
+const EB_CLOCK = /^(.+ · อัปเดต )\d{1,2}:\d{2}( · วาดใหม่ทุก \d+ นาที)$/;          // rule 6
+/** A line with its volatile part masked (rules 1, 5, 6); any other line as it is. */
+export const maskLine = (line) => {
+  if (typeof line !== 'string') return line;
+  if (STAMP.test(line)) return line.replace(STAMP, '$1<เวลา>$2<ผู้ใช้>');
+  if (FORECAST.test(line)) return line.replace(FORECAST, '$1<เวลา>');
+  if (EB_CLOCK.test(line)) return line.replace(EB_CLOCK, '$1<เวลา>$2');
+  return line;
+};
 export const maskLines = (lines) => (lines || []).map(maskLine);
 
 const NUM = /-?\d[\d,]*(\.\d+)?/g;
