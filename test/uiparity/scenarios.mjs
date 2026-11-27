@@ -148,7 +148,7 @@ function compareData(d) {
 }
 
 // ── run ──
-const files = fs.readdirSync(path.join(HERE, 'scenarios')).filter((f) => f.endsWith('.mjs')).sort();
+const files = fs.readdirSync(path.join(HERE, 'scenarios')).filter((f) => f.endsWith('.mjs') && !f.startsWith('_')).sort();
 const recordNames = legacyItems(LEGACY_DIR).items.filter((i) => i.type === 'handler').map((i) => i.name);
 const results = [];
 const seen = { calls: {}, dialogIds: {}, pages: {} };
@@ -170,7 +170,8 @@ for (const f of files) {
     log(`   vars ${JSON.stringify(vars).slice(0, 300)}`);
     H = await startHarness({ out: dir, legacyDir: LEGACY_DIR, opsDir: OPS_DIR, legacyDb: dbUrl(DB.legacy), opsDb: dbUrl(DB.ops),
       legacyPort: +(process.env.LEGACY_PORT || 3911), opsPort: +(process.env.OPS_PORT || 3912), user: 'uiparity', pass: 'uiparity', log });
-    const P = await bootPair(H, 1, { recordNames });
+    // one fixed clock for both browsers: 10:00 Bangkok of today (run.mjs uses the same start before 07:00)
+    const P = await bootPair(H, 1, { recordNames, clock: today + 'T10:00:00+07:00' });
     for (const [i, st] of sc.steps(vars).entries()) {
       const found = await runStep(H, P, st);
       const snap = await snapBoth(P, { page: sc.name, toggle: stepLabel(st), kind: 'step', found: { legacy: found[0], new: found[1] } }, { scope: 'modal' });

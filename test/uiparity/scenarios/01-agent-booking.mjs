@@ -1,0 +1,37 @@
+// Scenario 1 · booking: an agent booking, created and confirmed from the booking form
+// Legacy flow (08-app.js): Booking › "+ New booking" (bkV2NewBooking) › agent: type, Enter (bkV2AgentDDKey →
+// bkV2PickAgentByText) › trip 1 route: type, Enter (bkV2RouteDDKey → bkV2PickRouteByText) › the calendar
+// (bkV2CalOpen › bkV2CalPick) › 2 adults (bkV2BumpPax 'ad_fr') › lead name (bkV2SetBookingField 'leadPax') ›
+// self-arrive at the pier (bkV2TogglePickupSelf) › Confirm (bkV2SubmitBooking → bkV2CommitBooking 'confirmed').
+import { pickAgentRoute, bookingsByLead } from './_booking.mjs';
+export const LEAD = 'UIP SC1 Lead';
+export function formSteps(v, lead) {
+  return [
+    { nav: 'booking' },
+    { label: '+ New booking', clickFn: 'bkV2NewBooking' },
+    { label: 'agent: type', fill: '#bkv2-agent-input', value: v.agentName },
+    { label: 'agent: Enter', press: '#bkv2-agent-input', key: 'Enter' },
+    { label: 'route: type', fill: '#bkv2-route-input-0', value: v.routeName },
+    { label: 'route: Enter', press: '#bkv2-route-input-0', key: 'Enter' },
+    { label: 'date: open calendar', clickSel: '#bkv2-cal-trig-0' },
+    ...(v.date.slice(0, 7) !== v.today.slice(0, 7) ? [{ label: 'calendar: next month', clickSel: '[onclick*="CalNav(1)"]' }] : []),
+    { label: 'date: pick ' + v.date, clickSel: `[onclick*="CalPick(0,'${v.date}')"], [onclick*="CalPick(0, '${v.date}')"]` },
+    { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
+    { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
+    { label: 'lead name', fill: `input[oninput*="SetBookingField('leadPax'"]`, value: lead },
+    { label: 'self-arrive at the pier', clickSel: 'input[onchange*="TogglePickupSelf"]' },
+  ];
+}
+export default {
+  name: 'agent-booking',
+  title: 'agent booking: create and confirm from the form',
+  async prepare({ legacy, addDays, today }) {
+    const date = addDays(today, 14);
+    return { date, today, ...(await pickAgentRoute(legacy, date)) };
+  },
+  steps: (v) => [...formSteps(v, LEAD), { label: 'Confirm booking', clickFn: 'bkV2SubmitBooking' }],
+  async data({ legacy, ops }) {
+    const r = await bookingsByLead(legacy, ops, LEAD);
+    return { legacy: r.legacy, new: r.new };
+  },
+};

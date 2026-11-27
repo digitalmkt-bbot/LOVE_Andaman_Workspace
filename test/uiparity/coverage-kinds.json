@@ -1,0 +1,65 @@
+{
+  "_doc": "coverage.mjs overrides. kinds: item id -> {kind, why} (id = handler name, page:<view>, dialog:<element id>); kind is view | dialog | action | print | none (none = not counted, say why). patterns: [{re, type?, kind, why}] applied when no exact entry. replays: item id -> the check-3 replay that covers the rule behind it. uncovered: item id -> the written reason it is not covered yet (the ready bar needs one for every uncovered item).",
+  "kinds": {
+    "flBackupData": {
+      "kind": "none",
+      "why": "legacy-only: downloads the browser's whole-state blob (localStorage backup); the backend replaces it"
+    },
+    "flImportData": {
+      "kind": "none",
+      "why": "legacy-only: loads a whole-state blob into the browser; the importers replace it"
+    },
+    "resetAllData": {
+      "kind": "none",
+      "why": "legacy-only: wipes the browser's local state"
+    },
+    "exportHTML": {
+      "kind": "none",
+      "why": "legacy-only: saves the page as an offline HTML copy"
+    },
+    "laRetrySaveNow": {
+      "kind": "none",
+      "why": "legacy-only: retries the whole-state /api/v1/_batch save (not reimplemented, CLAUDE.md)"
+    },
+    "poSaveRetry": {
+      "kind": "none",
+      "why": "legacy-only: retries a failed whole-state save of the pier office"
+    },
+    "bsDebugLog": {
+      "kind": "none",
+      "why": "dev tool: boat-schedule debug log"
+    },
+    "_fsRaw": {
+      "kind": "none",
+      "why": "dev tool: raw fleet-state viewer"
+    },
+    "flProjMigrate": {
+      "kind": "none",
+      "why": "one-off client-side data migration of fleet projects (the importer did it)"
+    },
+    "agAlertSyncRate": {
+      "kind": "action",
+      "why": "writes the agent's rate type from an alert"
+    }
+  },
+  "patterns": [
+    {
+      "re": "^devlog",
+      "kind": "none",
+      "why": "dev tool: the developers' change log panel"
+    },
+    {
+      "re": "^_bcap",
+      "kind": "none",
+      "why": "dev tool: bug-capture panel (screenshots for the developers)"
+    }
+  ],
+  "replays": {
+    "bkV2SubmitBooking": "booking-price (cutover-replay A + replay-live B)",
+    "bkV2SaveDraft": "booking-price (cutover-replay A + replay-live B)",
+    "bkV2CancelConfirm": "cancel-fee (cutover-replay A)",
+    "bkV2PartialConfirm": "refund / partial-cancel fee (cutover-replay A)",
+    "page:calendar": "seats left per route-day (replay-live B)"
+  },
+  "uncovered": {}
+}
