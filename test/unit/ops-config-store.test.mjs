@@ -18,6 +18,8 @@ function harness({ pre = '', enabled = true, agent = false, server = {}, failGet
     pmap_agpanel: { key: 'pmap_agpanel', value: 1, saved: false, version: null },
     pmap_zonebg: { key: 'pmap_zonebg', value: 1, saved: true, version: 3 },
     guides: { key: 'guides', value: [{ id: 'g1', name: 'A' }], saved: true, version: 2 },
+    cal_route_sets: { key: 'cal_route_sets', value: [{ id: 'g1', name: 'A' }], saved: true, version: 2 },
+    pos_products: { key: 'pos_products', value: { 'sun cream': { nm: 'Sun cream', cat: 'care' } }, saved: true, version: 4 },
     ...(server.cfg || {}),
   };
   store['/v1/config'] = { entries: Object.values(cfg) };
@@ -44,6 +46,16 @@ function harness({ pre = '', enabled = true, agent = false, server = {}, failGet
     call: async (m, p, body) => {
       calls.push([m, p, body]);
       if (ctx.__deny) { const d = ctx.__deny; ctx.__deny = null; throw Object.assign(new Error(d.message), d); }
+      const it = /^\/v1\/config\/(guides|pos_products)\/items(?:\/([^/]+))?$/.exec(p);
+      if (it) {   // §targetedWrites · one item, applied to what the stub server holds now (no version)
+        const row = cfg[it[1]], id = it[2] && decodeURIComponent(it[2]), list = it[1] === 'guides';
+        let v = JSON.parse(JSON.stringify(row.value));
+        if (m === 'POST') { if (list) v.push(body); else { const { key, ...rec } = body; v[key] = rec; } }
+        else if (m === 'DELETE') { if (list) v = v.filter(g => g.id !== id); else delete v[id]; }
+        else { const cur = list ? v.find(g => g.id === id) : v[id]; Object.keys(body).forEach(k => { if (body[k] === null) delete cur[k]; else cur[k] = body[k]; }); }
+        cfg[it[1]] = { ...row, value: v, saved: true, version: (row.version || 0) + 1 };
+        return { key: it[1], id: id || body.id || body.key, version: cfg[it[1]].version };
+      }
       const mm = /^\/v1\/config\/(\w+)$/.exec(p);
       if (mm) {
         const row = cfg[mm[1]];
@@ -128,17 +140,17 @@ test('config: one GET /v1/config fills every key; values are the servers, not re
 
 test('config: ctWrite shows at once, saves after a pause with the version it read, keeps typing as one save', async () => {
   const h = harness(); await tick();
-  const g = h.ctx.ctRead('guides');
-  g[0].name = 'B'; h.ctx.ctWrite('guides', g);
-  g[0].name = 'Bo'; h.ctx.ctWrite('guides', g);
-  assert.equal(h.ctx.ctRead('guides')[0].name, 'Bo', 'optimistic');
-  assert.equal(puts(h, 'guides').length, 0, 'not yet: still typing');
-  await h.ctx.laOps.configStore.flush('guides');
-  assert.equal(puts(h, 'guides').length, 1);
-  assert.equal(puts(h, 'guides')[0][2].version, 2);
-  assert.equal(puts(h, 'guides')[0][2].value[0].name, 'Bo');
-  g[0].name = 'Boo'; h.ctx.ctWrite('guides', g); await h.ctx.laOps.configStore.flush('guides');
-  assert.equal(puts(h, 'guides')[1][2].version, 3, 'the next save carries the version the last answer gave');
+  const g = h.ctx.ctRead('cal_route_sets');
+  g[0].name = 'B'; h.ctx.ctWrite('cal_route_sets', g);
+  g[0].name = 'Bo'; h.ctx.ctWrite('cal_route_sets', g);
+  assert.equal(h.ctx.ctRead('cal_route_sets')[0].name, 'Bo', 'optimistic');
+  assert.equal(puts(h, 'cal_route_sets').length, 0, 'not yet: still typing');
+  await h.ctx.laOps.configStore.flush('cal_route_sets');
+  assert.equal(puts(h, 'cal_route_sets').length, 1);
+  assert.equal(puts(h, 'cal_route_sets')[0][2].version, 2);
+  assert.equal(puts(h, 'cal_route_sets')[0][2].value[0].name, 'Bo');
+  g[0].name = 'Boo'; h.ctx.ctWrite('cal_route_sets', g); await h.ctx.laOps.configStore.flush('cal_route_sets');
+  assert.equal(puts(h, 'cal_route_sets')[1][2].version, 3, 'the next save carries the version the last answer gave');
 });
 
 test('config: a never-saved key (version null) is saved without a version', async () => {
@@ -152,33 +164,33 @@ test('config: a never-saved key (version null) is saved without a version', asyn
 test('config: a refused save puts the last saved value back and shows the server message', async () => {
   const h = harness(); await tick();
   h.deny({ message: 'guides[0].role must be one of guide', status: 400, code: 'bad_request' });
-  const g = h.ctx.ctRead('guides'); g[0].name = 'Zed'; h.ctx.ctWrite('guides', g);
-  await h.ctx.laOps.configStore.flush('guides');
-  assert.equal(h.ctx.ctRead('guides')[0].name, 'A');
+  const g = h.ctx.ctRead('cal_route_sets'); g[0].name = 'Zed'; h.ctx.ctWrite('cal_route_sets', g);
+  await h.ctx.laOps.configStore.flush('cal_route_sets');
+  assert.equal(h.ctx.ctRead('cal_route_sets')[0].name, 'A');
   assert.equal(h.errors[0][1], 'guides[0].role must be one of guide');
-  assert.equal(h.errors[0][0], 'Guide register not saved');
+  assert.equal(h.errors[0][0], 'Calendar route sets not saved');
 });
 
 test('config: 409 stale_version reloads the key and tells the user', async () => {
   const h = harness(); await tick();
-  h.cfg.guides = { ...h.cfg.guides, value: [{ id: 'g1', name: 'Theirs' }], version: 5 };   // someone else saved
-  const g = h.ctx.ctRead('guides'); g[0].name = 'Mine'; h.ctx.ctWrite('guides', g);
-  await h.ctx.laOps.configStore.flush('guides');
+  h.cfg.cal_route_sets = { ...h.cfg.cal_route_sets, value: [{ id: 'g1', name: 'Theirs' }], version: 5 };   // someone else saved
+  const g = h.ctx.ctRead('cal_route_sets'); g[0].name = 'Mine'; h.ctx.ctWrite('cal_route_sets', g);
+  await h.ctx.laOps.configStore.flush('cal_route_sets');
   assert.equal(h.errors[0][2], 'stale_version');
   assert.match(h.errors[0][0], /not saved/);
-  assert.equal(h.calls.filter(c => c[0] === 'GET' && c[1] === '/v1/config/guides').length, 1);
-  assert.equal(h.ctx.ctRead('guides')[0].name, 'Theirs');
-  assert.equal(h.ctx.laOps.configStore.ents.guides.version, 5);
+  assert.equal(h.calls.filter(c => c[0] === 'GET' && c[1] === '/v1/config/cal_route_sets').length, 1);
+  assert.equal(h.ctx.ctRead('cal_route_sets')[0].name, 'Theirs');
+  assert.equal(h.ctx.laOps.configStore.ents.cal_route_sets.version, 5);
 });
 
 test('config: an edit made while a save is in flight is saved after it, not lost', async () => {
   const h = harness(); await tick();
-  const g = h.ctx.ctRead('guides'); g[0].name = 'One'; h.ctx.ctWrite('guides', g);
-  const first = h.ctx.laOps.configStore.flush('guides');
-  g[0].name = 'Two'; h.ctx.ctWrite('guides', g);
-  await first; await h.ctx.laOps.configStore.flush('guides');
-  assert.equal(h.ctx.ctRead('guides')[0].name, 'Two');
-  assert.equal(h.cfg.guides.value[0].name, 'Two');
+  const g = h.ctx.ctRead('cal_route_sets'); g[0].name = 'One'; h.ctx.ctWrite('cal_route_sets', g);
+  const first = h.ctx.laOps.configStore.flush('cal_route_sets');
+  g[0].name = 'Two'; h.ctx.ctWrite('cal_route_sets', g);
+  await first; await h.ctx.laOps.configStore.flush('cal_route_sets');
+  assert.equal(h.ctx.ctRead('cal_route_sets')[0].name, 'Two');
+  assert.equal(h.cfg.cal_route_sets.value[0].name, 'Two');
 });
 
 test('config: agent logins and legacy mode never touch the server for these keys', async () => {
@@ -201,4 +213,73 @@ test('config: the pickup map toggles that cached their first read are dropped wh
   assert.equal(vm.runInContext('_pmapZoneBg', h.ctx), null);
   assert.equal(vm.runInContext('_pmapAgOpen', h.ctx), null);
   assert.equal(h.ctx.ctRead('pmap_zonebg'), 0);
+});
+
+/* ── §targetedWrites (2026-11-27) · the guide register and the shop product registry go up item by item ── */
+const itemCalls = (h, k) => h.calls.filter(c => c[1].indexOf('/v1/config/' + k + '/items') === 0);
+
+test('guides: a changed guide is one PATCH with only the changed fields; no whole-list PUT, no version', async () => {
+  const h = harness(); await tick();
+  const g = h.ctx.ctRead('guides'); g[0].name = 'Somchai'; g[0].nick = 'Chai'; h.ctx.ctWrite('guides', g);
+  await h.ctx.laOps.configStore.flush('guides');
+  assert.equal(puts(h, 'guides').length, 0, 'the list is not sent whole');
+  assert.equal(J(itemCalls(h, 'guides')), J([['PATCH', '/v1/config/guides/items/g1', { name: 'Somchai', nick: 'Chai' }]]));
+  assert.equal(h.ctx.ctRead('guides')[0].nick, 'Chai', 'the saved register is read back');
+  assert.equal(h.ctx.laOps.configStore.ents.guides.version, 3);
+});
+
+test('guides: an added guide is a POST of it, a removed one a DELETE, a field taken off is null', async () => {
+  const h = harness({ server: { cfg: { guides: { key: 'guides', value: [{ id: 'g1', name: 'A', nick: 'a' }, { id: 'g2', name: 'B', licensed: true }], saved: true, version: 2 } } } });
+  await tick();
+  const g = h.ctx.ctRead('guides');
+  delete g[0].nick;                                    // nick cleared on g1
+  g.splice(1, 1);                                      // g2 removed
+  g.push({ id: 'g3', name: 'C', role: 'trainee', licensed: true });   // a new one at the end; licensed is the server's, never sent
+  h.ctx.ctWrite('guides', g); await h.ctx.laOps.configStore.flush('guides');
+  assert.equal(J(itemCalls(h, 'guides')), J([
+    ['DELETE', '/v1/config/guides/items/g2', undefined],
+    ['PATCH', '/v1/config/guides/items/g1', { nick: null }],
+    ['POST', '/v1/config/guides/items', { id: 'g3', name: 'C', role: 'trainee' }],
+  ]));
+  assert.equal(J(h.cfg.guides.value.map(x => x.id)), J(['g1', 'g3']));
+});
+
+test('guides: a reorder has no item form, so it is the whole-list PUT with the version, as before', async () => {
+  const h = harness({ server: { cfg: { guides: { key: 'guides', value: [{ id: 'g1', name: 'A' }, { id: 'g2', name: 'B' }], saved: true, version: 2 } } } });
+  await tick();
+  const g = h.ctx.ctRead('guides'); h.ctx.ctWrite('guides', [g[1], g[0]]); await h.ctx.laOps.configStore.flush('guides');
+  assert.equal(itemCalls(h, 'guides').length, 0);
+  assert.equal(puts(h, 'guides').length, 1); assert.equal(puts(h, 'guides')[0][2].version, 2);
+});
+
+test('guides: another person\'s change to another guide is kept (no stale_version), and shows after the save', async () => {
+  const h = harness({ server: { cfg: { guides: { key: 'guides', value: [{ id: 'g1', name: 'A' }, { id: 'g2', name: 'B' }], saved: true, version: 2 } } } });
+  await tick();
+  h.cfg.guides = { ...h.cfg.guides, value: [{ id: 'g1', name: 'A' }, { id: 'g2', name: 'Theirs' }], version: 3 };   // someone else saved g2
+  const g = h.ctx.ctRead('guides'); g[0].name = 'Mine'; h.ctx.ctWrite('guides', g); await h.ctx.laOps.configStore.flush('guides');
+  assert.equal(h.errors.length, 0);
+  assert.equal(J(h.ctx.ctRead('guides').map(x => x.name)), J(['Mine', 'Theirs']));
+});
+
+test('guides: a refused item shows the server message and the register as the server holds it', async () => {
+  const h = harness(); await tick();
+  h.deny({ message: 'guides[0].role must be one of guide, trainee, intern, staff', status: 400, code: 'bad_request' });
+  const g = h.ctx.ctRead('guides'); g[0].role = 'captain'; h.ctx.ctWrite('guides', g); await h.ctx.laOps.configStore.flush('guides');
+  assert.equal(h.errors[0][0], 'Guide register not saved');
+  assert.match(h.errors[0][1], /role must be one of/);
+  assert.equal(h.ctx.ctRead('guides')[0].role, undefined, 'read back from the server');
+});
+
+test('pos_products: one product changed is one PATCH by its key; a new one a POST with its key', async () => {
+  const h = harness(); await tick();
+  const p = h.ctx.ctRead('pos_products');
+  p['sun cream'].img = { id: 'att_1', url: '/v1/attachments/att_1' };
+  p['hat'] = { nm: 'Hat', cat: 'wear' };
+  await h.ctx.ctWrite('pos_products', p);
+  assert.equal(puts(h, 'pos_products').length, 0);
+  assert.equal(J(itemCalls(h, 'pos_products')), J([
+    ['PATCH', '/v1/config/pos_products/items/sun%20cream', { img: { id: 'att_1', url: '/v1/attachments/att_1' } }],
+    ['POST', '/v1/config/pos_products/items', { nm: 'Hat', cat: 'wear', key: 'hat' }],
+  ]));
+  assert.equal(h.ctx.ctRead('pos_products').hat.nm, 'Hat');
 });

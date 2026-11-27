@@ -12,7 +12,7 @@
    dr_mail                GET|PUT /v1/config/dr_mail           (daily report e-mail form)
    pmap_agpanel           GET|PUT /v1/config/pmap_agpanel      (pickup map: agent panel open, 0|1)
    pmap_zonebg            GET|PUT /v1/config/pmap_zonebg       (pickup map: zone background, 0|1)
-   guides                 GET|PUT /v1/config/guides            (the guide register, whole list)
+   guides                 GET /v1/config/guides · one guide: POST|PATCH|DELETE /v1/config/guides/items[/{id}] (§targetedWrites)
    rc_status_colors       GET|PUT /v1/config/rc_status_colors  (re-confirm page colours; rcStatusColors, rcSaveStatusColor)
    vanjob_tpl             GET|PUT /v1/config/vanjob_tpl        (van job sheet template; vjTpl, vjTplSave)
    vanjob_rowhl           GET|PUT /v1/config/vanjob_rowhl      (van job sheet line highlights; vjHlAll, vjHlPersist)
@@ -22,7 +22,7 @@
    pck_guide_colors       GET|PUT /v1/config/pck_guide_colors  (Pier check-in guide colours)
    tm_boats               GET|PUT /v1/config/tm_boats          (Ranong immigration boats and crews; tmBoatsRead, tmBoatsWrite)
    route_codes            GET|PUT /v1/config/route_codes       (§routeCode: hand-set programme codes; laRouteCodeMap / laRouteCodeSave)
-   pos_products           GET|PUT /v1/config/pos_products      (§pslProd: shop sales product registry; pslProdMap / pslProdSave)
+   pos_products           GET /v1/config/pos_products · one product: POST|PATCH|DELETE …/pos_products/items[/{key}] (§pslProd; pslProdMap / pslProdSave)
    px_central             GET|PUT /v1/config/px_central        (§pxForecast: Trip P&L Forecast's monthly central costs; pxFcSaved / pxFcSet)
    (the whole store in one read: GET /v1/config)
 
@@ -165,12 +165,60 @@
     if(!CFG[key].wait){ e.timer = null; return flush(key); }
     e.timer = setTimeout(function(){ flush(key); }, CFG[key].wait);
   }
+  /* §targetedWrites (2026-11-27) · the two big lists are saved item by item: the guide register (by guide id) and the shop's product
+     registry (by product key). The edit is compared with the last saved value and only what changed goes up:
+       a new item     POST   /v1/config/{key}/items          (the whole item)
+       a changed item PATCH  /v1/config/{key}/items/{id}     (the fields that changed; a field taken off is null)
+       a removed item DELETE /v1/config/{key}/items/{id}
+     No version: the rest of the list is the server's own when it applies the change, so two people editing different guides or
+     products never overwrite each other. A reorder of the guides (no item endpoint says where an item goes) is the whole-list PUT. */
+  var ITEM_KEYS = { guides: 'list', pos_products: 'map' };
+  function plain(x){ if(!x || typeof x !== 'object') return x; var y = Object.assign({}, x); delete y.licensed; return y; }
+  function itemsOf(kind, v){
+    var out = {}, order = [];
+    if(kind === 'list') (Array.isArray(v) ? v : []).forEach(function(x){ if(x && x.id != null){ out[String(x.id)] = plain(x); order.push(String(x.id)); } });
+    else Object.keys(v && typeof v === 'object' ? v : {}).forEach(function(k){ out[k] = plain(v[k]); order.push(k); });
+    return { by: out, order: order };
+  }
+  function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+  /* null when the change is not item-shaped (a reorder): the caller then saves the whole value */
+  function itemOps(key, before, after){
+    var kind = ITEM_KEYS[key], A = itemsOf(kind, before), B = itemsOf(kind, after), ops = [], base = '/v1/config/' + key + '/items';
+    if(kind === 'list'){
+      var kept = A.order.filter(function(id){ return B.by[id] !== undefined; }), now = B.order.filter(function(id){ return A.by[id] !== undefined; });
+      if(!same(kept, now)) return null;                                            // the guides were reordered
+      var firstNew = B.order.findIndex(function(id){ return A.by[id] === undefined; });
+      if(firstNew >= 0 && B.order.slice(firstNew).some(function(id){ return A.by[id] !== undefined; })) return null;   // a new guide not at the end
+    }
+    A.order.forEach(function(id){ if(B.by[id] === undefined) ops.push({ m: 'DELETE', p: base + '/' + encodeURIComponent(id) }); });
+    B.order.forEach(function(id){
+      var b = B.by[id], a = A.by[id];
+      if(a === undefined){ var add = Object.assign({}, b); if(kind === 'map') add.key = id; ops.push({ m: 'POST', p: base, b: add }); return; }
+      var diff = {}, any = false;
+      Object.keys(b || {}).forEach(function(f){ if(!same(b[f], a[f])){ diff[f] = b[f]; any = true; } });
+      Object.keys(a || {}).forEach(function(f){ if(!(f in (b || {}))){ diff[f] = null; any = true; } });
+      if(any) ops.push({ m: 'PATCH', p: base + '/' + encodeURIComponent(id), b: diff });
+    });
+    return ops;
+  }
+  function flushItems(e, key, ops){
+    var mine = e.seq;
+    return ops.reduce(function(p, op){ return p.then(function(){ return O.call(op.m, op.p, op.b); }); }, Promise.resolve()).then(function(){
+      return O.get('/v1/config/' + encodeURIComponent(key));
+    }).then(function(r){
+      e.version = r.version;
+      if(e.seq === mine){ e.value = O.clone(r.value); e.snap = null; }
+      else e.snap = { value: O.clone(r.value), version: r.version };     // typed on since: its own save follows, from what is saved now
+    });
+  }
   function flush(key){
     var e = ent(key); clearTimeout(e.timer); e.timer = null;
     if(!e.snap) return Promise.resolve();
     return O.queue(function(){
       if(!e.snap) return null;                                    // an earlier save of this key was refused: nothing left to send
       e.lastErr = null;
+      var ops = ITEM_KEYS[key] ? itemOps(key, e.snap.value, e.value) : null;
+      if(ops) return flushItems(e, key, ops);
       var mine = e.seq, body = { value: O.clone(e.value) };
       if(e.version != null) body.version = e.version;
       return O.call('PUT', '/v1/config/' + encodeURIComponent(key), body).then(function(r){
@@ -182,6 +230,13 @@
       clearTimeout(e.timer); e.timer = null; e.lastErr = err;   // w6-a: save() hands the refusal back to a dialog
       var snap = e.snap; e.snap = null; e.seq++;
       if(snap){ e.value = snap.value; e.version = snap.version; }
+      /* an item save may have gone part of the way (the items before the refused one are saved): show what the server holds */
+      if(ITEM_KEYS[key] && !(err && err.code === 'stale_version')){
+        return O.get('/v1/config/' + encodeURIComponent(key)).then(applyEntry, noop).then(function(){
+          if(e.quiet) return;
+          O.fail(CFG[key].title + ' not saved', err); cfgRepaint();
+        });
+      }
       if(err && err.code === 'stale_version'){
         return O.get('/v1/config/' + encodeURIComponent(key)).then(applyEntry, noop).then(function(){
           if(e.quiet) return;                                   // w6-a: the caller (a dialog) shows the refusal itself
