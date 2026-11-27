@@ -81,7 +81,17 @@
     if(!c.loaded && !c.loading && !(c.failedAt && Date.now() - c.failedAt < 15000)){
       loadMonth(key).then(redraw, function(e){ O.fail('POS sales did not load', e); });
     }
-    return clone(c.map);
+    return inUploadOrder(clone(c.map));
+  }
+  /* §posOrder (parity 2026-11-27) · legacy's month record keeps its days in the order they were uploaded (object insertion), and its
+     registry (pslRegData) takes a product's latest price from the LAST line read on its latest day: with both piers on that day, the
+     pier uploaded later wins (Boardshort ฿421 from Panwa, not ฿380). The server lists by date: put the days back in upload order. */
+  function inUploadOrder(map){
+    var out = {};
+    Object.keys(map).map(function(k, i){ return { k: k, i: i, at: String((map[k] && map[k].at) || '') }; })
+      .sort(function(a, b){ return a.at < b.at ? -1 : a.at > b.at ? 1 : a.i - b.i; })
+      .forEach(function(x){ out[x.k] = map[x.k]; });
+    return out;
   }
 
   function send(dk){
@@ -153,7 +163,7 @@
       regLoading = Promise.all(todo.map(loadAll)).then(function(){ regLoading = null; redraw(); },
         function(e){ regLoading = null; regFailAt = Date.now(); O.fail('POS sales did not load', e); });
     }
-    var keys = Object.keys(M);
+    var keys = Object.keys(M).sort();   // legacy's blob holds the months in the order first uploaded: oldest first
     var real = window.laBlob;
     window.laBlob = function(){ var o = {}; keys.forEach(function(k){ o[k] = 1; }); return o; };
     try{ return orig.apply(this, [].slice.call(arguments, 1)); }

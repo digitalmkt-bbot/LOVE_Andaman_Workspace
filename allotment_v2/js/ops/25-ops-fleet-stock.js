@@ -134,7 +134,7 @@
     return {
       id: c.id,
       date: c.date || '',
-      itemId: c.item_id || '',
+      itemId: c.item_id || c.pier_item_id || '',   // legacy keeps the pier item's id on a part used at the pier (its dupe scan keys on it)
       itemName: c.item_name || '',
       unit: c.unit || 'ชิ้น',
       qty: num(c.qty),
