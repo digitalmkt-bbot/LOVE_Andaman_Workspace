@@ -91,6 +91,24 @@
   };
 
   /* ── drawing again ───────────────────────────────────────────────────── */
+  /* parity poj-tublamu "pjPopToggle › <colour>" (2026-11-28) · legacy draws a pier screen only when the person does something, so a
+     popup they have open stays open (after a wristband colour pick, pjWbSet's own redraw closes it and the same click, reaching the
+     swatch's span, opens it again with pjPopToggle). Here the sheet is also drawn again when a server answer lands (the save, the
+     licence checks, the day's reads), which closed it. A redraw that is not part of a person's action (no window.event) keeps the
+     popups that were open (.pj-pop.on, by id); one inside a click or change draws as legacy does. */
+  function openPops(){
+    try{ if(window.event) return []; return Array.prototype.map.call(document.querySelectorAll('.pj-pop.on[id]'), function(el){ return el.id; }); }catch(_){ return []; }
+  }
+  function reopenPops(ids){
+    ids.forEach(function(id){
+      try{
+        var el = document.getElementById(id); if(!el || el.classList.contains('on')) return;
+        el.classList.add('on');
+        if(typeof window.pjPopFit === 'function') window.pjPopFit(el);
+      }catch(_){}
+    });
+  }
+  P.keepPops = { open: openPops, reopen: reopenPops };   // for tests
   P.redraw = function(){
     try{
       var fn = P.view && window[P.view];
@@ -117,7 +135,9 @@
   ['renderPierOffice', 'renderPierAtt', 'renderPierLic', 'renderPierJob'].forEach(function(name){
     var orig = window[name]; if(typeof orig !== 'function') return;
     window[name] = function(){
+      var pops = enabled() ? openPops() : [];
       var r = orig.apply(this, arguments);
+      reopenPops(pops);
       if(enabled()) P.ensure(name);
       return r;
     };

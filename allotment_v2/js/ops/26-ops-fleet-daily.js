@@ -95,7 +95,9 @@
       no: p.no || '',
       name: p.name || '',
       boatId: p.boat_id || null,
-      type: p.type || 'drydock',
+      /* parity fl-projects flRenderProjects "PR" (2026-11-28) · a project legacy saved with no type (PRJ-014, 019, 020, 021) keeps none:
+         legacy's badge is `{drydock:'DD', …}[p.type] || 'PR'`, so 'drydock' here drew "DD" on four cards */
+      type: p.type || '',
       vendor: p.vendor || '',
       planFrom: p.plan_from || '',
       planTo: p.plan_to || null,
