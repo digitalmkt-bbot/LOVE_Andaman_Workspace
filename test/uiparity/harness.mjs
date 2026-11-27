@@ -301,6 +301,14 @@ export async function settle(H, S, wait = 300) {
   if (!ok) S.errors.push(`still loading after ${H.LOAD_MS / 1000}s`);
   else if (S.loadMs > 300) await quiet(S, H.QUIET_MS);
 }
+// a page that draws in steps (legacy's booking page renders 15,000 bookings after the nav returns): wait until the open view
+// stops changing · its text length and its control count the same on 3 looks 400 ms apart, at most maxMs (run.mjs, after each page nav)
+export async function stable(S, maxMs = 20000) {
+  const look = () => S.page.evaluate(() => { const r = document.querySelector('.view.active') || document.body; return (r.innerText || '').length + ':' + r.querySelectorAll('[onclick],[onchange]').length; }).catch(() => 'x');
+  const t0 = Date.now(); let last = await look(), same = 0;
+  while (Date.now() - t0 < maxMs && same < 2) { await S.page.waitForTimeout(400); const now = await look(); same = now === last ? same + 1 : 0; last = now; }
+  return Date.now() - t0;
+}
 export async function onBoth(H, P, fn, arg, wait = 300, { reset = true } = {}) {
   const { legacy, neu } = P;
   if (reset) { legacy.reset(); neu.reset(); }
