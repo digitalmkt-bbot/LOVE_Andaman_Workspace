@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   var O=window.laOps; if(!O) return;
-  var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={}, catById={};
+  var L={}, enc=encodeURIComponent, cache={ day:{}, month:{}, sheet:{} }, loading={}, catById={}, vbById={};
   ['pcCoAddr','renderPierCash','pcRowSave','pcRowDel','pcPull','pcSetLT','pcSetLTNote','pcSetPK','pcFillPK','pc2EdSave','pcCoName','pcCoNameSet','pcCoSave','pcPrintCert','pcMonthDays','pcOpening','pcTotals','pcBoats','pcDates','pcPkPullState'].forEach(function(n){ L[n]=window[n]; });
   function on(){ return !!(O.enabled&&O.enabled()); }
   function key(p,d){ return p+'|'+d; }
@@ -24,6 +24,7 @@
     try{ var CA=typeof window.pcClmArr==='function'?window.pcClmArr():null;
       if(CA) (j.rows||[]).forEach(function(r){ var c=r.claim; if(c&&c.id&&!CA.some(function(x){ return x&&x.id===c.id; })) CA.push({id:c.id,pier:p,date:d,name:c.name||'',by:'',ts:''}); }); }catch(_){}
     (j.rows||[]).forEach(function(r){ if(r&&r.id!=null&&r.category!==undefined) catById[r.id]=r.category; });   /* the server's expense group of each row (pcGrpOf) */
+    (j.rows||[]).forEach(function(r){ if(r&&r.id!=null) vbById[r.id]=r.van_bill||null; });   /* each line's van-bill link (pcVbChip): pcBuildViews keeps legacy's fields only */
     cache.day[key(p,d)]=j; refresh();
   }
   function applySheet(kind,j){
@@ -277,8 +278,11 @@
   var chipLegacy=window.pcVbChip, goLegacy=window.pcVbGo, delLegacy=window.pcVbOnDel;
   if(typeof chipLegacy==='function') window.pcVbChip=function(k,x){
     if(!on()) return chipLegacy.apply(this,arguments);
-    if(k!=='out'||!x||!x.vb) return '';
-    var E=typeof window.pcE==='function'?window.pcE:function(t){ return String(t==null?'':t); }, L=x.vb;
+    /* x is pcDay()'s row, which pcBuildViews rebuilds from legacy's own fields (no vb): read the link the day ledger brought
+       (parity 11-27: pop-tublamu / pok-tublamu showed none of the 14 "🚐 GM · GM1, GM2, GM3" chips of 23 Nov) */
+    var L=x&&(x.vb||vbById[x.id]);
+    if(k!=='out'||!L) return '';
+    var E=typeof window.pcE==='function'?window.pcE:function(t){ return String(t==null?'':t); };
     var names=(L.keys||[]).map(function(kk,i){ kk=String(kk||''); if(kk.charAt(0)==='x') return 'รถนอก'; var vid=(L.van_ids||[])[i]||kk.split('~')[2]||''; return vid?vbName(vid):'?'; });
     var lbl=names.length>3?(names.slice(0,3).join(', ')+' +'+(names.length-3)):names.join(', ');
     return '<em class="pc-vb" title="สร้างจากใบวางบิล '+E(L.partner||'')+' · '+E(names.join(', '))+' · กดไปดูแถวในบิล" onclick="event.stopPropagation();pcVbGo(\''+E(String(x.id))+'\')">&#128656; '+E(L.partner||'บิล')+' · '+E(lbl)+'</em>';
