@@ -2,7 +2,7 @@
 // Legacy flow (08-app.js): Booking › "+ New booking" (bkV2NewBooking) › agent: type, Enter (bkV2AgentDDKey →
 // bkV2PickAgentByText) › trip 1 route: type, Enter (bkV2RouteDDKey → bkV2PickRouteByText) › the calendar
 // (bkV2CalOpen › bkV2CalPick) › 2 adults (bkV2BumpPax 'ad_fr') › lead name (bkV2SetBookingField 'leadPax') ›
-// nationality (bkV2NatDDKey) › guide English (bkV2ToggleGuide) › hotel (bkV2HotelDDFilter) — legacy requires all three to confirm › Confirm (bkV2SubmitBooking → bkV2CommitBooking 'confirmed').
+// nationality (bkV2NatDDKey) › guide English (bkV2ToggleGuide) › no transfer (bkV2SetTripField zone NoTransfer) — legacy requires all three to confirm › Confirm (bkV2SubmitBooking → bkV2CommitBooking 'confirmed').
 import { pickAgentRoute, bookingsByLead } from './_booking.mjs';
 export const LEAD = 'UIP SC1 Lead';
 export function formSteps(v, lead) {
@@ -23,7 +23,8 @@ export function formSteps(v, lead) {
     { label: 'lead nationality: type', fill: '#bkv2-nat-input-lead', value: 'Germany' },
     { label: 'lead nationality: Enter', press: '#bkv2-nat-input-lead', key: 'Enter' },
     { label: 'guide: English', clickSel: "input[onchange*=\"ToggleGuide('english'\"]" },
-    { label: 'hotel / pickup', fill: '#bkv2-hotel-input', value: 'UIP Test Hotel' },
+    // no transfer: the guest comes to the pier (zone NoTransfer, legacy's own exception to the pickup rule)
+    { label: 'trip zone: No transfer', clickSel: "[onclick*=\"SetTripField(0,'zone','NoTransfer')\"]" },
   ];
 }
 export default {
