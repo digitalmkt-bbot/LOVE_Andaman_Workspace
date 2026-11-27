@@ -2,7 +2,7 @@
 // Legacy flow (08-app.js): Booking › "+ New booking" (bkV2NewBooking) › agent: type, Enter (bkV2AgentDDKey →
 // bkV2PickAgentByText) › trip 1 route: type, Enter (bkV2RouteDDKey → bkV2PickRouteByText) › the calendar
 // (bkV2CalOpen › bkV2CalPick) › 2 adults (bkV2BumpPax 'ad_fr') › lead name (bkV2SetBookingField 'leadPax') ›
-// self-arrive at the pier (bkV2TogglePickupSelf) › Confirm (bkV2SubmitBooking → bkV2CommitBooking 'confirmed').
+// nationality (bkV2NatDDKey) › guide English (bkV2ToggleGuide) › hotel (bkV2HotelDDFilter) — legacy requires all three to confirm › Confirm (bkV2SubmitBooking → bkV2CommitBooking 'confirmed').
 import { pickAgentRoute, bookingsByLead } from './_booking.mjs';
 export const LEAD = 'UIP SC1 Lead';
 export function formSteps(v, lead) {
@@ -20,7 +20,10 @@ export function formSteps(v, lead) {
     { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
     { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
     { label: 'lead name', fill: `input[oninput*="SetBookingField('leadPax'"]`, value: lead },
-    { label: 'self-arrive at the pier', clickSel: 'input[onchange*="TogglePickupSelf"]' },
+    { label: 'lead nationality: type', fill: '#bkv2-nat-input-lead', value: 'Germany' },
+    { label: 'lead nationality: Enter', press: '#bkv2-nat-input-lead', key: 'Enter' },
+    { label: 'guide: English', clickSel: "input[onchange*=\"ToggleGuide('english'\"]" },
+    { label: 'hotel / pickup', fill: '#bkv2-hotel-input', value: 'UIP Test Hotel' },
   ];
 }
 export default {
