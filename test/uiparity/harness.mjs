@@ -73,6 +73,10 @@ export async function side(H, name, { clock } = {}) {
   if (t) await ctx.clock.install({ time: t });
   // answers: a queue for native alert/confirm/prompt · empty = dismiss (check 1 never accepts one)
   const S = { name, ctx, errors: [], failed: [], writes: [], dialogs: [], answers: [], pending: 0 };
+  // legacy natLearnBootstrap (§nat) teaches every booking's names into the shared nat_learn table once per browser (`_nat_bootstrap_done`):
+  // a real user's browser did that long ago, a fresh context does it on every pair, so legacy's name guesses (Market Data's "ours") drifted
+  // a head per run (parity 2026-11-28: AU 1,268 vs 1,267). Both sides start as a browser that has bootstrapped.
+  await ctx.addInitScript(() => { try { localStorage.setItem('_nat_bootstrap_done', '1'); } catch (_) {} });
   if (name === 'new') {
     await ctx.addInitScript((tk) => { try { sessionStorage.setItem('la_ops_token', tk); } catch (_) {} }, H.TOKEN);
     await ctx.route(PROD, async (route) => {
