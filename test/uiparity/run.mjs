@@ -80,6 +80,17 @@ log('boot counts new   ', JSON.stringify(boot.new.counts));
 const sidebarL = await legacy.page.evaluate(PROBE.sidebar), sidebarN = await neu.page.evaluate(PROBE.sidebar);
 const topbar = { legacy: await legacy.page.evaluate(PROBE.topbar), new: await neu.page.evaluate(PROBE.topbar) };
 const items = sidebarL.filter((it) => !ONLY || ONLY.includes(it.view));
+// States poa-panwa / poa-tublamu "(page open)" (2026-11-28) · the work schedule (poa-<pier>, ตารางการทำงาน) counts the cycle's
+// days that have boat jobs ("รอบนี้มีใบงานแล้ว n วัน", "รวม ทำงาน n"), and the boat job sheet (poj-<pier>) writes jobs while it is
+// walked. The new side reads them back from the server; the other worker's legacy page keeps the jobs it booted with, so the
+// schedule differed by what the run itself wrote. Every poa page is therefore walked before any poj page starts.
+const isPoa = (it) => /^poa-/.test(it.view), isPoj = (it) => /^poj-/.test(it.view);
+{
+  const poa = items.filter(isPoa), rest = items.filter((it) => !isPoa(it)), at = rest.findIndex(isPoj);
+  if (poa.length && at >= 0) items.splice(0, items.length, ...rest.slice(0, at), ...poa, ...rest.slice(at));
+}
+let poaLeft = items.filter(isPoa).length, poaDone = () => {};
+const poaWalked = new Promise((ok) => { poaDone = ok; if (!poaLeft) ok(); });
 const states = [];
 const inventory = [];
 const t0 = Date.now();
@@ -176,7 +187,7 @@ async function walkPage(P, i, it) {
 // coverage evidence so far, after every page: a run that dies half-way still counts what it saw
 const seenNow = () => { const o = { calls: {}, dialogIds: {}, pages: {} }; for (const s of states) { const w = s.page + ' · ' + s.toggle; for (const c of s.legacy.calls || []) o.calls[c] = o.calls[c] || w; for (const d of s.legacy.openIds || []) o.dialogIds[d] = o.dialogIds[d] || w; if (s.kind === 'page' && s.navOk && s.navOk.legacy === true) o.pages[s.page] = true; } return o; };
 let next = 0;
-await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++; try { await walkPage(P, i, items[i]); fs.writeFileSync(path.join(OUT, 'seen.json'), JSON.stringify({ partial: true, ...seenNow() }, null, 1)); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } } }));
+await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++; if (isPoj(items[i])) await poaWalked; try { await walkPage(P, i, items[i]); fs.writeFileSync(path.join(OUT, 'seen.json'), JSON.stringify({ partial: true, ...seenNow() }, null, 1)); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } finally { if (isPoa(items[i]) && --poaLeft === 0) poaDone(); } } }));
 const order = (pg) => items.findIndex((it) => it.view + (it.citytour ? '#citytour' : '') === pg);
 states.sort((x, y) => order(x.page) - order(y.page));
 inventory.sort((x, y) => order(x.page) - order(y.page));
