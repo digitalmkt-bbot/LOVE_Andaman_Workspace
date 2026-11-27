@@ -42,13 +42,16 @@ operation-backend needs its `node_modules` (`npm ci` in its checkout).
 ```bash
 OPS_BACKEND_DIR=D:/projects/operation-backend LEGACY_DIR=D:/projects/wt-uip-legacy node test/uiparity/run.mjs
 #   --views=dashboard,agents   only these pages     --workers=2   app pairs in parallel (default 2)
-#   --max-toggles=15  --max-dialogs=5  --no-dialogs  --out=<dir>
+#   no limit per page by default · quick runs: --max-toggles=15 --max-dialogs=5 --max-rows=0 --max-selects=4 --max-checks=5
+#   --no-dialogs  --no-rows  --all-dialogs (default: one dialog per handler)  --all-toggles | --per-fn=3 (default: 3 toggles, selects, checks per handler per page)
+#   --page-ms=300000 (a page stops after 5 min: "timed out after N controls")  --control-ms=90000  --select-options=3 | --all-options  --out=<dir>
 node test/uiparity/inventory.mjs test/uiparity/out/<run> > docs/ui-parity/inventory.md
 ```
 
 A full run takes about 40 minutes with 2 workers. The output goes to `test/uiparity/out/<time>/` (gitignored):
 `report.md`, `compare.json` (every state, with the differing lines), `states.json` (everything recorded),
-`inventory.json`, and the two servers' logs.
+`inventory.json`, `seen.json` (the legacy handlers that ran and the dialog elements on screen, for coverage.mjs), and the two servers' logs.
+The code it shares with `scenarios.mjs` (servers, the two pages, the probes, the compare) is `harness.mjs`.
 
 **Safety.** It refuses any database URL that is not localhost. Both servers start with a clean environment (only
 PATH-like variables), so a shell's `DATABASE_URL`, `B2C_*` or `API_PROXY_URL` cannot reach them. The new frontend's
@@ -58,9 +61,11 @@ calls to the production backend URL are routed to the local one, as `test/ui/t_o
 
 - **Toggles:** visible `[onclick]` elements in the open page that look like a tab, chip, pill, segment, filter or
   mode switch (by class, `role=tab`, or a group of siblings where one is `active`/`on`/`sel`). It skips anything
-  whose handler name looks like a write (`save`, `delete`, `confirm`, `assign`, `lock`, `pay`, `add…`, `edit…`, …)
+  (all of them unless `--max-toggles`) whose handler name looks like a write (`save`, `delete`, `confirm`, `assign`, `lock`, `pay`, `add…`, `edit…`, …)
   and multi-line cards (list items).
-- **Selects:** up to 4 per page, 2 other options each. **Checkboxes:** up to 5 per page.
+- **Selects:** every one on the page, 2 other options each. **Checkboxes:** every one on the page.
+- **List rows:** the first row of each list (a `tr[onclick]` or a multi-line card, one per handler) is opened, and every
+  toggle inside the detail it opens is clicked too (kinds `row` and `detail`).
 - **Dialogs:** buttons whose handler is `open…`/`show…`/`…Modal`/`…Detail`/`…Sheet` etc. (not `…Edit`/`…Form`):
   it opens one, records it, then closes it (Escape, then a ×/ปิด/ยกเลิก button).
 - Every state starts from the page freshly opened (`nav()` again), on both sides.
@@ -106,3 +111,29 @@ operation-backend `todo/parity-accepted.md`. Legacy's page sends 2 `_batch` writ
 Result 2026-11-27 (local data of 2026-11-26): seats 5,551 route-days 2026-10-28..2027-01-26, 5,548 same, 3 different
 (a charter with no boat: fixed in operation-backend, `dayCapacity`); booking price 13,381 / 13,381 same; trip price
 13,226 / 13,226 same.
+
+## Coverage (`coverage.mjs`, check 5)
+
+```bash
+node test/uiparity/coverage.mjs --runs=test/uiparity/out/<run> --scenarios=test/uiparity/out/<sc-run> --legacy-dir=<lk-inbox checkout>
+```
+
+The denominator is read from legacy's code: every function named in an `onclick`/`onchange`/`oninput` attribute
+(markup and JS template strings), every sidebar page and every dialog element id (ending Modal/Dialog/Dlg/Overlay/Sheet/Drawer).
+Each gets a kind (view, dialog, action, print, none) guessed from its name; `coverage-kinds.json` corrects the guess, names
+the check-3 replay behind a rule (`replays`) and holds the written reason for an item left uncovered (`uncovered`).
+A view/dialog/print is covered when a run.mjs run ran the handler (legacy's functions are wrapped in the page to know),
+opened the page or showed the element; an action only when a scenario ran it. `coverage.md`: per kind items / covered / %,
+then every uncovered item by page. Exit 1 below 95% or with an uncovered item that has no reason.
+
+## Action scenarios (`scenarios.mjs`, check 4)
+
+```bash
+SC_PREFIX=qc_ LEGACY_PORT=3941 OPS_PORT=3942 LEGACY_DIR=<lk-inbox checkout> OPS_BACKEND_DIR=<operation-backend> node test/uiparity/scenarios.mjs [--only=seat-lock]
+```
+
+Each `scenarios/*.mjs` is one staff task, run through the UI on both sides from fresh copies of `legacy` / `operations`
+(`<SC_PREFIX>legacy_sc`, `<SC_PREFIX>operations_sc`, made with `STRATEGY = FILE_COPY`, the uiparity login added, ours migrated
+to the backend under test), on a clock fixed at 10:00 Bangkok of today. After every step: the message (native dialogs, toast,
+the open dialog's first line) exactly, and the screen (run.mjs compare); at the end the changed records from both
+databases, matched by content. The step vocabulary is at the top of `scenarios.mjs`. Report: `scenarios.md` / `.json`.
