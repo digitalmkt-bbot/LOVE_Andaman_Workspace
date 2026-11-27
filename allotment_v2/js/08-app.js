@@ -38228,8 +38228,9 @@ function ctBtPinFitLater(){ clearTimeout(_ctPinT);
    ของเดิมแทรกไว้กลาง rAF ซึ่งพึ่งตัวแปร vb และบรรทัดก่อนหน้า
    ถ้าเส้นทางไหนไม่ผ่านตรงนั้น การตรึงก็ไม่ถูกคิดเลย (เจอจริง: สลับแท็บแล้วไม่ตรึง)
    ห่อแบบนี้ครอบทุกเส้นทางที่วาดใหม่ และไม่ต้องรู้ภายในของ bookingV2Render */
-(function(){
-  if(typeof window === 'undefined' || typeof window.bookingV2Render !== 'function') return;
+(function ctBtPinWrap(){   /* parity booking 2026-11-28: js/booking/bookingV2Render.js loads after this file, so wait for it (it was never wrapped) */
+  if(typeof window === 'undefined') return;
+  if(typeof window.bookingV2Render !== 'function'){ if(!ctBtPinWrap.w && typeof document !== 'undefined'){ ctBtPinWrap.w = 1; document.addEventListener('DOMContentLoaded', ctBtPinWrap); } return; }
   var _orig = window.bookingV2Render;
   /* §btcJump 2 · bookingV2Render() วาดตารางใหม่ทั้งก้อน · .t2-wrap ตัวใหม่เริ่มที่ 0
      โหมด Compact ตารางเป็นตัวเลื่อนเอง (หน้าไม่เลื่อน) จึงเด้งกลับหัวตารางทุกครั้ง
@@ -38282,8 +38283,9 @@ function btBrandFit(){
   }catch(_){ }
 }
 function btBrandFitLater(){ try{ requestAnimationFrame(function(){ btBrandFit(); requestAnimationFrame(btBrandFit); }); }catch(_){ btBrandFit(); } }
-(function(){
-  if(typeof window === 'undefined' || typeof window.bookingV2Render !== 'function') return;
+(function btBrandWrap(){   /* parity booking 2026-11-28: js/booking/bookingV2Render.js loads after this file, so wait for it (it was never wrapped) */
+  if(typeof window === 'undefined') return;
+  if(typeof window.bookingV2Render !== 'function'){ if(!btBrandWrap.w && typeof document !== 'undefined'){ btBrandWrap.w = 1; document.addEventListener('DOMContentLoaded', btBrandWrap); } return; }
   var _o = window.bookingV2Render;
   window.bookingV2Render = function(){ var out = _o.apply(this, arguments); btBrandFit(); btBrandFitLater(); return out; };
   window.addEventListener('resize', function(){ btBrandFitLater(); });

@@ -122,17 +122,24 @@
       G.status = g.state === 'released' ? 'released' : g.state === 'expired' ? 'expired'
         : (G.used > 0 && open && !anyLeft) ? 'depleted' : 'active';
       out.push(G);
-      /* a sub-group of a bulk lock is one child per name across the days */
+      /* a sub-group of a bulk lock is one child per name across the days
+         parity booking 2026-11-28: one imported from legacy is one child per legacy lock (its rows are lg_<legacy id>_<date>): legacy
+         keeps a released "Aura" and a live "Aura" as two locks (60 such name pairs), and merging them by name took the live one's
+         status from the released one (lkmwk3d9wt4263x under lkmw08ukuutcto5) */
       var kids = {};
       deps.forEach(function(r){ sortBy(subsOf[r.id] || [], 'created_at').forEach(function(c){
-        var key = c.sub_name || ''; var K = kids[key];
+        var stem = /^lg_(.+)_\d{4}-\d{2}-\d{2}$/.exec(c.id || '');
+        var key = stem ? ('lg:' + stem[1]) : (c.sub_name || ''); var K = kids[key];
         if(!K){
           K = kids[key] = common(c);
-          K.id = c.id; K.scope = 'bulk'; K.date = ''; K.parentId = G.id; K.subName = key;
+          K.id = c.id; K.scope = 'bulk'; K.date = ''; K.parentId = G.id; K.subName = c.sub_name || '';
           K.dateFrom = G.dateFrom; K.dateTo = G.dateTo; K.dow = G.dow.slice(); K.releaseDaysBefore = G.releaseDaysBefore; K.releaseTime = G.releaseTime;
           K.holderType = G.holderType; K.holderId = G.holderId; K.expiry = '';
           K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {}; K.log = [];
-          K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
+          /* parity booking 2026-11-28 (By trip "4 locks"): legacy's sub-group of a bulk lock keeps its own status; a released round of
+             its parent (releasedDates) does not release it, and bookingV2LocksFor counts it (lkmwk3d9wt4263x, lkmw39dd62vj5bk on r10
+             28 Nov). The server's state says 'released' for a sub-group whose parent's departure is released, so its own status answers. */
+          K.status = legacyStatus(c.status === 'active' && c.state === 'released' ? 'active' : (c.state || c.status)); K.opsVersion = c.version; out.push(K);
         }
         if(Array.isArray(c.log)) c.log.forEach(function(e){ K.log.push(logLine(e)); });   /* K4: a bulk sub-group's lines, as its parent's */
         var drawn = usedOf(c); K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
