@@ -147,12 +147,16 @@
       });
     }, function(){});
   }
+  /* parity X (2026-11-28) · with no window (the boot step) every live closure is read: legacy holds SB_WEATHER_CLOSURES whole, and
+     a window of today-30..+120 left a cancelled trip before it unseen (Fleet Calendar → week of 1 Nov: Early Krabi + Phang Nga
+     27 Oct "⊘ 10 BELOW B/E" was a plain "·"). The follow-ups of reopened closures are still read for that window only. */
   function load(from, to){
+    var all = !from && !to;
     from = from || O.shift(O.today(), -30);
     to = to || O.shift(O.today(), 120);
-    return O.get('/v1/weather-closures', { from: from, to: to }).then(function(j){
+    return O.get('/v1/weather-closures', all ? {} : { from: from, to: to }).then(function(j){
       var rows = listRows(j);
-      setClosures(rows, from, to);
+      if(all) setClosures(rows, null, null); else setClosures(rows, from, to);
       keepResolvedOfReopened(from, to);
       return rows;
     });

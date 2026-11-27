@@ -252,6 +252,28 @@
         imgs: x.files.map(function(f){ return { f: { id: f.id, name: f.name, mime: f.mime, by: f.by }, cap: (f.name || 'ไฟล์') + (f.by ? (' · แนบโดย ' + f.by) : '') }; }) };
     });
   }
+  /* parity X (2026-11-28) · legacy prints the reference pack and the slip pack INSIDE the Daily Report's print, behind the sheet
+     (tsPrintSheet → tsRefPackList / tsSlipPackList → _tsPackPages: _docPackPage, _tsSlipPage, a slip page right after its booking's
+     document page), and has no "เอกสาร N" / "สลิป N" buttons on the bar. Answered here in legacy's shape from the packs of the sheet in
+     view (the server's reference_pack / slip_pack when held), so legacy's pages draw them; `ord` is the booking's place in the sheet. */
+  function legacyBk(r){
+    var b = r.b || {};
+    return { id: r.id, leadPax: b.lead_pax || '', agentId: r.agentId || '', voucherRef: b.voucher_ref || '', hotelName: b.hotel_name || '',
+      attachments: (b.attachments || []).map(function(f){ return { id: f.id, name: f.name || f.id, mime: f.mime || '' }; }) };
+  }
+  function legacyTrip(r){ var t = r.t || {}; return { routeId: r.routeId, pax: t.pax || {}, ovnLeg: !!t.ovn_leg }; }
+  function ordIn(cur, id, i){ var k = (cur.order || []).indexOf(id); return k < 0 ? 100000 + i : k; }
+  function refPackList(date){
+    var cur = lastView; if(!cur || cur.date !== date) return [];
+    return (cur.ref || []).map(function(r, i){ return { bk: legacyBk(r), trip: legacyTrip(r), ord: ordIn(cur, r.id, i) }; });
+  }
+  function slipPackList(date){
+    var cur = lastView; if(!cur || cur.date !== date) return [];
+    return (cur.slips || []).map(function(x, i){
+      return { bk: legacyBk(x.r), trip: legacyTrip(x.r), ord: ordIn(cur, x.r.id, i), miss: n(x.missing), tot: n(x.paid), who: '', invPaid: n(x.invoicePaid),
+        imgs: x.files.map(function(f){ return { f: { id: f.id, name: f.name, mime: f.mime }, cap: f.cap || '' }; }) };
+    });
+  }
   /* Print pack: every file of the pack on one printable page, images inline, other types as a note. */
   function printPack(kind){
     var cur = lastView; if(!cur) return Promise.resolve();
@@ -427,7 +449,7 @@
     var no = docNo(date, st);
     var after = roster.after || {}, pens = kept.filter(function(r){ var a = after[r.id]; return a && (a.penalty_files || []).length; })
       .map(function(r){ var a = after[r.id]; return { r: r, dec: a.noshow || null, files: a.penalty_files.map(function(f){ return { id: f.id, name: f.name || f.id, mime: f.mime || '', by: f.by || '' }; }) }; });
-    lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds, pens: pens };
+    lastView = { date: date, docNo: no, ref: ref, slips: slips, slipIds: pendingIds, pens: pens, order: kept.map(function(r){ return r.id; }) };
     return {
       state: st, scoped: !!(st.pier || st.route || st.vat), docNo: no, keep: keep, inScope: inScope, kept: kept, serverScope: sv ? sv.SC : null, nAllServer: sv ? sv.nAll : null,
       cancelled: sv && sv.cancelled ? sv.cancelled : (roster.cancelled || []).filter(function(r){ return scopeKeep(st, r.routeId) && vatKeep(st, r); }),
@@ -444,7 +466,7 @@
   O.onWrite(function(){ cache = {}; slipCache = {}; tripAmt = {}; dayAmt = {}; });
   window.laOps.travelRows = {
     load: load, model: model, rosterOf: rosterOf, cancelledOf: cancelledOf, docNo: docNo, hasVat: hasVat, pierOf: pierOf, scopeKeep: scopeKeep,
-    whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack, penPackList: penPackList,
+    whySuggestion: whySuggestion, slipsLoad: slipsLoad, openFile: openFile, printPack: printPack, penPackList: penPackList, refPackList: refPackList, slipPackList: slipPackList,
     afterRow: afterRow, cotPick: cotPick, cotAmt: cotAmt, cotRef: cotRef, cotClear: cotClear, nsPick: nsPick, nsClear: nsClear,
     clear: function(){ cache = {}; loading = {}; slipCache = {}; slipBusy = {}; }
   };

@@ -236,3 +236,11 @@ test('legacy mode delegates to original incident and job functions without API c
   assert.equal(window.flMaintClose('mj_1', 'success'), 'legacy');
   assert.equal(calls.includes('api'), false);
 });
+
+test('parity X: a backdated progress line keeps the day it was written as createdAt (legacy timeline "บันทึกย้อนหลังเมื่อ")', () => {
+  const c = compat();
+  const job = c.fromServerJob({ id: 'mj_1', no: 'MJ-1', boat_id: 'b1', status: 'inprogress', progress_log: [
+    { date: '2026-02-10', text: 'ส่งเครื่อง Megazip', by: 'Megazip', created_on: '2026-06-20' }, { date: '2026-02-11', text: 'x', by: '', created_on: null }] });
+  assert.equal(job.progressLog[0].createdAt, '2026-06-20');
+  assert.equal(job.progressLog[1].createdAt, undefined);
+});

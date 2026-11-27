@@ -393,3 +393,13 @@ test('a re-opened trip: its resolved follow-up is kept for bookings that arrive 
   assert.equal(wr.status, 'resolved'); assert.equal(wr.outcome, 'cancel'); assert.equal(wr.event, 'r10|2026-10-05');
   assert.equal(W.followUpOf('BK-N'), null);                    // an unresolved one went back to normal
 });
+
+test('parity X: the boot load (no window) reads every closure, as legacy holds SB_WEATHER_CLOSURES whole', async () => {
+  const rt = runtime({
+    closures: [{ opsId: 'wx_0', routeId: 'r9', date: '2026-09-01', reason: 'weather', note: '', at: '' }],
+    answers: { 'GET /v1/weather-closures': { closures: [ROW_WX1] } },
+  });
+  await rt.window.laOps.weather.load();
+  assert.equal(rt.calls[0], 'GET /v1/weather-closures', 'no from/to');
+  assert.deepEqual(A(rt.SB_WEATHER_CLOSURES).map((c) => c.opsId), ['wx_1'], 'the whole list is the server answer');
+});

@@ -208,12 +208,10 @@
         .replace(/(<li data-tschk="bk"[^>]*>)[\s\S]*?(<\/li>)/, '$1<span class="h4-ic">&#10003;</span><span>Booking <b>' + F.nBk + '</b> ใบ &middot; จอง <b>' + F.booked + '</b> คน</span>$2')
         .replace(/(<li data-tschk="ns"[^>]*>)[\s\S]*?(<\/li>)/, '$1<span class="h4-ic warn">!</span><span>No-show &middot; ยกเลิกหน้างาน ของชุดนี้: เซิร์ฟเวอร์ให้เฉพาะทั้งวัน (No-show <b>' + n(S.no_show) + '</b> &middot; ยกเลิก <b>' + n(S.cxl) + '</b>)</span>$2');
     }
-    // Pack actions sit beside print, as legacy printed them behind the sheet.
-    var packs = '<button class="h4-gh" data-ops-ts-refpack="1" onclick="laOps.travelRows.printPack(\'ref\')" title="พิมพ์เอกสารประกอบของชุดนี้ · ' + V.ref.length + ' ใบ">เอกสาร <b>' + V.nRefFiles + '</b></button>'
-      + (V.slipPending
-        ? '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.slipsLoad()" title="อ่านสลิปของ ' + V.slipPending + ' ใบที่มีเงินเข้า">โหลดสลิป <b>' + V.slipPending + '</b></button>'
-        : '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.printPack(\'slip\')" title="พิมพ์สลิปการชำระเงินของชุดนี้' + (V.noSlipRows ? ' · ' + V.noSlipRows + ' ใบยังไม่มีสลิป' : '') + '">สลิป <b>' + V.nSlipFiles + '</b></button>');
-    html = html.replace('<button class="h4-pri"', packs + '<button class="h4-pri"');
+    /* parity X (2026-11-28) · legacy has no pack buttons on the bar: the document and slip packs print behind the sheet (tsPrintSheet,
+       answered by tsRefPackList / tsSlipPackList below). Only when the server sent no slip pack (an older server) and slips are still
+       unread is the "load slips" step offered, so the print can carry them. */
+    if(V.slipPending) html = html.replace('<button class="h4-pri"', '<button class="h4-gh" data-ops-ts-slippack="1" onclick="laOps.travelRows.slipsLoad()" title="อ่านสลิปของ ' + V.slipPending + ' ใบที่มีเงินเข้า">โหลดสลิป <b>' + V.slipPending + '</b></button><button class="h4-pri"');
     return html;
   }
 
@@ -891,9 +889,9 @@
       host.innerHTML = '<div style="padding:32px;text-align:center;color:#A32D2D">Travel Summary did not load from operation-backend.</div>';
     });
   });
-  // The print window carries the sheet itself; the document and slip packs print from the bar (their files are on the server).
-  wrap('tsRefPackList', function(){ return []; });
-  wrap('tsSlipPackList', function(){ return []; });
+  // parity X (2026-11-28) · the document and slip packs print behind the sheet, as legacy's (57-ops-travelsum-rows refPackList / slipPackList).
+  wrap('tsRefPackList', function(orig, date){ return T() && T().refPackList ? T().refPackList(date) : []; });
+  wrap('tsSlipPackList', function(orig, date){ return T() && T().slipPackList ? T().slipPackList(date) : []; });
   // Section 02 buttons: the no-show decision goes to the server.
   function T(){ return O.travelRows; }
   wrap('tsPick', function(orig, bkId, date, kind, amt){ return T().nsPick(bkId, kind, amt); });

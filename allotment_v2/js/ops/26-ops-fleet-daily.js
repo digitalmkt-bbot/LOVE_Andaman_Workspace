@@ -1458,7 +1458,10 @@
     O.get('/v1/fleet/daily-log', { from: ds, to: ds }).then(function(res){
       applyDailyRange(res);
       var el = document.getElementById('fl-dr-date');
-      if(el && el.value === ds && O.activeView() === 'dailyreport' && !O.busy() && typeof window.flRenderDR === 'function') window.flRenderDR();
+      /* parity X (2026-11-28) · the Daily Fleet Log's nav is data-view="fl-dailyreport" ('dailyreport' is the ops Daily Report): the old
+         test never matched, so a day outside the first 14-day window (flDRGo → 1 Nov) kept the browser's own sums, no litres and an
+         unsaved form though the server's answer had landed (legacy: 11 boats, 482 pax, 6,249.18 L, "บันทึกแล้ว") */
+      if(el && el.value === ds && O.activeView() === 'fl-dailyreport' && typeof window.flRenderDR === 'function') O.whenFree(function(){ window.flRenderDR(); });
     }).catch(function(){});
   }
   wrap('flBoatBookingsFor', function(orig, boatId, ds){
