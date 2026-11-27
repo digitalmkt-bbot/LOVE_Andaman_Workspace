@@ -132,7 +132,10 @@
           K.dateFrom = G.dateFrom; K.dateTo = G.dateTo; K.dow = G.dow.slice(); K.releaseDaysBefore = G.releaseDaysBefore; K.releaseTime = G.releaseTime;
           K.holderType = G.holderType; K.holderId = G.holderId; K.expiry = '';
           K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {}; K.log = [];
-          K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
+          /* parity booking 2026-11-28 (By trip "4 locks"): legacy's sub-group of a bulk lock keeps its own status; a released round of
+             its parent (releasedDates) does not release it, and bookingV2LocksFor counts it (lkmwk3d9wt4263x, lkmw39dd62vj5bk on r10
+             28 Nov). The server's state says 'released' for a sub-group whose parent's departure is released, so its own status answers. */
+          K.status = legacyStatus(c.status === 'active' && c.state === 'released' ? 'active' : (c.state || c.status)); K.opsVersion = c.version; out.push(K);
         }
         if(Array.isArray(c.log)) c.log.forEach(function(e){ K.log.push(logLine(e)); });   /* K4: a bulk sub-group's lines, as its parent's */
         var drawn = usedOf(c); K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
