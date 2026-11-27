@@ -682,6 +682,9 @@
     var a = document.activeElement; if(a && a.closest && a.closest('.tm-grid')) return;   // typing in the grid: the next draw picks it up
     try{ if(typeof window.renderPierTm === 'function' && document.getElementById('pt-host-' + (typeof _tmPier !== 'undefined' ? _tmPier : 'ranong'))) window.renderPierTm(); }catch(_){}
     try{ if(document.querySelector('.tm-grid, [data-tmchip]')) (typeof window.bookingV2RenderKeep === 'function' ? window.bookingV2RenderKeep : window.bookingV2Render)(); }catch(_){}
+    /* UI parity insurance (2026-11-28) · the Insurance page draws the same ตม. grid (tmGridHtml under each booking): drawn before
+       the day's rows landed, its Remark fields stayed empty ("ส่งแล้ว" missing on page open) until something else redrew it */
+    try{ if(typeof window.renderInsurance === 'function' && document.getElementById('insurance-host')) window.renderInsurance(); }catch(_){}
   }
   function tmLoadDay(date){
     if(tmDays[date]) return;

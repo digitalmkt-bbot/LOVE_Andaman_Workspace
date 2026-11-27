@@ -157,10 +157,19 @@
      /partial-cancel /reschedule, PUT …/meals, and /upgrade (which bumps the version). NOT for the
      day-of writes (trip-ops, check-in, van groups, van stops, doc check, reconfirm): those neither
      check the version nor move it (API team, 2026-10-09) · they go through call() as they are. */
+  /* §opsVersionMax (UI parity insurance, 2026-11-28) · the highest version this browser was answered with, per server booking id.
+     A booking's version only goes up, so a copy that says less is older than one already seen. Several reads can put an older
+     copy back after a write answered (a list or delta load merged unchecked, a pier-money read that crossed the write): the
+     next write then sent it and was refused 409 stale_version ("you have version 2, it is now 3") although nobody else had
+     written. The If-Match is never lower than the version this browser's own writes were answered with. */
+  var maxVersion = {};
+  function noteVersion(id, v){ if(id && v != null && Number.isFinite(+v) && !(maxVersion[id] >= +v)) maxVersion[id] = +v; }
   function bookingWrite(method, path, bk, body){
-    var h = {};
+    var h = {}, vid = bk && (bk.opsId || null);
+    if(bk && vid && maxVersion[vid] != null && (bk.opsVersion == null || +bk.opsVersion < maxVersion[vid])) bk.opsVersion = maxVersion[vid];
     if(bk && bk.opsVersion != null) h['If-Match'] = '"' + bk.opsVersion + '"';
     return call(method, path, body, h).then(function(j){
+      if(j && j.version != null && j.id) noteVersion(j.id, j.version);
       if(bk && j && j.version != null && (!bk.opsId || j.id === bk.opsId)) bk.opsVersion = +j.version;
       return j;
     }, function(e){

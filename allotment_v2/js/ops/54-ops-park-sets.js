@@ -62,7 +62,9 @@
     return O.get(base(pier, date)).then(function(j){
       if(my !== st.seq[key]) return j;
       st.pending[key] = false; st.failed[key] = false;
-      st.data[key] = { sets: ((j && j.sets) || []).map(convSet), pool: (j && j.pool) || [] };
+      /* UI parity pok-ranong (2026-11-28) · legacy's pkSets(date) is keyed by the date alone (PIER_CFG.parkSets[date]), so a pier's
+         page also counts and lists the sets the other piers made that day; the server sends those as other_pier_sets */
+      st.data[key] = { sets: ((j && j.sets) || []).concat((j && j.other_pier_sets) || []).map(convSet), pool: (j && j.pool) || [] };
       return j;
     }, function(e){
       if(my === st.seq[key]){ st.pending[key] = false; st.failed[key] = true; }

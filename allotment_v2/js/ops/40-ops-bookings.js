@@ -1081,6 +1081,9 @@
         if(!m) return;
         if(O.availability) O.availability.put(m.route_id, m.service_date, m);
         (m.bookings || []).forEach(function(ob){ if(upsert(ob)) changed = true; });
+        /* UI parity booking "By trip · date" (2026-11-28) · legacy's "Rescheduled away" ghost rows (_mvGhosts) read every booking it held;
+           this page holds the day's, so a booking moved off the date was not there. The manifest sends those (rescheduled_away). */
+        (m.rescheduled_away || []).forEach(function(ob){ if(upsert(ob)) changed = true; });
       });
       if(changed) persist();
       var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};

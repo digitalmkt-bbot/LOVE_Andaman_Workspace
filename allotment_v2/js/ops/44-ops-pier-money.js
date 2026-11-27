@@ -71,7 +71,8 @@
         by: p.by || '', at: p.at });
     });
     b.pierPayments = keep;
-    if(row.version != null) b.opsVersion = +row.version;
+    /* §opsVersionRace (UI parity insurance, 2026-11-28) · a read that crossed a write must not put the older version back */
+    if(row.version != null && !(b.opsVersion != null && +b.opsVersion > +row.version)) b.opsVersion = +row.version;
   }
   function loadOne(b, date){
     return O.get('/v1/bookings/' + enc(sid(b)) + '/pier-money', { date: date }).then(function(row){
