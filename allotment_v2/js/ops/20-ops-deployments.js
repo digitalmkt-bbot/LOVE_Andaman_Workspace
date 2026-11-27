@@ -44,6 +44,9 @@
     if(r.charter_booking_id){ c.type = 'charter'; c.charterBookingId = r.charter_booking_id; }
     else if(r.charter) c.type = 'charter';
     if(r.charter_agent) c.charterAgent = r.charter_agent;
+    /* parity P1 (2026-11-27) · the charter booking that takes the boat that day however it takes it (charter_taken_by, legacy
+       baCharterBoatMap: a split or dispatch boat too), which the fleet calendar's fcCell marks ⚓ on top of the cell (ops/80) */
+    if(r.charter_taken_by) c.charterTakenBy = r.charter_taken_by;
     if(r.rescue_for){
       c.type = 'rescue'; c.rescueFor = r.rescue_for;
       c.prev = r.rescue_prev ? { route: r.rescue_prev.route_id, type: r.rescue_prev.trip_type, booked: 0 } : null;

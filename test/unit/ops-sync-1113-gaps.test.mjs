@@ -154,18 +154,19 @@ test('§boatHist: bhLoad reads the boat\'s range first; bhCompute sees it as TRI
   assert.equal(ctx.pxTrip('2026-10-02', 'B1').fromCache, true, 'pxTrip back as it was');
 });
 
-test('§engFix / §engBase: no chips and no changes in ops mode; legacy\'s own when ops is off', () => {
+// §engBase moved to the server in parity P2 (2026-11-27): test/unit/ops-parity-data-1127b.test.mjs. The serial repair stays off.
+test('§engFix: no chip and no changes in ops mode; legacy\'s own when ops is off', () => {
   const src = fs.readFileSync('allotment_v2/js/ops/99-ops-engine-fix.js', 'utf8');
   let enabled = true, applied = 0;
   const alerts = [];
   const window = {
     laOps: { enabled: () => enabled },
-    flEngFixPending: () => [{ k: 'zeus' }], flEngBaseList: () => [{ id: 'e1' }],
-    flEngFixApply: () => { applied++; }, flEngBaseApply: () => { applied++; }, flEngFixOpen: () => { applied++; },
+    flEngFixPending: () => [{ k: 'zeus' }],
+    flEngFixApply: () => { applied++; }, flEngFix33Apply: () => { applied++; }, flEngFixOpen: () => { applied++; },
   };
   vm.runInNewContext(src, { window, alert: (t) => alerts.push(t) });
-  assert.deepEqual([window.flEngFixPending().length, window.flEngBaseList().length], [0, 0]);
-  window.flEngFixApply('zeus'); window.flEngBaseApply(); window.flEngFixOpen();
+  assert.equal(window.flEngFixPending().length, 0);
+  window.flEngFixApply('zeus'); window.flEngFix33Apply(); window.flEngFixOpen();
   assert.equal(applied, 0);
   assert.equal(alerts.length, 3);
   assert.match(alerts[0], /legacy app/);
