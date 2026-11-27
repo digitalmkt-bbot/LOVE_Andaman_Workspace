@@ -1041,6 +1041,7 @@
     MONEY_READERS.forEach(function(n){
       var f = window[n]; if(typeof f !== 'function' || f.__opsNeed) return;
       var w = function(){ if(!asked && !quiet && !state.loaded && !state.loading){ asked = true; O.later.need('money'); } return f.apply(this, arguments); };
+      Object.keys(f).forEach(function(k){ w[k] = f[k]; });   // the other adapters' marks (__ops, __opsPayChip…): they see their own copy, not a new one to wrap
       w.__opsNeed = true; window[n] = w;
     });
   }
