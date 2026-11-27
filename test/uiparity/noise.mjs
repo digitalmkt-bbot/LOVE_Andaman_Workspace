@@ -17,6 +17,16 @@
 //    weather summary lines under it are compared as they are.
 // 6. execboard (every state): "ศุกร์ 27 พ.ย. 2026 · อัปเดต 23:37 · วาดใหม่ทุก 1 นาที" is the clock of the board's last redraw (once
 //    a minute). Only the HH:MM after "อัปเดต" is masked; the date before it and the rest of the line must still match.
+// 7. booking "bkV2NewBooking" / "bkV2SelectDay", vanjobs "nav" (2026-11-27T22-38-28, round 13): "BK-26114164-N6PC" vs
+//    "BK-26114164-TGQ2" · a booking code made during the run (legacy bkV2GenerateBookingCode BK-YYMMNNNN-XXXX) ends in 4
+//    random characters, drawn apart on each side. A missing and an extra line pair up only when they are the same line once
+//    each code's 4-character suffix is masked, every code that differs keeps its 8 digits, and neither code was a booking at
+//    boot (legacy's SB_BOOKINGS ids, `bootCodes`): a code that was already a booking is never masked. Reported in `codePairs`.
+// 8. piercheckin "การ์ด" / "pckSetFam" / "pckSetBoat" / "pckKitchenOpen" (2026-11-27T22-38-28, round 13): legacy showed the
+//    Verona card (BK-26100399-22CV, 36 pax) and the new side did not, with the same rows, chips and boat tabs; a rerun of the page
+//    showed it on neither side. Boat cards are `content-visibility:auto` (§pckFast1): Chrome leaves an off-screen card out of
+//    innerText, so what was read depended on each page's scroll and on the heights it remembered. `contentVisible(true)` lays
+//    every such block out for the read (a style tag, not a page change); `contentVisible(false)` removes it again.
 
 const STAMP = /^(ข้อมูลอัพเดตเวลา )\d{1,2} \S+ \d{4} \d{1,2}:\d{2}( · โดย ).+$/;
 const FORECAST = /^(สรุปช่วงออกเรือ · พยากรณ์ล่าสุด )\d{1,2}:\d{2}$/;              // rule 5
@@ -61,4 +71,41 @@ export function countUpDone() {
 export function opsLoading() {
   const root = document.querySelector('.view.active') || document.body;
   return !!root.querySelector('.la-ops-loading, [data-ops-loading="1"]');
+}
+
+const RUN_CODE = /\bBK-(\d{8})-([0-9A-Z]{4})\b/g;
+/**
+ * Rule 7: pairs of (missing, extra) lines that differ only in the random 4-character suffix of booking codes both sides made
+ * during the run. `bootCodes` holds every booking id at boot; without it nothing is paired. Greedy, first match.
+ */
+export function runCodePairs(missing, extra, bootCodes) {
+  if (!bootCodes || typeof bootCodes.has !== 'function') return [];
+  const codes = (x) => [...x.matchAll(RUN_CODE)].map((m) => m[0]);
+  const masked = (x) => x.replace(RUN_CODE, 'BK-$1-····');
+  const fits = (m, e) => {
+    if (m === e || masked(m) !== masked(e)) return false;
+    const a = codes(m), b = codes(e);
+    // every code that differs keeps its digits (masked() equal says so), and neither side's code was a booking at boot
+    return a.length > 0 && a.length === b.length && a.every((c, i) => c === b[i] || (!bootCodes.has(c) && !bootCodes.has(b[i])));
+  };
+  const used = new Set(), pairs = [];
+  for (const m of missing) {
+    if (!codes(m).length) continue;
+    const i = extra.findIndex((e, k) => !used.has(k) && fits(m, e));
+    if (i < 0) continue;
+    used.add(i); pairs.push([m, extra[i]]);
+  }
+  return pairs;
+}
+
+/** Rule 8, run in the page: `on` lays out every `content-visibility:auto` block (so innerText reads it); `off` restores the page. */
+export function contentVisible(on) {
+  const id = 'uip-content-visible';
+  const el = document.getElementById(id);
+  if (!on) { if (el) el.remove(); return false; }
+  if (el) return true;
+  const s = document.createElement('style');
+  s.id = id; s.textContent = '*{content-visibility:visible !important}';
+  (document.head || document.documentElement).appendChild(s);
+  return true;
 }

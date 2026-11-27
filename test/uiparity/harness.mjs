@@ -6,7 +6,7 @@
 // servers get a clean environment (PATH-like variables only).
 import { serve } from '../ui/_harness.mjs';
 import { chromium } from 'playwright';
-import { countUpDone, maskLines, tiePairs } from './noise.mjs';
+import { contentVisible, countUpDone, maskLines, runCodePairs, tiePairs } from './noise.mjs';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -287,7 +287,9 @@ const pick = (s) => s && ({ title: s.title, lines: s.lines, lineCount: s.lineCou
 export async function snapBoth(P, state, opt = {}) {
   const { legacy, neu } = P;
   const [a, b] = await Promise.all([legacy, neu].map(async (S) => {
-    try { return await S.page.evaluate(PROBE.snap, { maxLines: 600, ...opt }); } catch (e) { return { error: String(e.message || e).slice(0, 200) }; }
+    // noise.mjs rule 8: off-screen content-visibility:auto blocks are laid out for the read, then left as the page had them
+    try { await S.page.evaluate(contentVisible, true); return await S.page.evaluate(PROBE.snap, { maxLines: 600, ...opt }); } catch (e) { return { error: String(e.message || e).slice(0, 200) }; }
+    finally { await S.page.evaluate(contentVisible, false).catch(() => {}); }
   }));
   const calls = await takeCalls(legacy);
   const pack = (S, s) => ({ ...pick(s), loadMs: S.loadMs || 0, error: s.error, errors: [...S.errors], failed: [...S.failed], writes: [...S.writes], dialogs: [...S.dialogs] });
@@ -332,7 +334,8 @@ const set = (xs) => new Set(xs || []);
 const NUM = /-?\d[\d,]*(\.\d+)?/g;
 // a booking code's random suffix (legacy bkV2GenerateBookingCode BK-YYMMNNNN-XXXX; the server copies it) is a value, like a number, never layout
 const CODE = /\bBK-?(\d{8,})-[0-9A-Z]{4}\b/g;
-export function compare(s) {
+/** `ctx.bootCodes`: the booking ids legacy held at boot (noise.mjs rule 7); without it no run-made code is paired. */
+export function compare(s, ctx = {}) {
   const L0 = s.legacy, N0 = s.new;
   // noise.mjs rule 1: the PR/PO "updated at HH:MM · by <user>" stamp is compared with its time and user masked
   const L = { ...L0, lines: maskLines(L0.lines) }, N = { ...N0, lines: maskLines(N0.lines) };
@@ -342,7 +345,11 @@ export function compare(s) {
   const ties = tiePairs(missing, extra);
   const tm = new Set(ties.map((t) => t[0])), te = new Set(ties.map((t) => t[1]));
   missing = missing.filter((x) => !tm.has(x)); extra = extra.filter((x) => !te.has(x));
-  const union = (new Set([...lines.a, ...lines.b]).size - ties.length) || 1;
+  // noise.mjs rule 7: a booking code both sides made during the run differs only in its random suffix (reported in codePairs)
+  const codePairs = runCodePairs(missing, extra, ctx.bootCodes);
+  const cm = new Set(codePairs.map((t) => t[0])), ce = new Set(codePairs.map((t) => t[1]));
+  missing = missing.filter((x) => !cm.has(x)); extra = extra.filter((x) => !ce.has(x));
+  const union = (new Set([...lines.a, ...lines.b]).size - ties.length - codePairs.length) || 1;
   const sim = (union - missing.length - extra.length) / union;
   const shape = (x) => x.replace(CODE, 'BK-$1-XXXX').replace(NUM, '#');
   const sa = set(missing.map(shape)), sb = set(extra.map(shape));
@@ -384,7 +391,7 @@ export function compare(s) {
     else cls = 'review: layout differs';
   }
   return { page: s.page, section: s.section, label: s.label, toggle: s.toggle, kind: s.kind, key: s.key, verdict, cls, why: why.join(' · '), sim: +sim.toFixed(3), laySim: +laySim.toFixed(3), layMissing: layMissing.slice(0, 25), layExtra: layExtra.slice(0, 25),
-    tiePairs: ties.slice(0, 10), rows: [L.rows, N.rows], loadMs: [L.loadMs || 0, N.loadMs || 0], lineCount: [L.lineCount, N.lineCount], missing: missing.slice(0, 25), extra: extra.slice(0, 25), btnMissing: btnMissing.slice(0, 20), btnExtra: btnExtra.slice(0, 20),
+    tiePairs: ties.slice(0, 10), codePairs: codePairs.slice(0, 10), rows: [L.rows, N.rows], loadMs: [L.loadMs || 0, N.loadMs || 0], lineCount: [L.lineCount, N.lineCount], missing: missing.slice(0, 25), extra: extra.slice(0, 25), btnMissing: btnMissing.slice(0, 20), btnExtra: btnExtra.slice(0, 20),
     newErrors: newErr.slice(0, 8), legacyErrors: (L.errors || []).slice(0, 5), failed: (N.failed || []).slice(0, 10), legacyFailed: (L.failed || []).slice(0, 5),
     writes: { legacy: L.writes, new: N.writes }, dialogs: { legacy: L.dialogs, new: N.dialogs }, modal: [!!L.modal, !!N.modal] };
 }

@@ -72,6 +72,9 @@ const COUNTS = () => {
   return Object.fromEntries(['SB_BOOKINGS', 'SB_AGENTS', 'SB_RATE_TYPES', 'SB_SEAT_LOCKS', 'ROUTES', 'BOATS', 'TRIPS', 'SB_SALES', 'SB_CONTRACTS', 'SB_MARKETS', 'SB_STAFF', 'SB_EXTRAS', 'VEHICLES', 'SB_ADDON_TYPES'].map((k) => [k, g(k)]));
 };
 boot.legacy.counts = await legacy.page.evaluate(COUNTS);
+// noise.mjs rule 7: the booking ids at boot · a code that is none of them was made during the run
+const bootCodes = new Set(await legacy.page.evaluate(() => { try { return (SB_BOOKINGS || []).map((b) => b && b.id).filter(Boolean); } catch (_) { return []; } }));
+boot.legacy.bootCodes = bootCodes.size;
 boot.new.counts = await neu.page.evaluate(COUNTS);
 log('boot counts legacy', JSON.stringify(boot.legacy.counts));
 log('boot counts new   ', JSON.stringify(boot.new.counts));
@@ -210,7 +213,7 @@ states.sort((x, y) => order(x.page) - order(y.page));
 inventory.sort((x, y) => order(x.page) - order(y.page));
 
 // ── compare ──
-const cmp = states.map(compare);
+const cmp = states.map((s) => compare(s, { bootCodes }));
 const strip = (s) => { const { _a, _b, ...rest } = s; return rest; };
 // coverage evidence: which legacy handlers ran and which dialog elements were on screen, and in which state first
 const seen = { calls: {}, dialogIds: {}, pages: {} };

@@ -2,7 +2,7 @@
 // proved to be capture noise and nothing else.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { maskLine, tiePairs } from '../uiparity/noise.mjs';
+import { contentVisible, maskLine, runCodePairs, tiePairs } from '../uiparity/noise.mjs';
 
 test('rule 1 (prpo): the "updated at" stamp is masked in its time and user only', () => {
   const a = maskLine('ข้อมูลอัพเดตเวลา 27 พ.ย. 2569 18:27 · โดย uiparity');
@@ -40,4 +40,31 @@ test('rule 6 (execboard): the redraw clock is masked; the date must still match'
   assert.equal(a, b);
   assert.notEqual(a, maskLine('เสาร์ 28 พ.ย. 2026 · อัปเดต 23:37 · วาดใหม่ทุก 1 นาที'), 'another day is still a difference');
   assert.equal(maskLine('LIVE · 23:37'), 'LIVE · 23:37', 'other clock lines untouched');
+});
+
+test('rule 7 (booking, vanjobs): a code made during the run pairs on its random suffix only', () => {
+  const boot = new Set(['BK-26100399-22CV', 'BK-26114163-AB12']);
+  assert.deepEqual(runCodePairs(['BK-26114164-N6PC'], ['BK-26114164-TGQ2'], boot), [['BK-26114164-N6PC', 'BK-26114164-TGQ2']]);
+  assert.deepEqual(runCodePairs(['จอง BK-26114164-N6PC · 2 pax'], ['จอง BK-26114164-I4R1 · 2 pax'], boot), [['จอง BK-26114164-N6PC · 2 pax', 'จอง BK-26114164-I4R1 · 2 pax']]);
+  // real differences stay
+  assert.deepEqual(runCodePairs(['BK-26114164-N6PC'], ['BK-26114164-TGQ2']), [], 'no boot list, no pair');
+  assert.deepEqual(runCodePairs(['BK-26100399-22CV'], ['BK-26100399-23CV'], boot), [], 'a code that was a booking at boot is never masked');
+  assert.deepEqual(runCodePairs(['BK-26114164-N6PC'], ['BK-26114165-TGQ2'], boot), [], 'other digits');
+  assert.deepEqual(runCodePairs(['BK-26114164-N6PC · 2 pax'], ['BK-26114164-TGQ2 · 3 pax'], boot), [], 'the rest of the line must match');
+  assert.deepEqual(runCodePairs(['PR'], [], boot), [], 'no code, no pair');
+});
+
+test('rule 8 (piercheckin): contentVisible adds one style tag for the read and removes it after', () => {
+  const nodes = new Map();
+  const head = { appendChild: (s) => nodes.set(s.id, s) };
+  globalThis.document = { head, documentElement: head, getElementById: (id) => (nodes.has(id) ? { remove: () => nodes.delete(id) } : null), createElement: () => ({}) };
+  try {
+    assert.equal(contentVisible(true), true);
+    assert.equal(nodes.size, 1);
+    assert.match([...nodes.values()][0].textContent, /content-visibility:visible !important/);
+    contentVisible(true);
+    assert.equal(nodes.size, 1, 'never twice');
+    contentVisible(false);
+    assert.equal(nodes.size, 0, 'the page is left as it was');
+  } finally { delete globalThis.document; }
 });
