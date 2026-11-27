@@ -12,9 +12,12 @@
      mdOpenBk          opens a missing-nationality booking: the booking is read from the server first
                        (the list holds the server's rows, not every booking)
      mdBkMix           one booking's mix: only the aggregate above used it; nothing calls it any more in operation mode
+     mdZoneDemand      pax by pickup zone (Ops & Guides) ← pickup_zones[] {zone, pax} (§qsZone, 2026-11-27: the browser holds only some bookings)
+     natLearnRecordMany the booking form's save also sends its names to POST /v1/bookings/nationality-votes (§qsNat): the server's
+                       name guess (legacy bkV2GuessNationality, table nationality_learn) learns from them as legacy's nat_learn did
    The arrival side (mdArrivalsByCode, the airport files) is the Market Data store (64-ops-market-data.js). The capture rate and
    index are division of the two sets of figures on screen, kept. mdOurPaxByMarket has no caller and stays as it was.
-   Differences from legacy (no guessing nationality from a name, trips of a period only) are the server's: docs/walk/w4-f1.md.
+   The server guesses a missing nationality from the name as legacy does (round 8, 2026-11-27); a period keeps only its trips.
    Until the first answer (and if it fails) legacy's sums over the loaded bookings stay. Classic script, after 64-ops-market-data.js.
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -66,6 +69,25 @@
     var weeks = {}; j.on_the_books.weeks.forEach(function(w){ if(n(w.pax)) weeks[w.week] = n(w.pax); });
     return weeks;
   });
+  wrap('mdZoneDemand', function(orig){
+    var j = mix(); if(!j || !Array.isArray(j.pickup_zones)) return orig.apply(this, [].slice.call(arguments, 1));
+    var out = {}; j.pickup_zones.forEach(function(z){ out[z.zone] = n(z.pax); });
+    return out;
+  });
+  /* the votes are sent as well as kept in the browser's own table (the form's GUESS helper still reads that one) */
+  (function(){
+    var orig = window.natLearnRecordMany;
+    if(typeof orig !== 'function' || orig.__qsNat) return;
+    var w = function(pairs){
+      var r = orig.apply(this, arguments);
+      if(on() && Array.isArray(pairs) && pairs.length){
+        var people = pairs.filter(function(p){ return p && p[0] && p[1] && p[1] !== 'OTHER'; }).slice(0, 500).map(function(p){ return { name: String(p[0]), nationality: String(p[1]) }; });
+        if(people.length) O.post('/v1/bookings/nationality-votes', { people: people }).catch(function(e){ console.warn('[ops] nationality votes not sent', e && e.message); });
+      }
+      return r;
+    };
+    w.__qsNat = true; w.__orig = orig; window.natLearnRecordMany = w;
+  })();
   wrap('mdOpenBk', function(orig, id){
     var args = [].slice.call(arguments, 1), B = O.bookings;
     if(!id || !B || typeof B.upsert !== 'function') return orig.apply(this, args);
