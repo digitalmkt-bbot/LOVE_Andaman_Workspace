@@ -1054,9 +1054,13 @@
       bk._historyFromServer = true;
       persist();
       var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
-      if(st.detailId === bk.id && !st.newBooking && !O.busy()){
+      /* drawn once the write queue is free (a refresh right after a command lands while it is still busy: the history stayed undrawn) */
+      (function draw(n){
+        var st2 = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
+        if(st2.detailId !== bk.id || st2.newBooking) return;
+        if(O.busy()){ if(n < 25) setTimeout(function(){ draw(n + 1); }, 200); return; }
         try{ (typeof bookingV2RenderKeep === 'function' ? bookingV2RenderKeep : bookingV2Render)(); }catch(_){}
-      }
+      })(0);
     }).catch(function(e){ detailAt[bk.id] = 0; if(e.status !== 404) O.fail('Could not refresh ' + bk.id, e); });
   }
 
