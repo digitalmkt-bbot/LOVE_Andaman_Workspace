@@ -71,7 +71,7 @@ async function freshDbs() {
       }
     }
     const c = new pg.Client({ connectionString: dbUrl(DB[k]) }); await c.connect();
-    await c.query(`INSERT INTO ${k === 'legacy' ? 'operation_schemas.users' : 'users'}(username,pass_hash,name,role,can_edit) VALUES('uiparity',$1,'UI Parity','admin',true)`, [hash]);
+    await c.query(`INSERT INTO ${k === 'legacy' ? 'operation_schemas.users' : 'users'}(username,pass_hash,name,role,can_edit) VALUES('uiparity',$1,'UI Parity','admin',true) ON CONFLICT (username) DO UPDATE SET pass_hash = EXCLUDED.pass_hash, name = EXCLUDED.name`, [hash]);   // a template that already has the login (legacy_ui / operations_ui)
     await c.end();
   }
   // the template may be older than the backend under test: bring our copy to its schema (clean env, local URL)
