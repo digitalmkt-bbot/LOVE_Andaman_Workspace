@@ -3816,6 +3816,12 @@ function _renderDashRaw(){
       const _bk=_rs&&Array.isArray(_rs.series)?_rs.series.find(x=>x&&x.bucket===ds):null;
       if(_bk&&Array.isArray(_bk.charter_boats)) _bk.charter_boats.forEach(x=>{ const n=+x.pax||0; if(n>0) charterBoats[x.boat_id||'']=(charterBoats[x.boat_id||'']||0)+n; });
       const wx=_bk&&_bk.weather_routes!=null ? (+_bk.weather_routes||0) : (_opsDash.alerts||[]).filter(a=>a.code==='closed_route').length;
+      /* §dashDayCap (2026-11-28) · legacy _bkDay's capacity is not the routes' seats: it adds the boat every live booking of the day rides,
+         ready or not (Tadeo in the shop carrying 36 on 28 Nov: "/ 543" where the routes say 505). The day answer's own bar has it
+         (server legacyDayCapacity); the routes' sum stays the fallback. */
+      const _dayB=Array.isArray(_opsDash.series)?_opsDash.series.find(x=>x&&x.bucket===ds):null;
+      const _capB=(_dayB&&_dayB.capacity!=null)?_dayB:((_bk&&_bk.capacity!=null)?_bk:null);
+      if(_capB) capacity=+_capB.capacity||0;
       return {ds,booked,capacity,routeBooked,charter,charterBoats,wx};
     }
     const dOps=TRIPS[ds]||{};
