@@ -66,9 +66,10 @@
         Object.keys(net).forEach(function(key){
           if(LEGACY_PAX[key] && finiteNumber(net[key]) !== null) legacyNet[LEGACY_PAX[key]] = Number(net[key]);
         });
-        /* A route with a sell/min-sell-only row is still represented in the
-           editor, but only net is chargeable by the booking engine. */
-        out.seatRates[id][zone] = legacyNet;
+        /* Only net is chargeable by the booking engine. A zone with selling / min-selling prices and no net (rt125931 r11 KL) has no
+           seatRates cell in legacy, so its card reads "KL NOT SET"; an empty cell drew "KL 0 0 0 0" (parity 11-27, rate-types).
+           Its tiers stay in priceTiers and the save keeps tier-only zones (blockFor). */
+        if(Object.keys(legacyNet).length) out.seatRates[id][zone] = legacyNet;
         ['sell','min_sell'].forEach(function(tier){
           var grid = tiers[tier]; if(!grid) return;
           Object.keys(grid).forEach(function(key){
