@@ -24,3 +24,32 @@ test('pk2Near: the neighbours from the month read; the day on screen as the page
   assert.deepEqual(JSON.parse(JSON.stringify(near.map((x) => [x.ds.slice(8), x.boats, x.tot, x.miss]))),
     [['23', 0, 0, 0], ['24', 0, 0, 0], ['25', 0, 0, 0], ['26', 0, 0, 0], ['27', 2, 57, 56], ['28', 0, 0, 0], ['29', 3, 0, 0]]);
 });
+
+// §pkNearWeek (2026-11-28, UI parity pok-tublamu): the card reads its own 7 days (?from=&to=) instead of whole months (Tub Lamu's
+// November read took 2-5 s, 12 s under load, while the card drew legacy's zeros); months already loaded for the month view answer it.
+test('pk2Near: a week read (from..to) for the card; the month reads when the month view has them', async () => {
+  const week = { pier: 'tublamu', month: null, days: [
+    { date: '2026-11-25', boats: new Array(7).fill({}), tickets: 330, miss: 6 },
+    { date: '2026-12-01', boats: new Array(5).fill({}), tickets: 0, miss: 0 },
+  ], gaps: [], total: {}, routes: [] };
+  const { ctx, O, settle, requests } = runtime({
+    files: ['91-ops-park-month.js'],
+    globals: { pk2Month: () => ({}), pk2Near: legacyNear, renderPierPark: () => '', pkTypes: () => [] },
+    handlers: { 'GET /v1/pier-office/tublamu/park-tickets/month': (_b, path) => ({ body: /from=/.test(path) ? week : { ...month, pier: 'tublamu', month: path.includes('2026-12') ? '2026-12' : '2026-11', days: [] } }) },
+  });
+  O.state.loaded = true;
+  assert.equal(ctx.pk2Near('2026-11-28', 'tublamu', { boats: 6, tot: 97, miss: 20 })[0].ds, 'legacy', 'no answer yet');
+  await settle();
+  assert.deepEqual(requests.map((r) => r.path.replace(/^.*\?/, '')), ['from=2026-11-25&to=2026-12-01'], 'one week read, not two months');
+  const near = ctx.pk2Near('2026-11-28', 'tublamu', { boats: 6, tot: 97, miss: 20 });
+  assert.deepEqual(JSON.parse(JSON.stringify(near.map((x) => [x.ds.slice(5), x.boats, x.tot, x.miss]))),
+    [['11-25', 7, 330, 6], ['11-26', 0, 0, 0], ['11-27', 0, 0, 0], ['11-28', 6, 97, 20], ['11-29', 0, 0, 0], ['11-30', 0, 0, 0], ['12-01', 5, 0, 0]]);
+  // the month view's reads land: the card answers from them, with no new request
+  ctx.pk2Month('2026-11', 'tublamu'); ctx.pk2Month('2026-12', 'tublamu');
+  await settle();
+  const n = requests.length;
+  ctx.pk2Near('2026-11-28', 'tublamu', { boats: 6, tot: 97, miss: 20 });
+  await settle();
+  assert.equal(requests.length, n);
+  assert.equal(ctx.pk2Near('2026-11-28', 'tublamu', { boats: 6, tot: 97, miss: 20 })[0].boats, 0, 'the (empty) month answer, not the week');
+});
