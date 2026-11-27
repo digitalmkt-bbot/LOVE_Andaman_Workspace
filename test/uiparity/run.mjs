@@ -89,6 +89,14 @@ const isPoa = (it) => /^poa-/.test(it.view), isPoj = (it) => /^poj-/.test(it.vie
   const poa = items.filter(isPoa), rest = items.filter((it) => !isPoa(it)), at = rest.findIndex(isPoj);
   if (poa.length && at >= 0) items.splice(0, items.length, ...rest.slice(0, at), ...poa, ...rest.slice(at));
 }
+// States poj-ranong (page open, 3, 4 ลำ, 5) of run 2026-11-27T20-42-09 · the boat job sheet's pick lists flag a person already on
+// another boat's job that day ("· ⚠ อยู่ Aluminous1 TL", legacy pjCrewBusyAll), and walking poj-tublamu writes a job for its parked
+// boat Aluminous1 (pjWcSet, pjMjPick: legacy saves the boat's team with it). poj-tublamu ran on pair 1, poj-ranong on pair 2: the new
+// side read pair 1's job back from the server (crew-flags), pair 2's legacy page kept the jobs it booted with, so only the new side
+// flagged Aluminous1's four crew and moved them to "⚠ ลงงานแล้ววันนี้". Every poj page is therefore walked by the same pair, in order,
+// so each legacy page holds the jobs the earlier poj pages wrote, as the server does.
+const pojAt = items.map((it, i) => (isPoj(it) ? i : -1)).filter((i) => i >= 0);
+let pojTaken = false;
 let poaLeft = items.filter(isPoa).length, poaDone = () => {};
 const poaWalked = new Promise((ok) => { poaDone = ok; if (!poaLeft) ok(); });
 const states = [];
@@ -133,6 +141,11 @@ async function walkPage(P, i, it) {
       await ctl('select ' + s.key, async () => {
         await onBoth(H, P, PROBE.nav, it, 300);
         const rr = await onBoth(H, P, PROBE.select, { key: s.key, value: o.v });
+        // States insurance "select tmi-…-nat = Russian · RU" of runs 2026-11-27 · a ตม. grid field (id tmi-…, legacy tmGridHtml) saves
+        // without drawing the page again (tmInputChange → insSetField writes the value and shows a dot, nothing else), so legacy's row
+        // still showed the nationality the walk's PREVIOUS select left (the "CN" button: drawn by the nav before this select) while the
+        // new page draws again after its save. Not a data difference: both sides are compared after the same full draw (the nav).
+        if (/^tmi-/.test(s.key)) await onBoth(H, P, PROBE.nav, it, 300);
         states.push(await snapBoth(P, st({ toggle: `select ${s.key} = ${o.t}`, key: s.key + '=' + o.v, fn: s.fn, kind: 'select', found: { legacy: rr[0], new: rr[1] } })));
       });
     }
@@ -187,7 +200,11 @@ async function walkPage(P, i, it) {
 // coverage evidence so far, after every page: a run that dies half-way still counts what it saw
 const seenNow = () => { const o = { calls: {}, dialogIds: {}, pages: {} }; for (const s of states) { const w = s.page + ' · ' + s.toggle; for (const c of s.legacy.calls || []) o.calls[c] = o.calls[c] || w; for (const d of s.legacy.openIds || []) o.dialogIds[d] = o.dialogIds[d] || w; if (s.kind === 'page' && s.navOk && s.navOk.legacy === true) o.pages[s.page] = true; } return o; };
 let next = 0;
-await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++; if (isPoj(items[i])) await poaWalked; try { await walkPage(P, i, items[i]); fs.writeFileSync(path.join(OUT, 'seen.json'), JSON.stringify({ partial: true, ...seenNow() }, null, 1)); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } finally { if (isPoa(items[i]) && --poaLeft === 0) poaDone(); } } }));
+const walkOne = async (P, i) => { try { await walkPage(P, i, items[i]); fs.writeFileSync(path.join(OUT, 'seen.json'), JSON.stringify({ partial: true, ...seenNow() }, null, 1)); } catch (e) { log(`! ${items[i].view}: ${String(e.message || e).slice(0, 200)}`); } finally { if (isPoa(items[i]) && --poaLeft === 0) poaDone(); } };
+await Promise.all(pairs.map(async (P) => { while (next < items.length) { const i = next++;
+  // the first pair to reach a poj page walks them all (see pojAt); the other pair goes on with the rest
+  if (isPoj(items[i])) { if (pojTaken) continue; pojTaken = true; await poaWalked; for (const j of pojAt) await walkOne(P, j); continue; }
+  await walkOne(P, i); } }));
 const order = (pg) => items.findIndex((it) => it.view + (it.citytour ? '#citytour' : '') === pg);
 states.sort((x, y) => order(x.page) - order(y.page));
 inventory.sort((x, y) => order(x.page) - order(y.page));
