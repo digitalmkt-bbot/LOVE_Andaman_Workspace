@@ -23,6 +23,7 @@
 //   { nav: 'booking', citytour? }              open a sidebar page
 //   { click: 'label|fn' }                      the run.mjs key (digits as #, bkV2 = bookingV2); page, then dialogs
 //   { clickText: 'Save', within?: 'css' }      the first visible button / [onclick] whose text is exactly this
+//   { clickIf: 'css' }                         click it when it is on screen (a sheet legacy shows only in some cases), else nothing
 //   { fill: 'css', value }                     type into an input (input + change events)
 //   { choose: 'css', value }                   pick an option (by value, else by label)
 //   { answer: true | 'text' | false }          the next native confirm/prompt is accepted (with text) / dismissed
@@ -110,6 +111,7 @@ const STEP = {
     if (!el) return false;
     el.click(); return true;
   }, { f: st.clickFn, near: st.near, nth: st.nth }),
+  clickIf: async (S, st) => { const l = S.page.locator(st.clickIf).filter({ visible: true }).first(); if (await l.count()) await l.click({ timeout: 10000 }); return true; },
   clickSel: async (S, st) => { const l = S.page.locator(st.clickSel).filter({ visible: true }).first(); await l.click({ timeout: 10000 }); return true; },
   press: async (S, st) => { const l = S.page.locator(st.press).filter({ visible: true }).first(); await l.press(st.key || 'Enter', { timeout: 10000 }); return true; },
   fill: async (S, st) => { const l = S.page.locator(st.fill).filter({ visible: true }).first(); await l.fill(String(st.value), { timeout: 10000 }); await l.dispatchEvent('change'); return true; },

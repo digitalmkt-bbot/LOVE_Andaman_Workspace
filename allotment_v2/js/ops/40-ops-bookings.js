@@ -88,13 +88,15 @@
     return nat;
   }
 
-  /* §opsAuthority (2026-10-08) · the server decides who made a booking, when, and its status.
-     · bookedAt / createdBy / confirmedAt / confirmedBy are stamped by the server from the login and
-       never sent: a create naming them is 400, and a PATCH changing them is 400.
+  /* §opsAuthority (2026-10-08) · the server decides when a booking was made and confirmed, and its status.
+     · bookedAt / confirmedAt are stamped by the server and never sent: a create naming them is 400, and a PATCH changing them is 400.
+     · createdBy ("Submitted by") and confirmedBy ("Confirmed by") are the form's, as in legacy (bkV2NewBooking: Submitted by is
+       typed, Confirmed by starts as bkV2LoginUser() and may be changed): sent as they are; an empty Confirmed by gets the login's
+       display name from the server (§qsConfirmer, scenario check 4, 2026-11-27).
      · a create sends `intent` (which save button), not `status`: the server weighs the trips and
        answers the status itself, pending_approval included. saveNow takes it from the answer.
      · focReason goes with the booking: confirming FOC passengers without one is 400. */
-  var SERVER_STAMPED = { bookedAt: 1, createdBy: 1, confirmedAt: 1, confirmedBy: 1 };
+  var SERVER_STAMPED = { bookedAt: 1, confirmedAt: 1 };
   /* the button pressed · "Save draft" asks for quote, "Submit" for confirmed or pending_foc. When the
      browser already turned it into pending_approval, the button is in approval.targetStatus */
   function intentOf(bk){
@@ -1299,6 +1301,54 @@
       };
       c2.__ops = true; window.bookingV2CommitBooking = c2;
     })();
+  })();
+
+  /* §qsOpenAny (scenario check 4, 2026-11-27) · open ANY booking, loaded or not. Legacy holds every booking in SB_BOOKINGS (15,053),
+     so each "open booking" path (the row click bookingV2OpenDetail, Edit, Reduce pax, Cancel, Reschedule, Restore, the approval buttons,
+     a search hit or a link that sets _bkV2.detailId) finds it there. The new page loads a window of them (257 at boot): a booking
+     outside it was "not found" and its detail stayed empty. Each path now reads the booking it is asked for from the server first
+     (GET /v1/bookings/{id} takes the client's id, the legacy BK-… external_id), puts it in SB_BOOKINGS at legacy's place (upsert), and
+     then runs legacy's own function, unchanged. A booking already loaded runs at once, as before (same return value). */
+  var opening = {}, missing = {};   // missing: a 404 once, so a redraw does not ask again
+  function fetchInto(id){
+    if(opening[id]) return opening[id];
+    opening[id] = O.get('/v1/bookings/' + encodeURIComponent(id)).then(function(ob){ upsert(ob); return find(id) || null; },
+      function(e){ if(e && e.status === 404){ missing[id] = true; return null; } throw e; })
+      .finally(function(){ delete opening[id]; });
+    return opening[id];
+  }
+  O.openBooking = fetchInto;
+  ['bookingV2OpenDetail', 'bookingV2EditBooking', 'bookingV2DetailPartial', 'bookingV2PartialModal', 'bookingV2DetailCancel', 'bookingV2CancelModal',
+   'bookingV2DetailReschedule', 'bookingV2RescheduleModal', 'bookingV2RestoreBooking', 'bookingV2ApproveBooking', 'bookingV2RejectBooking',
+   'bookingV2FocApprove', 'bookingV2FocReject'].forEach(function(name){
+    var orig = window[name];
+    if(typeof orig !== 'function' || orig.__opsOpen) return;
+    var w = function(id){
+      var self = this, args = arguments;
+      if(!O.enabled() || typeof id !== 'string' || !id || find(id)) return orig.apply(self, args);
+      // not on the server either: legacy's own function says so, as it does for an unknown id
+      return fetchInto(id).then(function(){ return orig.apply(self, args); }, function(e){ O.fail('Could not open booking ' + id, e); });
+    };
+    Object.keys(orig).forEach(function(k){ w[k] = orig[k]; });
+    w.__opsOpen = true; window[name] = w;
+  });
+  /* a path that sets _bkV2.detailId / editingId itself (a search hit, a link from another page) and draws: the same read, then draw again */
+  (function(){
+    var origRender = window.bookingV2Render;
+    if(typeof origRender !== 'function' || origRender.__opsOpen) return;
+    var r = function(){
+      var ret = origRender.apply(this, arguments);
+      try{
+        var st = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2 : null;
+        [st && st.detailId, st && st.editingId].forEach(function(id){
+          if(!O.enabled() || typeof id !== 'string' || !id || find(id) || opening[id] || missing[id]) return;
+          fetchInto(id).then(function(bk){ if(bk) render(); }, function(e){ O.fail('Could not open booking ' + id, e); });
+        });
+      }catch(_){}
+      return ret;
+    };
+    Object.keys(origRender).forEach(function(k){ r[k] = origRender[k]; });
+    r.__opsOpen = true; window.bookingV2Render = r;
   })();
 
   window.laOpsToServer = toServer;

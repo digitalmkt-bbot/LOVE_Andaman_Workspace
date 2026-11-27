@@ -312,13 +312,15 @@ export async function onBoth(H, P, fn, arg, wait = 300, { reset = true } = {}) {
 // ── compare one state of both sides ──
 const set = (xs) => new Set(xs || []);
 const NUM = /-?\d[\d,]*(\.\d+)?/g;
+// a booking code's random suffix (legacy bkV2GenerateBookingCode BK-YYMMNNNN-XXXX; the server copies it) is a value, like a number, never layout
+const CODE = /\bBK-?(\d{8,})-[0-9A-Z]{4}\b/g;
 export function compare(s) {
   const L = s.legacy, N = s.new;
   const lines = { a: set(L.lines), b: set(N.lines) };
   const missing = [...lines.a].filter((x) => !lines.b.has(x)), extra = [...lines.b].filter((x) => !lines.a.has(x));
   const union = new Set([...lines.a, ...lines.b]).size || 1;
   const sim = (union - missing.length - extra.length) / union;
-  const shape = (x) => x.replace(NUM, '#');
+  const shape = (x) => x.replace(CODE, 'BK-$1-XXXX').replace(NUM, '#');
   const sa = set(missing.map(shape)), sb = set(extra.map(shape));
   // layout = the lines with every number replaced by # · "same layout, other numbers" is a data difference
   const shA = set((L.lines || []).map(shape)), shB = set((N.lines || []).map(shape));

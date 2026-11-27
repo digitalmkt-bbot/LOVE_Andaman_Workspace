@@ -323,10 +323,11 @@
      "Version —", the party box "—", and the programme pages were missing. Fetch that one agent's
      full record (GET /v1/agents/:id), keep it per agent id for the session, and paint again.
      A failed fetch leaves the list row in place (the preview still draws) and warns once.
-     An agent object holds the full record when it has its own contractVersion key: the list
-     mapping (10-ops-catalogue mapAgentSummary) never sets it, the detail mapping always does. */
+     An agent object holds the full record when it is marked opsDetail: the detail mappings (16-ops-agents mapAgent,
+     10-ops-catalogue mapAgentDetail) set it, the list mapping (mapAgentSummary) never does. The list row has a contractVersion of
+     its own since §qsAgentRow (the booking form shows it), so that key no longer tells them apart. */
   var sample={cache:{},inflight:{},failed:{}}, countsStale=false;
-  function hasDetail(a){ return !!a&&Object.prototype.hasOwnProperty.call(a,'contractVersion'); }
+  function hasDetail(a){ return !!a&&a.opsDetail===true; }
   function agentRow(id){ return (typeof SB_AGENTS!=='undefined'&&Array.isArray(SB_AGENTS)?SB_AGENTS:[]).find(function(a){return a&&a.id===id;}); }
   function forgetPainted(){ try{ _cttSig=null; }catch(_){ } }
   function prepSample(){

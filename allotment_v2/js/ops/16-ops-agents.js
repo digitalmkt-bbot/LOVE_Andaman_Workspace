@@ -82,6 +82,7 @@
       programPeriods:programs.map(function(p){ return { routeId:p.route_id, bookFrom:p.book_from||'', bookTo:p.book_to||'', note:p.note||'' }; })
     });
     if('contract_days_left' in s){ o.contractDaysLeft=s.contract_days_left; o.contractExpiring=!!s.contract_expiring; o.contractExpired=!!s.contract_expired; }   // F4: the server's contract clock
+    o.opsDetail=true;   // the full record, not a list row (18-ops-contracts hasDetail)
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
     /* §targetedWrites · the versions the two whole-list PUTs send back (computed by the server, never edited) */
     if(s.programs_version!=null) o.opsProgramsVersion=+s.programs_version;
