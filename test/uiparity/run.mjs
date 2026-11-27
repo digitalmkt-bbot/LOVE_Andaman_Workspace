@@ -37,6 +37,8 @@ const MAX_TOGGLES = lim('max-toggles'), MAX_DIALOGS = lim('max-dialogs'), MAX_RO
 // (480 toggles on the operation page are a few handlers × every boat) · --all-toggles walks every instance
 const PER_FN = arg('all-toggles', false) ? Infinity : +arg('per-fn', 3);
 const capFn = (xs, key = (x) => x.fn) => { const n = {}; return (xs || []).filter((x) => { const k = key(x) || x.key; n[k] = (n[k] || 0) + 1; return n[k] <= PER_FN; }); };
+const PAGE_MS = +arg('page-ms', 300000), CTL_MS = +arg('control-ms', 90000);
+const SELECT_OPTS = arg('all-options', false) ? Infinity : +arg('select-options', 3);   // other options tried per select
 const DIALOGS = !arg('no-dialogs', false), ROWS = !arg('no-rows', false);
 const ONLY = arg('views', '') ? String(arg('views')).split(',') : null;
 const OUT = path.resolve(arg('out', path.join(HERE, 'out', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19))));
@@ -94,49 +96,77 @@ async function walkPage(P, i, it) {
   inventory.push(inv);
   log(`[${i + 1}/${items.length}] ${tag} · ${(a.toggles || []).length} toggles · ${(a.selects || []).length} selects · ${(a.checks || []).length} checks · ${(a.dialogs || []).length} dialogs · ${(a.listRows || []).length} lists · ${Math.round((Date.now() - t0) / 1000)}s`);
 
+  // a page has PAGE_MS, a control CTL_MS: one slow page or control can never hang the run · what was seen is kept
+  const tPage = Date.now(); let nCtl = 0, timedOut = false;
+  const over = () => { if (!timedOut && Date.now() - tPage > PAGE_MS) { timedOut = true; log(`  ! ${tag} timed out after ${nCtl} controls (${PAGE_MS / 1000}s)`); } return timedOut; };
+  const ctl = async (what, fn) => {
+    nCtl++;
+    let t; const r = await Promise.race([fn().then(() => 'ok', (e) => 'error: ' + String(e.message || e).slice(0, 120)), new Promise((ok) => { t = setTimeout(() => ok('timeout'), CTL_MS); })]);
+    clearTimeout(t);
+    if (r !== 'ok') log(`  ! ${tag} · ${what}: ${r}`);
+  };
   // toggles: each from the page's opening state
   for (const t of capFn(a.toggles).slice(0, MAX_TOGGLES)) {
-    await onBoth(H, P, PROBE.nav, it, 300);
-    const rr = await onBoth(H, P, PROBE.clickKey, t.key);
-    states.push(await snapBoth(P, st({ toggle: t.text || t.fn, key: t.key, fn: t.fn, kind: 'toggle', found: { legacy: rr[0], new: rr[1] } })));
+    if (over()) break;
+    await ctl('toggle ' + t.key, async () => {
+      await onBoth(H, P, PROBE.nav, it, 300);
+      const rr = await onBoth(H, P, PROBE.clickKey, t.key);
+      states.push(await snapBoth(P, st({ toggle: t.text || t.fn, key: t.key, fn: t.fn, kind: 'toggle', found: { legacy: rr[0], new: rr[1] } })));
+    });
   }
   for (const s of capFn(a.selects, (x) => x.fn || x.key).slice(0, MAX_SELECTS)) {
-    for (const o of s.options.filter((o) => o.v !== s.value).slice(0, 2)) {
-      await onBoth(H, P, PROBE.nav, it, 300);
-      const rr = await onBoth(H, P, PROBE.select, { key: s.key, value: o.v });
-      states.push(await snapBoth(P, st({ toggle: `select ${s.key} = ${o.t}`, key: s.key + '=' + o.v, fn: s.fn, kind: 'select', found: { legacy: rr[0], new: rr[1] } })));
+    for (const o of s.options.filter((o) => o.v !== s.value).slice(0, SELECT_OPTS)) {
+      if (over()) break;
+      await ctl('select ' + s.key, async () => {
+        await onBoth(H, P, PROBE.nav, it, 300);
+        const rr = await onBoth(H, P, PROBE.select, { key: s.key, value: o.v });
+        states.push(await snapBoth(P, st({ toggle: `select ${s.key} = ${o.t}`, key: s.key + '=' + o.v, fn: s.fn, kind: 'select', found: { legacy: rr[0], new: rr[1] } })));
+      });
     }
   }
   for (const c of capFn(a.checks, (x) => x.fn || x.key).slice(0, MAX_CHECKS)) {
-    await onBoth(H, P, PROBE.nav, it, 300);
-    const rr = await onBoth(H, P, PROBE.check, c.key);
-    states.push(await snapBoth(P, st({ toggle: `${c.checked ? 'uncheck' : 'check'} ${c.key}`, key: 'check:' + c.key, fn: c.fn, kind: 'check', found: { legacy: rr[0], new: rr[1] } })));
+    if (over()) break;
+    await ctl('check ' + c.key, async () => {
+      await onBoth(H, P, PROBE.nav, it, 300);
+      const rr = await onBoth(H, P, PROBE.check, c.key);
+      states.push(await snapBoth(P, st({ toggle: `${c.checked ? 'uncheck' : 'check'} ${c.key}`, key: 'check:' + c.key, fn: c.fn, kind: 'check', found: { legacy: rr[0], new: rr[1] } })));
+    });
   }
   // one dialog per handler: 1,282 "open" buttons on accounting are one dialog per invoice row, the same item
   // (coverage counts handlers) · --all-dialogs opens every one
   const dlgs = arg('all-dialogs', false) ? (a.dialogs || []) : (a.dialogs || []).filter((d, i, xs) => !d.fn || xs.findIndex((x) => x.fn === d.fn) === i);
   if (DIALOGS) for (const d of dlgs.slice(0, MAX_DIALOGS)) {
-    await onBoth(H, P, PROBE.nav, it, 300);
-    const rr = await onBoth(H, P, PROBE.clickKey, d.key, 600);
-    states.push(await snapBoth(P, st({ toggle: 'dialog: ' + (d.text || d.fn), key: d.key, fn: d.fn, kind: 'dialog', found: { legacy: rr[0], new: rr[1] } })));
-    await onBoth(H, P, PROBE.closeModal, null, 250);
+    if (over()) break;
+    await ctl('dialog ' + d.key, async () => {
+      await onBoth(H, P, PROBE.nav, it, 300);
+      const rr = await onBoth(H, P, PROBE.clickKey, d.key, 600);
+      states.push(await snapBoth(P, st({ toggle: 'dialog: ' + (d.text || d.fn), key: d.key, fn: d.fn, kind: 'dialog', found: { legacy: rr[0], new: rr[1] } })));
+      await onBoth(H, P, PROBE.closeModal, null, 250);
+    });
   }
   // the first row of each list: its detail panel, then every toggle inside that detail
   if (ROWS) for (const row of (a.listRows || []).slice(0, MAX_ROWS)) {
-    await onBoth(H, P, PROBE.nav, it, 300);
-    const rr = await onBoth(H, P, PROBE.clickKey, row.key, 600);
-    const det = await snapBoth(P, st({ toggle: 'row: ' + row.fn, key: row.key, fn: row.fn, kind: 'row', found: { legacy: rr[0], new: rr[1] } }), { scope: 'modal' });
-    states.push(det);
-    const pageKeys = new Set((a.toggles || []).map((t) => t.key));
-    const sub = capFn(((det._a || {}).toggles || []).filter((t) => !pageKeys.has(t.key))).slice(0, MAX_TOGGLES);
-    inv.detail[row.key] = sub.map((t) => t.key);
-    await onBoth(H, P, PROBE.closeModal, null, 250);
-    for (const t of sub) {
+    if (over()) break;
+    let sub = [];
+    await ctl('row ' + row.key, async () => {
       await onBoth(H, P, PROBE.nav, it, 300);
-      await onBoth(H, P, PROBE.clickKey, row.key, 600);
-      const r2 = await onBoth(H, P, PROBE.clickKey, t.key);
-      states.push(await snapBoth(P, st({ toggle: `row: ${row.fn} › ${t.text || t.fn}`, key: row.key + '›' + t.key, fn: t.fn, kind: 'detail', found: { legacy: r2[0], new: r2[1] } }), { scope: 'modal' }));
+      const rr = await onBoth(H, P, PROBE.clickKey, row.key, 600);
+      const det = await snapBoth(P, st({ toggle: 'row: ' + row.fn, key: row.key, fn: row.fn, kind: 'row', found: { legacy: rr[0], new: rr[1] } }), { scope: 'modal' });
+      states.push(det);
+      const pageKeys = new Set((a.toggles || []).map((t) => t.key));
+      sub = capFn(((det._a || {}).toggles || []).filter((t) => !pageKeys.has(t.key))).slice(0, MAX_TOGGLES);
+      inv.detail[row.key] = sub.map((t) => t.key);
       await onBoth(H, P, PROBE.closeModal, null, 250);
+    });
+    for (const t of sub) {
+      if (over()) break;
+      await ctl('detail ' + t.key, async () => {
+        await onBoth(H, P, PROBE.nav, it, 300);
+        await onBoth(H, P, PROBE.clickKey, row.key, 600);
+        const r2 = await onBoth(H, P, PROBE.clickKey, t.key);
+        states.push(await snapBoth(P, st({ toggle: `row: ${row.fn} › ${t.text || t.fn}`, key: row.key + '›' + t.key, fn: t.fn, kind: 'detail', found: { legacy: r2[0], new: r2[1] } }), { scope: 'modal' }));
+        await onBoth(H, P, PROBE.closeModal, null, 250);
+      });
     }
   }
 }
