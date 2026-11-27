@@ -31,6 +31,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { startHarness, bootPair, PROBE, snapBoth, onBoth, settle, compare, assertLocal } from './harness.mjs';
 import { legacyItems } from './coverage.mjs';
 
@@ -68,6 +69,12 @@ async function freshDbs() {
     await c.query(`INSERT INTO ${k === 'legacy' ? 'operation_schemas.users' : 'users'}(username,pass_hash,name,role,can_edit) VALUES('uiparity',$1,'UI Parity','admin',true)`, [hash]);
     await c.end();
   }
+  // the template may be older than the backend under test: bring our copy to its schema (clean env, local URL)
+  const base = {};
+  for (const k of ['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'HOME', 'ComSpec', 'PATHEXT']) if (process.env[k]) base[k] = process.env[k];
+  const r = spawnSync(process.execPath, ['--import', 'tsx', 'src/migrate.ts'], { cwd: OPS_DIR, env: { ...base, DATABASE_URL: dbUrl(DB.ops) }, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error('migrate failed: ' + (r.stderr || r.stdout).slice(-800));
+  log('   ' + (r.stdout.trim().split('\n').pop() || ''));
 }
 // read-only query helpers on the scenario databases
 async function reader(name) {
@@ -90,6 +97,17 @@ const STEP = {
     for (const sc of scope.reverse()) { const el = [...sc.querySelectorAll('button, [onclick], a')].filter(vis).find((e) => n(e.innerText || e.value) === t); if (el) { el.click(); return true; } }
     return false;
   }, { t: st.clickText, within: st.within }),
+  // a control found by its handler (bkV2 = bookingV2) inside the nearest block whose text has `near`
+  clickFn: (S, st) => S.page.evaluate(({ f, near, nth }) => {
+    const fn = (e) => { const m = /([A-Za-z_$][\w$.]*)\s*\(/.exec(e.getAttribute('onclick') || ''); return m ? m[1].replace(/^bookingV2/, 'bkV2') : ''; };
+    const els = [...document.querySelectorAll('[onclick]')].filter((e) => e.getClientRects().length && fn(e) === f.replace(/^bookingV2/, 'bkV2'));
+    const ok = (e) => { if (!near) return true; for (let p = e, i = 0; p && i < 8; p = p.parentElement, i++) if ((p.innerText || '').includes(near)) return true; return false; };
+    const el = els.filter(ok)[nth || 0];
+    if (!el) return false;
+    el.click(); return true;
+  }, { f: st.clickFn, near: st.near, nth: st.nth }),
+  clickSel: async (S, st) => { const l = S.page.locator(st.clickSel).filter({ visible: true }).first(); await l.click({ timeout: 10000 }); return true; },
+  press: async (S, st) => { const l = S.page.locator(st.press).filter({ visible: true }).first(); await l.press(st.key || 'Enter', { timeout: 10000 }); return true; },
   fill: async (S, st) => { const l = S.page.locator(st.fill).filter({ visible: true }).first(); await l.fill(String(st.value), { timeout: 10000 }); await l.dispatchEvent('change'); return true; },
   choose: async (S, st) => {
     const l = S.page.locator(st.choose).filter({ visible: true }).first();

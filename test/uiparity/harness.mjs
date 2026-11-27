@@ -153,6 +153,15 @@ export async function bootPair(H, n, opt = {}) {
   H.log(`pair ${n}: booting new …`);
   await neu.page.goto(`http://127.0.0.1:${H.port}/allotment_v2.html`, { timeout: 180000 });
   await neu.page.waitForFunction(() => window.laOps && window.laOps.state && window.laOps.state.loaded, null, { timeout: 300000 });
+  // a boot that lost calls (the shared local DB out of connections, say) boots again, up to 3 times
+  for (let i = 0; i < 3; i++) {
+    const failed = await neu.page.evaluate(() => (window.laOps.state.failed || []).map(String));
+    if (!failed.length) break;
+    H.log(`pair ${n}: new side boot lost ${failed.length} calls (${failed.slice(0, 3).join('; ').slice(0, 200)}) · reloading`);
+    neu.reset();
+    await neu.page.reload({ timeout: 180000 });
+    await neu.page.waitForFunction(() => window.laOps && window.laOps.state && window.laOps.state.loaded, null, { timeout: 300000 });
+  }
   await Promise.all([quiet(legacy, 20000), quiet(neu, 30000)]);
   if (opt.recordNames) legacy.wrapped = await recordCalls(legacy, opt.recordNames);
   return { legacy, neu };
