@@ -1025,9 +1025,33 @@
     toRefundPayoutBody: toRefundPayoutBody
   };
 
-  /* §bootLater · after the first draw, before the fleet: booking screens read invoices and payments (pay chip, restore) */
+  /* §loadOnOpen (2026-11-27) · invoices, deposits and refunds (~1.6 MB) are no longer read at every login: the Dashboard,
+     the fleet and the setup screens never read them. They load when a screen that reads SB_INVOICES / SB_PAYMENTS /
+     SB_DEPOSITS directly opens (MONEY_VIEWS), or the first time anything calls one of legacy's money helpers (MONEY_READERS:
+     the pay chip and paid split of a booking row, the cancel / reschedule / restore / weather dialogs, the pay dialog, the
+     pier check-in money cell…), wherever it is drawn (§loadOnNeed): the screen is drawn again when they are in, as it was
+     when this load ran after the first draw of every login. */
+  var MONEY_VIEWS = ['accounting', 'dailypfm', 'travelsum', 'rep-ops', 'execboard', 'booking', 'piercheckin', 'commissions', 'focdetail', 'b2c'];
+  var MONEY_READERS = ['acctBookingInvoice', 'acctInvoicePaid', 'acctInvoiceBalance', 'acctInvoiceState', 'acctAgentDepositAvail', 'acctDepositRemaining',
+    'acctDepositHeldTotal', 'acctApplyDeposit', 'acctOpenDoc', 'acctPayOpen', 'acctPayUseDeposit', 'acctStatementOpen', 'acctReceiptDocHtml',
+    'acctNextInvoiceNo', 'acctDashboardHtml', 'bkxExCovered', 'pckCotChip', 'pckMoneyCell', 'tsInvSlips', 'tsProformaPaidDate', 'pfmEditOpen',
+    'pfmPrintReport', 'repOpsSlides', 'bookingV2RestoreBooking', 'bookingV2WeatherResolveOne'];
+  var asked = false, quiet = 0;
+  function needOnRead(){
+    MONEY_READERS.forEach(function(n){
+      var f = window[n]; if(typeof f !== 'function' || f.__opsNeed) return;
+      var w = function(){ if(!asked && !quiet && !state.loaded && !state.loading){ asked = true; O.later.need('money'); } return f.apply(this, arguments); };
+      w.__opsNeed = true; window[n] = w;
+    });
+  }
+  // a reader whose money figures the server replaces anyway (the Dashboard's board, 60-ops-dashboard.js) runs without loading them
+  api.withoutLoad = function(fn){ quiet++; try{ return fn(); } finally { quiet--; } };
   if(enabled()){
-    if(O.later) O.later('money', function(){ return loadAll(false); }, 1);
+    if(O.later){
+      O.later('money', function(){ return loadAll(false); }, 1, MONEY_VIEWS);
+      // after every script: the outermost copy of each helper (83-ops-pay-chip, 84-ops-booking-calc… wrap them too)
+      if(O.later.need) (window.laDomReady || function(f){ f(); })(needOnRead);
+    }
     else loadAll(false).catch(function(){});   // a laOps without the queue (unit-test stubs): load now, as before
   }
 })();

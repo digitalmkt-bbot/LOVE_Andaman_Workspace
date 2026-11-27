@@ -56,6 +56,8 @@
       if(fresh && el && el.dataset.view === view) redraw();
     }, function(){});
   }
+  // §loadOnNeed · a load a reader asked for (laOps.later.need) is in: draw the open screen again (the boot's own draw covers it before that)
+  if(O.later && O.later.onLate) O.later.onLate(function(){ if(O.state.loaded) redraw(); });
   (function(){
     var orig = window.nav;
     if(typeof orig !== 'function' || !O.later) return;

@@ -105,7 +105,11 @@
      prefix. start() and done() leave such loads out; open(view) runs the ones that view needs (and anything the
      queue still holds), now() runs all of them.
        laOps.later.open(view)   90-ops-boot.js, on opening a screen: resolves true when it started a load the
-                                screen waited for (the boot then draws the screen again) */
+                                screen waited for (the boot then draws the screen again)
+     §loadOnNeed (2026-11-27) · laOps.later.need(name): a reader outside the listed views (a booking row's pay chip, a
+     dialog) touched the data a load fills: start that load now; once it is in, laOps.later.onLate's callback runs
+     (90-ops-boot.js draws the open screen again). Resolves true when this call started it; a load already asked for is
+     never sent twice. */
   var later = (function(){
     var tasks = [], running = 0, started = false, waiting = [], fallback = null, MAX = 2;
     function auto(t){ return !t.views; }
@@ -143,6 +147,14 @@
       var mine = tasks.filter(function(t){ return !auto(t) && wants(t, view); });
       var fresh = mine.some(function(t){ return !t.finished; });
       return Promise.all(tasks.filter(function(t){ return auto(t) || mine.indexOf(t) >= 0; }).map(run)).then(function(){ return fresh; });
+    };
+    var late = null;
+    queueLoad.onLate = function(cb){ late = cb; };
+    queueLoad.need = function(name){
+      var t = tasks.filter(function(x){ return x.name === name; })[0];
+      if(!t) return Promise.resolve(false);
+      if(t.p) return t.p.then(function(){ return false; });
+      return run(t).then(function(){ try{ if(late) late(name); }catch(_){} return true; });
     };
     queueLoad.done = done;
     queueLoad.whenDone = function(cb){ if(done()) cb(); else waiting.push(cb); };

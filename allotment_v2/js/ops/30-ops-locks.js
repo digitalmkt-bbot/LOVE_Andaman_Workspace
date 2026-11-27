@@ -37,11 +37,18 @@
     return { date: e.day || '', at: e.at || '', type: e.type, qty: e.qty, by: e.by || '', note: e.note || '',
              tripDate: e.trip_date || '', bookingId: e.booking_id || '', imported: !!e.imported };
   }
+  /* §lockLogOnShow (2026-11-27) · the login read no longer carries every lock's history (include=log was 3.4 MB of a 6.3 MB answer,
+     4,195 locks). Two screens read lock.log: By trip (the draw lines of the day it shows: §btLkHit / §btLkBand) and a lock's own page
+     (its history and its sub-groups'). Each asks for the locks of its dates with their history (GET /v1/seat-locks?from=&to=&include=log)
+     when it is drawn; the lines are kept per server row (logCache) and every lock built from that row gets them, the same lines in the
+     same order as the old read. A reload after a write asks those dates again, as the old reload re-read every log. */
+  var logCache = {};
+  function linesOf(r){ var ev = Array.isArray(r.log) ? r.log : logCache[r.id]; return Array.isArray(ev) ? ev.map(logLine) : []; }
   function legacyStatus(state){ return state === 'expired' ? 'expired' : state; }   // active depleted expired released converted
   function common(r){
     return { routeId: r.route_id, boatId: null,
       holderType: r.holder_type || (r.agent_id ? 'agent' : 'office'), holderId: r.agent_id || null,
-      reason: r.reason || '', expiry: r.expiry || '', createdAt: r.created_at || '', createdBy: r.created_by || '', log: Array.isArray(r.log) ? r.log.map(logLine) : [],
+      reason: r.reason || '', expiry: r.expiry || '', createdAt: r.created_at || '', createdBy: r.created_by || '', log: linesOf(r), _logRows: [r.id],
       dateFrom: '', dateTo: '', dow: [], releaseDaysBefore: null, releaseTime: '',
       monthFrom: '', monthTo: '', month: '', pendQty: 0, releasedPax: +r.released_pax || 0,
       /* N1 (parity 2026-11-27): the name legacy held an office hold for (migration 705), shown as its holder */
@@ -96,7 +103,7 @@
     groups.forEach(function(g){
       var deps = sortBy(depsOf[g.id] || [], 'service_date');
       var G = common(g);
-      G.id = g.id; G.scope = 'bulk'; G.date = ''; G.dateFrom = g.date_from; G.dateTo = g.date_to;
+      G.id = g.id; G.scope = 'bulk'; G.date = ''; G.dateFrom = g.date_from; G.dateTo = g.date_to; G._logRows = [];
       G.dow = (g.weekdays || []).slice(); G.releaseDaysBefore = g.release_days_before; G.releaseTime = g.release_time || '';
       G.departures = g.departures; G.departuresPast = g.departures_past;
       G.isGroup = true; G.opsVersion = g.version; G.opsIds = {}; G.opsVers = {}; G.usedBy = {}; G.pendBy = {}; G.releasedDates = [];
@@ -109,7 +116,7 @@
         if(+r.pending_pax) G.pendBy[d] = +r.pending_pax;
         /* K4 (parity 2026-11-26c): legacy keeps one log per bulk lock; its departures' lines (draw, return, release-round) are
            that log, so By trip's "🔒 <holder>" row chip (§btLkBand, read from lock.log draw lines) finds a bulk lock's draws */
-        if(Array.isArray(r.log)) r.log.forEach(function(e){ G.log.push(logLine(e)); });
+        G._logRows.push(r.id); linesOf(r).forEach(function(e){ G.log.push(e); });
         if(r.status === 'released') G.releasedDates.push(d);
         else { if(!open) open = r; if(r.state !== 'depleted') anyLeft = true; }
       });
@@ -131,10 +138,10 @@
           K.id = c.id; K.scope = 'bulk'; K.date = ''; K.parentId = G.id; K.subName = key;
           K.dateFrom = G.dateFrom; K.dateTo = G.dateTo; K.dow = G.dow.slice(); K.releaseDaysBefore = G.releaseDaysBefore; K.releaseTime = G.releaseTime;
           K.holderType = G.holderType; K.holderId = G.holderId; K.expiry = '';
-          K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {}; K.log = [];
+          K.qty = (+c.pax || 0) - (+c.released_pax || 0); K.used = 0; K.usedBy = {}; K.opsIds = {}; K.opsVers = {}; K.log = []; K._logRows = [];
           K.status = legacyStatus(c.state || c.status); K.opsVersion = c.version; out.push(K);
         }
-        if(Array.isArray(c.log)) c.log.forEach(function(e){ K.log.push(logLine(e)); });   /* K4: a bulk sub-group's lines, as its parent's */
+        K._logRows.push(c.id); linesOf(c).forEach(function(e){ K.log.push(e); });   /* K4: a bulk sub-group's lines, as its parent's */
         var drawn = usedOf(c); K.opsIds[c.service_date] = c.id; K.opsVers[c.service_date] = c.version; srvOf(K, c.service_date, c);
         if(drawn){ K.usedBy[c.service_date] = drawn; K.used += drawn; }
       }); });
@@ -149,7 +156,7 @@
     if(loading){ again = true; return loading; }
     // w5-a: CS's embed token may read /v1/seat-locks but not the groups; the page then shows single locks only
     var embed = !!window.__laEmbedToken;
-    loading = Promise.all([O.get('/v1/seat-locks', { include: 'log' }), embed ? Promise.resolve(null) : O.get('/v1/seat-lock-groups'),
+    loading = Promise.all([O.get('/v1/seat-locks'), embed ? Promise.resolve(null) : O.get('/v1/seat-lock-groups'),
       embed ? Promise.resolve(null) : O.get('/v1/seat-locks/sweep').catch(function(e){ try{ console.warn('[ops] seat-lock sweep · ' + (e && e.message)); }catch(_){} return null; })]).then(function(a){
       var A = locks(); if(!A) return;
       var next = build((a[0] && a[0].seat_locks) || [], (a[1] && a[1].seat_lock_groups) || []);
@@ -159,9 +166,55 @@
       markHolds();
       if(holdSig === null) holdSig = holdsSig();
       try{ console.log('[ops] seat locks · ' + next.length); }catch(_){}
+      askLogsAgain();
     }).then(function(){ loading = null; if(again){ again = false; return load(); } }, function(e){ loading = null; again = false; throw e; });
     return loading;
   }
+  /* §lockLogOnShow · the history of the locks of some dates (from..to, optionally one route), asked once until the next reload */
+  var logAsked = {}, logKeys = [];
+  function logsFor(q){
+    if(!O.enabled()) return Promise.resolve(false);
+    var key = JSON.stringify(q);
+    if(logAsked[key]) return logAsked[key];
+    logKeys.push(key);
+    if(logKeys.length > 8) delete logAsked[logKeys.shift()];   // a reload asks again only for the last few windows shown
+    var p = logAsked[key] = O.get('/v1/seat-locks', Object.assign({ include: 'log' }, q)).then(function(j){
+      var ids = {};
+      ((j && j.seat_locks) || []).forEach(function(r){ if(r && r.id){ logCache[r.id] = Array.isArray(r.log) ? r.log : []; ids[r.id] = 1; } });
+      relink(ids);
+      if(logAsked[key] === p) render();
+      return true;
+    }, function(e){
+      if(logAsked[key] === p) delete logAsked[key];
+      try{ console.warn('[ops] seat-lock history ' + key + ' · ' + (e && e.message)); }catch(_){}
+      return false;
+    });
+    return p;
+  }
+  // every lock built from one of these rows takes its lines again from the cache, in the order build() put them
+  function relink(ids){
+    (locks() || []).forEach(function(o){
+      if(!o || !o._logRows || o._logFull || !o._logRows.some(function(id){ return ids[id]; })) return;
+      var out = [];
+      o._logRows.forEach(function(id){ (logCache[id] || []).forEach(function(e){ out.push(logLine(e)); }); });
+      o.log = out;
+    });
+  }
+  // after a reload (a write, another desk's change) the lines may have moved: the windows on show are asked again
+  function askLogsAgain(){
+    var keys = logKeys.slice(); logAsked = {}; logKeys = [];
+    keys.forEach(function(k){ try{ logsFor(JSON.parse(k)); }catch(_){} });
+  }
+  function logsForDay(d){ return /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? logsFor({ from: d, to: d }) : Promise.resolve(false); }
+  // By trip reads the draw lines of the day it shows (§btLkHit / §btLkBand in bookingV2RenderTab2)
+  (function(){
+    var orig = window.bookingV2RenderTab2; if(typeof orig !== 'function' || orig.__opsLog) return;
+    var w = function(){
+      try{ if(ready && typeof window.bookingV2Tab2ActiveDate === 'function') logsForDay(window.bookingV2Tab2ActiveDate()); }catch(_){}
+      return orig.apply(this, arguments);
+    };
+    w.__opsLog = true; window.bookingV2RenderTab2 = w;
+  })();
   /* a whole-boat hold shows on Boat Operation as legacy's charter-looking cell with boatLockId */
   function markHolds(){
     var A = locks(), T = (typeof TRIPS !== 'undefined') ? TRIPS : null; if(!A || !T) return;
@@ -483,7 +536,10 @@
       var L = find(id);
       if(L && O.enabled() && ready){
         var path = isGroup(L) ? '/v1/seat-lock-groups/' + E(L.id) + '/log' : '/v1/seat-locks/' + E(L.id) + '/log';
-        O.get(path).then(function(j){ L.log = ((j && j.events) || []).map(logLine); render(); }, function(){});
+        O.get(path).then(function(j){ L.log = ((j && j.events) || []).map(logLine); L._logFull = true; render(); }, function(){});
+        // §lockLogOnShow · its sub-groups' lines (bookingV2LockHistoryHtml lists them under the lock): the departures of its dates
+        if(L.scope === 'bulk' && L.dateFrom) logsFor({ from: L.dateFrom, to: L.dateTo || L.dateFrom, route_id: L.routeId || undefined });
+        else logsForDay(L.date);
       }
       return r;
     };

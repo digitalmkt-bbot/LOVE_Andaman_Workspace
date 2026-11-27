@@ -779,6 +779,8 @@
           },function(){ return false; }).then(function(ok){
             setTimeout(function(){ creditAll=null; creditAsk=Object.create(null); }, CREDIT_TTL);
             if(ok && typeof window.renderAccounting==='function' && O.activeView && O.activeView()==='accounting' && !(O.busy&&O.busy())) try{ window.renderAccounting(); }catch(_){}
+            // §loadOnNeed (2026-11-27) · the Dashboard's over-credit list too: it no longer loads every invoice for legacy's own sum
+            if(ok && typeof window.renderDash==='function' && O.activeView && O.activeView()==='dashboard' && !(O.busy&&O.busy())) try{ window.renderDash(); }catch(_){}
             return ok;
           });
         }

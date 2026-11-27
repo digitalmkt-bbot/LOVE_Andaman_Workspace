@@ -118,7 +118,11 @@
   var legacyBoard = window._dashBoardData;
   if(typeof legacyBoard === 'function'){
     var board = function(){
-      var d = legacyBoard.apply(this, arguments);
+      /* §loadOnNeed (2026-11-27) · legacy's loop sums "paid?" (acctBookingPaid) and the agents' credit (agCreditState) over
+         every booking, which would load all invoices (~1.6 MB) at each login: the unbilled figures are the server's (below)
+         and the credit is the server's (/v1/agents/credit, 16-ops-agents.js), so the loop runs without asking for them */
+      var self = this, args = arguments;
+      var d = (O.money && O.money.withoutLoad) ? O.money.withoutLoad(function(){ return legacyBoard.apply(self, args); }) : legacyBoard.apply(this, arguments);
       var u = O.enabled() ? unbilled() : null;
       if(d && u){
         d.unN = Math.max(0, Math.round(+u.count || 0));
