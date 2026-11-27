@@ -1518,7 +1518,9 @@
     return out;
   }
 
-  function accOf(m){ return m && m.days ? { fuel: num(m.fuel), cost: num(m.cost), pax: num(m.pax), days: num(m.days), runH: num(m.run_hours) } : null; }
+  /* legacy _fuelWkAgg opens a week for a boat that did not sail but has position fuel (ตีเรือ, its ฿ only): days 0, shown "ไม่ออก",
+     counted in the week's boats (parity 2026-11-27: W2 13 ลำ, Aluminous2) */
+  function accOf(m){ return m && (m.days || num(m.cost) > 0) ? { fuel: num(m.fuel), cost: num(m.cost), pax: num(m.pax), days: num(m.days), runH: num(m.run_hours) } : null; }
 
   function fuelWkFromReport(r){
     var out = {};
