@@ -66,7 +66,9 @@
   });
   wrap('mdOnTheBooks', function(orig){
     var j = mix(); if(!j) return orig.apply(this, [].slice.call(arguments, 1));
-    var weeks = {}; j.on_the_books.weeks.forEach(function(w){ if(n(w.pax)) weeks[w.week] = n(w.pax); });
+    var weeks = {}, sum = 0; j.on_the_books.weeks.forEach(function(w){ if(n(w.pax)){ weeks[w.week] = n(w.pax); sum += n(w.pax); } });
+    /* parity round 9 (2026-11-27): legacy's ninth bucket (day 56) is in the card's total, not drawn; the server's total_pax has it */
+    var rest = n(j.on_the_books.total_pax) - sum; if(rest > 0) weeks[j.on_the_books.weeks.length] = rest;
     return weeks;
   });
   wrap('mdZoneDemand', function(orig){
