@@ -556,9 +556,12 @@
   function fromServer(ob){
     if(ob && ob.id) try{ srvCopy[ob.id] = JSON.stringify(ob); }catch(_){ delete srvCopy[ob.id]; }   // §targetedWrites · the base of the next save, as text: the booking built from it is edited in place
     var bk = { id: ob.external_id || ob.id, opsId: ob.id, schemaVer: 2, status: ob.status || 'confirmed',
-               createdAt: ob.booked_at || ob.created_at || '', updatedAt: ob.updated_at || '', updatedBy: ob.updated_by || '',
+               /* §opsCreatedAt (parity 2026-11-28) · legacy createdAt is when the booking was made; bookedAt is re-stamped when staff save it
+                  through the form (b2c_LOV-7818719_1: made 23 Nov, saved 24 Nov), so the Live bookings feed (_dashBkTs) sorted it among the 24 Nov ones */
+               createdAt: ob.created_at || ob.booked_at || '', updatedAt: ob.updated_at || '', updatedBy: ob.updated_by || '',
                opsVersion: ob.version != null ? +ob.version : null,        // §opsVersion · sent back as If-Match
-               history: [], ops: {}, adjustments: [], _fromOpsBackend: true };
+               /* the history's Created line (made_at, the server's): what legacy _dashBkTs sorts the feed by before createdAt · the detail reads the whole history */
+               history: ob.made_at ? [{ at: ob.made_at, kind: 'created', tag: 'Created', by: '', text: '' }] : [], ops: {}, adjustments: [], _fromOpsBackend: true };
     HEADER.forEach(function(h){ var v = ob[snake(h[0])]; if(v !== undefined) bk[h[0]] = v; });
     ['leadPax', 'leadNationality', 'leadPhone', 'leadEmail', 'hotelName', 'voucherRef', 'bookingDate'].forEach(function(k){ if(bk[k] == null) bk[k] = ''; });
     /* §opsDisplayCode (parity 2026-11-27) · legacy bkV2DisplayCode numbers an order's lines among ALL its lines; the browser holds only
@@ -682,6 +685,7 @@
     /* Only retain values the API does not own.  In particular, never re-apply a
        local operations/price/adjustment copy over the server response. */
     var keep = {}; ['history', 'approval', 'focApproval', 'rebook', 'weatherResolve', 'createdAt'].forEach(function(k){ if(bk[k] !== undefined) keep[k] = bk[k]; });
+    if(keep.history && !keep.history.length && fresh.history.length) delete keep.history;   // a copy read without made_at first takes the Created line now
     var vans = (O.vans && O.vans.take) ? O.vans.take(bk) : null;   // §vanKeep · owned by /operations/van-groups
     delete bk.srvFlags;      // §opsRowFlags · an answer without the flags (PATCH, POST) must not leave the old ones behind
     delete bk.srvAllocatedPax;   // w5-a · same for the held-seats count

@@ -662,11 +662,21 @@
     if(!enabled() || !COST_KEYS[key]) return orig.apply(this, [].slice.call(arguments, 1));
     costWrite(key, val);
   });
+  /* §ctFirstPid (parity 2026-11-28) · legacy paints the "สิ่งที่ค้าง" box (ctPaintTabs → ctV2Head) BEFORE ctPlanHtml picks the first plan, so its
+     first draw has no plan chosen and no "แผนนี้ยังไม่ผูกเส้นทาง"; the line shows from the next draw the user causes. Our own redraws (the
+     server's calc answers) are not the user's: while the plan was only picked by that first draw, they draw with it unpicked again, as
+     legacy's screen stays. Any other draw (a click, a write) ends it. */
+  var pidAuto = false, quietDraw = false;
   wrap('ctRender', function(orig){
-    if(!enabled() || cost.loaded) return orig.apply(this, [].slice.call(arguments, 1));
+    if(enabled() && cost.loaded){
+      if(quietDraw && pidAuto && window._ct) window._ct.pid = '';
+      else if(!quietDraw) pidAuto = false;
+      return orig.apply(this, [].slice.call(arguments, 1));
+    }
+    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
     var host = document.getElementById('ct-body'); if(!host) return;
     host.innerHTML = O.loadingHtml('Loading costing...');
-    return loadCosting().then(function(){ orig(); }, function(e){
+    return loadCosting().then(function(){ pidAuto = !!(window._ct && !window._ct.pid); orig(); }, function(e){
       O.fail('Costing did not load', e);
       host.innerHTML = '<div style="padding:32px;text-align:center;color:#A32D2D">Costing did not load from operation-backend.</div>';
     });
@@ -748,7 +758,7 @@
     clearTimeout(calc.renderT);
     calc.renderT = setTimeout(function(){
       if(Object.keys(calc.busy).length || Object.keys(calc.wants).length) return calcRender();
-      if(typeof window.ctRender === 'function' && ctVisible()) window.ctRender();
+      if(typeof window.ctRender === 'function' && ctVisible()){ quietDraw = true; try{ window.ctRender(); } finally { quietDraw = false; } }
     }, 120);
   }
   calcApi.render = calcRender;
