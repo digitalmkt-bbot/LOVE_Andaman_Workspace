@@ -137,3 +137,16 @@ Each `scenarios/*.mjs` is one staff task, run through the UI on both sides from 
 to the backend under test), on a clock fixed at 10:00 Bangkok of today. After every step: the message (native dialogs, toast,
 the open dialog's first line) exactly, and the screen (run.mjs compare); at the end the changed records from both
 databases, matched by content. The step vocabulary is at the top of `scenarios.mjs`. Report: `scenarios.md` / `.json`.
+
+## Capture noise the comparison ignores (`noise.mjs`)
+
+Only noise a run proved, each rule named after the state that proved it (run 2026-11-27T11-20-33); unit test
+`test/unit/uiparity-noise.test.mjs`. Nothing else is filtered, and no rule hides a line whose numbers differ.
+
+- **PR/PO stamp** (every prpo state): `ข้อมูลอัพเดตเวลา <date> HH:MM · โดย <user>` is compared with its time and user masked.
+- **Tied rows** (actionboard By agent / All piers / Tub Lamu, guestins): a line missing on one side and a line extra on the other
+  pair up only when they have the same numbers in the same places and differ only in the label's words ("GREENMAN 6" vs
+  "TRIPCOM 6"). Paired lines are listed in `compare.json` `tiePairs`, not dropped silently.
+- **Count-up** (sales-board): `settle()` waits (5 s at most) until every `.sb-cnt` shows its `data-pax`.
+- **Loading placeholder** (actionboard page open): `settle()` treats the ops placeholder (`.la-ops-loading`,
+  `[data-ops-loading]`) as still loading, whatever its label.
