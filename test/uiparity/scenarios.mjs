@@ -23,6 +23,7 @@
 //   { nav: 'booking', citytour? }              open a sidebar page
 //   { click: 'label|fn' }                      the run.mjs key (digits as #, bkV2 = bookingV2); page, then dialogs
 //   { clickText: 'Save', within?: 'css' }      the first visible button / [onclick] whose text is exactly this
+//   { clickIf: 'css' }                         click it when it is on screen (a sheet legacy shows only in some cases), else nothing
 //   { fill: 'css', value }                     type into an input (input + change events)
 //   { choose: 'css', value }                   pick an option (by value, else by label)
 //   { answer: true | 'text' | false }          the next native confirm/prompt is accepted (with text) / dismissed
@@ -36,7 +37,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { startHarness, bootPair, PROBE, snapBoth, onBoth, settle, compare, assertLocal } from './harness.mjs';
+import { startHarness, bootPair, PROBE, snapBoth, onBoth, settle, compare, assertLocal, stable } from './harness.mjs';
 import { legacyItems } from './coverage.mjs';
 
 const require = createRequire(import.meta.url);
@@ -70,7 +71,10 @@ async function freshDbs() {
       }
     }
     const c = new pg.Client({ connectionString: dbUrl(DB[k]) }); await c.connect();
-    await c.query(`INSERT INTO ${k === 'legacy' ? 'operation_schemas.users' : 'users'}(username,pass_hash,name,role,can_edit) VALUES('uiparity',$1,'UI Parity','admin',true)`, [hash]);
+    // a template that already has the login (legacy_ui / operations_ui): its password and name are set to this run's
+    const T = k === 'legacy' ? 'operation_schemas.users' : 'users';
+    const had = await c.query(`UPDATE ${T} SET pass_hash = $1, name = 'UI Parity', role = 'admin', can_edit = true WHERE lower(username) = 'uiparity'`, [hash]);
+    if (!had.rowCount) await c.query(`INSERT INTO ${k === 'legacy' ? 'operation_schemas.users' : 'users'}(username,pass_hash,name,role,can_edit) VALUES('uiparity',$1,'UI Parity','admin',true)`, [hash]);
     await c.end();
   }
   // the template may be older than the backend under test: bring our copy to its schema (clean env, local URL)
@@ -110,6 +114,7 @@ const STEP = {
     if (!el) return false;
     el.click(); return true;
   }, { f: st.clickFn, near: st.near, nth: st.nth }),
+  clickIf: async (S, st) => { const l = S.page.locator(st.clickIf).filter({ visible: true }).first(); if (await l.count()) await l.click({ timeout: 10000 }); return true; },
   clickSel: async (S, st) => { const l = S.page.locator(st.clickSel).filter({ visible: true }).first(); await l.click({ timeout: 10000 }); return true; },
   press: async (S, st) => { const l = S.page.locator(st.press).filter({ visible: true }).first(); await l.press(st.key || 'Enter', { timeout: 10000 }); return true; },
   fill: async (S, st) => { const l = S.page.locator(st.fill).filter({ visible: true }).first(); await l.fill(String(st.value), { timeout: 10000 }); await l.dispatchEvent('change'); return true; },
@@ -125,6 +130,8 @@ const STEP = {
     const r = f(...(args || [])); return r === undefined ? true : (typeof r === 'object' ? true : r);
   }, { fn: st.call, args: st.args }),
   wait: async (S, st) => { await S.page.waitForTimeout(st.wait); return true; },
+  // legacy saves the browser blob 1 s after a change (01-auth-sync.js setItem shim → POST /api/v1/_batch): wait for that write (or the timeout)
+  waitWrite: async (S, st) => { const t0 = Date.now(); const re = new RegExp(st.waitWrite); while (Date.now() - t0 < (st.timeout || 15000)) { if (S.writes.some((w) => re.test(w))) return true; await S.page.waitForTimeout(250); } return true; },
 };
 const stepKind = (st) => Object.keys(STEP).find((k) => k in st);
 const stepLabel = (st) => st.label || (stepKind(st) + ' ' + JSON.stringify(st[stepKind(st)]) + (st.value != null ? ' = ' + st.value : ''));
@@ -139,6 +146,8 @@ async function runStep(H, P, st, R) {
     try { return await STEP[stepKind(s)](S, s); } catch (e) { return 'error: ' + String(e.message || e).split('\n')[0].slice(0, 200); }
   }));
   await Promise.all(sides.map(([, S]) => settle(H, S, st.settle || 500)));
+  // a screen that draws in steps after its data arrives (the by-trip board of a far day): until it stops changing, at most 8 s
+  await Promise.all(sides.map(([, S]) => stable(S, 8000)));
   return r;
 }
 const message = (side) => [...(side.dialogs || []), ...(side.toast || []).map((t) => 'toast: ' + t), ...(side.modal ? ['dialog: ' + side.modal[0]] : [])];

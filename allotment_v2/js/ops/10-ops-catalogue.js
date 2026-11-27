@@ -108,7 +108,15 @@
     // the agent Table's "เครดิต (วัน)" and "Contract Tmpl" columns for every row (UI parity 2026-11-26, H17): the list carries them now
     if('credit_days' in s) o.creditDays = s.credit_days;
     if('contract_template_id' in s) o.contractTemplateId = s.contract_template_id || '';
-    if(Array.isArray(s.program_route_ids)) o.programs = s.program_route_ids.slice();
+    if(Array.isArray(s.program_route_ids)){
+      o.programs = s.program_route_ids.slice();
+      /* §qsAgentRow (scenario check 4, 2026-11-27) · legacy's booking form reads every agent's programPeriods (bkV2BookableRoutes: the
+         contract's programmes decide the route list, "N in rate type" and the ⚠ note) and contractVersion (bkV2RenderPaymentSection,
+         "no contract" when empty) without opening the agent. The list row carries the routes and the version; the booking periods
+         (bookFrom/bookTo, read only by the agent and contract screens, which fetch the full record first) stay the detail's. */
+      o.programPeriods = s.program_route_ids.map(function(r){ return { routeId: r, bookFrom: '', bookTo: '', note: '' }; });
+    }
+    if('contract_version' in s) o.contractVersion = s.contract_version || '';
     if('contract_days_left' in s){ o.contractDaysLeft = s.contract_days_left; o.contractExpiring = !!s.contract_expiring; o.contractExpired = !!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.alerts)) o.serverAlerts = s.alerts;      // the server's pricing alerts (16-ops-agents.js: agAlerts, agHdIssues)
     if(Array.isArray(s.gaps)) o.gaps = s.gaps.slice();          // w6-d: the list chips programs / rate / vat / docs (94-ops-agents-w6.js)
@@ -119,6 +127,7 @@
   }
   function mapAgentDetail(s, local){
     var o = mapAgentSummary(s);
+    o.opsDetail = true;   // the full record (18-ops-contracts hasDetail)
     put(o, 'creditDays', s.credit_days); put(o, 'contact', s.contact); put(o, 'email', s.email); put(o, 'phone', s.phone);
     put(o, 'note', s.note); put(o, 'contractTemplateId', s.contract_template_id); put(o, 'contractVersion', s.contract_version);
     put(o, 'contractStart', s.contract_start);

@@ -68,3 +68,12 @@ test('sync: picking Charter sends charter:true once; Early sends trip_type with 
   assert.equal(posts.length, 2);
   assert.deepEqual([posts[1][2].charter, posts[1][2].trip_type], [false, 'normal']);
 });
+
+// §qsKeepCharter (scenario check 4, 2026-11-27): a boat that a charter booking takes AND that carries the stored Charter pick
+// (9 such rows in legacy's data) was posted charter:false by the next sync after any booking Confirm, wiping the pick.
+test('sync: a charter booking\'s cell keeps the server\'s Charter mark, so nothing is sent', async () => {
+  const L = load([row('b1', { charter: true, charter_booking_id: 'lg_BK-1', chartered: true }), row('b2', { charter: true, chartered: true })]);
+  await L.ready;
+  L.ctx.save('operations'); await L.runTimers();
+  assert.deepEqual(L.calls.filter((c) => c[0] !== 'GET'), [], 'no write: the cells are as the server holds them');
+});

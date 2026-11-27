@@ -22,7 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startHarness, bootPair, PROBE, snapBoth, onBoth, compare } from './harness.mjs';
+import { startHarness, bootPair, PROBE, snapBoth, onBoth, compare, stable } from './harness.mjs';
 import { legacyItems } from './coverage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -88,6 +88,8 @@ async function walkPage(P, i, it) {
   const inNew = sidebarN.some((x) => x.view === it.view && x.citytour === it.citytour);
   const st = (o) => ({ page: tag, section: it.section, label: it.label, ...o });
   const r = await onBoth(H, P, PROBE.nav, it, 700);
+  // the page may still be drawing after the nav settles (full runs saw the booking page with 0 toggles, a smoke run 19): wait until it stops changing
+  await Promise.all([P.legacy, P.neu].map((S) => stable(S)));
   const base = await snapBoth(P, st({ toggle: '(page open)', kind: 'page', navOk: { legacy: r[0], new: r[1] }, inNewSidebar: inNew }));
   states.push(base);
   const a = base._a || {}, b = base._b || {};

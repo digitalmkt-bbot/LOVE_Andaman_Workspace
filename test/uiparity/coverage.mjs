@@ -194,6 +194,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!runs.length) { console.error('usage: node test/uiparity/coverage.mjs --runs=<run-dir>[,…] [--scenarios=<dir>,…] [--legacy-dir=…] [--out=<dir>]'); process.exit(2); }
   const c = coverage({ legacyDir: arg('legacy-dir', process.env.LEGACY_DIR || 'D:/projects/wt-uip-legacy'), runs, scenarios, kindsFile: arg('kinds', path.join(HERE, 'coverage-kinds.json')) });
   const out = arg('out', runs[0]);
+  fs.mkdirSync(out, { recursive: true });   // a new --out folder
   fs.writeFileSync(path.join(out, 'coverage.md'), coverageMd(c));
   fs.writeFileSync(path.join(out, 'coverage.json'), JSON.stringify({ per: c.per, total: c.total, items: c.items }, null, 1));
   const pct = (a, b) => b ? (100 * a / b).toFixed(1) : '0';

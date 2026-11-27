@@ -28,6 +28,9 @@ export default {
     { label: 'reason: customer cancelled', choose: '#bkp-cat', value: 'customer_cancel' },
     { label: 'charge 1 of them', fill: '#bkp-chg-cnt', value: 1 },
     { label: 'Confirm reduce', clickFn: 'bkV2PartialConfirm' },
+    // legacy's bkV2PartialCancel writes the blob to localStorage; the 01-auth-sync.js shim (setItem) saves it 1 s later with POST
+    // /api/v1/_batch (250 ms on live views). Wait for that save on legacy; the new side has already answered (its command is the save)
+    { label: "legacy's debounced save (POST /api/v1/_batch)", waitWrite: '_batch', timeout: 20000, new: { wait: 0, waitWrite: undefined } },
   ],
   async data({ legacy, ops, vars }) {
     const [L] = await legacy(`SELECT b.status, b.total, b.pricebreakdown_total AS bd, t.pax_ad_fr AS ad,
