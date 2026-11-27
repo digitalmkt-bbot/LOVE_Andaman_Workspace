@@ -5,12 +5,13 @@ import vm from 'node:vm';
 
 // §opsHandoff (2026-10-12) · client side of operation-backend's integration handoff.
 
-test('partial cancel sends waived.count only (the server computes the refund)', () => {
+test('partial cancel sends the typed refund box with the count, as legacy (the server keeps it within 0..its proposal)', () => {
   const src = fs.readFileSync('allotment_v2/js/booking/bookingV2PartialConfirm.js', 'utf8');
   const call = src.slice(src.indexOf("laOpsBookingAction(bookingId, 'partial-cancel'"));
   const body = call.slice(0, call.indexOf("'Reduce pax')"));
-  assert.match(body, /waived:\{count:waivedCount\}/);
-  assert.doesNotMatch(body, /waived:\{[^}]*amount/);
+  assert.match(body, /waived:\{count:waivedCount, amount:waiveAmt\}/);
+  const form = fs.readFileSync('allotment_v2/js/ops/71-ops-booking-form.js', 'utf8');
+  assert.doesNotMatch(form, /w\.readOnly = true/, 'the refund box is not made read-only');
 });
 
 // Runs the change-feed module against a stub and returns the screens it asked to redraw.
