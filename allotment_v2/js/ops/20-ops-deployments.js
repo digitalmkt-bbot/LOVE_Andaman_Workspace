@@ -75,7 +75,10 @@
         var cap = capFor(b, d); if(!(cap > 0)) return;           // server wants a positive capacity
         out[key(d, b)] = { route: cell.route, capacity: cap, date: d, boat: b,
           type: (cell.type === 'early' || cell.type === 'normal') ? cell.type : null,     // the Early / Normal pick (a client fact); a charter cell is not one
-          charter: cell.type === 'charter' && !cell.charterBookingId && !cell.boatLockId };  // the Charter pick (a client fact): not a charter booking's or a hold's cell
+          /* the Charter pick (a client fact). A charter booking's or a hold's cell is type 'charter' because of the booking, so it says
+             nothing about the pick: keep the server's mark (§qsKeepCharter, scenario check 4, 2026-11-27: every sync after a booking
+             Confirm posted charter:false for such cells and wiped 9 Charter picks; legacy's commit touches no boat cell of a seat booking) */
+          charter: (cell.charterBookingId || cell.boatLockId) ? !!(synced[key(d, b)] && synced[key(d, b)].charter) : cell.type === 'charter' };
       });
     });
     return out;

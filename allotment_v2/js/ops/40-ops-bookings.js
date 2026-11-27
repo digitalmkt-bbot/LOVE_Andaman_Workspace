@@ -1338,6 +1338,10 @@
     if(typeof origRender !== 'function' || origRender.__opsOpen) return;
     var r = function(){
       var ret = origRender.apply(this, arguments);
+      /* §qsBtcPass · legacy's By-trip skin (§btCompact: the มุมมอง Classic / Compact / Layer switch, the Notice table) is drawn by a
+         MutationObserver pass after each render; a render the new page runs inside that pass (busy) was never seen, and after Confirm
+         the board showed without the switch. One more pass after every render: it only adds what is missing (idempotent). */
+      try{ if(typeof window.btcPass === 'function') setTimeout(function(){ try{ window.btcPass(); }catch(_){ } }, 0); }catch(_){ }
       try{
         var st = (typeof _bkV2 !== 'undefined' && _bkV2) ? _bkV2 : null;
         [st && st.detailId, st && st.editingId].forEach(function(id){
