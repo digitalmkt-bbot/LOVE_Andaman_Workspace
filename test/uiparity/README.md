@@ -43,7 +43,7 @@ operation-backend needs its `node_modules` (`npm ci` in its checkout).
 OPS_BACKEND_DIR=D:/projects/operation-backend LEGACY_DIR=D:/projects/wt-uip-legacy node test/uiparity/run.mjs
 #   --views=dashboard,agents   only these pages     --workers=2   app pairs in parallel (default 2)
 #   no limit per page by default · quick runs: --max-toggles=15 --max-dialogs=5 --max-rows=0 --max-selects=4 --max-checks=5
-#   --no-dialogs  --no-rows  --all-dialogs (default: one dialog per handler)  --out=<dir>
+#   --no-dialogs  --no-rows  --all-dialogs (default: one dialog per handler)  --all-toggles | --per-fn=3 (default: 3 toggles, selects, checks per handler per page)  --out=<dir>
 node test/uiparity/inventory.mjs test/uiparity/out/<run> > docs/ui-parity/inventory.md
 ```
 

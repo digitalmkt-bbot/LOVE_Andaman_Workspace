@@ -33,6 +33,10 @@ const LEGACY_DB = process.env.LEGACY_DB || 'postgres://postgres:postgres@localho
 const OPS_DB = process.env.OPS_DB || 'postgres://postgres:postgres@localhost:55433/operations_ui';
 const lim = (k) => { const v = arg(k, ''); return v === '' || v === true ? Infinity : +v; };
 const MAX_TOGGLES = lim('max-toggles'), MAX_DIALOGS = lim('max-dialogs'), MAX_ROWS = lim('max-rows'), MAX_SELECTS = lim('max-selects'), MAX_CHECKS = lim('max-checks');
+// coverage counts handlers, not instances: by default each handler is clicked at most PER_FN times per page
+// (480 toggles on the operation page are a few handlers × every boat) · --all-toggles walks every instance
+const PER_FN = arg('all-toggles', false) ? Infinity : +arg('per-fn', 3);
+const capFn = (xs, key = (x) => x.fn) => { const n = {}; return (xs || []).filter((x) => { const k = key(x) || x.key; n[k] = (n[k] || 0) + 1; return n[k] <= PER_FN; }); };
 const DIALOGS = !arg('no-dialogs', false), ROWS = !arg('no-rows', false);
 const ONLY = arg('views', '') ? String(arg('views')).split(',') : null;
 const OUT = path.resolve(arg('out', path.join(HERE, 'out', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19))));
@@ -91,19 +95,19 @@ async function walkPage(P, i, it) {
   log(`[${i + 1}/${items.length}] ${tag} · ${(a.toggles || []).length} toggles · ${(a.selects || []).length} selects · ${(a.checks || []).length} checks · ${(a.dialogs || []).length} dialogs · ${(a.listRows || []).length} lists · ${Math.round((Date.now() - t0) / 1000)}s`);
 
   // toggles: each from the page's opening state
-  for (const t of (a.toggles || []).slice(0, MAX_TOGGLES)) {
+  for (const t of capFn(a.toggles).slice(0, MAX_TOGGLES)) {
     await onBoth(H, P, PROBE.nav, it, 300);
     const rr = await onBoth(H, P, PROBE.clickKey, t.key);
     states.push(await snapBoth(P, st({ toggle: t.text || t.fn, key: t.key, fn: t.fn, kind: 'toggle', found: { legacy: rr[0], new: rr[1] } })));
   }
-  for (const s of (a.selects || []).slice(0, MAX_SELECTS)) {
+  for (const s of capFn(a.selects, (x) => x.fn || x.key).slice(0, MAX_SELECTS)) {
     for (const o of s.options.filter((o) => o.v !== s.value).slice(0, 2)) {
       await onBoth(H, P, PROBE.nav, it, 300);
       const rr = await onBoth(H, P, PROBE.select, { key: s.key, value: o.v });
       states.push(await snapBoth(P, st({ toggle: `select ${s.key} = ${o.t}`, key: s.key + '=' + o.v, fn: s.fn, kind: 'select', found: { legacy: rr[0], new: rr[1] } })));
     }
   }
-  for (const c of (a.checks || []).slice(0, MAX_CHECKS)) {
+  for (const c of capFn(a.checks, (x) => x.fn || x.key).slice(0, MAX_CHECKS)) {
     await onBoth(H, P, PROBE.nav, it, 300);
     const rr = await onBoth(H, P, PROBE.check, c.key);
     states.push(await snapBoth(P, st({ toggle: `${c.checked ? 'uncheck' : 'check'} ${c.key}`, key: 'check:' + c.key, fn: c.fn, kind: 'check', found: { legacy: rr[0], new: rr[1] } })));
@@ -124,7 +128,7 @@ async function walkPage(P, i, it) {
     const det = await snapBoth(P, st({ toggle: 'row: ' + row.fn, key: row.key, fn: row.fn, kind: 'row', found: { legacy: rr[0], new: rr[1] } }), { scope: 'modal' });
     states.push(det);
     const pageKeys = new Set((a.toggles || []).map((t) => t.key));
-    const sub = ((det._a || {}).toggles || []).filter((t) => !pageKeys.has(t.key)).slice(0, MAX_TOGGLES);
+    const sub = capFn(((det._a || {}).toggles || []).filter((t) => !pageKeys.has(t.key))).slice(0, MAX_TOGGLES);
     inv.detail[row.key] = sub.map((t) => t.key);
     await onBoth(H, P, PROBE.closeModal, null, 250);
     for (const t of sub) {
