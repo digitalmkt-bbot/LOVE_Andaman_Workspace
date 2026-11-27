@@ -267,7 +267,9 @@
     }
     function after(){ _bkV2LockForm.qty = ''; _bkV2LockForm.reason = ''; _bkV2LockForm.expiry = ''; _bkV2LockModalOpen = false; }
     function send(mode){ return function(){ return O.post(path, mode ? Object.assign({}, body, { pending: mode }) : body); }; }
-    function run(mode){ return go('Seat lock not saved', send(mode), ask).then(function(r){ if(r) after(); render(); }); }
+    /* legacy _mk closes the form and draws at once (bkV2Render); render() skips while the write queue is busy, which left the
+       LOCK SEATS form on screen after a saved lock (§qsLockClose, scenario check 4) */
+    function run(mode){ return go('Seat lock not saved', send(mode), ask).then(function(r){ if(r){ after(); try{ bookingV2Render(); }catch(_){ } } else render(); }); }
     function ask(e){ askPending('create', f.routeId, e, run); }
     return run(null);
   });

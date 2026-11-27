@@ -307,6 +307,14 @@ export async function settle(H, S, wait = 300) {
   // the numbers are read as they are and any difference shows)
   await S.page.waitForFunction(countUpDone, null, { timeout: 5000, polling: 150 }).catch(() => {});
 }
+// a page that draws in steps (legacy's booking page renders 15,000 bookings after the nav returns): wait until the open view
+// stops changing · its text length and its control count the same on 3 looks 400 ms apart, at most maxMs (run.mjs, after each page nav)
+export async function stable(S, maxMs = 20000) {
+  const look = () => S.page.evaluate(() => { const r = document.querySelector('.view.active') || document.body; return (r.innerText || '').length + ':' + r.querySelectorAll('[onclick],[onchange]').length; }).catch(() => 'x');
+  const t0 = Date.now(); let last = await look(), same = 0;
+  while (Date.now() - t0 < maxMs && same < 2) { await S.page.waitForTimeout(400); const now = await look(); same = now === last ? same + 1 : 0; last = now; }
+  return Date.now() - t0;
+}
 export async function onBoth(H, P, fn, arg, wait = 300, { reset = true } = {}) {
   const { legacy, neu } = P;
   if (reset) { legacy.reset(); neu.reset(); }
@@ -318,6 +326,8 @@ export async function onBoth(H, P, fn, arg, wait = 300, { reset = true } = {}) {
 // ── compare one state of both sides ──
 const set = (xs) => new Set(xs || []);
 const NUM = /-?\d[\d,]*(\.\d+)?/g;
+// a booking code's random suffix (legacy bkV2GenerateBookingCode BK-YYMMNNNN-XXXX; the server copies it) is a value, like a number, never layout
+const CODE = /\bBK-?(\d{8,})-[0-9A-Z]{4}\b/g;
 export function compare(s) {
   const L0 = s.legacy, N0 = s.new;
   // noise.mjs rule 1: the PR/PO "updated at HH:MM · by <user>" stamp is compared with its time and user masked
@@ -330,7 +340,7 @@ export function compare(s) {
   missing = missing.filter((x) => !tm.has(x)); extra = extra.filter((x) => !te.has(x));
   const union = (new Set([...lines.a, ...lines.b]).size - ties.length) || 1;
   const sim = (union - missing.length - extra.length) / union;
-  const shape = (x) => x.replace(NUM, '#');
+  const shape = (x) => x.replace(CODE, 'BK-$1-XXXX').replace(NUM, '#');
   const sa = set(missing.map(shape)), sb = set(extra.map(shape));
   // layout = the lines with every number replaced by # · "same layout, other numbers" is a data difference
   const shA = set((L.lines || []).filter((x) => !tm.has(x)).map(shape)), shB = set((N.lines || []).filter((x) => !te.has(x)).map(shape));
