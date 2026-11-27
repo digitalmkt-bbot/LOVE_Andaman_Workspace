@@ -559,6 +559,9 @@
                history: [], ops: {}, adjustments: [], _fromOpsBackend: true };
     HEADER.forEach(function(h){ var v = ob[snake(h[0])]; if(v !== undefined) bk[h[0]] = v; });
     ['leadPax', 'leadNationality', 'leadPhone', 'leadEmail', 'hotelName', 'voucherRef', 'bookingDate'].forEach(function(k){ if(bk[k] == null) bk[k] = ''; });
+    /* §opsDisplayCode (parity 2026-11-27) · legacy bkV2DisplayCode numbers an order's lines among ALL its lines; the browser holds only
+       some of them, so the server's display_code (order-lines.ts displayCodeOf) is the answer: LOV-7228679-8, not -4 */
+    if(ob.display_code) bk.displayCode = String(ob.display_code);
     if(bk.agentId == null) bk.agentId = null;
     Object.keys(STRUCTS).forEach(function(s){
       var o = {}, any = false;
