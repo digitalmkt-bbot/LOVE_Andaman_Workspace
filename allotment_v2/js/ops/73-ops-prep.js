@@ -11,6 +11,8 @@
                      {name, qty, whole_booking, unknown_count}); renderPrPo groups and draws them as before
      ppAllPax        not called in operation mode (the server's allergy lines already say whole booking / unknown count)
      ppCapOf, ppCapTag   the boat's seats for the day  ← cells[].capacity / license_pax
+     pjDepOf         while the sheet draws: the boat-day's departure ← cells[].departure (the job's time, else the route's first;
+                     legacy read PIER_JOB.dep, which this page does not load; parity O3, 2026-11-27)
      ppPierCapTag    the pier's seats against its bookings ← piers[].capacity {seats, boat_days, over, unassigned_pax, boats_without_capacity}
                      (only while no route / special-meal filter is on: the server's pier figure is the whole pier's)
      renderPrPo      asks for the answer, shows the loading line until it lands, and keeps 41's booking load from starting
@@ -43,13 +45,16 @@
     return j;
   }
   function index(j){
-    var cap = {}, venue = {};
+    var cap = {}, venue = {}, dep = {};
     (j.piers || []).forEach(function(p){
-      (p.programmes || []).forEach(function(g){ (g.cells || []).forEach(function(c){ if(c.boat_id && c.capacity) cap[c.date + '|' + c.boat_id] = { cap: n(c.capacity), lic: n(c.license_pax) }; }); });
+      (p.programmes || []).forEach(function(g){ (g.cells || []).forEach(function(c){
+        if(c.boat_id && c.capacity) cap[c.date + '|' + c.boat_id] = { cap: n(c.capacity), lic: n(c.license_pax) };
+        if(c.boat_id && c.departure) dep[c.date + '|' + c.boat_id] = c.departure;
+      }); });
       (p.restaurants || []).forEach(function(r){ (r.cells || []).forEach(function(c){ venue[c.date + '|' + (c.boat_id || '') + '|' + c.route_id] = { id: r.venue_id || '-', name: r.name || '' }; }); });
     });
     var pier = {}; (j.piers || []).forEach(function(p){ pier[p.pier] = p; });
-    j.__idx = { cap: cap, venue: venue, pier: pier };
+    j.__idx = { cap: cap, venue: venue, pier: pier, dep: dep };
   }
 
   wrap('ppRows', function(orig){
@@ -105,8 +110,9 @@
       if(O.loadingOver) O.loadingOver(host, 'Loading PR/PO…'); else if(host && !host.firstChild) host.innerHTML = O.loadingHtml('Loading PR/PO…');
       return;
     }
-    var ens = window.bookingV2EnsureOpsRange;
+    var ens = window.bookingV2EnsureOpsRange, dep = window.pjDepOf, D = j.__idx.dep;
     window.bookingV2EnsureOpsRange = function(){ return null; };          // 41 loads the range's bookings: not needed
-    try{ return orig.apply(this, args); } finally { window.bookingV2EnsureOpsRange = ens; }
+    if(typeof dep === 'function') window.pjDepOf = function(date, bid, fallback){ var v = D[date + '|' + bid]; return v || dep.apply(this, arguments); };
+    try{ return orig.apply(this, args); } finally { window.bookingV2EnsureOpsRange = ens; if(typeof dep === 'function') window.pjDepOf = dep; }
   });
 })();

@@ -85,6 +85,9 @@ test('day aggregate is built from server trips, month totals fill the previous p
   assert.equal(a.cap, 120);
   assert.equal(a.routes.r1.n, 2);
   assert.equal(a.groups.Fuel, 17000);
+  // parity O1: legacy pxDayAgg's per-group detail (§csDetail) for the Analysis tab's cost structure
+  assert.deepEqual(JSON.parse(JSON.stringify(a.gdet.Fuel)), { v: 17000, est: 18000, trips: 2, src: { r: 17000 }, lines: { Fuel: 17000 }, routes: { r1: 17000 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(a.gdet.Food.src)), { w: 6000 });
   const m = c.aggFromTotals('2026-09-12', { trips: 3, revenue: 900, cost: 400, profit: 500, pax: 30, bookings: 8, loss_trips: 1, capacity: 150 });
   assert.equal(m.rev, 900);
   assert.equal(m.profit, 500);
@@ -154,18 +157,31 @@ test('template, plan and rent round-trip between server and legacy shapes', () =
   assert.equal(c.rentToServer({ ...rent, fuelMul: 120 }).fuel_pct, 120);
 });
 
-test('analysis tab draws the server report numbers', () => {
-  const { c } = load();
-  const html = c.analysisHtml({
-    window: { from: '2026-08-27', to: '2026-10-12', days: 47 }, previous_window: { days: 47, trips: 10, pax: 100, revenue: 1000, cost: 800, net: 200 }, target_per_pax: 500, pier: null,
-    totals: { trips: 5, did_not_sail: 1, sailed_trips: 4, pax: 120, revenue: 300000, cost: 250000, net: 50000, capacity: 300, load_factor: 0.4, agents_below_cost: 1, below_cost_net: -900, agent_revenue: 1, other_revenue: 1, flags_missing: 0, receipted_pct: 61 },
-    routes: [{ route_id: 'r1', name: 'Phi Phi', trips: 5, did_not_sail: 1, avg_pax: 24, avg_capacity: 60, revenue: 1, cost: 1, net: 50000, revenue_per_pax: 2500, cost_per_pax: 2083, net_per_pax: 417, margin_pct: 17, load_factor: 0.4, break_even_plan: 22, break_even_fit: null, below_cost: false }],
-    bands: [{ key: 'under_40', trips: 2, avg_pax: 10, net: -500, net_per_pax: -25, verdict: 'loss' }], groups: [], movers: [], weeks: [], flags: [], markets: [], agents: [],
-  });
-  assert.match(html, /Phi Phi/);
-  assert.match(html, /300,000/);
-  assert.match(html, /40%/);
-  assert.match(html, /Under 40% full/);
+test('analysis tab (parity O1): reads the window and the window before as server days, then legacy pxAnalysis draws', async () => {
+  const days = [];
+  const { window, calls, c } = load({ get: (p, q) => {
+    if (p !== '/v1/reports/trip-pl/days') return {};
+    const out = []; for (let d = q.from; d <= q.to; ) { out.push({ date: d, trips: [] }); const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + 1); d = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+    days.push(...out); return { from: q.from, to: q.to, pier: q.pier || null, days: out };
+  } });
+  window.laOps.shift = (ds, n) => { const x = new Date(ds + 'T00:00:00'); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+  const all = c.analysisDays(47);
+  assert.equal(all.length, 94);
+  assert.equal(all[0], '2026-07-12');
+  assert.equal(all[46], '2026-08-27');
+  assert.equal(all[47], '2026-08-28');
+  assert.equal(all[93], '2026-10-13');
+  let drew = 0; const origRender = window.renderTripPL;
+  window._px.tab = 'a';
+  await origRender();
+  const reads = calls.filter((x) => x[1] === '/v1/reports/trip-pl/days');
+  assert.equal(reads.length, 2, 'two reads of at most 62 days');
+  assert.equal(days.length, 94);
+  assert.equal(calls.some((x) => x[1] === '/v1/reports/analysis'), false, 'the old server-drawn report is not read');
+  assert.equal(window.pxAnalysis(), 'legacy-analysis', 'legacy pxAnalysis draws the page');
+  calls.length = 0; await origRender();
+  assert.equal(calls.filter((x) => x[1] === '/v1/reports/trip-pl/days').length, 0, 'fresh days are not read again');
+  void drew;
 });
 
 test('wrapped functions fall back to the legacy originals when operations mode is off', () => {
