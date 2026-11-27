@@ -1091,6 +1091,27 @@
       .then(function(){ manifestBusy[date] = 0; });
   }
 
+  /* UI parity booking "By trip · date" (2026-11-28) · legacy's "Rescheduled away" ghost rows (_mvGhosts) read every booking it held;
+     this page holds the day's, so a booking moved off the date was not there. The manifest of each route of the day sends those
+     (rescheduled_away): read once per day for the day By trip shows, and only they are taken in (the seat figures stay
+     /v1/availability's, as before). */
+  var ghostsAt = {};
+  function loadGhosts(date){
+    if(!date || ghostsAt[date]) return;
+    var T = (typeof TRIPS !== 'undefined') ? TRIPS : {}, routes = {};
+    Object.keys(T[date] || {}).forEach(function(b){ var c = T[date][b]; if(c && c.route) routes[c.route] = 1; });
+    if(!Object.keys(routes).length) return;   // the day's boats are not loaded yet: the next draw asks
+    ghostsAt[date] = 1;
+    Promise.all(Object.keys(routes).map(function(r){ return O.get('/v1/manifest', { date: date, route_id: r }); })).then(function(res){
+      var changed = false;
+      res.forEach(function(m){ ((m && m.rescheduled_away) || []).forEach(function(ob){ if(upsert(ob)) changed = true; }); });
+      var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
+      if(changed && st.tab === 'bytrip' && !st.detailId && !O.busy()){
+        try{ (typeof bookingV2RenderKeep === 'function' ? bookingV2RenderKeep : bookingV2Render)(); }catch(_){}
+      }
+    }).catch(function(e){ delete ghostsAt[date]; try{ console.warn('[ops] rescheduled-away ' + date + ' · ' + e.message); }catch(_){} });
+  }
+
   // A remote booking write needs an immediate refresh only when it touches the open
   // booking/day. Other pages simply have their query caches invalidated by O.wrote().
   if(O.onChange) O.onChange(function(change){
@@ -1121,7 +1142,10 @@
         if(st.detailId && !st.newBooking){
           var bk = find(st.detailId);
           if(bk && bk.opsId && (!detailAt[bk.id] || Date.now() - detailAt[bk.id] > 30000)) refreshDetail(bk);
-        } else if(st.tab === 'bytrip' && st.filterDate && !st.newBooking){
+        } else if(st.tab === 'bytrip' && !st.newBooking){
+          try{ loadGhosts(st.filterDate || (typeof bookingV2Tab2ActiveDate === 'function' ? bookingV2Tab2ActiveDate() : '')); }catch(_){}
+        }
+        if(st.tab === 'bytrip' && st.filterDate && !st.newBooking && !st.detailId){
           if(!manifestAt[st.filterDate] || Date.now() - manifestAt[st.filterDate] > 60000) refreshDay(st.filterDate);
         }
       }catch(_){}

@@ -36,6 +36,10 @@ function _opsBookingMerge(mapped){
     if(i===undefined){ at[k]=SB_BOOKINGS.length; SB_BOOKINGS.push(b); return; }
     // §vanKeep · the booking API has no van fields; keep the ones the van-groups load put on
     var V=window.laOps&&window.laOps.vans, kept=V&&V.take?V.take(SB_BOOKINGS[i]):null;
+    /* §opsVersionRace (UI parity insurance, 2026-11-28) · as mergeInto: a copy older than the one already applied (a range or delta
+       load that crossed a write) changes nothing, else its version went back and the next write was refused 409 stale_version */
+    var cur=SB_BOOKINGS[i];
+    if(cur && cur.opsVersion!=null && b.opsVersion!=null && +b.opsVersion < +cur.opsVersion) return;
     Object.assign(SB_BOOKINGS[i],b);
     if(kept) V.put(SB_BOOKINGS[i],kept);
   });
