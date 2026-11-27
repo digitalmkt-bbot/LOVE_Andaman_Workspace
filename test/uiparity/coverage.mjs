@@ -48,7 +48,8 @@ export function legacyItems(legacyDir) {
       const n = m[1] || m[2];
       if (!defs.has(n)) defs.set(n, []);
       defs.get(n).push({ file: f, pos: m.index });
-      fnPos[f].push([m.index, n]);
+      // a local helper (esc, fmt, pill, …) is not the function that builds a screen: skip it as an owner
+      if (n.length > 4 && !/^(escape|escapeHTML|escHtml|fmtD|fmtDate|money|label|chip|pill|badge|row|cell|button|option)$/i.test(n)) fnPos[f].push([m.index, n]);
     }
   }
   const owner = (f, pos) => { const a = fnPos[f]; let lo = 0, hi = a.length - 1, r = null; while (lo <= hi) { const mid = (lo + hi) >> 1; if (a[mid][0] < pos) { r = a[mid][1]; lo = mid + 1; } else hi = mid - 1; } return r; };
