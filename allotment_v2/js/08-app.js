@@ -61801,7 +61801,11 @@ function bkV2RenderTab2(){
         if(_ovTrip){ if(_ovTrip.ovnLeg)_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN ขากลับ</span>`; else if(_ovTrip.ovn==='self')_ovSB=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#9A5B00;background:#FBEAD5;border-radius:8px;padding:3px 10px;white-space:nowrap">&#127769; OVN&middot;กลับเอง</span>`; else if(_ovTrip.ovn==='return')_ovSB=bkOvnBoatBack(_ovTrip)
           ? `<span style="display:inline-block;font-size:10px;font-weight:700;color:#0B5A43;background:#DDF1EA;border-radius:8px;padding:3px 10px;white-space:nowrap" title="ส่ง ${esc(_ovTrip.date||'')} · เรือกลับท่าวันเดียวกัน · ไปรับ ${esc(_ovTrip.ovnReturnDate||'')}">&#8644; ส่ง ${esc(String(_ovTrip.date||'').slice(8))}&middot;รับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`   /* §ovnBoatBack */
           : `<span style="display:inline-block;font-size:10px;font-weight:700;color:#5B289A;background:#EDE7FB;border-radius:8px;padding:3px 10px;white-space:nowrap" title="กลับวัน ${esc(_ovTrip.ovnReturnDate||'')}">&#127769; ค้างคืน&middot;กลับ ${esc(String(_ovTrip.ovnReturnDate||'').slice(5))}</span>`; }
-        const _sbBase = _ri.sep ? (()=>{ const _dropClean=_ri.selfRet?String(_ri.drop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_ri.drop; const loc=`<span class="t2-sb" title="${esc(_ri.drop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
+        /* §sbOwnDrop (2026-11-27) · owner ทำใบ รับที่เดียวกัน 4 คน · ขากลับ 2 คนไป Seabed Grand อีก 2 คนไปสนามบิน: "ไม่มีอัพเดทในหน้านี้นะ"
+           ข้อมูลบันทึกถูก (altPickups[i].dropPlace) แต่ช่อง Send back ของแถวแยกยังขึ้นจุดส่งของทั้งใบ · แถวแยกที่มีจุดส่งของตัวเอง → ขึ้นจุดส่งของแถวนั้น */
+        const _ownD = (a.split && !a.bsplit && a.pick && !a.pick.main && typeof bkDropOf==='function') ? bkDropOf(bk, a.pick) : null;
+        const _sbDrop = (_ownD && _ownD.own && _ownD.place) ? _ownD.place : _ri.drop;
+        const _sbBase = (_ri.sep || (_ownD && _ownD.own)) ? (()=>{ const _dropClean=_ri.selfRet?String(_sbDrop||'').replace(/\s*\(self-?arrive\)/i,'').trim():_sbDrop; const loc=`<span class="t2-sb" title="${esc(_sbDrop||'')}">${esc(_dropClean||'—')}</span>`; /* §rtFt (2026-10-14) · owner: "รถที่จัดแล้วว่ากลับกับคันไหน ทำเป็น Popup ลอยอยู่ใต้ชื่อ รร" · สามสถานะที่ไม่ต้องทำอะไรต่อ
                  (จัดรถกลับแล้ว · กลับคันเดิม · ลูกค้ากลับเอง) ย้ายไปเป็นป้ายลอยใต้ชื่อโรงแรมในช่อง Pickup (_rtFt ด้านล่าง)
                  ช่องนี้เหลือแค่ชื่อจุดส่ง · ป้ายแดง "ยังไม่จัดรถกลับ" ที่ต้องลงมือ ยังอยู่ที่เดิม */
               /* §rtFt2 · owner: "มันต้องอยู่ที่ Dropoff ทำให้สวยเหมือนอันนี้ (ป้ายล็อก)" · ป้ายลอยใต้ชื่อจุดส่งในช่องนี้เอง
@@ -88208,7 +88212,8 @@ function bkVcDoc(bk, mode){
       +bk.altPickups.map(function(a){ var ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null;
           var loc=String(a.place||'').trim()||(ar?ar.name:'')||'—'; var q=Math.max(1,parseInt(a.qty)||1);
           return '<div style="display:flex;gap:10px;align-items:baseline;margin-top:4px;font-size:14px"><span style="'+MONO+'font-weight:500;white-space:nowrap">'+q+' pax</span><span style="font-weight:600">'+esc(loc)+'</span>'
-            +(a.room?('<span style="color:'+SUB+'">Room '+esc(a.room)+'</span>'):'')+(a.time?('<span style="margin-left:auto;padding:1px 8px;border-radius:6px;background:'+YEL+';'+MONO+'">'+esc(a.time)+'</span>'):'')+'</div>'; }).join('')
+            +(a.room?('<span style="color:'+SUB+'">Room '+esc(a.room)+'</span>'):'')+((typeof bkAltHasDrop==='function' && bkAltHasDrop(a))?(function(){ var dr=(a.dropAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.dropAreaId):null; var dl=String(a.dropPlace||'').trim()||(dr?dr.name:''); return dl?('<span style="color:#B4541A;font-weight:600">&rarr; Drop-off: '+esc(dl)+'</span>'):''; })():'')   /* §sbOwnDrop · จุดส่งของกลุ่มที่แยก */
+            +(a.time?('<span style="margin-left:auto;padding:1px 8px;border-radius:6px;background:'+YEL+';'+MONO+'">'+esc(a.time)+'</span>'):'')+'</div>'; }).join('')
       +'</div>';
   }
   /* services · same source as the boat job sheet (bundle and rate type count too) · no prices */
