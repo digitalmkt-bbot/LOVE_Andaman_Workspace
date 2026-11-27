@@ -18,6 +18,8 @@
 //
 // Same safety as run.mjs: local databases only, clean child environments. Both servers boot on LEGACY_PORT / OPS_PORT
 // (defaults 3931 / 3932, away from run.mjs's). Writes `replay-live.md` and `replay-live.json` to --out.
+// A difference listed in operation-backend todo/parity-accepted.md (check 3, same rule and case id; --accepted=<file>) is
+// accepted; any other makes the run exit 1.
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -92,10 +94,18 @@ await page.waitForFunction(() => typeof window.nav === 'function' && document.qu
 log('legacy page booted');
 
 const rules = [];
+// Accepted differences: operation-backend todo/parity-accepted.md, check-3 rows (`| 3 | <rule> | <case id> | … | why |`).
+const ACCEPTED_FILE = arg('accepted', path.join(OPS_DIR, 'todo', 'parity-accepted.md'));
+const accepted = new Map();
+if (fs.existsSync(ACCEPTED_FILE)) for (const line of fs.readFileSync(ACCEPTED_FILE, 'utf8').split(/\r?\n/)) {
+  const c = line.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim().replace(/^`|`$/g, ''));
+  if (c.length >= 5 && c[0] === '3') accepted.set(`${c[1]}|${c[2]}`, c.slice(4).join('|'));
+}
 const rule = (name, title, cases, info = []) => {
-  const diff = cases.filter((c) => c.legacy !== c.ours);
-  rules.push({ rule: name, title, cases, info, same: cases.length - diff.length, different: diff.length });
-  log(`${name}: ${cases.length} cases, ${cases.length - diff.length} same, ${diff.length} different`);
+  for (const c of cases) if (c.legacy !== c.ours && accepted.has(`${name}|${c.id}`)) c.accepted = accepted.get(`${name}|${c.id}`);
+  const diff = cases.filter((c) => c.legacy !== c.ours && !c.accepted), acc = cases.filter((c) => c.accepted).length;
+  rules.push({ rule: name, title, cases, info, same: cases.length - diff.length - acc, accepted: acc, different: diff.length });
+  log(`${name}: ${cases.length} cases, ${cases.length - diff.length - acc} same, ${diff.length} different, ${acc} accepted`);
 };
 
 // ── seats: getAllotment vs GET /v1/availability ──
@@ -171,11 +181,11 @@ if (CASES && want('booking-price')) {
 }
 
 const md = ['# Check 3 · method B · legacy\'s own functions in the legacy page', '', `Run ${new Date().toISOString()} · legacy writes during the run: ${writes.length}${writes.length ? ' (' + [...new Set(writes)].slice(0, 5).join(', ') + ')' : ''}`, '',
-  '| rule | cases | same | different |', '|---|---|---|---|', ...rules.map((r) => `| ${r.rule} | ${r.cases.length} | ${r.same} | ${r.different} |`)];
+  '| rule | cases | same | different | accepted |', '|---|---|---|---|---|', ...rules.map((r) => `| ${r.rule} | ${r.cases.length} | ${r.same} | ${r.different} | ${r.accepted} |`)];
 for (const r of rules) {
   md.push('', `## ${r.rule} · ${r.title}`, '', ...r.info.map((i) => `- ${i}`));
   const d = r.cases.filter((c) => c.legacy !== c.ours);
-  if (d.length) md.push('', '| case id | legacy | ours | note |', '|---|---|---|---|', ...d.map((c) => `| ${c.id} | ${c.legacy} | ${c.ours} | ${c.note || ''} |`));
+  if (d.length) md.push('', '| case id | legacy | ours | verdict | note |', '|---|---|---|---|---|', ...d.map((c) => `| ${c.id} | ${c.legacy} | ${c.ours} | ${c.accepted ? 'accepted' : 'different'} | ${c.accepted || c.note || ''} |`));
 }
 fs.writeFileSync(path.join(OUT, 'replay-live.md'), md.join('\n') + '\n');
 fs.writeFileSync(path.join(OUT, 'replay-live.json'), JSON.stringify(rules));
