@@ -108,7 +108,10 @@ async function walkPage(P, i, it) {
     const rr = await onBoth(H, P, PROBE.check, c.key);
     states.push(await snapBoth(P, st({ toggle: `${c.checked ? 'uncheck' : 'check'} ${c.key}`, key: 'check:' + c.key, fn: c.fn, kind: 'check', found: { legacy: rr[0], new: rr[1] } })));
   }
-  if (DIALOGS) for (const d of (a.dialogs || []).slice(0, MAX_DIALOGS)) {
+  // one dialog per handler: 1,282 "open" buttons on accounting are one dialog per invoice row, the same item
+  // (coverage counts handlers) · --all-dialogs opens every one
+  const dlgs = arg('all-dialogs', false) ? (a.dialogs || []) : (a.dialogs || []).filter((d, i, xs) => !d.fn || xs.findIndex((x) => x.fn === d.fn) === i);
+  if (DIALOGS) for (const d of dlgs.slice(0, MAX_DIALOGS)) {
     await onBoth(H, P, PROBE.nav, it, 300);
     const rr = await onBoth(H, P, PROBE.clickKey, d.key, 600);
     states.push(await snapBoth(P, st({ toggle: 'dialog: ' + (d.text || d.fn), key: d.key, fn: d.fn, kind: 'dialog', found: { legacy: rr[0], new: rr[1] } })));
