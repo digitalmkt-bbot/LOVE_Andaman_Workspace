@@ -30,7 +30,8 @@ export default {
     // §lkPend · seats short: legacy asks first ("ที่นั่งว่างไม่พอ", bkV2LkPendAskModal); lock what is free, the rest Pending. Not shown: nothing to do
     { label: 'seats short? lock what is free (bkV2LkPendAskGo split)', clickIf: '[data-lkpend="split"]' },
     { label: 'ปล่อย (release) on the new lock', clickFn: 'bkV2LockReleaseConfirm', near: REASON },
-    { label: 'release one seat fewer', clickSel: `[onclick*="ReleaseModalSet(${v.qty - 1})"]` },
+    // the sheet starts at what the lock still holds (all of it, or what was free when seats were short); its first control is the − button
+    { label: 'release one seat fewer (the − button)', clickSel: '[onclick*="ReleaseModalSet("]' },
     { label: 'Release (commit)', clickFn: 'bkV2ReleaseModalCommit' },
   ],
   async data({ legacy, ops, vars }) {

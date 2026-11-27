@@ -37,7 +37,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { startHarness, bootPair, PROBE, snapBoth, onBoth, settle, compare, assertLocal } from './harness.mjs';
+import { startHarness, bootPair, PROBE, snapBoth, onBoth, settle, compare, assertLocal, stable } from './harness.mjs';
 import { legacyItems } from './coverage.mjs';
 
 const require = createRequire(import.meta.url);
@@ -130,6 +130,8 @@ const STEP = {
     const r = f(...(args || [])); return r === undefined ? true : (typeof r === 'object' ? true : r);
   }, { fn: st.call, args: st.args }),
   wait: async (S, st) => { await S.page.waitForTimeout(st.wait); return true; },
+  // legacy saves the browser blob 1 s after a change (01-auth-sync.js setItem shim → POST /api/v1/_batch): wait for that write (or the timeout)
+  waitWrite: async (S, st) => { const t0 = Date.now(); const re = new RegExp(st.waitWrite); while (Date.now() - t0 < (st.timeout || 15000)) { if (S.writes.some((w) => re.test(w))) return true; await S.page.waitForTimeout(250); } return true; },
 };
 const stepKind = (st) => Object.keys(STEP).find((k) => k in st);
 const stepLabel = (st) => st.label || (stepKind(st) + ' ' + JSON.stringify(st[stepKind(st)]) + (st.value != null ? ' = ' + st.value : ''));
@@ -144,6 +146,8 @@ async function runStep(H, P, st, R) {
     try { return await STEP[stepKind(s)](S, s); } catch (e) { return 'error: ' + String(e.message || e).split('\n')[0].slice(0, 200); }
   }));
   await Promise.all(sides.map(([, S]) => settle(H, S, st.settle || 500)));
+  // a screen that draws in steps after its data arrives (the by-trip board of a far day): until it stops changing, at most 8 s
+  await Promise.all(sides.map(([, S]) => stable(S, 8000)));
   return r;
 }
 const message = (side) => [...(side.dialogs || []), ...(side.toast || []).map((t) => 'toast: ' + t), ...(side.modal ? ['dialog: ' + side.modal[0]] : [])];
