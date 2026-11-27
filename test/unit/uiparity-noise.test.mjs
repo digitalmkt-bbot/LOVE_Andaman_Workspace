@@ -26,3 +26,18 @@ test('rule 2 (actionboard): rows tied on the same numbers in another order pair 
   assert.deepEqual(tiePairs(['B2 6'], ['C3 6']), [], 'a label with digits is not paired');
   assert.deepEqual(tiePairs(['GREENMAN 6 · 3 ลำ'], ['TRIPCOM 6 · 2 ลำ']), [], 'all numbers must match');
 });
+
+test('rule 5 (operation): the forecast stamp is masked in its minute only', () => {
+  const a = maskLine('สรุปช่วงออกเรือ · พยากรณ์ล่าสุด 23:32'), b = maskLine('สรุปช่วงออกเรือ · พยากรณ์ล่าสุด 23:33');
+  assert.equal(a, b);
+  assert.equal(a, 'สรุปช่วงออกเรือ · พยากรณ์ล่าสุด <เวลา>');
+  assert.equal(maskLine('ฝนฟ้าคะนอง 16 น.'), 'ฝนฟ้าคะนอง 16 น.', 'the weather lines are compared as they are');
+  assert.equal(maskLine('พยากรณ์ล่าสุด 23:32'), 'พยากรณ์ล่าสุด 23:32', 'only the exact line');
+});
+
+test('rule 6 (execboard): the redraw clock is masked; the date must still match', () => {
+  const a = maskLine('ศุกร์ 27 พ.ย. 2026 · อัปเดต 23:37 · วาดใหม่ทุก 1 นาที'), b = maskLine('ศุกร์ 27 พ.ย. 2026 · อัปเดต 23:38 · วาดใหม่ทุก 1 นาที');
+  assert.equal(a, b);
+  assert.notEqual(a, maskLine('เสาร์ 28 พ.ย. 2026 · อัปเดต 23:37 · วาดใหม่ทุก 1 นาที'), 'another day is still a difference');
+  assert.equal(maskLine('LIVE · 23:37'), 'LIVE · 23:37', 'other clock lines untouched');
+});
