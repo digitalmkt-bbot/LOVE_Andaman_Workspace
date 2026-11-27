@@ -15,7 +15,7 @@ export default {
         AND (SELECT count(*) FROM operation_schemas.sb_bookings__trips x WHERE x.sb_bookings_id = b.id) = 1
         AND coalesce(t.bookingmode, 'seat') = 'seat' AND t.pax_ad_fr >= 2
         AND coalesce(t.pax_chd_fr,0) + coalesce(t.pax_inf_fr,0) + coalesce(t.pax_foc_fr,0) + coalesce(t.pax_ad_th,0) + coalesce(t.pax_chd_th,0) = 0
-        AND t.ops_piercheckin IS NULL AND t.ops_vancheckin IS NULL AND b.cashontour_amount IS NULL AND b.pierpayments IS NULL
+        AND b.ops_piercheckin IS NULL AND b.ops_vancheckin IS NULL AND b.cashontour_amount IS NULL AND b.pierpayments IS NULL
         AND length(coalesce(b.leadpax, '')) >= 5
         AND (SELECT count(*) FROM operation_schemas.sb_bookings z WHERE z.leadpax = b.leadpax) = 1
       ORDER BY b.id`, [day(today)]);
@@ -40,7 +40,8 @@ export default {
     { label: 'B: check in', clickSel: `[onclick*="ckTap('${v.b}'"]` },
   ],
   async data({ legacy, ops, vars }) {
-    const L = await legacy(`SELECT b.id, t.ops_piercheckin AS ck FROM operation_schemas.sb_bookings b JOIN operation_schemas.sb_bookings__trips t ON t.sb_bookings_id = b.id WHERE b.id = ANY($1) ORDER BY b.id`, [[vars.a, vars.b]]);
+    // legacy keeps the pier check-in on the booking (sb_bookings.ops_piercheckin), one trip here
+    const L = await legacy(`SELECT b.id, b.ops_piercheckin AS ck FROM operation_schemas.sb_bookings b WHERE b.id = ANY($1) ORDER BY b.id`, [[vars.a, vars.b]]);
     const N = await ops(`SELECT b.external_id AS id, c.expected, c.actual_pax, c.checked_in_at IS NOT NULL AS checked, c.reason_code,
         (SELECT json_agg(json_build_object('type', e.type, 'pax', e.pax, 'ad', e.ad, 'reason', e.reason_code) ORDER BY e.seq) FROM booking_trip_checkin_events e
           WHERE e.booking_trip_id = c.booking_trip_id AND e.kind = c.kind AND e.slot = c.slot AND e.undone_at IS NULL) AS events
