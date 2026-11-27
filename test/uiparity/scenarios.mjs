@@ -189,6 +189,7 @@ for (const f of files) {
       for (const d of snap.legacy.openIds || []) seen.dialogIds[d] = seen.dialogIds[d] || sc.name + ' · ' + step.label;
       if (st.nav) seen.pages[st.nav + (st.citytour ? '#citytour' : '')] = seen.pages[st.nav] || sc.name;
       log(`   ${i + 1}. ${step.label} · found ${found.map(String).join('/')} · message ${msgSame ? 'same' : 'DIFFERENT'} · screen ${c.verdict}${c.why ? ' (' + c.why + ')' : ''}`);
+      if (c.verdict !== 'same') log(`      legacy-only: ${c.layMissing.slice(0, 4).join(' ¦ ').slice(0, 300)}\n      new-only:    ${c.layExtra.slice(0, 4).join(' ¦ ').slice(0, 300)}${c.failed.length ? '\n      failed: ' + c.failed.join(' ¦ ').slice(0, 300) : ''}`);
       if (!msgSame) log(`      legacy: ${mL.join(' ¦ ').slice(0, 300)}\n      new:    ${mN.join(' ¦ ').slice(0, 300)}`);
       if (!ok) log('      ! the step did not run on legacy: the scenario is wrong, not the new side');
     }
@@ -200,6 +201,7 @@ for (const f of files) {
     await R.legacy.end(); await R.ops.end();
   } catch (e) { res.error = String(e.stack || e).slice(0, 1500); log(`   ! ${sc.name}: ${res.error}`); }
   if (H) H.cleanup();
+  fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(results, null, 1));   // so far, in case the run dies
   await new Promise((r) => setTimeout(r, 1500));
 }
 if (!arg('keep-dbs', false)) for (const k of ['legacy', 'ops']) await admin(`DROP DATABASE IF EXISTS ${DB[k]} WITH (FORCE)`).catch(() => {});

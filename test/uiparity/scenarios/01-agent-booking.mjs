@@ -14,8 +14,9 @@ export function formSteps(v, lead) {
     { label: 'route: type', fill: '#bkv2-route-input-0', value: v.routeName },
     { label: 'route: Enter', press: '#bkv2-route-input-0', key: 'Enter' },
     { label: 'date: open calendar', clickSel: '#bkv2-cal-trig-0' },
-    ...(v.date.slice(0, 7) !== v.today.slice(0, 7) ? [{ label: 'calendar: next month', clickSel: '[onclick*="CalNav(1)"]' }] : []),
-    { label: 'date: pick ' + v.date, clickSel: `[onclick*="CalPick(0,'${v.date}')"], [onclick*="CalPick(0, '${v.date}')"]` },
+    // the day cell's own handler: clicking the cell timed out on both sides (the popup's cells are not 'visible' to the
+    // test while the month renders), so the step calls what the cell's onclick calls
+    { label: 'date: pick ' + v.date + ' (the day cell: bkV2CalPick)', call: 'bkV2CalPick', args: [0, v.date] },
     { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
     { label: '+1 adult', clickSel: `[onclick*="BumpPax(0,'ad_fr',1)"]` },
     { label: 'lead name', fill: `input[oninput*="SetBookingField('leadPax'"]`, value: lead },
