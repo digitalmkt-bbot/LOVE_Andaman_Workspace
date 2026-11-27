@@ -1,9 +1,10 @@
 // Scenario 4 · seats: create a day seat lock for the office, then release part of it
-// Legacy flow (08-app.js): Booking › Seat Locks tab (bkV2SwitchTab('locks')) › the create form
+// Legacy flow (08-app.js): Booking › Seat Locks tab (bkV2SwitchTab('locks')) › "+ ล็อกที่นั่ง" (bkV2OpenLockModal) › the form
 // (bkV2LockSetField route/date/qty/reason) › "สร้างล็อก" (bkV2LockCreateSubmit → bkV2CreateLock) ›
 // the lock's "ปล่อย" button (bkV2LockReleaseConfirm) › the release sheet, minus one (bkV2ReleaseModalSet) ›
 // "Release n" (bkV2ReleaseModalCommit → bkV2ReleaseLock).
-const REASON = 'UIP-SC4 office hold';
+import { RUN } from './_booking.mjs';
+const REASON = 'UIP-SC4 office hold ' + RUN;
 export default {
   name: 'seat-lock',
   title: 'create a seat lock, then release part of it',
@@ -17,6 +18,7 @@ export default {
   steps: (v) => [
     { nav: 'booking' },
     { label: 'Seat Locks tab', clickSel: `[onclick*="SwitchTab('locks'"]` },
+    { label: '+ ล็อกที่นั่ง (open the lock form)', clickFn: 'bkV2OpenLockModal' },
     { label: 'route', choose: `select[onchange*="LockSetField('routeId'"]`, value: v.route },
     { label: 'date', fill: `input[type=date][onchange*="LockSetField('date'"]`, value: v.date },
     { label: 'seats', fill: `input[oninput*="LockSetField('qty'"]`, value: v.qty },

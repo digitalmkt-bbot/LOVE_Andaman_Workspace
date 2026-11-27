@@ -41,3 +41,5 @@ export async function bookingsByLead(legacy, ops, lead) {
   });
   return { legacy: L.map(legacyRec), new: N.map(opsRec), raw: { legacy: L, new: N } };
 }
+// one tag per run: scenario names, lead names and reasons carry it, so reruns on the same databases do not collide
+export const RUN = process.env.SC_RUN || new Date().toISOString().slice(5, 16).replace(/[-:T]/g, '');

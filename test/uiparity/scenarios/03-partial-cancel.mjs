@@ -17,7 +17,7 @@ export default {
         AND coalesce(t.bookingmode, 'seat') = 'seat' AND t.date >= $1 AND t.pax_ad_fr >= 4
         AND coalesce(t.pax_chd_fr,0) + coalesce(t.pax_inf_fr,0) + coalesce(t.pax_foc_fr,0) + coalesce(t.pax_ad_th,0) = 0
       ORDER BY t.date, b.id LIMIT 20`, [addDays(today, 3)]);
-    for (const r of rows) { const [o] = await ops('SELECT id FROM bookings WHERE id = $1', [r.id]); if (o) return { id: r.id, lead: r.lead }; }
+    for (const r of rows) { const [o] = await ops('SELECT id FROM bookings WHERE external_id = $1', [r.id]); if (o) return { id: r.id, lead: r.lead }; }
     throw new Error('no suitable booking for partial-cancel');
   },
   steps: (v) => [
@@ -36,7 +36,7 @@ export default {
     const [N] = await ops(`SELECT b.status, b.total, (SELECT p.count FROM booking_trips t JOIN booking_trip_pax p ON p.booking_trip_id = t.id
           WHERE t.booking_id = b.id AND p.category = 'ad' AND p.residency = 'foreign') AS ad,
         (SELECT json_agg(p ORDER BY p.at) FROM booking_partial_cancels p WHERE p.booking_id = b.id) AS partials
-      FROM bookings b WHERE b.id = $1`, [vars.id]);
+      FROM bookings b WHERE b.external_id = $1`, [vars.id]);
     const part = (p) => ({ count: n(p.count), category: p.category, charged: [n(p.charged_count), n(p.charged_amount)], waived: [n(p.waived_count), n(p.waived_amount)] });
     return {
       legacy: L ? [{ status: L.status, total: n(L.total), adults: n(L.ad), partials: (L.partials || []).map(part) }] : [],

@@ -27,6 +27,7 @@
 //   { choose: 'css', value }                   pick an option (by value, else by label)
 //   { answer: true | 'text' | false }          the next native confirm/prompt is accepted (with text) / dismissed
 //   { call: 'fn', args: [] }                   call the same page function on both sides (bkV2X ↔ bookingV2X)
+//   { call: 'fn', argsFrom: { legacy: sql, ops: sql } }   … with arguments read from each side's database
 //   { wait: ms }
 // and any step may carry { legacy: {...}, new: {...} } to override itself per side (say why in a comment).
 import fs from 'node:fs';
@@ -128,11 +129,13 @@ const STEP = {
 const stepKind = (st) => Object.keys(STEP).find((k) => k in st);
 const stepLabel = (st) => st.label || (stepKind(st) + ' ' + JSON.stringify(st[stepKind(st)]) + (st.value != null ? ' = ' + st.value : ''));
 
-async function runStep(H, P, st) {
+async function runStep(H, P, st, R) {
   const sides = [['legacy', P.legacy], ['new', P.neu]];
   P.legacy.reset(); P.neu.reset();
   const r = await Promise.all(sides.map(async ([n, S]) => {
     const s = { ...st, ...(st[n] || {}) };
+    // argsFrom: { legacy: sql, ops: sql } · the call's arguments read from that side's database (an id the UI made)
+    if (s.argsFrom) { const rows = await R[n === 'legacy' ? 'legacy' : 'ops'](s.argsFrom[n === 'legacy' ? 'legacy' : 'ops']); s.args = rows.length ? Object.values(rows[0]) : ['(not found)']; }
     try { return await STEP[stepKind(s)](S, s); } catch (e) { return 'error: ' + String(e.message || e).split('\n')[0].slice(0, 200); }
   }));
   await Promise.all(sides.map(([, S]) => settle(H, S, st.settle || 500)));
@@ -176,7 +179,7 @@ for (const f of files) {
     // one fixed clock for both browsers: 10:00 Bangkok of today (run.mjs uses the same start before 07:00)
     const P = await bootPair(H, 1, { recordNames, clock: today + 'T10:00:00+07:00' });
     for (const [i, st] of sc.steps(vars).entries()) {
-      const found = await runStep(H, P, st);
+      const found = await runStep(H, P, st, R);
       const snap = await snapBoth(P, { page: sc.name, toggle: stepLabel(st), kind: 'step', found: { legacy: found[0], new: found[1] } }, { scope: 'modal' });
       const c = compare(snap);
       const mL = message(snap.legacy), mN = message(snap.new);

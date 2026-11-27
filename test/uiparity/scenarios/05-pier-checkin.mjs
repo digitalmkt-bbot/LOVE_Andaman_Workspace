@@ -23,7 +23,7 @@ export default {
     for (const r of rows) (byPier[r.pier] = byPier[r.pier] || []).push(r);
     const pier = Object.keys(byPier).sort((a, b) => byPier[b].length - byPier[a].length)[0];
     const pick = [];
-    for (const r of byPier[pier] || []) { const [o] = await ops('SELECT id FROM bookings WHERE id = $1', [r.id]); if (o) pick.push(r); if (pick.length === 2) break; }
+    for (const r of byPier[pier] || []) { const [o] = await ops('SELECT id FROM bookings WHERE external_id = $1', [r.id]); if (o) pick.push(r); if (pick.length === 2) break; }
     if (pick.length < 2) throw new Error('no two suitable bookings at the pier today');
     return { date: today, pier, a: pick[0].id, aLead: pick[0].lead, b: pick[1].id, bLead: pick[1].lead };
   },
@@ -41,10 +41,10 @@ export default {
   ],
   async data({ legacy, ops, vars }) {
     const L = await legacy(`SELECT b.id, t.ops_piercheckin AS ck FROM operation_schemas.sb_bookings b JOIN operation_schemas.sb_bookings__trips t ON t.sb_bookings_id = b.id WHERE b.id = ANY($1) ORDER BY b.id`, [[vars.a, vars.b]]);
-    const N = await ops(`SELECT t.booking_id AS id, c.expected, c.actual_pax, c.checked_in_at IS NOT NULL AS checked, c.reason_code,
+    const N = await ops(`SELECT b.external_id AS id, c.expected, c.actual_pax, c.checked_in_at IS NOT NULL AS checked, c.reason_code,
         (SELECT json_agg(json_build_object('type', e.type, 'pax', e.pax, 'ad', e.ad, 'reason', e.reason_code) ORDER BY e.seq) FROM booking_trip_checkin_events e
           WHERE e.booking_trip_id = c.booking_trip_id AND e.kind = c.kind AND e.slot = c.slot AND e.undone_at IS NULL) AS events
-      FROM booking_trips t JOIN booking_trip_checkins c ON c.booking_trip_id = t.id AND c.kind = 'pier' WHERE t.booking_id = ANY($1) ORDER BY 1`, [[vars.a, vars.b]]);
+      FROM booking_trips t JOIN bookings b ON b.id = t.booking_id JOIN booking_trip_checkins c ON c.booking_trip_id = t.id AND c.kind = 'pier' WHERE b.external_id = ANY($1) ORDER BY 1`, [[vars.a, vars.b]]);
     const legacyRec = (r) => { const c = typeof r.ck === 'string' ? JSON.parse(r.ck) : r.ck; return c ? { id: r.id, expected: c.expected, actual: c.actualPax, checked: !!c.at, reason: c.reasonCode || '', events: (c.events || []).map((e) => ({ type: e.type, pax: e.pax, ad: (e.paxBreak || {}).ad ?? null, reason: e.reasonCode })) } : { id: r.id, none: true }; };
     const opsRec = (r) => ({ id: r.id, expected: r.expected, actual: r.actual_pax, checked: r.checked, reason: r.reason_code || '', events: (r.events || []).map((e) => ({ type: e.type, pax: e.pax, ad: e.ad, reason: e.reason })) });
     const ids = [vars.a, vars.b];
