@@ -4,8 +4,11 @@
    Trip P&L (Daily / Monthly / Analysis tabs): every figure is computed on the
    server and only drawn here. The legacy renderers (pxDaily, pxMonth) keep
    their markup; they are fed trips mapped from the server's rows through
-   pxDay / pxTrip / pxDayAgg. The Analysis tab is drawn from the server's
-   analysis report (the browser no longer fits costs, bands or agent nets).
+   pxDay / pxTrip / pxDayAgg. The Analysis tab is legacy's own pxAnalysis over
+   the same server days (parity O1, 2026-11-27): the window and the window before
+   it are read with GET /v1/reports/trip-pl/days, and pxDayAgg lays each server
+   day (trips, bands, agent sums with the rate card) in legacy's shape, as the
+   Monthly tab does.
 
    Costing (template / plans / rented boats): ctRead / ctWrite for the three
    keys cost_template, cost_plans and boat_rent go to the server. The design
@@ -16,7 +19,7 @@
 
    GET  /v1/reports/trip-pl?date=&pier=
    GET  /v1/reports/trip-pl/month?month=&pier=
-   GET  /v1/reports/analysis?days=&pier=
+   GET  /v1/reports/trip-pl/days?from=&to=&pier=   (Monthly, Forecast, Analysis)
    POST /v1/trip-actuals/:date/:boat_id/{close|reopen|ran|not-ran}
    GET|PUT /v1/costing/template
    GET|POST /v1/costing/plans · PATCH|DELETE /v1/costing/plans/:id
@@ -26,7 +29,7 @@
   'use strict';
   var O = window.laOps; if(!O) return;
   var TTL = 60000;
-  var S = { day:{}, mday:{}, an:{}, loading:{}, rent:{} };   // rent: month -> { at, data: trip-pl/month rent_idle } (w5-d)
+  var S = { day:{}, mday:{}, loading:{}, rent:{} };   // rent: month -> { at, data: trip-pl/month rent_idle } (w5-d)
   var cost = { loaded:false, template:null, plans:[], rents:{}, rentSrv:{}, rentDaySrv:false, known:{}, idMap:{}, seq:0, loading:null };
 
   function enabled(){ return O.enabled(); }
@@ -51,7 +54,7 @@
     var workers = []; for(var w = 0; w < Math.min(size, items.length); w++) workers.push(next());
     return Promise.all(workers).then(function(){ return out; });
   }
-  function clearAll(){ S.day = {}; S.mday = {}; S.an = {}; S.rent = {}; }
+  function clearAll(){ S.day = {}; S.mday = {}; S.rent = {}; }
 
   /* ── server trip → the legacy trip object the renderers read ─────────────── */
   var SRC = { actual:'r', plan:'p', formula:'f', pending:'w', override:'o' };
@@ -254,7 +257,17 @@
       R.n++; R.pax += lt.px.tot; R.rev += lt.rev; R.cost += lt.cost; R.profit += lt.profit; R.cap += cap;
       if(lt.be){ R.be += lt.be; R.beN++; }
       a.tr.push({ rid:rk, bid:lt.bid, name:lt.name, date:date, pax:lt.px.tot, cost:lt.cost, rev:lt.rev, cap:cap, foc:lt.px.foc, inf:lt.px.inf });
-      lt.rows.forEach(function(r){ a.groups[r.g] = (a.groups[r.g] || 0) + r.use; });
+      /* §csDetail (legacy pxDayAgg) · each cost group's lines, sources and routes: the Analysis tab's cost structure reads them (parity O1) */
+      var gs = {};
+      lt.rows.forEach(function(r){
+        a.groups[r.g] = (a.groups[r.g] || 0) + r.use;
+        var GD = a.gdet[r.g] || (a.gdet[r.g] = { v:0, est:0, trips:0, src:{}, lines:{}, routes:{} });
+        GD.v += r.use; GD.est += (+r.est || 0);
+        GD.src[r.src] = (GD.src[r.src] || 0) + r.use;
+        if(Math.round(r.use) !== 0 || r.real != null) GD.lines[r.l] = (GD.lines[r.l] || 0) + r.use;
+        GD.routes[rk] = (GD.routes[rk] || 0) + r.use;
+        if(!gs[r.g]){ gs[r.g] = 1; GD.trips++; }
+      });
       /* §pxSteps (sync 11-16, lk-inbox 434545bf): profit by step (operation cost / wages / depreciation), legacy's own split of the
          server's cost lines (each row's id, group and use), as legacy pxDayAgg does with its own trips */
       if(typeof window.pxStAdd === 'function') window.pxStAdd(a, lt);
@@ -268,69 +281,23 @@
              famCost:n(x.fam_cost), famPax:n(x.fam_pax), famTrips:n(x.fam_trips), famAg:{}, saleLoss:n(x.sale_loss), zeroN:0 };
   }
 
-  /* ── Analysis tab, drawn from the server report ─────────────────────────── */
-  function anKey(days, pier){ return days + '|' + (pier || ''); }
-  function loadAnalysis(days, pier){
-    var k = anKey(days, pier);
-    if(fresh(S.an[k])) return Promise.resolve(S.an[k].data);
-    return once('an:' + k, function(){
-      return O.get('/v1/reports/analysis', { days:days, pier:pier || '' }).then(function(d){
-        if(!d || !d.totals || !d.window) throw new Error('invalid analysis response');
-        S.an[k] = { at:Date.now(), data:d }; return d;
-      });
-    });
+  /* ── Analysis tab (parity O1, 2026-11-27) ───────────────────────────────────
+     Legacy pxAnalysis(e) reads pxDayAgg for the last N days to today and for the N days before them (its "vs prev" columns).
+     Both windows are read here as server days; then legacy's pxAnalysis draws its own page (hero, insights, revenue to check,
+     routes with the fitted break-even, cost structure, bands, weekly trend, markets, agent x route) from them. */
+  function backDays(N, end){
+    if(typeof window.pxBackDays === 'function') return window.pxBackDays(N, end);
+    var out = [], d = end; for(var i = 0; i < N; i++){ out.unshift(d); d = O.shift(d, -1); } return out;
   }
-  var TH = 'padding:7px 9px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748B;background:#F8FAFC';
-  function tbl(heads, rows, empty){
-    return '<div style="overflow:auto;background:#fff;border:1px solid #E2E8F0;border-radius:12px;margin-bottom:14px"><table style="width:100%;border-collapse:collapse"><thead><tr>'
-      + heads.map(function(h, i){ return '<th style="' + TH + (i ? ';text-align:right' : '') + '">' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>'
-      + (rows.length ? rows.map(function(r){
-          return '<tr style="border-top:1px solid #EEF2F6">' + r.map(function(c, i){ return '<td style="padding:7px 9px;font-size:12px;font-variant-numeric:tabular-nums;text-align:' + (i ? 'right' : 'left') + '">' + c + '</td>'; }).join('') + '</tr>';
-        }).join('') : '<tr><td colspan="' + heads.length + '" style="padding:18px;text-align:center;color:#64748B">' + esc(empty || 'No data') + '</td></tr>')
-      + '</tbody></table></div>';
+  function analysisDays(N){
+    var days = backDays(N, O.today());
+    if(!days.length) return [];
+    return backDays(N, backDays(2, days[0])[0]).concat(days);
   }
-  function kpi(label, value, color){
-    return '<div style="flex:1;min-width:140px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:12px 14px"><div style="font-size:10px;text-transform:uppercase;color:#64748B;font-weight:600">'
-      + esc(label) + '</div><div style="font-size:20px;font-weight:700;margin-top:3px;color:' + (color || '#0F172A') + '">' + value + '</div></div>';
-  }
-  function head(t){ return '<div style="font-size:12px;font-weight:700;margin:16px 0 8px">' + esc(t) + '</div>'; }
-  function net(v){ return (n(v) < 0 ? '−' : '+') + baht(Math.abs(n(v))); }
-  function pct(v){ return Math.round(n(v) * 100) + '%'; }
-  var BAND = { under_40:'Under 40% full', '40_60':'40-60% full', '60_80':'60-80% full', over_80:'Over 80% full' };
-  var VERDICT = { loss:'Loss', thin:'Thin', healthy:'Healthy' };
-  function analysisHtml(d){
-    var T = d.totals, P = d.previous_window || {}, w = d.window;
-    if(!T.trips) return '<div class="empty">No trips in the last ' + esc(w.days) + ' days</div>';
-    var out = '<div style="padding:4px 2px"><div style="font-size:11px;color:#64748B;margin-bottom:10px">Server analysis · ' + esc(w.from) + ' to ' + esc(w.to)
-      + ' · target ' + baht(d.target_per_pax) + '/pax' + (d.pier ? ' · pier ' + esc(d.pier) : '') + '</div>';
-    out += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
-      + kpi('Revenue', baht(T.revenue), '#0F6E56') + kpi('Cost', baht(T.cost), '#A05A1A') + kpi('Net', net(T.net), n(T.net) < 0 ? '#A32D2D' : '#0F6E56')
-      + kpi('Trips', esc(T.trips) + (T.did_not_sail ? ' (' + esc(T.did_not_sail) + ' did not sail)' : '')) + kpi('Pax', esc(T.pax)) + kpi('Load factor', pct(T.load_factor))
-      + kpi('Agents below cost', esc(T.agents_below_cost) + ' · ' + net(T.below_cost_net), n(T.agents_below_cost) ? '#A32D2D' : '#0F172A')
-      + kpi('Receipted cost', esc(T.receipted_pct) + '%') + '</div>';
-    if(P.trips != null) out += '<div style="font-size:11px;color:#64748B">Previous ' + esc(P.days) + ' days: ' + esc(P.trips) + ' trips · ' + esc(P.pax) + ' pax · revenue ' + baht(P.revenue) + ' · net ' + net(P.net) + '</div>';
-    out += head('Routes · net per pax') + tbl(['Route', 'Trips', 'Avg pax', 'Revenue/pax', 'Cost/pax', 'Net/pax', 'Net', 'Load', 'B/E plan', 'B/E fit'],
-      (d.routes || []).map(function(r){
-        return [esc(r.name) + (r.below_cost ? ' <b style="color:#A32D2D">below cost</b>' : ''), esc(r.trips) + (r.did_not_sail ? ' (' + esc(r.did_not_sail) + ' idle)' : ''), esc(r.avg_pax) + '/' + esc(r.avg_capacity),
-                baht(r.revenue_per_pax), baht(r.cost_per_pax), net(r.net_per_pax), net(r.net), pct(r.load_factor), r.break_even_plan == null ? '-' : esc(r.break_even_plan), r.break_even_fit == null ? '-' : esc(r.break_even_fit)];
-      }));
-    out += head('Load-factor bands') + tbl(['Band', 'Trips', 'Avg pax', 'Net', 'Net/pax', 'Verdict'],
-      (d.bands || []).map(function(b){ return [esc(BAND[b.key] || b.key), esc(b.trips), b.avg_pax == null ? '-' : esc(b.avg_pax), net(b.net), b.net_per_pax == null ? '-' : net(b.net_per_pax), b.verdict ? esc(VERDICT[b.verdict] || b.verdict) : '-']; }));
-    out += head('Cost groups' + ((d.movers || []).length ? ' · rising: ' + d.movers.join(', ') : '')) + tbl(['Group', 'Amount', '% of cost', '/pax', 'Previous', 'Change', 'Receipted'],
-      (d.groups || []).map(function(g){
-        return [esc(g.group), baht(g.amount), esc(g.share_of_cost_pct) + '%', baht(g.cost_per_pax), g.previous == null ? '-' : baht(g.previous), g.change_pct == null ? '-' : (g.change_pct > 0 ? '+' : '') + esc(g.change_pct) + '%', pct(g.receipted_share)];
-      }));
-    out += head('Weeks') + tbl(['Week', 'Trips', 'Pax', 'Revenue/pax', 'Cost/pax', 'Net/pax'],
-      (d.weeks || []).map(function(x){ return [esc(x.from) + ' to ' + esc(x.to), esc(x.trips), esc(x.pax), baht(x.revenue_per_pax), baht(x.cost_per_pax), net(x.net_per_pax)]; }));
-    if((d.flags || []).length) out += head('Check revenue · ' + baht(T.flags_missing) + ' missing') + tbl(['Trip', 'Pax', 'Revenue/pax', 'Route average', 'Gap', 'Missing'],
-      d.flags.map(function(f){ return [esc(f.date) + ' · ' + esc(f.boat_name) + ' · ' + esc(f.route_name || f.route_id), esc(f.pax), baht(f.revenue_per_pax), baht(f.route_average), net(f.gap), baht(f.missing)]; }));
-    out += head('Markets') + tbl(['Market', 'Agents', 'Heads', 'Revenue', 'Cost', 'Net', 'Net/pax'],
-      (d.markets || []).map(function(m){ return [esc(m.market_name), esc(m.agents), esc(m.heads), baht(m.revenue), baht(m.cost), net(m.net), net(m.net_per_pax)]; }));
-    var AG = d.agents || [], shown = window._px && window._px.agAll ? AG : AG.slice(0, 15);
-    out += head('Agent contribution · ' + AG.length + ' agents') + tbl(['Agent', 'Market', 'Bookings', 'Heads', 'Revenue/pax', 'Cost/pax', 'Net/pax', 'Net'],
-      shown.map(function(a){ return [esc(a.name) + (a.below_cost ? ' <b style="color:#A32D2D">below cost</b>' : ''), esc(a.market_name), esc(a.bookings), esc(a.heads), baht(a.revenue_per_pax), baht(a.cost_per_pax), net(a.net_per_pax), net(a.net)]; }));
-    if(AG.length > 15) out += '<button onclick="pxAgAll()" style="padding:6px 12px;margin-bottom:14px">' + (window._px.agAll ? 'Show top 15' : 'Show all ' + AG.length) + '</button>';
-    return out + '</div>';
+  function analysisNeeds(){
+    var P = window._px, pier = P.pier || '';
+    var miss = analysisDays(P.an || 47).filter(function(d){ return !fresh(S.day[dayKey(d, pier)]); });
+    return miss.length ? [function(){ return loadDays(miss, pier); }] : [];
   }
 
   /* ── renderTripPL gate: fetch what the tab needs, then let the legacy renderer draw ── */
@@ -340,7 +307,7 @@
     var pier = P.pier || '';
     if(P.tab === 'm') return monthNeeds();
     if(P.tab === 'f') return forecastNeeds();
-    if(P.tab === 'a') return fresh(S.an[anKey(P.an || 47, pier)]) ? [] : [function(){ return loadAnalysis(P.an || 47, pier); }];
+    if(P.tab === 'a') return analysisNeeds();
     return fresh(S.day[dayKey(P.date, pier)]) ? [] : [function(){ return loadDay(P.date, pier); }];
   }
   function shell(inner){
@@ -413,11 +380,6 @@
       return { bid:r.boat_id, name:r.name, RN:{ to:r.open_ended ? '' : r.to, name:r.name }, SP:{ from:r.from, to:r.to, due:n(r.due), opDays:n(r.days_plan) }, slots:n(r.slots), sail:n(r.sailed),
                daysRan:n(r.days_ran), opPlan:n(r.days_plan), booked:n(r.booked), due:n(r.due), gap:n(r.gap) };
     });
-  });
-  wrap('pxAnalysis', function(orig){
-    if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
-    var e = S.an[anKey(window._px.an || 47, window._px.pier || '')];
-    return e ? analysisHtml(e.data) : '<div class="empty">Analysis is not loaded</div>';
   });
   /* the cost-per-head agent split in the day card reads bookings, which the server day does not carry:
      it stays a local read of SB_BOOKINGS (kept as is). */
@@ -1117,9 +1079,9 @@
     cost.plans.push(p); cost.known[p.id] = JSON.stringify(p);
     return p;
   }
-  window.laOps.costingPL = { adoptPlan:adoptPlan, realPlanId:function(id){ return cost.idMap[id] || id; }, rentIdleOf:function(ym){ var e = S.rent[ym]; return e && fresh(e) ? e.data : null; }, calcState:calc, answer:function(pl){ return answer(pl, undefined, false); }, askNow:askNow, loadDay:loadDay, loadAnalysis:loadAnalysis, loadCosting:loadCosting, clear:clearAll };
+  window.laOps.costingPL = { adoptPlan:adoptPlan, realPlanId:function(id){ return cost.idMap[id] || id; }, rentIdleOf:function(ym){ var e = S.rent[ym]; return e && fresh(e) ? e.data : null; }, calcState:calc, answer:function(pl){ return answer(pl, undefined, false); }, askNow:askNow, loadDay:loadDay, loadCosting:loadCosting, clear:clearAll };
   window.__laOpsCostingCompat = {
-    legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisHtml:analysisHtml,
+    legacyTrip:legacyTrip, aggFromTrips:aggFromTrips, aggFromTotals:aggFromTotals, analysisDays:analysisDays,
     templateFromServer:templateFromServer, templateToServer:templateToServer, planFromServer:planFromServer, planToServer:planToServer,
     rentFromServer:rentFromServer, rentToServer:rentToServer, partToServer:partToServer, partFromServer:partFromServer
   };
