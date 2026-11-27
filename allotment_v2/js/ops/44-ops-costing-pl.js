@@ -562,6 +562,7 @@
     cost.plans = (plans.plans || []).map(planFromServer);
     cost.rents = rentsFromServer((rents || {}).rents);
     rentSrvSet((rents || {}).rents);
+    cost.runs = (rents || {}).runs || null;   /* §qsRuns · the rented-boat tab's sailing days, over every deployment */
     cost.known = {}; cost.plans.forEach(function(p){ cost.known[p.id] = JSON.stringify(p); });
     cost.knownRents = {}; Object.keys(cost.rents).forEach(function(k){ cost.knownRents[k] = JSON.stringify(cost.rents[k]); });
     cost.loaded = true;
@@ -605,7 +606,7 @@
       var last = null;
       return jobs.reduce(function(p, j){ return p.then(function(){
         return j.del ? O.del('/v1/costing/boat-rents/' + encodeURIComponent(j.id)) : O.call('PUT', '/v1/costing/boat-rents/' + encodeURIComponent(j.id), j.body).then(function(r){ last = r; });
-      }); }, Promise.resolve()).then(function(){ if(last && last.rents) rentSrvSet(last.rents); });
+      }); }, Promise.resolve()).then(function(){ if(last && last.rents) rentSrvSet(last.rents); if(last && last.runs) cost.runs = last.runs; });
     }).then(function(){ O.wrote('costing'); if(typeof window.ctRentBust === 'function') window.ctRentBust(); if(calcApi.render) calcApi.render(); }, function(e){ return refreshAfterFail('Boat rent was not saved', e); });
   }
   function writePlans(val){
@@ -761,6 +762,19 @@
     var w = function(){ var args = [].slice.call(arguments); if(!enabled() || !cost.loaded) return orig.apply(this, args); return replacement.apply(this, [orig].concat(args)); };
     w.__opsCostingCalc = true; window[name] = w;
   }
+
+  /* §qsRuns (2026-11-27) · ctBoatRuns · the days each boat is on the board, per route, and the days no deal covers: the server's runs
+     (GET /v1/costing/boat-rents), over every deployment. Legacy counted its whole TRIPS; this browser holds only some days (BMP 6, legacy 7). */
+  wrapCalc('ctBoatRuns', function(orig){
+    if(!cost.runs) return orig();
+    var out = {};
+    Object.keys(cost.runs).forEach(function(bid){
+      var r = cost.runs[bid], rt = {};
+      Object.keys(r.routes || {}).forEach(function(k){ var x = r.routes[k]; rt[k] = { n:n(x.n), noDeal:n(x.no_deal), first:x.first, last:x.last }; });
+      out[bid] = { n:n(r.n), first:r.first, last:r.last, noDeal:n(r.no_deal), rt:rt };
+    });
+    return out;
+  });
 
   /* ctCalc · the rows and the totals; only for the sheet's own context (the heads, engines, boats, fuel and boat of the plan) */
   wrapCalc('ctCalc', function(orig, pl, ctx, tpl){

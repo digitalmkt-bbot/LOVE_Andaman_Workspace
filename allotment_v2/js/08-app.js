@@ -36040,11 +36040,9 @@ function ctSetTab(t){ _ct.tab = t; ctRender(); }
    LKC77 / LKC33 / BMP ไม่ได้ปักกับแผนไหน จึงไม่มีที่ให้ใส่ดีล และ P&L คิดเป็นเรือบริษัทตลอด
    แท็บนี้ลิสต์ทุกลำที่ ownership==='charter' (และลำที่ติ๊กเป็นเรือเช่าไว้แล้ว) · แก้ตรงนี้ = ระเบียนเดียวกับที่การ์ดในแผนใช้ */
 function ctRentPick(bid){ _ct.rb = bid; ctRender(); }
-function ctRentTabHtml(){
-  var BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){
-    return b && !b.retired && (b.ownership === 'charter' || (ctRentRaw(b.id) && ctRentRaw(b.id).on)); })
-    .sort(function(a, z){ return String(a.name).localeCompare(String(z.name)); });
-  /* วันที่จัดเรือของแต่ละลำ · แยกตามเส้นทาง · ไว้เห็นว่าลำไหน/เส้นทางไหนยังไม่มีดีลครอบ */
+/* §qsRuns (2026-11-27) · each boat's days on the board, per route, and the days no deal covers · in operation mode the server's
+   (GET /v1/costing/boat-rents runs, ops/44-ops-costing-pl.js): the browser's TRIPS holds only some days */
+function ctBoatRuns(){
   var runs = {};
   try{ Object.keys(TRIPS || {}).forEach(function(d){ Object.keys(TRIPS[d] || {}).forEach(function(bid){
     var op = TRIPS[d][bid]; if(!op || !op.route) return;
@@ -36053,6 +36051,14 @@ function ctRentTabHtml(){
     var x = r.rt[op.route] = r.rt[op.route] || { n:0, noDeal:0, first:d, last:d };
     x.n++; if(d < x.first) x.first = d; if(d > x.last) x.last = d;
     if(!ctRentFor(bid, d, op.route)){ r.noDeal++; x.noDeal++; } }); }); }catch(_){ }
+  return runs;
+}
+function ctRentTabHtml(){
+  var BL = (typeof BOATS !== 'undefined' ? BOATS : []).filter(function(b){
+    return b && !b.retired && (b.ownership === 'charter' || (ctRentRaw(b.id) && ctRentRaw(b.id).on)); })
+    .sort(function(a, z){ return String(a.name).localeCompare(String(z.name)); });
+  /* วันที่จัดเรือของแต่ละลำ · แยกตามเส้นทาง · ไว้เห็นว่าลำไหน/เส้นทางไหนยังไม่มีดีลครอบ */
+  var runs = ctBoatRuns();
   if(!_ct.rb || !BL.some(function(b){ return b.id === _ct.rb; })){
     var f = BL.filter(function(b){ return runs[b.id]; })[0] || BL[0]; _ct.rb = f ? f.id : '';
   }
