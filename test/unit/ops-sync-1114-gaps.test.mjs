@@ -33,7 +33,7 @@ function configStore(entries) {
   return { window, calls, legacyWrites };
 }
 
-test('§routeCode / §pslProd: route_codes and pos_products read from GET /v1/config and save with PUT /v1/config/{key}, never the blob', async () => {
+test('§routeCode / §pslProd: route_codes and pos_products read from GET /v1/config and save to the server (route_codes PUT, pos_products by item), never the blob', async () => {
   const { window, calls, legacyWrites } = configStore([
     { key: 'route_codes', value: { r1: 'TRA' }, version: 3 },
     { key: 'pos_products', value: { 'beach shoe.toto': { cat: 'Beach Shoe' } }, version: 1 },
@@ -45,10 +45,11 @@ test('§routeCode / §pslProd: route_codes and pos_products read from GET /v1/co
   window.ctWrite('route_codes', { r1: 'TRA', r9: 'SLV' });
   window.ctWrite('pos_products', { 'beach shoe.toto': { cat: 'Beach Shoe', nm: 'TOTO' } });
   await flush();
-  const puts = calls.filter((c) => c[0] === 'PUT');
-  assert.deepEqual(clone(puts.map((c) => [c[1], c[2]])), [
-    ['/v1/config/route_codes', { value: { r1: 'TRA', r9: 'SLV' }, version: 3 }],
-    ['/v1/config/pos_products', { value: { 'beach shoe.toto': { cat: 'Beach Shoe', nm: 'TOTO' } }, version: 1 }],
+  const writes = calls.filter((c) => c[0] === 'PUT' || c[0] === 'PATCH');
+  assert.deepEqual(clone(writes.map((c) => [c[0], c[1], c[2]])), [
+    ['PUT', '/v1/config/route_codes', { value: { r1: 'TRA', r9: 'SLV' }, version: 3 }],
+    // §targetedWrites (2026-11-27): the product registry goes up one product at a time, only the changed field
+    ['PATCH', '/v1/config/pos_products/items/beach%20shoe.toto', { nm: 'TOTO' }],
   ]);
   assert.deepEqual(legacyWrites, [], 'nothing reached the legacy blob');
   assert.equal(calls.filter((c) => c[0] === 'fail').length, 0);

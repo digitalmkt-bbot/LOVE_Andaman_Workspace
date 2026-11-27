@@ -6,6 +6,8 @@
    GET   /v1/bookings/{id}                 fresh copy when a booking's detail opens
    GET   /v1/bookings/{id}/history         that detail's History card
    POST  /v1/bookings · PATCH /{id}        save (bookingV2SyncToOpsBackend)
+   POST|PATCH|DELETE /{id}/{trips|adjustments|alt-pickups|upgrades|allergies|attachments}[/{item}]
+                                           §targetedWrites: a save sends only what changed (planEdit)
    POST  /{id}/cancel · /restore · /partial-cancel · /reschedule
    POST  /{id}/confirm                     "Submit" on a booking the server holds as a quote
    POST  /{id}/approve · /reject           approve · reject · FOC approve · FOC reject
@@ -227,6 +229,110 @@
     return b;
   }
 
+  /* ── §targetedWrites (2026-11-27) · an edit sends what changed, not the whole booking ──
+     The base is toServer() of the booking as the server last answered it (srvCopy, kept by fromServer; worked out when a save
+     needs it). A save compares the form's toServer() with it and sends:
+       · one list item changed, nothing else  → that item's endpoint (operation-backend booking-items.ts):
+           POST /v1/bookings/{id}/{trips|adjustments|alt-pickups|upgrades|allergies|attachments}        a new item
+           PATCH …/{list}/{trip id | position | upgrade id}                                             the changed fields
+           DELETE …/{list}/{trip id | position | upgrade id | document id}                              a removed item
+       · anything else                        → PATCH /v1/bookings/{id} with the changed header fields and, whole, only the
+                                                lists that changed (several changes stay ONE request: one rule check, one
+                                                version step and one history line, as legacy's one save).
+     Every one sends If-Match (bookingWrite); the server runs an item write through the same amendment as the PATCH, so the
+     booking, the price and the refusals are the same. No base (a booking not read from the server in this tab) → the whole body. */
+  var srvCopy = {};               // server id → the booking the server last answered, as JSON text (fromServer): the base of the next save
+  var LISTS = {
+    trips:        { path: 'trips',       by: 'id' },
+    adjustments:  { path: 'adjustments', by: 'pos' },
+    altPickups:   { path: 'alt-pickups', by: 'pos' },
+    upgrades:     { path: 'upgrades',    by: 'id' },
+    allergy_list: { path: 'allergies',   by: 'pos' },
+    attachments:  { path: 'attachments', by: 'id', noPatch: true }
+  };
+  function J(v){ return JSON.stringify(v === undefined ? null : v); }
+  function baseFor(id){
+    var ob = srvCopy[id]; if(!ob) return null;
+    ob = JSON.parse(ob);
+    try{ return toServer(fromServer(ob), false); }catch(_){ return null; }   // a trip whose lock or pickup the mapping cannot read: send it whole
+  }
+  /* the fields of `now` that differ from `was`; a field `was` had and `now` has not is null */
+  function fieldDiff(was, now){
+    var d = {}, any = false;
+    Object.keys(now || {}).forEach(function(k){ if(J(now[k]) !== J((was || {})[k])){ d[k] = now[k]; any = true; } });
+    Object.keys(was || {}).forEach(function(k){ if(!(k in (now || {}))){ d[k] = null; any = true; } });
+    return any ? d : null;
+  }
+  /* the item operations that turn list `a` into list `b`, or null when they are not simple (several, a reorder, an insert) */
+  function listOps(key, a, b){
+    var spec = LISTS[key]; a = a || []; b = b || [];
+    if(J(a) === J(b)) return [];
+    if(spec.by === 'id'){
+      var ida = a.map(function(x){ return x && x.id; }), idb = b.map(function(x){ return x && x.id; });
+      var kept = ida.filter(function(id){ return id && idb.indexOf(id) >= 0; }), keptB = idb.filter(function(id){ return id && ida.indexOf(id) >= 0; });
+      if(J(kept) !== J(keptB)) return null;                                        // reordered
+      var ops = [];
+      ida.forEach(function(id){ if(id && idb.indexOf(id) < 0) ops.push({ m: 'DELETE', ref: id }); });
+      b.forEach(function(x, i){
+        var id = x && x.id;
+        if(!id || ida.indexOf(id) < 0){
+          if(i !== b.length - 1) ops.push(null);                                    // a new item must be the last one
+          else ops.push({ m: 'POST', body: x });
+          return;
+        }
+        var d = fieldDiff(a[ida.indexOf(id)], x);
+        if(d){ if(spec.noPatch) ops.push(null); else ops.push({ m: 'PATCH', ref: id, body: d }); }
+      });
+      return ops.some(function(o){ return o === null; }) ? null : ops;
+    }
+    // by position: one appended, one removed, or one changed in place
+    if(b.length === a.length + 1 && J(a) === J(b.slice(0, a.length))) return [{ m: 'POST', body: b[b.length - 1] }];
+    if(b.length === a.length - 1){
+      for(var i = 0; i < a.length; i++){ if(J(a.slice(0, i).concat(a.slice(i + 1))) === J(b)) return [{ m: 'DELETE', ref: String(i) }]; }
+      return null;
+    }
+    if(b.length === a.length){
+      var at = [];
+      a.forEach(function(x, i){ if(J(x) !== J(b[i])) at.push(i); });
+      if(at.length === 1) return [{ m: 'PATCH', ref: String(at[0]), body: fieldDiff(a[at[0]], b[at[0]]) }];
+    }
+    return null;
+  }
+  /* { item: {method, path, body} } for a one-item edit, else { patch: body } with only what changed */
+  function planEdit(bk, body){
+    var base = bk.opsId ? baseFor(bk.opsId) : null;
+    if(!base) return { patch: body };
+    var patch = {}, item = null, count = 0, complex = false;
+    Object.keys(body).forEach(function(k){
+      if(LISTS[k]) return;
+      if(k === 'rate' || k === 'external_id') return;
+      if(J(body[k]) !== J(base[k])) patch[k] = body[k];
+    });
+    /* a header field the form no longer sends is left as it is, as the whole PATCH left it (absent = unchanged) */
+    var changedLists = [];
+    Object.keys(LISTS).forEach(function(k){
+      if(!(k in body)) return;
+      var ops = listOps(k, base[k], body[k]);
+      if(ops && !ops.length) return;
+      changedLists.push(k);
+      if(ops === null){ complex = true; return; }
+      count += ops.length;
+      if(ops.length === 1){
+        var op = ops[0], spec = LISTS[k];
+        item = { method: op.m, path: '/' + spec.path + (op.ref !== undefined ? '/' + encodeURIComponent(op.ref) : ''), body: op.body };
+      }
+    });
+    if(body.rate !== undefined) patch.rate = body.rate;
+    var headerOnly = Object.keys(patch).filter(function(k){ return k !== 'rate'; }).length === 0;
+    if(!complex && count === 1 && headerOnly){
+      var ib = Object.assign({}, item.body || {});
+      if(body.rate !== undefined) ib.rate = body.rate;
+      return { item: { method: item.method, path: item.path, body: ib } };
+    }
+    changedLists.forEach(function(k){ patch[k] = body[k]; });
+    return { patch: patch };
+  }
+
   /* ── action records · shared by the full mapping and by merges after an action ── */
   function catLabel(c){ try{ if(typeof bookingV2CancelLabel === 'function') return bookingV2CancelLabel(c); }catch(_){} return c || ''; }
   /* §opsAboard · a booking answer carries aboard on every trip: put it on the browser's trip of the same id, so a save,
@@ -446,6 +552,7 @@
 
   /* ── server booking → client booking ── */
   function fromServer(ob){
+    if(ob && ob.id) try{ srvCopy[ob.id] = JSON.stringify(ob); }catch(_){ delete srvCopy[ob.id]; }   // §targetedWrites · the base of the next save, as text: the booking built from it is edited in place
     var bk = { id: ob.external_id || ob.id, opsId: ob.id, schemaVer: 2, status: ob.status || 'confirmed',
                createdAt: ob.booked_at || ob.created_at || '', updatedAt: ob.updated_at || '', updatedBy: ob.updated_by || '',
                opsVersion: ob.version != null ? +ob.version : null,        // §opsVersion · sent back as If-Match
@@ -682,8 +789,11 @@
       if(editAgreed[bk.id]) agreed.edit_anyway = true;
       if(progAgreed) agreed.programme_anyway = true;
       if((bk.trips || []).some(function(t){ return t && t.charterDisplacementAck; })) agreed.displace_anyway = true;
+      /* §targetedWrites · an edit sends only what changed: one list item through its endpoint, else the changed fields */
+      var plan = bk.opsId ? planEdit(bk, body) : null;
       return O.anyway(function(f){
-        var b = Object.assign({}, body, f);
+        if(plan && plan.item) return O.bookingWrite(plan.item.method, '/v1/bookings/' + encodeURIComponent(bk.opsId) + plan.item.path, bk, Object.assign({}, plan.item.body, f));
+        var b = Object.assign({}, plan ? plan.patch : body, f);
         if(bk.opsId) return O.bookingWrite('PATCH', '/v1/bookings/' + encodeURIComponent(bk.opsId), bk, b);
         /* §opsHold · opened from a whole-boat hold ("เหมาลำ"): the server makes the booking and
            turns the hold into it in one step, so the boat is never free in between */
@@ -1190,7 +1300,7 @@
 
   window.laOpsToServer = toServer;
   window.laOpsFromServer = fromServer;
-  O.bookings = { pierNoteFrom: pierNoteFrom, turnBackFrom: turnBackFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, mergeInto: mergeInto, upsert: upsert,
+  O.bookings = { pierNoteFrom: pierNoteFrom, turnBackFrom: turnBackFrom, save: save, saveNow: saveNow, fromServer: fromServer, toServer: toServer, planEdit: planEdit, mergeInto: mergeInto, upsert: upsert,
                  reload: reload, loadPending: loadPending, ensurePending: ensurePending, refreshDay: refreshDay };
 
   /* The cancel dialog's reasons (BKV2_CANCEL_REASONS) are the server's list: GET /v1/cancel-categories

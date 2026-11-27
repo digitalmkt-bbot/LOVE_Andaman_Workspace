@@ -109,8 +109,13 @@
     BO.ensure([ds], fcRedraw);
     var c = BO.run(orig, self, [].slice.call(arguments, 2));        // status and pier of the day = the server's, once its answer is in
     try{
+      /* parity P1 (2026-11-27) · legacy fcCell: c.chr = op.charterBookingId || op.type === 'charter' || baCharterBoatMapMemo(ds).get(b.id).
+         Boat Operation's is_charter is the cell (bop2FleetStatus); the last part, a charter that takes the boat through a split or
+         dispatch (Tri Star 01/07 on 27 Nov, โชคสมบูรณ์99), is the deployment's charter_taken_by (kept on the TRIPS cell by ops/20). */
       var day = BO.day(ds), a = day && (day.assigned || []).find(function(x){ return x.boat_id === b.id; });
-      if(a && c && c.k === 'run' && !!c.chr !== !!a.is_charter){ c.chr = !!a.is_charter; if(!c.chr) delete c.ag; }
+      var tk = (typeof TRIPS !== 'undefined' && TRIPS[ds] && TRIPS[ds][b.id]) ? TRIPS[ds][b.id].charterTakenBy : null;
+      var want = a ? (!!a.is_charter || !!tk) : null;
+      if(a && c && c.k === 'run' && !!c.chr !== want){ c.chr = want; if(!c.chr) delete c.ag; }
     }catch(_){}
     /* parity R2 (2026-11-26) · legacy prints "⚓ Charter · <agent>" from SB_BOOKINGS, which here holds a window only: the agent of the
        charter booking comes with the deployment (GET /operations/deployments charter_agent, kept on the TRIPS cell by ops/20) */
