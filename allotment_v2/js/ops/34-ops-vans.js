@@ -36,6 +36,7 @@
   var serverIds = {};     // 'date|routeId|number' -> server group id
   var groupMembers = {};  // server group id -> members as the server lists them (pickup order)
   var groupOrderMap = {}; // 'date::routeId::zone' -> group numbers in the order staff dragged them (display_order)
+  var orderVersions = {}; // 'date::routeId::zone' -> the server's order_versions[zone] last read (§targetedWrites: sent back by PUT …/order)
   var groupInfo = {};     // server group id -> {date, routeId, number, vanId} · read by 35-ops-van-jobs.js
   var originals = {};
   var WRAPPED = ['bookingV2VanGroupSetVan', 'bookingV2AssignVan', 'bookingV2VanGroupSetTime', 'bookingV2VanGroupDisband',
@@ -195,10 +196,10 @@
 
   /* GET the day's groups and replace the route's van fields with them · no write */
   function fetchDay(date, routeId){
-    return O.get(BASE, { service_date: date, route_id: routeId }).then(function(j){ return applyRouteGroups(date, routeId, (j && j.groups) || []); });
+    return O.get(BASE, { service_date: date, route_id: routeId }).then(function(j){ return applyRouteGroups(date, routeId, (j && j.groups) || [], j && j.order_versions); });
   }
   /* the route's groups as the server answered them (per route, or one route of the day read below) onto the local bookings */
-  function applyRouteGroups(date, routeId, groups){
+  function applyRouteGroups(date, routeId, groups, versions){
       var prefix = date + '|' + routeId + '|';
       Object.keys(serverIds).forEach(function(k){ if(k.indexOf(prefix) === 0) delete serverIds[k]; });
       allBookings().forEach(function(b){
@@ -210,6 +211,8 @@
       groups.forEach(function(g){ applyGroup(date, routeId, g); groupMembers[g.id] = g.members || []; });
       /* display_order: the zone's dragged groups, in order; the rest follow by number (client side, as legacy) */
       Object.keys(groupOrderMap).forEach(function(k){ if(k.indexOf(date + '::' + routeId + '::') === 0) delete groupOrderMap[k]; });
+      Object.keys(orderVersions).forEach(function(k){ if(k.indexOf(date + '::' + routeId + '::') === 0) delete orderVersions[k]; });
+      Object.keys(versions || {}).forEach(function(z){ orderVersions[date + '::' + routeId + '::' + z] = +versions[z]; });
       groups.filter(function(g){ return g.display_order != null; })
         .sort(function(a, b){ return a.display_order - b.display_order; })
         .forEach(function(g){ var k = date + '::' + routeId + '::' + g.zone; (groupOrderMap[k] = groupOrderMap[k] || []).push(+g.number); });
@@ -597,8 +600,15 @@
     if(list.length) groupOrderMap[k] = list; else delete groupOrderMap[k];
     var body = { service_date: date, route_id: routeId, zone: zone };
     if(list.length) body.group_ids = ids; else body.clear = true;
-    O.queue(function(){ return O.call('PUT', BASE + '/order', body); }).then(function(){}, function(e){
+    if(orderVersions[k] != null) body.version = orderVersions[k];      // §targetedWrites · the zone's order as this screen read it
+    O.queue(function(){ return O.call('PUT', BASE + '/order', body); }).then(function(j){
+      var v = j && j.order_versions; if(v && v[zone] != null) orderVersions[k] = +v[zone]; else delete orderVersions[k];
+    }, function(e){
       if(before) groupOrderMap[k] = before; else delete groupOrderMap[k];
+      /* another screen changed this zone's groups or their order since this one read them: read the day again so the saved order shows */
+      if(e && e.code === 'stale_version') return fetchDay(date, routeId).catch(function(){}).then(function(){
+        O.fail('Group order not saved: it was changed by someone else, the saved order is shown', e); redraw();
+      });
       O.fail('Group order not saved · ' + failCode(e), e);
       redraw();
     });
@@ -640,10 +650,20 @@
           return row;
         });
         if(Object.keys(changes).concat(Object.keys(picks)).some(function(idx){ return !seen[idx]; })){ var e = new Error('The selected split part no longer exists'); e.code = 'part_missing'; throw e; }
-        return O.call('PATCH', '/operations/trip-ops/' + enc(tid), { van_parts: full });
+        /* §targetedWrites · the list replaces the trip's parts whole: it goes with the version of the parts it was built from */
+        var body2 = { van_parts: full };
+        if(trip && trip.operations && trip.operations.van_parts_version != null) body2.van_parts_version = trip.operations.van_parts_version;
+        return O.call('PATCH', '/operations/trip-ops/' + enc(tid), body2);
       });
     }).then(function(j){ onDone(j); redraw(); return j; }, function(e){
       if(e && e.code === 'part_missing') return refuse(title, e.message);
+      /* the parts changed between the read and the write (another screen): read the booking and the day again, then say so */
+      if(e && e.code === 'stale_version'){
+        var re = (O.bookings && typeof O.bookings.reload === 'function') ? O.bookings.reload(b.id) : Promise.resolve(null);
+        return Promise.resolve(re).then(function(){ var t2 = tripOpsOf(b, date); return t2 ? fetchDay(date, t2.routeId) : null; }).catch(function(){}).then(function(){
+          O.fail(title + ': the van parts were changed by someone else, the saved ones are shown', e); redraw(); return null;
+        });
+      }
       O.fail(title + ' · ' + failCode(e), e);
       return null;
     });
@@ -782,10 +802,10 @@
     var routes = (typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : [];
     dayLoading[date] = O.queue(function(){
       return O.get(BASE + '/day', { service_date: date }).then(function(j){
-        var byRoute = {};
-        ((j && j.routes) || []).forEach(function(x){ if(x && x.route_id) byRoute[x.route_id] = x.groups || []; });
+        var byRoute = {}, versions = {};
+        ((j && j.routes) || []).forEach(function(x){ if(x && x.route_id){ byRoute[x.route_id] = x.groups || []; versions[x.route_id] = x.order_versions; } });
         routes.forEach(function(r){ if(r && r.id && !byRoute[r.id]) byRoute[r.id] = []; });
-        Object.keys(byRoute).forEach(function(rid){ applyRouteGroups(date, rid, byRoute[rid]); });
+        Object.keys(byRoute).forEach(function(rid){ applyRouteGroups(date, rid, byRoute[rid], versions[rid]); });
       });
     }).catch(function(e){
       try{ console.warn('[ops] van groups did not load · local van fields kept · ' + (e && e.message)); }catch(_){}

@@ -103,3 +103,26 @@ test('legacy mode: the original, zero requests', async () => {
   assert.deepEqual(rt.calls, []);
   assert.deepEqual(rt.legacy, ['legacy fill']);
 });
+
+// ── §targetedWrites (2026-11-27): the programme PUT carries the programs_version the agent was read with ──
+test('the PUT carries the programs_version read with the agent', async () => {
+  const rt = runtime();
+  const get = rt.ctx.laOps.get;
+  rt.ctx.laOps.get = async (path) => { const r = await get(path); if (!/activity/.test(path)) r.programs_version = 900 + Number(path.slice(-1)); return r; };
+  await rt.ctx.agProgBulkApply();
+  assert.deepEqual(rt.calls.sort(), [
+    'PUT /v1/agents/a2/programs ' + JSON.stringify({ programs: [NEW_ROW], version: 902 }),
+    'PUT /v1/agents/a3/programs ' + JSON.stringify({ programs: [NEW_ROW], version: 903 }),
+  ]);
+});
+
+test('409 stale_version reads the agent again and says the programmes were changed by someone else', async () => {
+  const rt = runtime({ refuse: { a3: { message: "Agent a3's programmes has changed since you read it", code: 'stale_version' } } });
+  let reads = 0;
+  const get = rt.ctx.laOps.get;
+  rt.ctx.laOps.get = async (path) => { if (path === '/v1/agents/a3') reads++; return get(path); };
+  await rt.ctx.agProgBulkApply();
+  assert.equal(reads, 2, 'read before the fill, and again after the refusal');
+  assert.equal(rt.failures.length, 1);
+  assert.match(rt.failures[0].message, /a3: It was changed by someone else since this screen read it: the saved programmes are shown now/);
+});

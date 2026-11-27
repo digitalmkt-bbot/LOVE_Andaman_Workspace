@@ -694,3 +694,64 @@ test('split part time: a typed window goes whole as pick_time / pick_time_end / 
   assert.equal(patch.body.van_parts[0].pick_time, undefined, 'only the part being timed carries a time');
   assert.equal(byId(rt.bks, 'b1').ops.vanSplits[1].pickTime, '06:10-06:25');
 });
+
+// ── §targetedWrites (2026-11-27): the whole-list van writes carry the version they were read with ──
+
+test('return van: the van_parts PATCH carries the van_parts_version of the parts it was built from', async () => {
+  const rt = runtime({ handlers: {
+    'GET /v1/bookings/lg_1': { body: { id: 'lg_1', trips: [{ id: 'trip_1', operations: { van_parts: [partOf()], van_parts_version: 4242 } }] } },
+    'PATCH /operations/trip-ops/trip_1': (body) => ({ body: { trip: { operations: { van_parts: [partOf({ return_van_id: body.van_parts[0].return_van_id })], van_parts_version: 4343 } }, warnings: [] } }),
+  } });
+  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  await rt.flush(); await rt.flush();
+  const patch = rt.requests.find((r) => r.method === 'PATCH');
+  assert.equal(patch.body.van_parts_version, 4242);
+  assert.equal(byId(rt.bks, 'b1').ops.vanReturnId, 'veh09');
+});
+
+test('return van: 409 stale_version reads the booking and the day again and says the parts changed', async () => {
+  let reads = 0;
+  const rt = runtime({ handlers: {
+    'GET /v1/bookings/lg_1': () => { reads++; return { body: { id: 'lg_1', trips: [{ id: 'trip_1', operations: { van_parts: [partOf()], van_parts_version: 7 } }] } }; },
+    'PATCH /operations/trip-ops/trip_1': { status: 409, body: { statusCode: 409, code: 'stale_version', message: "Trip trip_1's van parts has changed since you read it" } },
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [group()], order_versions: { PK: 11 } } },
+  } });
+  rt.O.bookings = { reload: () => { reads++; return Promise.resolve(null); } };
+  rt.ctx.bookingV2AssignVanReturn('b1', 'veh09', D);
+  for (let i = 0; i < 6; i++) await rt.flush();
+  assert.equal(reads, 2, 'the read before the write, then the reload after the refusal');
+  assert.ok(rt.requests.some((r) => r.method === 'GET' && r.path.indexOf('/operations/van-groups?') === 0), 'the day is read again');
+  assert.ok(rt.toasts.some((t) => /changed by someone else/.test(JSON.stringify(t))), 'the person is told');
+  assert.notEqual(byId(rt.bks, 'b1').ops.vanReturnId, 'veh09', 'nothing changed locally');
+});
+
+test('group order: PUT …/order carries the zone\'s order_versions entry from the day read, and keeps the new one', async () => {
+  const two = group({ id: 'vgrp_4', number: 4, members: [] });
+  const rt = runtime({ handlers: {
+    'GET /operations/van-groups': { body: { service_date: D, route_id: R, groups: [group(), two], order_versions: { PK: 11 } } },
+    'PUT /operations/van-groups/order': { body: { service_date: D, route_id: R, groups: [], order_versions: { PK: 12 } } },
+  } });
+  await rt.O.vans.load(D, R);
+  rt.ctx.bookingV2GrpOrderSet(D, R, 'PK', [4, 3]);
+  await rt.flush(); await rt.flush();
+  const put = rt.requests.find((r) => r.method === 'PUT');
+  assert.deepEqual(plain(put.body), { service_date: D, route_id: R, zone: 'PK', group_ids: ['vgrp_4', 'vgrp_3'], version: 11 });
+  rt.ctx.bookingV2GrpOrderSet(D, R, 'PK', [3, 4]);
+  await rt.flush(); await rt.flush();
+  assert.equal(rt.requests.filter((r) => r.method === 'PUT')[1].body.version, 12, 'the next save sends the version the answer gave');
+});
+
+test('group order: 409 stale_version puts the order back, reads the day and says so', async () => {
+  const two = group({ id: 'vgrp_4', number: 4, members: [] });
+  let dayReads = 0;
+  const rt = runtime({ handlers: {
+    'GET /operations/van-groups': () => { dayReads++; return { body: { service_date: D, route_id: R, groups: [group(), two], order_versions: { PK: 11 } } }; },
+    'PUT /operations/van-groups/order': { status: 409, body: { statusCode: 409, code: 'stale_version', message: 'The van order of zone PK has changed since you read it' } },
+  } });
+  await rt.O.vans.load(D, R);
+  rt.ctx.bookingV2GrpOrderSet(D, R, 'PK', [4, 3]);
+  for (let i = 0; i < 6; i++) await rt.flush();
+  assert.equal(dayReads, 2, 'read again after the refusal');
+  assert.deepEqual(plain(rt.ctx.bookingV2GrpOrderGet(D, R, 'PK')), [], 'the order the server holds (none dragged)');
+  assert.ok(rt.toasts.some((t) => /changed by someone else/.test(JSON.stringify(t))));
+});

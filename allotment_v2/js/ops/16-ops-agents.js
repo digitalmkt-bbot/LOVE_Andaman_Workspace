@@ -10,7 +10,10 @@
    GET    /v1/agents/:id/activity
    POST   /v1/agents
    PATCH  /v1/agents/:id
-   PUT    /v1/agents/:id/programs
+   PUT    /v1/agents/:id/programs        with version = programs_version (§targetedWrites, 2026-11-27)
+   PUT    /v1/agents/:id/rate-seasons    with version = rate_seasons_version / the GET's version
+     A 409 stale_version (another tab saved the list since this one read it) rereads the agent,
+     redraws, and the refusal is shown: the person sees what is saved and can do it again.
    PUT    /v1/agents/:id/rate-type
    POST   /v1/agents/:id/activate|deactivate|renew
    POST   /v1/agents/:id/resync-contract   (agent page "Sync to bound rate")
@@ -80,6 +83,9 @@
     });
     if('contract_days_left' in s){ o.contractDaysLeft=s.contract_days_left; o.contractExpiring=!!s.contract_expiring; o.contractExpired=!!s.contract_expired; }   // F4: the server's contract clock
     if(Array.isArray(s.rate_seasons)) o.rateSeasons=seasonsIn(s.rate_seasons);
+    /* §targetedWrites · the versions the two whole-list PUTs send back (computed by the server, never edited) */
+    if(s.programs_version!=null) o.opsProgramsVersion=+s.programs_version;
+    if(s.rate_seasons_version!=null) o.opsSeasonsVersion=+s.rate_seasons_version;
     if('contract_template_effective_id' in s) o.contractTemplateEffectiveId=s.contract_template_effective_id;   // w5-e: ctTmplForAgent
     if(Array.isArray(s.incomplete)) o.incomplete=s.incomplete.slice();   // the server's own gap list (agIncompleteFields below)
     if(Array.isArray(s.alerts)) o.serverAlerts=s.alerts;                 // the server's pricing alerts (agAlerts / agHdIssues below)
@@ -105,9 +111,19 @@
     try{ if(id && typeof _agSelected!=='undefined' && _agSelected===id && typeof legacyDetail==='function') legacyDetail(id); }catch(_){}
   }
   function fail(title,e){ O.fail(title,e); return null; }
+  /* §targetedWrites · a programme or season list saved over a newer one is 409 stale_version: read the agent again and redraw, so the
+     screen shows what is saved, then hand the refusal on (the caller's own message names what was not saved) */
+  var LIST_PATH=/^\/v1\/agents\/([^/]+)\/(programs|rate-seasons)$/;
   function write(method,path,body){
-    return O.queue(function(){ return O.call(method,path,body); });
+    return O.queue(function(){ return O.call(method,path,body); }).catch(function(e){
+      var m=LIST_PATH.exec(path);
+      if(!(m && e && e.code==='stale_version')) throw e;
+      var id=decodeURIComponent(m[1]);
+      e.message='It was changed by someone else since this screen read it: the saved '+(m[2]==='programs'?'programmes are':'seasons are')+' shown now. '+(e.message||'');
+      return fetchAgent(id).then(function(){ redraw(id); },function(){}).then(function(){ throw e; });
+    });
   }
+  function withVersion(body,v){ if(v!=null) body.version=v; return body; }
   function fetchAgent(id){
     return Promise.all([O.get('/v1/agents/'+enc(id)), O.get('/v1/agents/'+enc(id)+'/activity',{limit:200})]).then(function(r){
       var old=current(id), mapped=putProjection(r[0],old);
@@ -166,7 +182,7 @@
     var id=_agEditAgentId, a=current(id), section=_agEditSection, d=_agEditDraft;
     if(!a || !d) return;
     var method='PATCH', path='/v1/agents/'+enc(id), body=patchBody(section,d);
-    if(section==='programs'){ method='PUT'; path+='/programs'; body={programs:programsBody(d.programPeriods)}; }
+    if(section==='programs'){ method='PUT'; path+='/programs'; body=withVersion({programs:programsBody(d.programPeriods)},a.opsProgramsVersion); }
     if(section==='ratetype'){ method='PUT'; path+='/rate-type'; body={rate_type_id:nullable(d.rateTypeId)}; }
     if(!body) return;
     return write(method,path,body).catch(function(e){
@@ -210,7 +226,7 @@
   }
 
   function fieldRequest(a,k,v){
-    if(k==='programs') return {method:'PUT',path:'/v1/agents/'+enc(a.id)+'/programs',body:{programs:(v||[]).map(function(x){return typeof x==='string'?x:x.route_id||x.routeId;})}};
+    if(k==='programs') return {method:'PUT',path:'/v1/agents/'+enc(a.id)+'/programs',body:withVersion({programs:(v||[]).map(function(x){return typeof x==='string'?x:x.route_id||x.routeId;})},a.opsProgramsVersion)};
     if(k==='rateTypeId') return {method:'PUT',path:'/v1/agents/'+enc(a.id)+'/rate-type',body:{rate_type_id:nullable(v)}};
     var body={};
     if(k==='market') body.market_id=nullable(v); else if(k==='sub') body.sub_market=nullable(v); else if(k==='sales') body.sales_id=nullable(v);
@@ -551,7 +567,7 @@
     var clean=(window._rtmDraft||[]).filter(function(x){ return x && x.rt && x.from; })
       .map(function(x){ return {rt:x.rt, from:x.from, to:x.to||''}; })
       .sort(function(x,y){ return String(x.from).localeCompare(String(y.from)); });
-    return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',{seasons:seasonsOut(clean)}).then(function(){
+    return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',withVersion({seasons:seasonsOut(clean)},a.opsSeasonsVersion)).then(function(){
       return fetchAgent(a.id);
     }).then(function(){
       if(typeof rtmInit==='function') rtmInit(a.id);
@@ -567,7 +583,7 @@
     if(!P || !P.total) return;
     var ags=[]; P.groups.forEach(function(g){ g.ags.forEach(function(a){ if(ags.indexOf(a)<0) ags.push(a); }); });
     return Promise.all(ags.map(function(a){
-      return O.get('/v1/agents/'+enc(a.id)+'/rate-seasons').then(function(r){ a.rateSeasons=seasonsIn(r && r.seasons); });
+      return O.get('/v1/agents/'+enc(a.id)+'/rate-seasons').then(function(r){ a.rateSeasons=seasonsIn(r && r.seasons); if(r && r.version!=null) a.opsSeasonsVersion=+r.version; });
     })).then(function(){
       var before={}; ags.forEach(function(a){ before[a.id]={seasons:clone(a.rateSeasons||[]), activity:clone(a.activity||[])}; });
       legacyExpBulkApply.apply(self,args);
@@ -575,7 +591,7 @@
       var refused=[], chain=Promise.resolve();
       changed.forEach(function(a){
         chain=chain.then(function(){
-          return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',{seasons:seasonsOut(a.rateSeasons)}).then(function(){ return fetchAgent(a.id); },function(e){
+          return write('PUT','/v1/agents/'+enc(a.id)+'/rate-seasons',withVersion({seasons:seasonsOut(a.rateSeasons)},a.opsSeasonsVersion)).then(function(){ return fetchAgent(a.id); },function(e){
             a.rateSeasons=before[a.id].seasons; a.activity=before[a.id].activity;
             refused.push((a.code||a.name||a.id)+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
           });
@@ -610,7 +626,7 @@
       var refused=[], chain=Promise.resolve();
       changed.forEach(function(a){
         chain=chain.then(function(){
-          return write('PUT','/v1/agents/'+enc(a.id)+'/programs',{programs:programsBody(a.programPeriods)}).then(function(){ return fetchAgent(a.id); },function(e){
+          return write('PUT','/v1/agents/'+enc(a.id)+'/programs',withVersion({programs:programsBody(a.programPeriods)},a.opsProgramsVersion)).then(function(){ return fetchAgent(a.id); },function(e){
             var b=before[a.id]; a.programPeriods=b.periods; a.programs=b.programs; a.activity=b.activity;
             refused.push((a.code||a.name||a.id)+': '+((e&&e.message)||'refused')+(e&&e.code?' ['+e.code+']':''));
           });
