@@ -74,6 +74,9 @@ test('daily response replaces cache for only that date, honors server pier locks
   assert.equal(proj.boatId, 'b1');
   assert.equal(proj.plannedBudget, 250000);
   assert.equal(proj.cost, 120000);
+  assert.equal(proj.type, 'drydock');
+  // parity fl-projects "PR" (2026-11-28): a project saved with no type keeps none (legacy's badge then reads "PR", not "DD")
+  assert.equal(c.fromServerProject({ id: 'proj_2026_b12_021_29q5', no: 'PRJ-021', name: 'Hull paint', boat_id: 'b12', type: null }).type, '');
 
   assert.deepEqual(JSON.parse(JSON.stringify(c.toSafetyReplaceBody({
     reason: 'expired',
