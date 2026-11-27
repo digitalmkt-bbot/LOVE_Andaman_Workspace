@@ -113,6 +113,13 @@
     var a = best.needs_action;
     var out = { pend: Math.max(0, +a.pending_approval || 0), wx: Math.max(0, +a.weather_to_resolve || 0), cxl: Math.max(0, +a.cancelled_today || 0) };
     if(a.weather_first_date) out.wxDate = String(a.weather_first_date);
+    /* parity round 9 (2026-11-27) · "เอเย่นต์เครดิตเกิน": legacy's crN / crB / crL over every booking it held; SB_BOOKINGS holds only the
+       loaded days here (20 agents ฿30.8M where legacy shows 25, ฿31.8M), so the server's over_credit stands in when it is there */
+    var oc = a.over_credit;
+    if(oc && Array.isArray(oc.agents)){
+      out.crN = Math.max(0, +oc.count || 0); out.crB = Math.round(+oc.baht || 0);
+      out.crL = oc.agents.map(function(x){ return { n: String(x.name || x.agent_id || ''), over: +x.over || 0 }; });
+    }
     return out;
   }
   var legacyBoard = window._dashBoardData;
