@@ -79,3 +79,30 @@ only the first is clicked.
 
 The kind column is a first guess from the evidence (a 404 is a missing endpoint, a JS error is wiring). The
 hand-checked list is in `docs/ui-parity/`.
+
+## Rule replay, method B (`replay-live.mjs`, check 3)
+
+operation-backend's `cutover-replay` (check 3, method A) compares our rules with the answers legacy **stored**. For an
+answer legacy only computes on screen, and as the arbiter when a stored answer differs, `replay-live.mjs` runs
+**legacy's own functions in the legacy page** and compares them with this backend's API for the same case:
+
+| rule | legacy (in the page) | ours |
+|---|---|---|
+| `seats` | `getAllotment(route, date)`: seat pool, booked, locked, seats left | `GET /v1/availability?from&to`, every route-day |
+| `booking-price-live`, `trip-price-live` | `bkV2CalcQuote` / `bkV2TripSubtotal` on each stored booking, prepared as `bkV2EditBooking` does (§rtKeep), without opening the form | the figures `cutover-replay --json` priced with `priceBooking` |
+
+```bash
+# in operation-backend: the method-A cases as JSON
+DATABASE_URL=…/operations ORIGINAL_DATABASE_URL=…/legacy node --import tsx src/tools/cutover-replay.ts --json=cases.json
+# here (own copies of legacy / operations with the uiparity login, as above; ports 3931/3932 by default)
+LEGACY_DIR=<origin/lk-inbox checkout> OPS_BACKEND_DIR=<operation-backend> LEGACY_DB=…/<legacy copy> OPS_DB=…/<operations copy> \
+  node test/uiparity/replay-live.mjs --cases=cases.json [--rules=seats,booking-price] [--from= --to=] [--out=<dir>]
+```
+
+It writes `replay-live.md` / `replay-live.json` and exits 1 when a case differs. A booking-price case where legacy
+**today** equals ours but its stored figure does not is legacy's own drift (the rate changed after the save): it goes in
+operation-backend `todo/parity-accepted.md`. Legacy's page sends 2 `_batch` writes while it boots (its own sweeps): use a copy.
+
+Result 2026-11-27 (local data of 2026-11-26): seats 5,551 route-days 2026-10-28..2027-01-26, 5,548 same, 3 different
+(a charter with no boat: fixed in operation-backend, `dayCapacity`); booking price 13,381 / 13,381 same; trip price
+13,226 / 13,226 same.

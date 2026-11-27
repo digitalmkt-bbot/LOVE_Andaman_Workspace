@@ -21,7 +21,8 @@
         (laOps.fail) and a new code is reserved for the open form.
    Q51 · PARTIAL CANCEL POST /v1/bookings/{id}/partial-cancel/preview feeds the dialog's boxes. The fee box
         takes the server's proposal and may be overtyped (a 400 charged_amount_out_of_range message is
-        shown under the box); the refund box is the server's figure and READ-ONLY (decided difference from legacy).
+        shown under the box); the refund box likewise (legacy's waive box is typed: 2026-11-27, check 3 found
+        3 of 12 legacy refunds typed), within 0 .. the server's proposal (400 waived_amount_out_of_range).
    ══════════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
@@ -283,8 +284,12 @@
     var note = ((el('bkp-note') || {}).value || '').trim();
     if(!cat || (cat === 'other' && !note)) cat = pFallbackCategory();       // the preview needs a category; it does not change the money
     var charged = { count: chg };
-    if(typed){ var a = el('bkp-chg-amt'); if(a && a.value !== '') charged.amount = Math.max(0, Number(a.value) || 0); }
-    var b = { trip_id: t.opsTripId, pax: removed, category: cat, charged: charged, waived: { count: tot - chg } };
+    var waived = { count: tot - chg };
+    if(typed){
+      var a = el('bkp-chg-amt'); if(a && a.value !== '') charged.amount = Math.max(0, Number(a.value) || 0);
+      var wa = el('bkp-waive-amt'); if(wa && wa.value !== '') waived.amount = Math.max(0, Number(wa.value) || 0);
+    }
+    var b = { trip_id: t.opsTripId, pax: removed, category: cat, charged: charged, waived: waived };
     if(cat === 'other') b.note = note || 'x';
     return { opsId: bk.opsId, body: b };
   }
@@ -300,7 +305,10 @@
         c.max = r.charged.max;
         c.title = '฿0 – ฿' + r.charged.max;
       }
-      if(w) w.value = r.waived.amount;
+      if(w){
+        if(!typed) w.value = r.waived.amount;
+        if(r.waived.max != null){ w.max = r.waived.max; w.title = '฿0 – ฿' + r.waived.max; }
+      }
       lastProposal = r;
     }, function(e){
       if(mine !== pSeq) return;
@@ -316,17 +324,14 @@
     ctx = { bookingId: bookingId, tripIdx: Math.max(0, tripIdx | 0) };
     lastProposal = null;
     try{
+      /* the refund box is typed, as legacy's (2026-11-27): the server proposes it and keeps a typed figure within 0 .. its proposal */
       var w = el('bkp-waive-amt');
-      if(w){
-        w.readOnly = true; w.tabIndex = -1;
-        w.style.background = '#F1EEE8'; w.style.color = '#5b6472';
-        w.title = 'ยอดคืนเงินคำนวณโดยระบบ (แก้ไม่ได้) · refund is the server\'s figure';
-      }
+      if(w) w.addEventListener('input', function(){ pSchedule(true); });
       var c = el('bkp-chg-amt');
       if(c) c.addEventListener('input', function(){ pSchedule(true); });
       var box = w && w.closest('div[style*="background:#FAF7F2"]');
       var hint = box && Array.prototype.filter.call(box.children, function(x){ return /auto/.test(x.textContent || '') && /แก้ได้/.test(x.textContent || ''); })[0];
-      if(hint) hint.textContent = hint.textContent.replace('แก้ได้', 'ช่อง "ชาร์จ" แก้ได้ภายในช่วงที่ระบบกำหนด · ยอดคืนเงินระบบคำนวณ แก้ไม่ได้');
+      if(hint) hint.textContent = hint.textContent.replace('แก้ได้', 'แก้ได้ภายในช่วงที่ระบบกำหนด');
     }catch(e){ console.warn('[ops] partial dialog', e); }
     return r;
   });
