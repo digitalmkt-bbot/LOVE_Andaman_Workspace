@@ -25,7 +25,7 @@ await ctx.route(PROD, async (route) => {
   const req = route.request(), u = new URL(req.url()), hd = req.headers(), fwd = {};
   for (const k of ['authorization', 'content-type', 'if-match']) if (hd[k]) fwd[k] = hd[k];
   last = Date.now();
-  const c = { m: req.method(), path: u.pathname, q: u.search, bytes: 0, phase: 'boot' };
+  const c = { m: req.method(), path: u.pathname, q: u.search, bytes: 0, phase: 'boot', t: Date.now() };
   calls.push(c);
   const r = await fetch(OPS + u.pathname + u.search, { method: req.method(), headers: fwd, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : (req.postData() || undefined) });
   const buf = r.status === 204 ? Buffer.alloc(0) : Buffer.from(await r.arrayBuffer());
@@ -43,7 +43,9 @@ if (args.includes('--trace-need')) await page.evaluate(() => {
   L.need = function (name) { console.log('[need] ' + name + ' ← ' + String(new Error().stack).split('\n').slice(2, 9).join(' | ')); return need.apply(this, arguments); };
 });
 page.on('console', (m) => { if (m.text().startsWith('[need]')) console.log(m.text().slice(0, 1200)); });
-async function settle() { last = Date.now(); while (Date.now() - last < quiet) await page.waitForTimeout(500); }
+// --max=<ms>: stop waiting after that long even if requests keep starting (a screen that keeps asking is itself a finding)
+const maxWait = +((args.find((a) => a.startsWith('--max=')) || '').split('=')[1] || 120000);
+async function settle() { const t0 = Date.now(); last = Date.now(); while (Date.now() - last < quiet && Date.now() - t0 < maxWait) await page.waitForTimeout(500); if (Date.now() - t0 >= maxWait) console.log('still asking after ' + maxWait + ' ms'); }
 await settle();
 const nBoot = calls.length;
 if (view) {
@@ -54,6 +56,9 @@ if (view) {
 const by = {};
 for (const c of calls) { const k = c.phase + ' ' + c.m + ' ' + c.path; (by[k] ||= { n: 0, bytes: 0 }); by[k].n++; by[k].bytes += c.bytes; }
 for (const [k, v] of Object.entries(by).sort((a, b) => b[1].bytes - a[1].bytes)) console.log(String(v.n).padStart(3), String(Math.round(v.bytes / 1024)).padStart(7) + ' KB  ' + k);
+// --calls=<path prefix>: each such request with its query and size, in order
+const callsOf = (args.find((a) => a.startsWith('--calls=')) || '').slice(8);
+if (callsOf) calls.filter((c) => (c.path + c.q).startsWith(callsOf)).forEach((c) => console.log(`  ${((c.t - calls[0].t) / 1000).toFixed(1)}s ${c.phase} ${c.m} ${c.path}${c.q} → ${c.status} ${Math.round(c.bytes / 1024)} KB`));
 const tot = (ph) => calls.filter((c) => c.phase === ph).reduce((a, c) => ({ n: a.n + 1, bytes: a.bytes + c.bytes }), { n: 0, bytes: 0 });
 const b = tot('boot');
 console.log(`LOGIN (dashboard): ${b.n} requests, ${(b.bytes / 1048576).toFixed(2)} MB`);

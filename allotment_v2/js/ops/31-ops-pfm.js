@@ -135,9 +135,9 @@
     if(!force && state.cache[key]) return Promise.resolve(state.cache[key]);
     if(state.loading[key]) return state.loading[key];
     var mLoad = (O.money && typeof O.money.ensureLoaded === 'function') ? O.money.ensureLoaded().catch(function(){}) : Promise.resolve();
-    var p = mLoad.then(function(){
-      return O.get('/v1/pfm', { from: from, to: to });
-    }).then(function(res){
+    // §loadOnOpen (2026-11-27) · money is no longer in hand from the login: ask for the grid at the same time, draw when both are in
+    var grid = O.get('/v1/pfm', { from: from, to: to });
+    var p = Promise.all([mLoad, grid]).then(function(a){ return a[1]; }).then(function(res){
       return applyGridResponse(key, res);
     }).finally(function(){
       delete state.loading[key];
