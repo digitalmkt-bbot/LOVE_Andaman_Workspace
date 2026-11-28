@@ -23,8 +23,8 @@
      · the changes of one pull become ONE card per action and person ("อัปเดต booking 8 ใบ · โดย RSVN05"), so a run of
        re-confirms is one card, not a stack that covers the page;
      · the booking shows by its code (BK-…) or lead name, never the server's internal id (booking_<uuid>), and once only;
-     · at most LIVE_MAX cards; each leaves after LIVE_MS (kept while the pointer is on it). Look: css/01-base.css #la-live-wrap. */
-  var LIVE_MAX = 3, LIVE_MS = 8000, pendingNotes = [], notesQueued = false;
+     · at most LIVE_MAX cards; each leaves after NOTE_MS (kept while the pointer is on it). Look: css/01-base.css #la-live-wrap. */
+  var LIVE_MAX = 3, NOTE_MS = 8000, pendingNotes = [], notesQueued = false;
   function bookingLabel(id){
     var s = String(id || ''), list = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : [];
     for(var i = 0; i < list.length; i++){
@@ -78,7 +78,7 @@
       el.querySelector('button').addEventListener('click', gone);
       el.addEventListener('mouseenter', function(){ clearTimeout(t); });
       el.addEventListener('mouseleave', function(){ t = setTimeout(gone, 1500); });
-      t = setTimeout(gone, LIVE_MS);
+      t = setTimeout(gone, NOTE_MS);
     }catch(_){}
   }
   /* §opsHandoff (2026-10-12) · a van or pickup change redraws the screen that shows it, but only while
@@ -112,6 +112,11 @@
      afternoon, the office sent ~20 requests/s (Railway, 2026-11-28 16:05-16:20) and every other read queued behind
      them: Travel Summary waited past 120 s and stayed on "Loading…". Now the changes of one pull ask for ONE redraw;
      a redraw within DRAW_GAP_MS of the last waits for the gap; the steps to run first (dropDay) are kept by key. */
+  /* §ckLiveBg (2026-11-28) · a window that is open but not in front (another window or app has focus) redraws at most
+     every BG_DRAW_GAP_MS: after #123 the office still sent ~20 requests/s, most from check-in tabs left open on several
+     Windows PCs. The front window keeps DRAW_GAP_MS; a hidden tab does not ask at all (pull). */
+  var BG_DRAW_GAP_MS = 30000;
+  function focused(){ try{ return typeof document.hasFocus !== 'function' || document.hasFocus(); }catch(_){ return true; } }
   var DRAW_GAP_MS = 5000, lastDraw = 0, drawTimer = null, drawWanted = false, drawPreps = {}, busyTries = 0;
   function draw(){
     drawTimer = null;
@@ -128,7 +133,7 @@
   function queueDraw(key, prep){ drawWanted = true; if(key && prep) drawPreps[key] = prep; }
   function flushDraw(){
     if(!drawWanted || drawTimer) return;
-    var wait = lastDraw + DRAW_GAP_MS - Date.now();
+    var wait = lastDraw + (focused() ? DRAW_GAP_MS : BG_DRAW_GAP_MS) - Date.now();
     if(wait <= 0) draw(); else drawTimer = setTimeout(draw, wait);
   }
   function repaintCheckin(change){
@@ -181,9 +186,12 @@
   /* §ckLiveOps (2026-11-28) · legacy §ckLive2: while Pier or Van check-in is open (legacy _laLiveView), ask every 2 s,
      so a check-in on one device shows on another within about 2 s, not 20. Stops when the tab is hidden or the screen
      changes; the 20 s poll above stays for every other screen. pull() never overlaps itself (loading). */
-  var LIVE_VIEWS = { piercheckin:1, vancheckin:1 }, LIVE_MS = 2000;
-  setInterval(function(){ if(!document.hidden && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
+  /* §ckLiveBg (2026-11-28) · every 10 s, not 2 s, and only in the window that has focus (a window behind others keeps the
+     20 s poll). Coming back to the window asks at once, so what the person looks at is fresh. */
+  var LIVE_VIEWS = { piercheckin:1, vancheckin:1 }, LIVE_MS = 10000;
+  setInterval(function(){ if(!document.hidden && focused() && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
+  try{ if(typeof window.addEventListener === 'function') window.addEventListener('focus', function(){ pull(); flushDraw(); }); }catch(_){}
   // Boot completes asynchronously after this classic script is evaluated.
   (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
   O.changes = { notes: flushNotes, label: bookingLabel, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };

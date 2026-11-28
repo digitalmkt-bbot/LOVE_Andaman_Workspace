@@ -15,7 +15,7 @@ test('partial cancel sends the typed refund box with the count, as legacy (the s
 });
 
 // Runs the change-feed module against a stub and returns the screens it asked to redraw.
-async function runFeed({ active, changes, win = {}, timers = [], gets = [] }) {
+async function runFeed({ active, changes, win = {}, timers = [], gets = [], focus = true }) {
   const repaints = [];
   let calls = 0;
   const window = {
@@ -40,6 +40,7 @@ async function runFeed({ active, changes, win = {}, timers = [], gets = [] }) {
   window.laOps = laOps;
   const document = {
     hidden: false,
+    hasFocus: () => focus,
     addEventListener: () => {},
     querySelector: (sel) => (sel === '.nav-item.active' && active ? { dataset: { view: active } } : null),
   };
@@ -79,12 +80,12 @@ test('a change on another day does not redraw Pier check-in', async () => {
   assert.deepEqual(await runFeed({ active: 'piercheckin', changes: ch, win: { _pckDate: '2026-11-28' } }), []);
 });
 
-// legacy §ckLive2: a 2 s check while Pier or Van check-in is open; the 20 s poll stays for the rest.
-async function liveTick(active) {
+// §ckLiveBg: a 10 s check while Pier or Van check-in is open and in front; the 20 s poll stays for the rest.
+async function liveTick(active, focus = true) {
   const timers = [], gets = [];
-  await runFeed({ active, changes: [], timers, gets });
-  const fast = timers.find((t) => t.ms === 2000);
-  assert.ok(fast, 'a 2 s timer is set');
+  await runFeed({ active, changes: [], timers, gets, focus });
+  const fast = timers.find((t) => t.ms === 10000);
+  assert.ok(fast, 'a 10 s timer is set');
   assert.ok(timers.some((t) => t.ms === 20000), 'the 20 s poll stays');
   const before = gets.length;
   fast.fn();
@@ -92,16 +93,18 @@ async function liveTick(active) {
   return gets.length - before;
 }
 
-test('the 2 s check asks the server only while Pier or Van check-in is open', async () => {
+test('the 10 s check asks the server only while Pier or Van check-in is open', async () => {
   assert.equal(await liveTick('piercheckin'), 1);
   assert.equal(await liveTick('vancheckin'), 1);
   assert.equal(await liveTick('landcheckin'), 0, 'legacy _laLiveView is Pier and Van only');
   assert.equal(await liveTick('booking'), 0);
 });
 
-test('the 2 s check stops while the tab is hidden', () => {
+test('the 10 s check stops while the tab is hidden or behind other windows', () => {
   const src = fs.readFileSync('allotment_v2/js/ops/70-ops-changes.js', 'utf8');
-  assert.match(src, /setInterval\(function\(\)\{ if\(!document\.hidden && LIVE_VIEWS\[activeView\(\)\]\) pull\(\); \}, LIVE_MS\)/);
+  assert.match(src, /setInterval\(function\(\)\{ if\(!document\.hidden && focused\(\) && LIVE_VIEWS\[activeView\(\)\]\) pull\(\); \}, LIVE_MS\)/);
+  assert.match(src, /LIVE_MS = 10000/);
+  assert.match(src, /BG_DRAW_GAP_MS = 30000/);
 });
 
 test('van bills are not redrawn by the feed (nav would clear open accordions)', async () => {
@@ -118,4 +121,10 @@ test('a redraw within the gap waits for a timer instead of drawing again at once
   const src = fs.readFileSync('allotment_v2/js/ops/70-ops-changes.js', 'utf8');
   assert.match(src, /var DRAW_GAP_MS = 5000/);
   assert.match(src, /if\(wait <= 0\) draw\(\); else drawTimer = setTimeout\(draw, wait\);/);
+  assert.doesNotMatch(src, /LIVE_MS = 8000/, 'the notice timer has its own name (NOTE_MS)');
+});
+
+test('a check-in window behind other windows does not use the 10 s check', async () => {
+  assert.equal(await liveTick('piercheckin', false), 0);
+  assert.equal(await liveTick('vancheckin', false), 0);
 });
