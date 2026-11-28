@@ -3170,6 +3170,7 @@ var _laBlob=null, _laBlobRaw=null;
 var _laBlobPin=null;
 function laBlob(){
   if(_laBlobPin) return _laBlobPin;
+  if(_laBlobDirty && _laBlob) return _laBlob;   // §blobLazy · the object not yet written is the newest copy
   var raw;
   try{ raw=localStorage.getItem(LS_KEY)||'{}'; }catch(_){ raw='{}'; }
   if(_laBlob && raw===_laBlobRaw) return _laBlob;
@@ -3251,8 +3252,29 @@ window._laCkApply=function(date, recs){
     return true;
   }catch(e){ try{ console.warn('[ckDay] apply failed', e && e.message); }catch(_){} return false; }
 };
+/* §blobLazy (2026-11-28) · owner: "just scroll the booking and then the saving toast just came up and freeze it" · "what is persist
+   function … is it bad for performance?". With operation-backend (LA_LEGACY_UNAVAILABLE) nothing sends this blob anywhere: the boot
+   shim keeps it in memory only (_syncReady stays false, 01-auth-sync.js), the server holds the data. Yet every persist (a booking
+   refreshed, a day's manifest merged, a save) turned the whole blob (tens of MB) into one string on the main thread: the page froze
+   for that long each time. In that mode the string is now made only when some legacy code reads the blob back (localStorage.getItem
+   below), so a reader never sees an old copy and nothing else pays for it. Legacy mode writes at once, as before (its write is what
+   starts the auto-save to legacy's server). */
+var _laBlobDirty=false;
+function _laBlobFlush(){
+  if(!_laBlobDirty) return; _laBlobDirty=false;
+  try{ var str=JSON.stringify(_laBlob||{}); _laBlobRaw=str; localStorage.setItem(LS_KEY, str); }catch(e){ console.warn('[perf] blob save failed', e && e.message); }
+}
+(function(){
+  try{
+    var P=Storage.prototype, get=P.getItem;
+    if(get.__laLazy) return;
+    var w=function(k){ if(_laBlobDirty && k===LS_KEY && this===window.localStorage) _laBlobFlush(); return get.apply(this, arguments); };
+    w.__laLazy=true; P.getItem=w;
+  }catch(_){}
+})();
 function laBlobSave(){
   try{ if(typeof bkVanAuditScan==='function') bkVanAuditScan(); }catch(_){}   /* §vanLog · ก่อนเขียน · บันทึกประวัติลงใบไปพร้อมกัน */
+  if(window.LA_LEGACY_UNAVAILABLE){ _laBlobDirty=true; return; }   // §blobLazy
   try{
     var str=JSON.stringify(_laBlob||{});
     _laBlobRaw=str;                      // เขียนเองแล้วแคชยังตรง → รอบหน้าไม่ต้อง parse ใหม่

@@ -237,8 +237,15 @@
 
   var refreshT = null;
   // A remote change is handled by onChange below (only the windows it touches); only this tab's own write empties the cache.
+  /* §saveFreeze (2026-11-28) · owner: "it still jump/freeze when i save". Every save of this tab emptied all seat numbers and
+     redrew the whole booking screen 300 ms later, which re-read availability for every day shown, even a save that moves no
+     seat: a doc-check tick, a reconfirm, a payment, a pier sheet. Those kinds leave the numbers alone now; any other kind
+     (a booking, a lock, a deployment, a route, a capacity change…) empties them as before. A change that does move seats
+     also comes back on the change feed (onChange below), which re-reads the days it names. */
+  var NO_SEATS = /^(doc-check|booking-reconfirm|penalty-files|trip-checkin|trip-actual|trip-pl|van-arrival|van-bill|invoice|deposit|refund|pfm|pier|park|fleet|costing|agents|sales|market|daily-report|meal-venue|pos-sales|ts-|addon-types)/;
   O.onWrite(function(kind){
     if(typeof kind === 'string' && kind.indexOf('remote:') === 0) return;
+    if(NO_SEATS.test(String(kind || ''))) return;
     clear();
     clearTimeout(refreshT);
     refreshT = setTimeout(redraw, 300);       // the redraw asks again for what it shows

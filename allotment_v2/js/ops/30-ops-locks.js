@@ -191,9 +191,12 @@
     if(first || !O.deployments || !O.deployments.load) return Promise.resolve();
     return Promise.resolve(O.deployments.syncNow ? O.deployments.syncNow() : null).catch(function(){}).then(function(){ return O.deployments.load(); }).then(function(){ markHolds(); }, function(){});
   }
-  function reload(){ return load().then(refreshBoard).then(function(){ O.wrote('locks'); render(); }, function(e){ try{ console.warn('[ops] seat locks reload · ' + (e && e.message)); }catch(_){} }); }
+  /* §saveFreeze (2026-11-28) · quiet = a re-read after someone else's save (a booking save, the "โหลดเลย" click), not a lock write:
+     it does not say O.wrote('locks'). Saying it told every cache on the page that something was saved, so the redraw after each
+     booking save read the whole day again a second time (owner: "it still jump/freeze when i save"). A lock write still says it. */
+  function reload(quiet){ return load().then(refreshBoard).then(function(){ if(!quiet) O.wrote('locks'); render(); }, function(e){ try{ console.warn('[ops] seat locks reload · ' + (e && e.message)); }catch(_){} }); }
   var soon = null;
-  function reloadSoon(){ clearTimeout(soon); soon = setTimeout(function(){ if(O.enabled() && ready) reload(); }, 400); }
+  function reloadSoon(){ clearTimeout(soon); soon = setTimeout(function(){ if(O.enabled() && ready) reload(true); }, 400); }
   // a booking saved or cancelled in this tab (a draw or a return) → the numbers moved: reload and redraw at once
   O.onWrite(function(kind){ if(kind === 'booking') reloadSoon(); });
   /* §clickRefresh (2026-11-28) · another desk's change no longer reloads and redraws the booking screen on its own. Owner: "the redraw
@@ -214,7 +217,7 @@
       d.innerHTML = '<span class="la-rf-dot"></span><span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b><i></i></span><button type="button">โหลดเลย</button>';
       d.querySelector('button').addEventListener('click', function(){
         if(d.parentNode) d.parentNode.removeChild(d);
-        if(O.enabled() && ready) reload(); else render();
+        if(O.enabled() && ready) reload(true); else render();
       });
       document.body.appendChild(d);
     }
