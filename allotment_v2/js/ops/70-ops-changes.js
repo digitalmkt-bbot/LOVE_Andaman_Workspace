@@ -36,7 +36,7 @@
     if(!view) return;
     var act = document.querySelector('.nav-item.active');
     if(!act || !act.dataset || act.dataset.view !== view) return;
-    if(typeof window._laRerender === 'function') window._laRerender();
+    queueDraw();
   }
   /* §opsCheckinLive (Q34a) · Van Check-in shows bookings (check-in marks, arrivals), vans, groups and stops, so a change
      of those kinds on the open day redraws it. Runs AFTER O.wrote (the booking and van caches are dropped by then) and
@@ -51,7 +51,32 @@
     var act = document.querySelector('.nav-item.active');
     return (act && act.dataset && act.dataset.view) || '';
   }
-  function repaintCheckin(change, tries){
+  /* §ckLiveCalm (2026-11-28) · one redraw per batch, at most one every DRAW_GAP_MS. Before this every change in a
+     /v1/changes page redrew the open screen on its own, and each redraw reloads the screen's whole day (van-jobs,
+     van-days, van-stops, van-groups, manifest, bookings). With the 2 s check on Pier/Van check-in and a busy booking
+     afternoon, the office sent ~20 requests/s (Railway, 2026-11-28 16:05-16:20) and every other read queued behind
+     them: Travel Summary waited past 120 s and stayed on "Loading…". Now the changes of one pull ask for ONE redraw;
+     a redraw within DRAW_GAP_MS of the last waits for the gap; the steps to run first (dropDay) are kept by key. */
+  var DRAW_GAP_MS = 5000, lastDraw = 0, drawTimer = null, drawWanted = false, drawPreps = {}, busyTries = 0;
+  function draw(){
+    drawTimer = null;
+    if(O.busy && O.busy()){
+      if(busyTries++ < 8){ drawTimer = setTimeout(draw, 1500); return; }
+      busyTries = 0; drawWanted = false; drawPreps = {}; return;
+    }
+    busyTries = 0; drawWanted = false;
+    var preps = drawPreps; drawPreps = {};
+    Object.keys(preps).forEach(function(k){ try{ preps[k](); }catch(_){} });
+    lastDraw = Date.now();
+    if(typeof window._laRerender === 'function') window._laRerender();
+  }
+  function queueDraw(key, prep){ drawWanted = true; if(key && prep) drawPreps[key] = prep; }
+  function flushDraw(){
+    if(!drawWanted || drawTimer) return;
+    var wait = lastDraw + DRAW_GAP_MS - Date.now();
+    if(wait <= 0) draw(); else drawTimer = setTimeout(draw, wait);
+  }
+  function repaintCheckin(change){
     if(!change || !CHECKIN_KINDS[change.kind]) return;
     var view = activeView();
     if(!CHECKIN_DAY[view]) return;
@@ -59,9 +84,8 @@
     var day = (typeof dv === 'string') ? dv : '';
     if(day && Array.isArray(change.route_days) && change.route_days.length &&
        !change.route_days.some(function(d){ return d && d.service_date === day; })) return;
-    if(O.busy && O.busy()){ if((tries || 0) < 8) setTimeout(function(){ repaintCheckin(change, (tries || 0) + 1); }, 1500); return; }
-    if(view === 'vancheckin' && O.vanJobs && O.vanJobs.dropDay) O.vanJobs.dropDay(day);
-    if(typeof window._laRerender === 'function') window._laRerender();
+    if(view === 'vancheckin' && O.vanJobs && O.vanJobs.dropDay) queueDraw('van:' + day, function(){ O.vanJobs.dropDay(day); });
+    else queueDraw();
   }
   function apply(change){
     if(!change || !Number.isInteger(+change.version)) return;
@@ -87,6 +111,7 @@
     var first = cursor === null ? baseline() : O.get('/v1/changes', { since: cursor, limit: PAGE }).then(function(j){
       var changes = (j && Array.isArray(j.changes)) ? j.changes : [];
       changes.forEach(apply);
+      flushDraw();
       // Empty means the response version is our durable cursor. Do not jump past a
       // non-empty page: a full page may have more rows still waiting after it.
       if(!changes.length && j && Number.isInteger(+j.version)) cursor = +j.version;

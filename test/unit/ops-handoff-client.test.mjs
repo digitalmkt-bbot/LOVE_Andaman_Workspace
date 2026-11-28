@@ -107,3 +107,15 @@ test('the 2 s check stops while the tab is hidden', () => {
 test('van bills are not redrawn by the feed (nav would clear open accordions)', async () => {
   assert.deepEqual(await runFeed({ active: 'vanbill', changes: [{ kind: 'van_bill', version: 9 }] }), []);
 });
+
+// §ckLiveCalm (2026-11-28) · the changes of one pull redraw the open check-in screen once, not once per change.
+test('a page of booking changes redraws Pier check-in once', async () => {
+  const ch = [1, 2, 3, 4, 5].map((i) => ({ kind: 'booking', version: 5 + i, route_days: [{ route_id: 'r1', service_date: '2026-11-28' }] }));
+  assert.deepEqual(await runFeed({ active: 'piercheckin', changes: ch, win: { _pckDate: '2026-11-28' } }), ['piercheckin']);
+});
+
+test('a redraw within the gap waits for a timer instead of drawing again at once', () => {
+  const src = fs.readFileSync('allotment_v2/js/ops/70-ops-changes.js', 'utf8');
+  assert.match(src, /var DRAW_GAP_MS = 5000/);
+  assert.match(src, /if\(wait <= 0\) draw\(\); else drawTimer = setTimeout\(draw, wait\);/);
+});

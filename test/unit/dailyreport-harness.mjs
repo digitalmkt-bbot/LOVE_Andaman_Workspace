@@ -76,7 +76,7 @@ export function load({ enabled = true, data = {}, extra = {}, page = true } = {}
   const reads = [], toasts = [], fails = [], legacy = [];
   let localReads = 0;
   const ctx = {
-    console: { log() {}, warn() {}, error() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, RegExp, encodeURIComponent, parseFloat, setTimeout,
+    console: { log() {}, warn() {}, error() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, RegExp, encodeURIComponent, parseFloat, setTimeout, clearTimeout,
     document: { getElementById: (id) => (id === 'dailyreport-host' ? host : null) },
     _drDate: DATE, _drTab: 'ov', _drTrendMode: 'travel',
     renderTravelSum() {}, renderAccounting() {}, acctDashboardHtml() { return ''; }, acctStatementOpen() {}, drCfgSet() {},
