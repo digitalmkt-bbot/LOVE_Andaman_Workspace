@@ -34,7 +34,7 @@ test('§lkSubDay: a bulk lock sub-group sends its travel day; none picked = lega
   assert.deepEqual(J(sent), []);
   assert.deepEqual(J(alerts), ['เลือกวันเดินทางของกรุ๊ปย่อยก่อน']);
   await run({ id: 'g1', group: true, opsVersion: 3 }, { parentId: 'g1', name: 'A', qty: 4, date: '2026-12-02' });
-  assert.deepEqual(J(sent.at(-1)), ['POST', '/v1/seat-lock-groups/g1/sub-groups', { sub_name: 'A', pax: 4, service_date: '2026-12-02' }]);
+  assert.deepEqual(J(sent.at(-1)), ['POST', '/v1/seat-lock-groups/g1/sub-groups', { sub_name: 'A', pax: 4, auto_adjust: true, service_date: '2026-12-02' }]);   // auto_adjust: ops-locks-auto-adjust.test.mjs
   await run({ id: 'l1', group: false, opsVersion: 1 }, { parentId: 'l1', name: 'B', qty: 2 });
   assert.equal(sent.at(-1)[2].service_date, undefined, 'a day lock\'s sub-group needs no day');
 });

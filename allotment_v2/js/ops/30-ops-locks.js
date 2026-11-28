@@ -289,6 +289,7 @@
     var L = find(m.lockId); if(!L) return;
     function one1(id, v, mode){
       var b = { pax: n }; if(m.note) b.note = String(m.note); if(mode) b.pending = mode;
+      if(L.parentId) b.auto_adjust = true;   /* a sub-group short of its parent's room grows the parent (autoAdjusted) */
       return W('POST', '/v1/seat-locks/' + E(id) + '/add', v, b);
     }
     function run(mode){
@@ -296,7 +297,7 @@
         if(isGroup(L)) return W('POST', lockPath(L) + '/add', L.opsVersion, Object.assign({ pax: n }, m.note ? { note: String(m.note) } : {}, mode ? { pending: mode } : {}));
         if(onBulkChild(L)) return eachDay(L, function(id, v){ return one1(id, v, mode); });
         return one1(L.id, L.opsVersion, mode);
-      }, function(e){ askPending('add', L.routeId, e, run); }).then(function(r){ if(r !== null){ _bkV2AddModal = null; } render(); });
+      }, function(e){ askPending('add', L.routeId, e, run); }).then(function(r){ if(r !== null){ _bkV2AddModal = null; } render(); autoAdjusted(r); });
     }
     return run(null);
   });
@@ -358,7 +359,7 @@
     if(!String(m.name || '').trim()){ alert('Type a sub-group name (e.g. A)'); return; }
     var q = Number(m.qty) || 0; if(q <= 0){ alert('Enter the number of seats for this sub-group'); return; }
     var L = find(m.parentId); if(!L) return;
-    var body = { sub_name: String(m.name).trim(), pax: q }; if(m.reason) body.reason = m.reason;
+    var body = { sub_name: String(m.name).trim(), pax: q, auto_adjust: true }; if(m.reason) body.reason = m.reason;
     /* §lkSubDay (sync 11-17) · a sub-group under a bulk lock is one travel day's: the server needs it (service_date),
        legacy asks for it in the same words */
     if(isGroup(L)){
@@ -366,8 +367,21 @@
       body.service_date = m.date;
     }
     return go('Sub-group not saved', function(){ return W('POST', lockPath(L) + '/sub-groups', L.opsVersion, body); })
-      .then(function(r){ if(r !== null) _bkV2SubModal = null; render(); });
+      .then(function(r){ if(r !== null) _bkV2SubModal = null; render(); autoAdjusted(r); });
   });
+
+  /* ── sub-group short of seats → the parent lock grows (2026-11-28) ─────────────
+     Booking page › boat column › จัดการ › sub-group. Legacy refuses a sub-group bigger than its parent's room
+     ("เกินจำนวนที่เหลือแบ่งได้"); the server, sent auto_adjust: true, grows the parent by the shortfall instead.
+     Seats the boat has free are held, the rest wait as Pending. The answer says how much (adjusted_pax). */
+  function autoAdjusted(r){
+    var n = r && +r.adjusted_pax; if(!(n > 0)) return;
+    var pend = +((r.adjusted_parent || {}).pending_pax) || 0;
+    setTimeout(function(){
+      alert('ที่นั่งในล็อกแม่ไม่พอ · เพิ่มที่นั่งให้ล็อกแม่อัตโนมัติ ' + n + ' ที่'
+        + (pend > 0 ? '\n\nเรือว่างไม่พอ · รอที่ว่าง (Pending) ' + pend + ' ที่\nกด "ยืนยัน" ที่ล็อกแม่เมื่อมีที่ว่าง' : ''));
+    }, 0);
+  }
 
   /* ── edit (day, bulk, sub-group) ──────────────────────────────────────── */
   def('bookingV2LockEditSubmit', function(){
@@ -386,6 +400,7 @@
     if(str(f.reason) !== str(L.reason)) body.reason = f.reason || '';
     if(L.parentId){
       if(L.subName != null && f.subName != null && str(f.subName) !== str(L.subName)) body.sub_name = f.subName;
+      if(body.pax !== undefined) body.auto_adjust = true;   /* more seats than the parent has left → the parent grows (autoAdjusted) */
     } else {
       var h = holder(f); if(!h.ok) return;
       if(h.body.holder_type !== L.holderType || (h.body.agent_id || null) !== (L.holderId || null)) Object.assign(body, h.body);
@@ -409,7 +424,7 @@
       return go('Seat lock not saved', function(){
         if(onBulkChild(L)) return eachDay(L, function(i, v){ return W('PATCH', '/v1/seat-locks/' + E(i), v, b); });
         return W('PATCH', lockPath(L), L.opsVersion, b);
-      }, function(e){ askPending('edit', body.route_id || L.routeId, e, run); }).then(function(r){ if(r !== null) close(); render(); });
+      }, function(e){ askPending('edit', body.route_id || L.routeId, e, run); }).then(function(r){ if(r !== null) close(); render(); autoAdjusted(r); });
     }
     return run(null);
   });
@@ -694,6 +709,23 @@
     var id = holdFor[bookingId], L = id && find(id);
     return L ? { id: id, version: L.opsVersion } : null;
   }
+
+  /* the dialogs still say legacy's limit ("แบ่งได้ไม่เกินนี้") and the Manage panel hides "+ กรุ๊ปย่อย" once the parent is
+     fully split: with the server growing the parent, say so and keep the button while the lock is active */
+  var MANAGE_SUB_BTN = 'font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit';
+  defO('bookingV2LockOverlays', function(orig){
+    var html = orig.apply(this, [].slice.call(arguments, 1));
+    if(typeof html !== 'string' || !html) return html;
+    html = html.replace('ที่ · แบ่งได้ไม่เกินนี้', 'ที่ · ใส่เกินได้ · ล็อกแม่จะเพิ่มที่นั่งให้อัตโนมัติ')
+      .replace(/type="number" min="1" max="\d+"(\s+value="[^"]*"\s+oninput="bookingV2SubSet\('qty')/, 'type="number" min="1"$1')
+      .replace(' · กรุ๊ปย่อยเพิ่มได้ไม่เกินที่ล็อกแม่ยังไม่ได้แบ่ง', ' · กรุ๊ปย่อยที่ที่นั่งไม่พอ ล็อกแม่จะเพิ่มที่นั่งให้อัตโนมัติ');
+    var mL = (typeof _bkV2LockManageId !== 'undefined' && _bkV2LockManageId) ? find(_bkV2LockManageId) : null;
+    var rel = mL ? '<button onclick="bookingV2LockReleaseConfirm(\'' + mL.id + '\')"' : '';
+    if(mL && !mL.parentId && mL.status === 'active' && html.indexOf('bookingV2SubOpen(\'' + mL.id + '\')') < 0 && html.indexOf(rel) >= 0){
+      html = html.replace(rel, '<button onclick="bookingV2SubOpen(\'' + mL.id + '\')" style="' + MANAGE_SUB_BTN + '">+ กรุ๊ปย่อย</button>\n          ' + rel);
+    }
+    return html;
+  });
 
   O.locks = { load: load, reload: reload, reloadSoon: reloadSoon, markHolds: markHolds, boatOptRow: boatOptRow, find: find,
     syncNow: function(){ return Promise.resolve(false); }, sync: function(){ return Promise.resolve(false); },   // nothing to push: each click is a command
