@@ -19,12 +19,15 @@
   }
   /* §liveNotice (2026-11-28) · another person's booking change shows bottom-left, in the sidebar lane, the way legacy's
      "มีข้อมูลใหม่จากคนอื่น" card (#la-refresh, css/01-base.css §laRfLeft) does, not as save toasts top-right.
-     owner: "ของเดิมเราขึ้นอัพเดทอยู่ฝั่งซ้ายล่าง พอดีกับ sidebar และปรับหน้าตา ui ให้เข้ากับระบบด้วย".
-     · the changes of one pull become ONE card per action and person ("อัปเดต booking 8 ใบ · โดย RSVN05"), so a run of
-       re-confirms is one card, not a stack that covers the page;
-     · the booking shows by its code (BK-…) or lead name, never the server's internal id (booking_<uuid>), and once only;
-     · at most LIVE_MAX cards; each leaves after NOTE_MS (kept while the pointer is on it). Look: css/01-base.css #la-live-wrap. */
-  var LIVE_MAX = 3, NOTE_MS = 8000, pendingNotes = [], notesQueued = false;
+     §liveNoticeOne (2026-11-28) · owner (screenshot: two "อัปเดต booking 94 ใบ / 9 ใบ … โดย lk_service" cards over the
+     "มีข้อมูลใหม่จากคนอื่น" card): "เหมือนมันจะรกเกิน". So:
+     · ONE card at most. Later changes fold into it (counts add up, the timer starts again) instead of stacking;
+     · background sync accounts (lk_service, …_service, …sync, system) show nothing: they are not a person's work;
+     · codes are listed only for one or two bookings; more is a count ("มีการเปลี่ยนแปลง booking 12 ใบ · ใหม่ 2 · อัปเดต 10");
+     · while legacy's #la-refresh card shows, this one stays hidden (css), so the lane never holds two cards.
+     The booking shows by its code (BK-…) or lead name, never the server's internal id (booking_<uuid>). */
+  var NOTE_MS = 8000, pendingNotes = [], notesQueued = false, card = null;
+  function systemActor(by){ return /(^|[._\s-])(service|sync|system|bot)$/i.test(String(by || '')) || /^system$/i.test(String(by || '')); }
   function bookingLabel(id){
     var s = String(id || ''), list = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : [];
     for(var i = 0; i < list.length; i++){
@@ -36,49 +39,69 @@
     return s;
   }
   function bookingToast(change){
-    if(!change || change.kind !== 'booking' || mine(change)) return;
+    if(!change || change.kind !== 'booking' || mine(change) || systemActor(change.changed_by)) return;
     pendingNotes.push({ action: change.action === 'created' || change.action === 'deleted' ? change.action : 'updated',
       by: change.changed_by ? String(change.changed_by) : '', id: String(change.entity_id || '') });
     if(!notesQueued){ notesQueued = true; Promise.resolve().then(flushNotes); }   // after the whole page of changes is applied
   }
   var NOTE_WORD = { created: 'Booking ใหม่', updated: 'อัปเดต booking', deleted: 'ลบ booking' };
+  var COUNT_WORD = { created: 'ใหม่', updated: 'อัปเดต', deleted: 'ลบ' };
   function noteEsc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }); }
   function flushNotes(){
     notesQueued = false;
     var notes = pendingNotes; pendingNotes = [];
-    var groups = [], byKey = {};
+    if(!notes.length) return;
+    var live = card && card.el && card.el.parentNode ? card : null;
+    var st = live ? card.st : { ids: {}, order: [], by: [] };
     notes.forEach(function(n){
-      var k = n.action + '|' + n.by, g = byKey[k];
-      if(!g){ g = byKey[k] = { action: n.action, by: n.by, ids: [] }; groups.push(g); }
-      if(g.ids.indexOf(n.id) < 0) g.ids.push(n.id);
+      var cur = st.ids[n.id];
+      // one booking counts once: created/deleted win over a later update of the same booking
+      if(!cur){ st.ids[n.id] = n.action; st.order.push(n.id); }
+      else if(n.action !== 'updated') st.ids[n.id] = n.action;
+      if(n.by && st.by.indexOf(n.by) < 0) st.by.push(n.by);
     });
-    groups.forEach(showNote);
+    showCard(st);
   }
   function liveWrap(){
     var w = document.getElementById('la-live-wrap');
     if(!w && document.body){ w = document.createElement('div'); w.id = 'la-live-wrap'; w.setAttribute('role', 'status'); w.setAttribute('aria-live', 'polite'); document.body.appendChild(w); }
     return w;
   }
-  function showNote(g){
+  function cardHtml(st){
+    var n = st.order.length, counts = { created: 0, updated: 0, deleted: 0 };
+    st.order.forEach(function(id){ counts[st.ids[id]]++; });
+    var kinds = ['created', 'updated', 'deleted'].filter(function(k){ return counts[k]; });
+    var kind = kinds.length === 1 ? kinds[0] : 'mixed';
+    var title = n === 1 ? NOTE_WORD[st.ids[st.order[0]]]
+      : kinds.length === 1 ? NOTE_WORD[kinds[0]] + ' ' + n + ' ใบ'
+      : 'มีการเปลี่ยนแปลง booking ' + n + ' ใบ';
+    var detail = kinds.length > 1 ? kinds.map(function(k){ return COUNT_WORD[k] + ' ' + counts[k]; }).join(' · ') : '';
+    var labels = n <= 2 ? st.order.map(bookingLabel).filter(Boolean) : [];
+    var by = st.by.slice(0, 2).join(', ') + (st.by.length > 2 ? ' +' + (st.by.length - 2) : '');
+    return { kind: kind, html: '<span class="la-live-dot"></span><span class="la-live-tx"><b>' + noteEsc(title) + '</b>'
+      + (labels.length ? '<code>' + labels.map(function(c){ return '<span>' + noteEsc(c) + '</span>'; }).join(' ') + '</code>' : '')
+      + ((detail || by) ? '<i>' + noteEsc(detail) + (detail && by ? ' · ' : '') + (by ? 'โดย ' + noteEsc(by) : '') + '</i>' : '') + '</span>'
+      + '<button type="button" aria-label="ปิด">×</button>' };
+  }
+  function showCard(st){
     try{
       var w = liveWrap(); if(!w) return;
-      var labels = g.ids.map(bookingLabel).filter(Boolean), n = g.ids.length;
-      var title = NOTE_WORD[g.action] + (n > 1 ? ' ' + n + ' ใบ' : '');
-      var codes = labels.slice(0, 3).map(function(c){ return '<span>' + noteEsc(c) + '</span>'; }).join(' ') + (labels.length > 3 ? ' <span>+' + (labels.length - 3) + '</span>' : '');
-      var el = document.createElement('div');
-      el.className = 'la-live la-live-' + g.action;
-      el.innerHTML = '<span class="la-live-dot"></span><span class="la-live-tx"><b>' + noteEsc(title) + '</b>'
-        + (codes ? '<code>' + codes + '</code>' : '')
-        + (g.by ? '<i>โดย ' + noteEsc(g.by) + '</i>' : '') + '</span>'
-        + '<button type="button" aria-label="ปิด">×</button>';
-      w.appendChild(el);
-      while(w.children.length > LIVE_MAX) w.removeChild(w.firstChild);
-      var t = null;
-      var gone = function(){ clearTimeout(t); el.classList.add('la-live-out'); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 200); };
-      el.querySelector('button').addEventListener('click', gone);
-      el.addEventListener('mouseenter', function(){ clearTimeout(t); });
-      el.addEventListener('mouseleave', function(){ t = setTimeout(gone, 1500); });
-      t = setTimeout(gone, NOTE_MS);
+      var c = cardHtml(st), el = card && card.el && card.el.parentNode ? card.el : null;
+      if(!el){
+        while(w.firstChild) w.removeChild(w.firstChild);
+        el = document.createElement('div');
+        w.appendChild(el);
+        card = { el: el, st: st, t: null };
+        var gone = function(){ clearTimeout(card && card.t); if(card && card.el === el) card = null; el.classList.add('la-live-out'); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 200); };
+        el.addEventListener('click', function(e){ if(e && e.target && e.target.tagName === 'BUTTON') gone(); });
+        el.addEventListener('mouseenter', function(){ if(card) clearTimeout(card.t); });
+        el.addEventListener('mouseleave', function(){ if(card) card.t = setTimeout(gone, 1500); });
+        card.gone = gone;
+      }
+      card.st = st;
+      el.className = 'la-live la-live-' + c.kind;
+      el.innerHTML = c.html;
+      clearTimeout(card.t); card.t = setTimeout(card.gone, NOTE_MS);
     }catch(_){}
   }
   /* §opsHandoff (2026-10-12) · a van or pickup change redraws the screen that shows it, but only while

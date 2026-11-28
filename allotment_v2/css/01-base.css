@@ -763,9 +763,9 @@ body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #l
    bottom-left over the sidebar column, sidebar-wide, white card, coloured dot, blue bold title. One card per action and
    person per poll; the newest sits lowest, next to the user badge. Moves up while #la-refresh / #la-b2c-issues show. */
 #la-live-wrap{position:fixed;left:14px;bottom:84px;z-index:99995;width:250px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-body:has(#la-refresh) #la-live-wrap{bottom:150px}
+/* §liveNoticeOne · the lane holds one card: while legacy's #la-refresh shows, this one waits hidden */
+body:has(#la-refresh) #la-live-wrap{display:none}
 body:has(#la-b2c-issues) #la-live-wrap{bottom:132px}
-body:has(#la-refresh):has(#la-b2c-issues) #la-live-wrap{bottom:198px}
 .la-live{pointer-events:auto;position:relative;display:flex;align-items:flex-start;gap:10px;box-sizing:border-box;width:100%;
   background:#fff;color:#22262e;border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 8px 10px 12px;
   font:12.5px/1.35 'DM Sans',sans-serif;box-shadow:0 12px 32px rgba(2,10,30,.16);animation:laRfIn .22s ease-out;transition:opacity .2s,transform .2s}
@@ -773,6 +773,7 @@ body:has(#la-refresh):has(#la-b2c-issues) #la-live-wrap{bottom:198px}
 .la-live-dot{width:8px;height:8px;border-radius:50%;background:#185FA5;flex:none;margin-top:4px}
 .la-live-created .la-live-dot{background:#1D9E75;animation:laRfPulse 1.9s ease-out infinite}
 .la-live-deleted .la-live-dot{background:#C0392B}
+.la-live-mixed .la-live-dot{background:#185FA5}
 .la-live-tx{min-width:0;flex:1}
 .la-live-tx b{display:block;font-size:12.5px;font-weight:800;color:#12518F;line-height:1.25}
 .la-live-deleted .la-live-tx b{color:#A32D2D}
