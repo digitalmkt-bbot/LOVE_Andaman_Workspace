@@ -108,6 +108,75 @@
       try{ console.warn('[ops] list ' + key + ': the server did not answer, the screen keeps its own test · ' + ((err && err.message) || err)); }catch(_){}
     });
   }
+
+  /* ── §bkListPage (2026-11-28) · the page on screen, asked of the server ──────────────────────────────
+     All bookings used to page the WHOLE travel month into the browser (November: ~4,500 bookings, 5 requests of
+     ~470 kB) and filter, sort and slice it there. Now it asks GET /v1/bookings for the page it shows: the month strip's
+     month (travel_month), the Booking page (land), the status pill (status / pending_foc / b2c), the search (q, every
+     month), the sort (activity / travel / created) and the numbered page (limit + offset). The answer's rows join
+     SB_BOOKINGS (the row template and the detail panel read them there) and its `total` sizes the pager.
+     laOpsListPage(o) -> { ids:[...], total } once answered (kept, and shown, while a newer answer is asked after a
+     write), null while the first answer is on its way, { failed:true } when the server did not answer: the screen then
+     loads the month and works it out itself, as before. */
+  var PAGES = {}, PAGE_KEEP = 24;
+  function pageParams(o){
+    var p = { limit: o.size === 'all' ? 5000 : Math.max(1, +o.size || 200), offset: Math.max(0, ((+o.page || 1) - 1) * (o.size === 'all' ? 5000 : Math.max(1, +o.size || 200))) };
+    if(o.q) p.q = o.q; else if(o.month && o.month !== 'all') p.travel_month = o.month;
+    p.land = o.land ? 'true' : 'false';
+    if(o.status === 'b2c') p.b2c = 'true';
+    else if(o.status === 'pending_foc') p.pending_foc = 'true';
+    else if(o.status && o.status !== 'all') p.status = o.status;
+    if(o.sort === 'activity' || o.sort === 'travel') p.sort = o.sort; else p.order = 'desc';   // 'created': newest made first, as legacy
+    return p;
+  }
+  function loadPage(key, params){
+    var e = PAGES[key]; e.busy = true;
+    O.get('/v1/bookings', params).then(function(j){
+      var rows = (j && Array.isArray(j.bookings)) ? j.bookings : [];
+      var mapped = (typeof window.bookingV2FromOpsBooking === 'function') ? rows.map(window.bookingV2FromOpsBooking) : [];
+      if(typeof window._opsBookingMerge === 'function') window._opsBookingMerge(mapped);
+      var ids = mapped.map(function(b){ return b.id; });
+      var old = PAGES[key], same = old && old.ids && old.total === (+j.total || 0) && old.ids.join('|') === ids.join('|');
+      PAGES[key] = { ids: ids, total: +j.total || 0, at: Date.now(), busy: false, stale: false };
+      if(!same || old.stale) redraw();
+    }, function(err){
+      PAGES[key] = { ids: e.ids || null, total: e.total || 0, at: Date.now(), busy: false, failedAt: Date.now(), stale: e.stale };
+      try{ console.warn('[ops] all-bookings page: the server did not answer, the screen loads the month itself · ' + ((err && err.message) || err)); }catch(_){}
+      redraw();
+    });
+  }
+  window.laOpsListPage = function(o){
+    if(!enabled()) return null;
+    var params = pageParams(o || {}), key = JSON.stringify(params), e = PAGES[key];
+    var failedRecently = e && e.failedAt && Date.now() - e.failedAt < FAIL_MS;
+    if(failedRecently && !e.ids) return { failed: true };
+    if(!e){
+      var ks = Object.keys(PAGES); if(ks.length >= PAGE_KEEP) delete PAGES[ks[0]];
+      e = PAGES[key] = { ids: null, total: 0, busy: false };
+    }
+    if(!e.busy && !failedRecently && (!e.ids || e.stale)){
+      /* typing a search: wait for a pause before asking */
+      if(params.q){ clearTimeout(timers['page|' + key]); timers['page|' + key] = setTimeout(function(){ if(PAGES[key] && !PAGES[key].busy) loadPage(key, params); }, WAIT_MS); }
+      else loadPage(key, params);
+    }
+    /* the rows must still be in SB_BOOKINGS (a cache reset or a sign-in empties it): if any is gone, ask again */
+    if(e.ids && !e.busy && e.ids.length && typeof SB_BOOKINGS !== 'undefined'){
+      var have = new Set(SB_BOOKINGS.map(function(b){ return b.id; }));
+      if(e.ids.some(function(id){ return !have.has(id); })){ e.stale = true; if(!failedRecently) loadPage(key, params); }
+    }
+    return e.ids ? { ids: e.ids, total: e.total } : null;
+  };
+  /* a reset of the booking cache forgets the pages too */
+  (function(){
+    var orig = window.bookingV2OpsResetCache;
+    if(typeof orig === 'function' && !orig.__bkListPage){
+      var w = function(keep){ if(!keep) PAGES = {}; return orig.apply(this, arguments); };
+      w.__bkListPage = true; window.bookingV2OpsResetCache = w;
+    }
+  })();
+  /* any booking write may move rows in or out of a page: keep the pages on screen, ask again on the next draw */
+  O.onWrite(function(){ Object.keys(PAGES).forEach(function(k){ if(PAGES[k]) PAGES[k].stale = true; }); });
+
   /* kind 'pending_foc' | 'q' -> Set of booking ids, or null (not answered yet) */
   window.laOpsListSet = function(kind, q){
     if(!enabled()) return null;

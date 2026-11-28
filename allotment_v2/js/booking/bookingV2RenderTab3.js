@@ -3,24 +3,31 @@ function bookingV2RenderTab3(){
   // The list is travel-month scoped in operation-backend mode. Its former
   // all-history source was the boot preload; request only the month staff open.
   const _initialMonth=_bkV2.month || bookingV2MonthKey(bookingV2LocalYMD(new Date()));
-  if(_initialMonth!=='all' && typeof bookingV2OpsEnsureMonth==='function'){
-    const _monthLoad=bookingV2OpsEnsureMonth(_initialMonth);
-    if(_monthLoad) _monthLoad.then(function(j){
-      if(j && _bkV2.tab==='all' && _bkV2.month===_initialMonth && !_bkV2.newBooking) bookingV2Render();
-    });
-  }
+  /* §bkListPage (2026-11-28) · in operation-backend mode the list asks the server for the page on screen
+     (laOpsListPage, 75-ops-booking-list.js) instead of loading the whole month; the month loads below run only
+     when that read failed (_bkLoadOwn, set further down), as the fallback. */
+  const _srvList = typeof window.laOpsListPage==='function' && !!(window.laOps && window.laOps.enabled && window.laOps.enabled());
+  const _loadOwn = function(m){
+    if(m!=='all' && typeof bookingV2OpsEnsureMonth==='function'){
+      const _monthLoad=bookingV2OpsEnsureMonth(m);
+      if(_monthLoad) _monthLoad.then(function(j){
+        if(j && _bkV2.tab==='all' && _bkV2.month===m && !_bkV2.newBooking) bookingV2Render();
+      });
+    }
+    if(m==='all' && typeof bookingV2OpsEnsureAll==='function'){
+      const _allLoad=bookingV2OpsEnsureAll();
+      if(_allLoad) _allLoad.then(function(j){
+        if(j && _bkV2.tab==='all' && _bkV2.month==='all' && !_bkV2.newBooking) bookingV2Render();
+      });
+    }
+  };
+  if(!_srvList) _loadOwn(_initialMonth);
   // In operation-backend mode, ensure summary (stats + month-counts) is requested so
   // KPIs, pills, and the month strip reflect all bookings, matching legacy behavior.
   if(typeof bookingV2OpsEnsureSummary==='function'){
     const _sumLoad=bookingV2OpsEnsureSummary();
     if(_sumLoad) _sumLoad.then(function(j){
       if(j && _bkV2.tab==='all' && !_bkV2.newBooking) bookingV2Render();
-    });
-  }
-  if(_initialMonth==='all' && typeof bookingV2OpsEnsureAll==='function'){
-    const _allLoad=bookingV2OpsEnsureAll();
-    if(_allLoad) _allLoad.then(function(j){
-      if(j && _bkV2.tab==='all' && _bkV2.month==='all' && !_bkV2.newBooking) bookingV2Render();
     });
   }
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -52,8 +59,8 @@ function bookingV2RenderTab3(){
   // §bkMonthPage · everything EXCEPT the month cut · the month chips count these, so their numbers always
   // reflect the status pill you are actually on rather than an all-time total.
   /* §opsBookingList · who matches the Pending-FOC pill and the search is the server's answer (GET /v1/bookings?pending_foc=true / ?q=); null = not here yet, legacy's own test runs */
-  const _srvPF = (_bkV2.statusFilter === 'pending_foc' && window.laOpsListSet) ? window.laOpsListSet('pending_foc') : null;
-  const _srvQ = (q && window.laOpsListSet) ? window.laOpsListSet('q', q) : null;
+  const _srvPF = (!_srvList && _bkV2.statusFilter === 'pending_foc' && window.laOpsListSet) ? window.laOpsListSet('pending_foc') : null;
+  const _srvQ = (!_srvList && q && window.laOpsListSet) ? window.laOpsListSet('q', q) : null;
   const preMonth = all.filter(b => {
     if(_bkV2.statusFilter === 'pending_foc'){ if(_srvPF ? !_srvPF.has(b.id) : !isPendingFoc(b)) return false; }
     else if(_bkV2.statusFilter === 'b2c'){ if(!b.id.startsWith('b2c_')) return false; }
@@ -96,9 +103,18 @@ function bookingV2RenderTab3(){
   let month = _bkV2.month || (monthCounts.has(thisMonth) ? thisMonth : (months[0] || thisMonth));
   if(!q) _bkV2.month = month;    // remember the browsed month — but never let a search overwrite it
   if(q) month = 'all';           // a search has to reach every month, not only the one you happen to be sitting on
-  const monthRows = month === 'all' ? preMonth : preMonth.filter(b => bookingV2MonthKey(b.travelDate) === month);
   // One id→record map instead of an SB_BOOKINGS.find() per row (that find was O(n) inside an O(n) map).
   const rawById = new Map((SB_BOOKINGS||[]).map(b => [b.id, b]));
+  /* §bkListPage · the server's page: its rows in its order, and how many match in all (the pager, "Showing").
+     null while the first answer is on its way (a loading row); { failed } = the server did not answer, so the month
+     loads and the browser filters, sorts and slices it as before. */
+  const _pageSizeAsked = _bkV2.pageSize === 'all' ? 'all' : _bkV2.pageSize;
+  const _srvPage = _srvList ? window.laOpsListPage({ month, land: !!_bkV2CityTourOnly, status: _bkV2.statusFilter, q, sort: bookingV2SortMode(), page: _bkV2.page || 1, size: _pageSizeAsked }) : null;
+  const _srvFailed = !!(_srvPage && _srvPage.failed);
+  if(_srvList && _srvFailed) _loadOwn(month);
+  const _srvRows = (_srvPage && !_srvFailed) ? _srvPage.ids.map(id => rawById.get(id)).filter(Boolean).map(bookingV2Norm) : null;
+  const _srvWaiting = _srvList && !_srvPage;
+  const monthRows = _srvRows ? _srvRows : _srvWaiting ? [] : month === 'all' ? preMonth : preMonth.filter(b => bookingV2MonthKey(b.travelDate) === month);
   /* §bkActivity (2026-10-14) · owner "ขอให้ไล่เรียงแบบล่าสุด กรณีที่มีแก้ไขให้ขึ้นอัพเดทด้วย" · design A
      เรียงได้สามแบบ · ค่าเริ่มต้น "ความเคลื่อนไหวล่าสุด" = ใบที่เพิ่งสร้าง/แก้/ยกเลิก/FOC ขึ้นบนสุด
      อ่านจาก history[] (บันทึกทุกครั้งที่สร้าง แก้ ยกเลิก) + updatedAt + createdAt ที่มีอยู่แล้ว ไม่แตะฐานข้อมูล
@@ -107,7 +123,7 @@ function bookingV2RenderTab3(){
   const actOf = new Map();
   for(const b of monthRows) actOf.set(b.id, bookingV2LastAct(rawById.get(b.id), b));
   const _actAt = b => String((actOf.get(b.id)||{}).at||'');
-  const filtered = monthRows.slice().sort((a,b) =>
+  const filtered = _srvRows ? _srvRows : monthRows.slice().sort((a,b) =>   /* §bkListPage · the server's page is already in its order */
     sortMode === 'travel'
       ? (String(b.travelDate||'').localeCompare(String(a.travelDate||'')) || String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
     : sortMode === 'created'
@@ -116,12 +132,17 @@ function bookingV2RenderTab3(){
 
   // §bkPage · safety net only · a normal month is well under pageSize so no pager shows at all. 'All time'
   // and freak months still get sliced, because the row template below does O(SB_BOOKINGS) work per row.
-  const pageSize = _bkV2.pageSize === 'all' ? Math.max(filtered.length, 1) : _bkV2.pageSize;
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  /* §bkListPage · with the server's page, `matchTotal` is the server's count of every matching booking and the rows are
+     already that one page; otherwise the browser's own list, sliced here */
+  const matchTotal = _srvRows ? _srvPage.total : filtered.length;
+  const pageSize = _bkV2.pageSize === 'all' ? (_srvRows ? 5000 : Math.max(filtered.length, 1)) : _bkV2.pageSize;
+  const pageCount = Math.max(1, Math.ceil(matchTotal / pageSize));
   const page = Math.min(Math.max(1, _bkV2.page || 1), pageCount);   // clamp · a filter change can shrink the list under the current page
+  /* the server answered a page past the end (the list shrank under it): ask for the last page instead */
+  if(_srvRows && page !== (_bkV2.page || 1)){ _bkV2.page = page; setTimeout(function(){ if(_bkV2.tab==='all') bookingV2Render(); }, 0); }
   _bkV2.page = page;
   const from = (page - 1) * pageSize;
-  const pageRows = filtered.slice(from, from + pageSize);
+  const pageRows = _srvRows ? filtered : filtered.slice(from, from + pageSize);
   /* §bkActivity · คีย์สำหรับจัดกลุ่มเป็นวัน · โหมดวันเดินทางใช้วันเดินทาง · อีกสองโหมดใช้วันตามเวลาท้องถิ่น */
   const _dayKeyOf = b => sortMode === 'travel' ? String(b.travelDate||'').slice(0,10)
     : bookingV2LocalDayKey(sortMode === 'created' ? b.createdAt : (actOf.get(b.id)||{}).at);
@@ -185,7 +206,9 @@ function bookingV2RenderTab3(){
       <span class="hint">${sortMode==='activity'?'ใบที่เพิ่งสร้าง แก้ไข หรือยกเลิก ขึ้นบนสุด · จัดกลุ่มเป็นวัน':sortMode==='travel'?'ทริปใกล้สุดขึ้นก่อน · จัดกลุ่มเป็นวันเดินทาง':'ใบที่สร้างล่าสุดขึ้นก่อน · ไม่สนว่าแก้ไขเมื่อไหร่'}</span>
     </div>
     ${bookingV2MonthBarHtml({month, months, monthCounts, monthMin, monthMax, allTotal: _Stats ? _Stats.total : preMonth.length, searching: !!q})}
-    ${filtered.length === 0 ? `
+    ${_srvWaiting ? `
+      <div class="bkv2-empty" role="status"><div class="ttl">Loading bookings…</div></div>
+    ` : matchTotal === 0 ? `
       <div class="bkv2-empty">
         <div class="ttl">${q ? 'No bookings match' : `No trips in ${bookingV2MonthLabel(month)}`}</div>
         <div class="sub">${_bkV2.search?`Nothing for &quot;${escapeHTML(_bkV2.search)}&quot;`:'Step to another month above, or pick All time'}</div>
@@ -199,12 +222,12 @@ function bookingV2RenderTab3(){
         </tbody>
       </table>
     `}
-    ${pageCount <= 1 ? '' : bookingV2PagerHtml(page, pageCount, from, pageRows.length, filtered.length)}
+    ${pageCount <= 1 ? '' : bookingV2PagerHtml(page, pageCount, from, pageRows.length, matchTotal)}
     <div class="bkv2-foot-hints">
       <span class="gp"><span class="bkv2-kbd">${'⌘'}K</span>commands</span>
       <span class="gp"><span class="bkv2-kbd">C</span>new booking</span>
       <span class="gp"><span class="bkv2-kbd">/</span>search</span>
-      <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${kCount}${_opsStatsLoading||month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
+      <span style="margin-left:auto;font-style:italic">Showing ${_srvWaiting ? '…' : matchTotal} of ${kCount}${_opsStatsLoading||month==='all'||q?'':` &middot; ${bookingV2MonthLabel(month)}`}</span>
     </div>
   `;
 }
