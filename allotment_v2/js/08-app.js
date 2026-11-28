@@ -119,7 +119,7 @@ let SB_MARKETS = [
 ];
 // Load persisted markets (full list overrides seed once edited) · read-modify-write key
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_markets) && d.sb_markets.length) SB_MARKETS = laApplySort(d.sb_markets); }catch(e){ console.warn('load sb_markets failed', e); } })();
-function sbMarketsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('config')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_markets=SB_MARKETS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_markets failed', e); } }
+function sbMarketsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('config')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_markets=SB_MARKETS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_markets failed', e); } }
 // One-time seed: dedicated Walk-in / Direct market (separate bucket in Demand/Sales reports)
 (function(){ try{ if(Array.isArray(SB_MARKETS) && !SB_MARKETS.some(m=>m.id==='walkin')){ SB_MARKETS.push({id:'walkin', name:'Walk-in / Direct', color:'#2d9a6a', subs:['Office','Pier']}); if(typeof sbMarketsPersist==='function') sbMarketsPersist(); console.log('[seed] added Walk-in / Direct market'); } }catch(e){ console.warn('walkin market seed failed',e); } })();
 // One-time seed: Staff / Internal market (welfare + inspection trips · excluded from sales revenue)
@@ -190,7 +190,7 @@ let SB_STAFF = [
   {id:'st05', code:'EMP-021', name:'Mechanic Lek', dept:'Maintenance', active:true, quota:{'2026':3}}
 ];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_staff)) SB_STAFF = d.sb_staff; }catch(e){ console.warn('load sb_staff failed', e); } })();
-function sbStaffPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_staff=SB_STAFF; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_staff failed', e); } }
+function sbStaffPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_staff=SB_STAFF; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_staff failed', e); } }
 
 // ════ Transfer Fleet (vehicles for van assign / job orders) ════
 // ownership: 'own' (company) | 'partner' (รถร่วม) · zoneBase: 'PK' | 'KL'
@@ -203,7 +203,7 @@ let SB_VEHICLES = [
   {id:'veh06', name:'Partner Bus B', plate:'-',    type:'bus',     capacity:30, ownership:'partner', partnerName:'Phuket Coach',          zoneBase:'PK', active:true, note:'รถร่วม · group'}
 ];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_vehicles)) SB_VEHICLES = d.sb_vehicles; }catch(e){ console.warn('load sb_vehicles failed', e); } })();
-function sbVehiclesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_vehicles=SB_VEHICLES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_vehicles failed', e); } }
+function sbVehiclesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_vehicles=SB_VEHICLES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_vehicles failed', e); } }
 // Vehicle status timeline · push {at,kind,text} · kind: created|status|zone|driver|edit
 function vehLog(id, kind, text){ const v=(SB_VEHICLES||[]).find(x=>x.id===id); if(!v||!text) return; if(!Array.isArray(v.log)) v.log=[]; v.log.push({at:new Date().toISOString(), kind:kind||'edit', text:String(text)}); if(v.log.length>100) v.log=v.log.slice(-100); }
 // ── §สีประจำรถ · vehicle identity colour ────────────────────────────────────────
@@ -692,7 +692,7 @@ function renderStaff(){
       `}
     </div>`;
 }
-function sbSalesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_sales=SB_SALES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_sales failed', e); } }
+function sbSalesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_sales=SB_SALES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_sales failed', e); } }
 
 function sbGetSales(sId){return SB_SALES.find(s=>s.id===sId);}
 /* §salesActive (2026-10-05) · เจ้าของ: "ขอเพิ่มสถานะเซลล์ Active / Inactive · กรณี inactive ไม่ต้องโชว์ในส่วนอื่น ๆ"
@@ -808,7 +808,7 @@ function laRateBindings(){ return (SB_AGENTS||[]).map(function(a){
   if(Array.isArray(a.rateSeasons)) o.rateSeasons = a.rateSeasons;
   return o;
 }); }
-function sbAgentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_agents=SB_AGENTS; if(_LA_RATE_BIND_READY) d.sb_agents_rate_bindings=laRateBindings(); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_agents failed', e); } }
+function sbAgentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_agents=SB_AGENTS; if(_LA_RATE_BIND_READY) d.sb_agents_rate_bindings=laRateBindings(); (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_agents failed', e); } }
 // ── Agent activity log (audit trail) · push {at,by,kind,text} to a.activity ──
 // kind: 'created' | 'rate' | 'credit' | 'profile' | 'programs' | 'company' | 'sales' | 'contract' | 'note' | 'edit'
 function agLog(agentId, kind, text){
@@ -974,7 +974,7 @@ _seedContractExpiryVariety();
 // Load with Array.isArray so a deliberately-cleared list stays cleared (CLAUDE.md §2 "Load conditions matter").
 let SB_CONTRACTS = [];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_contracts)) SB_CONTRACTS = d.sb_contracts; }catch(e){ console.warn('load sb_contracts failed', e); } })();
-function sbContractsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_contracts=SB_CONTRACTS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_contracts failed', e); } }
+function sbContractsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return; try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_contracts=SB_CONTRACTS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_contracts failed', e); } }
 // One-time, idempotent migration: each agent's existing single contract (contractStart/End/Version/
 // programPeriods) → one 'main' sb_contract; archived contractHistory[] snapshots → prior 'expired' contracts.
 // Skips agents that already have a migrated main (id 'ct_main_<agentId>') so re-runs / cloud-loads are no-ops.
@@ -2949,7 +2949,7 @@ window._laRerender=function(){
   const DUMMY_BK_IDS = ['BK-26050001','BK-26050002','BK-26050003','BK-26050004','BK-26050005','BK-26050006','BK-26050042','BK-26050041','BK-26050040','BK-26050039','BK-26050038'];
   const before = SB_BOOKINGS.length;
   SB_BOOKINGS = SB_BOOKINGS.filter(b => !DUMMY_BK_IDS.includes(b.id));
-  if(SB_BOOKINGS.length !== before){ const o=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(LS_KEY, JSON.stringify(o)); }
+  if(SB_BOOKINGS.length !== before){ const o=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); o.sb_bookings=SB_BOOKINGS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(o))); }
 }catch(e){ console.warn('dummy booking cleanup failed', e); } })();
 // auto-calc total for legacy v1 seed bookings only (v2 has explicit total)
 SB_BOOKINGS.forEach(bk=>{ if(bk.schemaVer!==2 && !bk._fromOpsBackend) bk.total = sbCalcBookingTotal(bk); }); /* §srvTotal · a booking from operation-backend keeps the server total (no programId: the mock tables would zero it) */
@@ -2972,7 +2972,7 @@ let SB_SEAT_LOCKS = (function(){
 })();
 // Persist (read-modify-write · shares LS_KEY with operations + fleet)
 function sbSeatLocksPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */ 
-  try { const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_seat_locks = SB_SEAT_LOCKS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }
+  try { const d = (typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_seat_locks = SB_SEAT_LOCKS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }
   catch(e){ console.warn('seat-locks persist failed', e); }
 }
     // parent qty not yet in a sub-group
@@ -3149,9 +3149,9 @@ let SB_DEPOSITS = [];
   if(Array.isArray(d.sb_payments)) SB_PAYMENTS=d.sb_payments;
   if(Array.isArray(d.sb_deposits)) SB_DEPOSITS=d.sb_deposits;
 }catch(e){ console.warn('load accounting failed', e); } })();
-function sbInvoicesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_invoices=SB_INVOICES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_invoices failed',e);} }
-function sbPaymentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_payments=SB_PAYMENTS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_payments failed',e);} }
-function sbDepositsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_deposits=SB_DEPOSITS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_deposits failed',e);} }
+function sbInvoicesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_invoices=SB_INVOICES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_invoices failed',e);} }
+function sbPaymentsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_payments=SB_PAYMENTS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_payments failed',e);} }
+function sbDepositsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return; try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_deposits=SB_DEPOSITS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_deposits failed',e);} }
 // §perf (2026-07-27) · state blob ก้อนเดียวโตเป็น ~9MB แล้ว · โค้ดที่จะแตะค่าเล็กๆ สักค่า ต้อง
 // JSON.parse ทั้งก้อน (~57ms) ทุกครั้ง · เก็บผลที่ parse แล้วไว้ใช้ซ้ำ
 //
@@ -3389,11 +3389,11 @@ function acctStateChip(st){ const c=ACCT_STATE_CHIP[st]||ACCT_STATE_CHIP.issued;
 // ════════════ DEMAND / MARKET INTELLIGENCE (Phuket immigration stats) ════════════
 let SB_MARKET_STATS = {};
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(d.sb_market_stats && typeof d.sb_market_stats==='object') SB_MARKET_STATS=d.sb_market_stats; }catch(e){ console.warn('load sb_market_stats failed',e); } })();
-function sbMarketStatsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_market_stats=SB_MARKET_STATS; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_market_stats failed',e); } }
+function sbMarketStatsPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_market_stats=SB_MARKET_STATS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_market_stats failed',e); } }
 // ── Monthly arrivals totals (Phuket airport summary · YYYY-MM → arrivals) · feeds Year-chart/gauge/pace as a fallback where no daily data exists ──
 let SB_MARKET_MONTHLY = {};
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(d.sb_market_monthly && typeof d.sb_market_monthly==='object') SB_MARKET_MONTHLY=d.sb_market_monthly; }catch(e){ console.warn('load sb_market_monthly failed',e); } })();
-function sbMarketMonthlyPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_market_monthly=SB_MARKET_MONTHLY; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_market_monthly failed',e); } }
+function sbMarketMonthlyPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('sales')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_market_monthly=SB_MARKET_MONTHLY; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_market_monthly failed',e); } }
 // One-time seed · ตม.ทอ.ภูเก็ต ขาเข้า รายเดือน · 2568(2025) ครบปี + 2569(2026) ม.ค.–พ.ค.
 (function(){ try{
   const flag='_md_monthly_seed_2569v1'; if(localStorage.getItem(flag)==='1') return;
@@ -4010,7 +4010,7 @@ function mdToggleAgZone(){ _mdAgZone=!_mdAgZone; if(typeof renderMarketData==='f
 let _insDate=(typeof bookingV2LocalYMD==='function')?bookingV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
 let INSURANCE_OVERRIDES=null;
 function insEnsure(){ if(INSURANCE_OVERRIDES) return INSURANCE_OVERRIDES; try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); INSURANCE_OVERRIDES=(d.insurance_overrides&&typeof d.insurance_overrides==='object')?d.insurance_overrides:{}; }catch(e){ INSURANCE_OVERRIDES={}; } return INSURANCE_OVERRIDES; }
-function insPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const raw=localStorage.getItem(LS_KEY); const d=raw?JSON.parse(raw):{}; d.insurance_overrides=insEnsure(); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){} }
+function insPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.insurance_overrides=insEnsure(); (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){} }
 function insKey(bkId,pk){ return bkId+'::'+pk; }
 function insOv(bkId,pk){ const s=insEnsure(); return s[insKey(bkId,pk)]||null; }
 function insHas(bkId,pk,field){ const o=insOv(bkId,pk); return !!(o && o[field]!==undefined); }
@@ -5331,7 +5331,7 @@ function pmapEnsureLeaflet(cb){ if(window.L){cb();return;} if(!document.getEleme
 var _devlogFilter='all';
 var DEVLOG_TAGS={ task:{label:'Task',c:'#1683C7',bg:'#E1F0FA'}, bug:{label:'Bug',c:'#A32D2D',bg:'#FBE9E9'}, idea:{label:'Idea',c:'#8A6A0B',bg:'#FAF0C8'} };
 function devlogLoad(){ try{ var d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); var a=d.admin_devlog; if(typeof a==='string') a=JSON.parse(a||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function devlogSave(arr){ try{ var d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.admin_devlog=JSON.stringify(arr||[]); localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist admin_devlog failed', e); } }
+function devlogSave(arr){ try{ var d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.admin_devlog=JSON.stringify(arr||[]); (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist admin_devlog failed', e); } }
 function devlogIsAdmin(){ return (window.LA_ME && window.LA_ME.role==='admin') || !window.LA_ME; }  // localhost (no LA_ME) = full access
 function _devlogWho(){ try{ return (window.LA_ME && (LA_ME.name||LA_ME.username)) || 'admin'; }catch(e){ return 'admin'; } }
 function _devlogFmt(ts){ try{ return new Date(ts).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
@@ -39287,7 +39287,7 @@ function _bkUpgPayInit(u){
 // ════ WEATHER CANCEL · cancel a trip (route+date) + per-booking resolution ════
 let SB_WEATHER_CLOSURES = [];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_weather)) SB_WEATHER_CLOSURES=d.sb_weather; }catch(e){ console.warn('load sb_weather failed',e); } })();
-function sbWeatherPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_weather=SB_WEATHER_CLOSURES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_weather failed',e); } }
+function sbWeatherPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_weather=SB_WEATHER_CLOSURES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_weather failed',e); } }
 function tcxPickR(k){ window._tcxPick=k; [].forEach.call(document.querySelectorAll('.tcx-rc'),function(el){ el.classList.toggle('on', el.getAttribute('data-k')===k); }); }
 
 
@@ -42323,7 +42323,7 @@ const RT_ADDON_BUILTIN = [
 // ════ Custom Add-on Types (data-driven · managed via UI · §addon-ui) ════
 let SB_ADDON_TYPES = [];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_addon_types)) SB_ADDON_TYPES = d.sb_addon_types; }catch(e){ console.warn('load sb_addon_types failed', e); } })();
-function sbAddonTypesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('config')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_addon_types=SB_ADDON_TYPES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_addon_types failed', e); } }
+function sbAddonTypesPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('config')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_addon_types=SB_ADDON_TYPES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_addon_types failed', e); } }
 
 function _rtAddonInit_generic(cfg){
   const o = { applies: [] };
@@ -47740,7 +47740,7 @@ function agClearExecute(){
   // 2) bookings (read-modify-write · same pattern as commit)
   if(typeof SB_BOOKINGS!=='undefined' && Array.isArray(SB_BOOKINGS)){
     SB_BOOKINGS = SB_BOOKINGS.filter(b=>!idset.has(b.agentId));
-    try{ const o=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch(e){ console.warn('persist sb_bookings failed', e); }
+    try{ const o=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); o.sb_bookings=SB_BOOKINGS; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(o))); }catch(e){ console.warn('persist sb_bookings failed', e); }
   }
   // 3) contracts (agent_artifacts keyed by agentId)
   if(typeof ctArtifactsLoad==='function'){ try{ ctArtifactsLoad(); }catch(e){} }
@@ -51602,7 +51602,7 @@ const BKV2_NATIONALITIES = [
 // Custom nationalities · user-typed entries persist & reappear in the dropdown (LS key sb_nationalities)
 let SB_CUSTOM_NATIONALITIES = [];
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_nationalities)) SB_CUSTOM_NATIONALITIES = d.sb_nationalities; }catch(e){ console.warn('load sb_nationalities failed', e); } })();
-function sbNationalitiesPersist(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_nationalities=SB_CUSTOM_NATIONALITIES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){ console.warn('persist sb_nationalities failed', e); } }
+function sbNationalitiesPersist(){ try{ const d=(typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.sb_nationalities=SB_CUSTOM_NATIONALITIES; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }catch(e){ console.warn('persist sb_nationalities failed', e); } }
 // One-time idempotent purge: strip junk custom nationalities with <2 letters (e.g. a stray "Q" that
 // was auto-added before manual-add was introduced) and clear those codes off any bookings.
 (function(){
