@@ -334,9 +334,11 @@ function save(area){
   if(area && typeof window.laCanEditArea==='function' && !window.laCanEditArea(area)) return;
   // READ-MODIFY-WRITE: preserve fleet_* fields (managed by flSave) — do NOT clobber the whole key
   try{
-    const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+    /* §blobDirect (2026-11-28) · the blob in memory (08-app.js laBlob), not a parse of the whole stored string on every save; laBlobSave
+       writes it (at once in legacy mode, when read back with operation-backend, §blobLazy). Before 08-app.js loads: as before. */
+    const d = (typeof laBlob==='function') ? laBlob() : JSON.parse(localStorage.getItem(LS_KEY)||'{}');
     d.version=DATA_VERSION; d.routes=ROUTES; d.boats=BOATS; d.trips=TRIPS;
-    localStorage.setItem(LS_KEY, JSON.stringify(d));
+    if(typeof laBlobSave==='function') laBlobSave(); else localStorage.setItem(LS_KEY, JSON.stringify(d));
   }
   catch(e){ console.warn('localStorage save failed',e); }
 }
@@ -10186,7 +10188,7 @@ function bop2LoadTemplates(){
   catch(e){ return []; }
 }
 function bop2SaveTemplates(arr){
-  try { const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); d.bop2_templates = arr; localStorage.setItem(LS_KEY, JSON.stringify(d)); }
+  try { const d = (typeof laBlob==='function'?laBlob():JSON.parse(localStorage.getItem(LS_KEY)||'{}')); d.bop2_templates = arr; (typeof laBlobSave==='function'?laBlobSave():localStorage.setItem(LS_KEY, JSON.stringify(d))); }
   catch(e){ console.warn('template save failed', e); }
 }
 function bop2OpenModal(type){
