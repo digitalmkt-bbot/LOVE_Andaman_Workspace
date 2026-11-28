@@ -335,10 +335,9 @@
     });
   }
   function stopIdOf(k){ var p = str(k).split('::'); return p[2] || ''; }
-  /* §pickupClock · a stop's time as typed in legacy's form ('05:00 a.m.', '7:30') goes as HH:MM; anything else (a window
-     '05:15-05:30', '0715') goes as typed and the server reads it (operation-backend stopClock: its first clock time, or the text
-     into the note when it has none), as legacy keeps any text. */
-  function stopTime(v){ var t = O.clock ? O.clock(v) : null; return t === null ? (str(v).trim() || null) : (t || null); }
+  /* §freeText (2026-11-28) · legacy's vs-time is a free-text box and vsSubmit keeps any text: the time goes as typed and the
+     server keeps it as typed (operation-backend migration 746). Blank is no time. */
+  function stopTime(v){ return str(v).trim() || null; }
   function stopBody(rec){
     var body = {
       kind: rec.kind === 'cargo' ? 'cargo' : 'staff', label: str(rec.label).trim(),
