@@ -1078,7 +1078,10 @@
       if(document.hidden && _laCkSeen){ _laCkSeen=0; }   /* ซ่อนแท็บ · รอบหน้าที่กลับมาให้ดึงเต็ม */
     }); }catch(e){}
   })();
-  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; /* §laRefresh (2026-09-11) · หน้าตา/ตำแหน่งย้ายไปอยู่ css/01-base.css แล้ว
+  /* §liveNoticeOne (2026-11-28) · a background sync account (lk_service, …_service, …sync) is not "someone else":
+     its change still loads by itself when idle (_laPending), it just raises no card. owner: "เหมือนมันจะรกเกิน" */
+  function _laSysActor(by){ return /(^|[._\s-])(service|sync|system|bot)$/i.test(String(by||'')) || /^system$/i.test(String(by||'')); }
+  function showRefresh(info){ if(_refreshShown) return; if(info && _laSysActor(info.updated_by)) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; /* §laRefresh (2026-09-11) · หน้าตา/ตำแหน่งย้ายไปอยู่ css/01-base.css แล้ว
        ของเดิมเป็น inline style ลอยกลางก้นจอ · ที่นี่เหลือแค่เนื้อความ
        บรรทัดบน = เกิดอะไรขึ้น · บรรทัดล่าง = ใครทำ + ระบบจะทำอะไรต่อ */
     var _by=(info&&info.updated_by)?('โดย '+esc(info.updated_by)+' · '):'';
