@@ -1073,6 +1073,13 @@
   }
 
   /* ── By-trip day → /v1/manifest per route that runs that day ── */
+  /* §btLoadJump · drawn with the other answers of the day, once, after the person stops scrolling (bookingV2RenderKeep.js) */
+  function laterDraw(still){
+    try{
+      if(typeof bookingV2RedrawAfterLoad === 'function') bookingV2RedrawAfterLoad(still);
+      else (typeof bookingV2RenderKeep === 'function' ? bookingV2RenderKeep : bookingV2Render)();
+    }catch(_){}
+  }
   var manifestAt = {}, manifestBusy = {};
   function refreshDay(date){
     if(manifestBusy[date]) return; manifestBusy[date] = 1; manifestAt[date] = Date.now();
@@ -1088,9 +1095,7 @@
       });
       if(changed) persist();
       var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
-      if(changed && st.tab === 'bytrip' && st.filterDate === date && !st.detailId && !O.busy()){
-        try{ (typeof bookingV2RenderKeep === 'function' ? bookingV2RenderKeep : bookingV2Render)(); }catch(_){}
-      }
+      if(changed && st.tab === 'bytrip' && st.filterDate === date && !st.detailId && !O.busy()) laterDraw(function(){ return st.tab === 'bytrip' && st.filterDate === date && !st.detailId && !O.busy(); });
     }).catch(function(e){ try{ console.warn('[ops] manifest ' + date + ' · ' + e.message); }catch(_){} })
       .then(function(){ manifestBusy[date] = 0; });
   }
@@ -1110,9 +1115,7 @@
       var changed = false;
       res.forEach(function(m){ ((m && m.rescheduled_away) || []).forEach(function(ob){ if(upsert(ob)) changed = true; }); });
       var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
-      if(changed && st.tab === 'bytrip' && !st.detailId && !O.busy()){
-        try{ (typeof bookingV2RenderKeep === 'function' ? bookingV2RenderKeep : bookingV2Render)(); }catch(_){}
-      }
+      if(changed && st.tab === 'bytrip' && !st.detailId && !O.busy()) laterDraw(function(){ return st.tab === 'bytrip' && !st.detailId && !O.busy(); });
     }).catch(function(e){ delete ghostsAt[date]; try{ console.warn('[ops] rescheduled-away ' + date + ' · ' + e.message); }catch(_){} });
   }
 

@@ -4,7 +4,10 @@ function bookingV2SetMonth(m){
   _bkV2.month = m;
   _bkV2.page = 1;
   if(_bkV2.search) _bkV2.search = '';
-  if(m !== 'all' && typeof bookingV2OpsEnsureMonth === 'function'){
+  /* §bkListPage · in operation-backend mode the list asks the server for the month's page itself (bookingV2RenderTab3) */
+  var srvList = typeof window.laOpsListPage === 'function' && !!(window.laOps && window.laOps.enabled && window.laOps.enabled());
+  if(srvList){ /* nothing to load here */ }
+  else if(m !== 'all' && typeof bookingV2OpsEnsureMonth === 'function'){
     var p = bookingV2OpsEnsureMonth(m);
     if(p) p.then(function(j){ if(j && _bkV2.month === m && !_bkV2.newBooking) bookingV2Render(); });
   } else if(m === 'all' && typeof bookingV2OpsEnsureAll === 'function'){

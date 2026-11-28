@@ -133,7 +133,12 @@ item('[L] All-bookings list · chips, last activity and KPI come from GET /v1/bo
   const n0 = calls.length;
   await openList(monthOf(D1));
   await waitScreen(() => document.querySelectorAll('.bkv2-tbl tr.bkr').length >= 2, null, 15000); await settle(900);
-  ok('the list asks the server for the month (GET /v1/bookings?from&to) and the summary (GET /v1/bookings/stats)', calls.slice(n0).some((c) => /GET \/v1\/bookings\?.*from=/.test(c)) && calls.slice(n0).some((c) => /GET \/v1\/bookings\/stats/.test(c)), calls.slice(n0));
+  /* §bkListPage (2026-11-28) · the list asks for the page it shows (travel_month + limit + offset), never the whole month (from&to) */
+  ok('§bkListPage: the list asks for ONE page of the month (travel_month, limit, offset), not the whole month (from&to)', calls.slice(n0).some((c) => /GET \/v1\/bookings\?.*travel_month=/.test(c) && /limit=\d+/.test(c) && /offset=0/.test(c)) && !calls.slice(n0).some((c) => /GET \/v1\/bookings\?.*from=/.test(c)), calls.slice(n0));
+  /* A and B travel tomorrow, C ten days on: near a month's end that is two months, so the rows are read on All time */
+  await openList('all');
+  await waitScreen(() => document.querySelectorAll('.bkv2-tbl tr.bkr').length >= 3, null, 15000); await settle(900);
+  ok('the list asks the server for its page (GET /v1/bookings) and the summary (GET /v1/bookings/stats)', calls.slice(n0).some((c) => /GET \/v1\/bookings\?/.test(c)) && calls.slice(n0).some((c) => /GET \/v1\/bookings\/stats/.test(c)), calls.slice(n0));
   const sA = await serverRow('zz-f3-A', 'ZZ F3 One'), sB = await serverRow('zz-f3-B', 'ZZ F3 Two'), sC = await serverRow('zz-f3-C', 'ZZ F3 Foc');
   console.log('    server flags A:', JSON.stringify({ n: sA.is_new, s: sA.is_soon, t: sA.is_today, d: sA.possible_duplicate, act: sA.last_activity }));
   const rA = await row('zz-f3-A'), rB = await row('zz-f3-B'), rC = await row('zz-f3-C');
