@@ -389,6 +389,19 @@
   function wrote(kind){ forgetShared(); listeners.forEach(function(fn){ try{ fn(kind); }catch(_){} }); }
   function onChange(fn){ changeListeners.push(fn); }
   function changed(change){ forgetShared(); changeListeners.forEach(function(fn){ try{ fn(change); }catch(_){} }); }
+  /* §vanRefetchCalm (2026-11-28) · whether a /v1/changes event can change what a screen holds for `date`: its kind is in
+     `kinds` and, when it names its days (route_days), one of them is `date`. A change that names no days (a van, a route)
+     touches every day; no `date` asks about any day. Before this every save anywhere made each open tab read the van
+     day again (GET /operations/van-jobs ~4/s in production, 2026-11-28), whatever the save was about. */
+  var VAN_DAY_KINDS = { booking:1, van:1, van_day:1, van_stop:1, van_group:1, route:1, pickup_area:1, pickup_profile:1, config:1 };
+  function touches(change, kinds, date){
+    if(!change || !(kinds || VAN_DAY_KINDS)[change.kind]) return false;
+    var days = change.route_days;
+    if(!date || !Array.isArray(days) || !days.length) return true;
+    return days.some(function(d){ return d && d.service_date === date; });
+  }
+  /* a write this tab made (not the feed's 'remote:…' echo of someone else's, which onChange already saw) */
+  function ownWrite(kind){ return String(kind || '').indexOf('remote:') !== 0; }
 
   window.laOps = {
     enabled: enabled, call: call, qs: qs, bookingWrite: bookingWrite,
@@ -401,7 +414,7 @@
     toast: toast, fail: fail, clone: clone, restoreInPlace: restoreInPlace,
     busy: busy, whenFree: whenFree, redrawLater: redrawLater, activeView: activeView, loadingHtml: loadingHtml, loadingOver: loadingOver, skeletonHtml: skeletonHtml,
     ymd: ymd, shift: shift, today: today, clock: clock, pickupWindow: pickupWindow, pickupText: pickupText,
-    onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed,
+    onWrite: onWrite, wrote: wrote, onChange: onChange, changed: changed, touches: touches, ownWrite: ownWrite, VAN_DAY_KINDS: VAN_DAY_KINDS,
     state: { loaded: false }
   };
 })();

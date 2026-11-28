@@ -98,8 +98,17 @@
 
   O.onWrite(function(kind){
     if(/^(weather|market|devlog|daily-report|costing|trip-pl|config|addon-types|park|meal|pier-cash|pier-office)/i.test(String(kind || ''))) return;
+    // §vanRefetchCalm (2026-11-28) · someone else's save is onChange's below: only the days it touches are read again
+    if(!O.ownWrite(kind)) return;
     epoch++;
     if(fleetOpen()) Object.keys(jobsAt).forEach(function(d){ dayJobs(d); });
+  });
+  O.onChange(function(change){
+    Object.keys(jobsAt).forEach(function(d){
+      if(!O.touches(change, O.VAN_DAY_KINDS, d)) return;
+      jobsAt[d].epoch = -1;
+      if(fleetOpen()) dayJobs(d);
+    });
   });
   O.fleetServer = { refresh: refresh, jobs: dayJobs, clear: function(){ jobsAt = {}; staleVan = {}; epoch++; } };
 })();

@@ -463,12 +463,23 @@
   });
 
   /* ════ The day's load, behind each screen's render ════ */
-  var dayAt = {}, dayLoading = {};
+  /* §vanRefetchCalm (2026-11-28) · a held day is read again when a change touches it (onChange below), when this tab
+     writes, or after DAY_FRESH_MS. Before, any render more than 5 s after the load STARTED read the whole day again, and
+     the load's own closing redraw is a render: a day slower than 5 s (van-jobs took 5-27 s in production that afternoon)
+     reloaded itself without end in every open tab. Now the time counts from when the load ended, and a load in flight is
+     shared. A change that arrives during a load keeps the day stale for the next render. */
+  var DAY_FRESH_MS = 30000;
+  var dayAt = {}, dayLoading = {}, dayBusy = {}, dayDirty = {};
+  function dropDay(d){ if(!d) return; delete dayAt[d]; if(dayBusy[d]) dayDirty[d] = true; }
+  O.onChange(function(change){
+    Object.keys(dayAt).concat(Object.keys(dayBusy)).forEach(function(d){ if(O.touches(change, O.VAN_DAY_KINDS, d)) dropDay(d); });
+  });
+  O.onWrite(function(kind){ if(O.ownWrite(kind)) Object.keys(dayAt).concat(Object.keys(dayBusy)).forEach(dropDay); });
   function loadDay(date){
     if(!O.enabled() || !date) return Promise.resolve(null);
-    var now = Date.now();
-    if(dayAt[date] && now - dayAt[date] < 5000) return dayLoading[date];
-    dayAt[date] = now;
+    if(dayBusy[date]) return dayLoading[date];
+    if(dayAt[date] && Date.now() - dayAt[date] < DAY_FRESH_MS) return dayLoading[date];
+    dayBusy[date] = true; dayDirty[date] = false;
     // §vanKeep · groups land only on bookings already in the browser, so the day's bookings come first
     var books = (typeof bookingV2OpsEnsureDay === 'function') ? bookingV2OpsEnsureDay(date) : null;
     var groups = Promise.resolve(books).catch(function(){}).then(function(){
@@ -492,7 +503,15 @@
         loadArrivals(date).catch(function(e){ console.warn('[ops] van arrivals did not load · ' + (e && e.message)); })
       ]);
     }).then(function(){ syncSreq(); redraw(); });
-    return dayLoading[date];
+    var mine = dayLoading[date];
+    var settle = function(){
+      if(dayLoading[date] !== mine) return;
+      dayBusy[date] = false;
+      if(dayDirty[date]) delete dayAt[date]; else dayAt[date] = Date.now();
+      dayDirty[date] = false;
+    };
+    mine.then(settle, settle);
+    return mine;
   }
   /* until the vans' window lands, a job's van is known only by the job (name, plate, seats, colour, owner, the day's
      driver): SB_VEHICLES then holds legacy's 6 demo vans, which drew as empty cards ("Minibus 1", "Partner Van A").
@@ -594,6 +613,6 @@
       [statusRanges, zoneRanges].forEach(function(m){ Object.keys(m).forEach(function(k){ if(m[k].van_id === vanId) delete m[k]; }); });
     },
     invalidate: function(){ vansWindow = null; },
-    dropDay: function(d){ if(d) delete dayAt[d]; }   // §opsCheckinLive · the next render of that day asks the server again
+    dropDay: dropDay   // §opsCheckinLive · the next render of that day asks the server again
   };
 })();
