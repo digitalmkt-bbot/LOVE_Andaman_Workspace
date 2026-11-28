@@ -758,7 +758,35 @@ body.ts-printing .view{padding-bottom:0}
 .la-skel-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.la-skel::after{animation:none}.la-skel-wrap{animation:none}}
 body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
-@media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues{display:none!important}}
+@media print{#la-userbadge,#la-viewonly,#la-refresh,#la-b2c-issues,#la-live-wrap{display:none!important}}
+/* §liveNotice (2026-11-28) · another person's booking change (ops/70-ops-changes.js). Same lane and look as #la-refresh:
+   bottom-left over the sidebar column, sidebar-wide, white card, coloured dot, blue bold title. One card per action and
+   person per poll; the newest sits lowest, next to the user badge. Moves up while #la-refresh / #la-b2c-issues show. */
+#la-live-wrap{position:fixed;left:14px;bottom:84px;z-index:99995;width:250px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+body:has(#la-refresh) #la-live-wrap{bottom:150px}
+body:has(#la-b2c-issues) #la-live-wrap{bottom:132px}
+body:has(#la-refresh):has(#la-b2c-issues) #la-live-wrap{bottom:198px}
+.la-live{pointer-events:auto;position:relative;display:flex;align-items:flex-start;gap:10px;box-sizing:border-box;width:100%;
+  background:#fff;color:#22262e;border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 8px 10px 12px;
+  font:12.5px/1.35 'DM Sans',sans-serif;box-shadow:0 12px 32px rgba(2,10,30,.16);animation:laRfIn .22s ease-out;transition:opacity .2s,transform .2s}
+.la-live.la-live-out{opacity:0;transform:translateY(6px)}
+.la-live-dot{width:8px;height:8px;border-radius:50%;background:#185FA5;flex:none;margin-top:4px}
+.la-live-created .la-live-dot{background:#1D9E75;animation:laRfPulse 1.9s ease-out infinite}
+.la-live-deleted .la-live-dot{background:#C0392B}
+.la-live-tx{min-width:0;flex:1}
+.la-live-tx b{display:block;font-size:12.5px;font-weight:800;color:#12518F;line-height:1.25}
+.la-live-deleted .la-live-tx b{color:#A32D2D}
+.la-live-tx code{display:block;font:600 11px/1.35 'DM Mono',ui-monospace,monospace;color:#41514b;margin-top:2px}
+.la-live-tx code span{white-space:nowrap;display:inline-block;margin-right:6px}
+.la-live-tx i{display:block;font-style:normal;font-size:10.5px;font-weight:600;color:#8a857d;margin-top:1px;line-height:1.3}
+.la-live button{flex:none;border:0;background:transparent;color:#9aa8a2;font-size:16px;line-height:1;cursor:pointer;padding:0 3px}
+.la-live button:hover{color:#22262e}
+body.sb-collapsed #la-live-wrap{width:84px}
+body.sb-collapsed .la-live{padding:8px 6px;gap:6px}
+body.sb-collapsed .la-live-tx b{font-size:10.5px}
+body.sb-collapsed .la-live-tx code,body.sb-collapsed .la-live-tx i,body.sb-collapsed .la-live-dot{display:none}
+@media (prefers-reduced-motion:reduce){.la-live,.la-live-created .la-live-dot{animation:none}}
+body.ts-printing #la-live-wrap,body.dr-printing #la-live-wrap,body.pp-printing #la-live-wrap,body.bk-mro #la-live-wrap{display:none!important}
 /* §b2cCheck (2026-10-03) · ใบ B2C ที่ต้องเช็ค · อยู่เลนเดียวกับ #la-refresh (คอลัมน์ sidebar ก้นซ้าย = "เรื่องของระบบ")
    ปิดอยู่กว้างเท่า sidebar ไม่ล้ำเนื้อหา · กดดูแล้วถึงจะขยายออก (คนกดเองแล้ว ทับเนื้อหาได้)
    ถ้า la-refresh ขึ้นพร้อมกัน ดัน la-refresh ขึ้นไปเหนือป้ายนี้ · ไม่งั้นซ้อนกันที่ 84px พอดี */

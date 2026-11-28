@@ -17,14 +17,69 @@
     var me = window.LA_ME && window.LA_ME.username;
     return !!(me && change && change.changed_by && String(change.changed_by) === String(me));
   }
+  /* §liveNotice (2026-11-28) · another person's booking change shows bottom-left, in the sidebar lane, the way legacy's
+     "มีข้อมูลใหม่จากคนอื่น" card (#la-refresh, css/01-base.css §laRfLeft) does, not as save toasts top-right.
+     owner: "ของเดิมเราขึ้นอัพเดทอยู่ฝั่งซ้ายล่าง พอดีกับ sidebar และปรับหน้าตา ui ให้เข้ากับระบบด้วย".
+     · the changes of one pull become ONE card per action and person ("อัปเดต booking 8 ใบ · โดย RSVN05"), so a run of
+       re-confirms is one card, not a stack that covers the page;
+     · the booking shows by its code (BK-…) or lead name, never the server's internal id (booking_<uuid>), and once only;
+     · at most LIVE_MAX cards; each leaves after LIVE_MS (kept while the pointer is on it). Look: css/01-base.css #la-live-wrap. */
+  var LIVE_MAX = 3, LIVE_MS = 8000, pendingNotes = [], notesQueued = false;
+  function bookingLabel(id){
+    var s = String(id || ''), list = (typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)) ? SB_BOOKINGS : [];
+    for(var i = 0; i < list.length; i++){
+      var b = list[i];
+      if(b && (b.opsId === s || b.id === s)){ var c = b.code || b.voucherRef || b.leadPax; if(c) return String(c); break; }
+    }
+    if(/^lg_/.test(s)) return s.slice(3);                          // lg_BK-26114692-PV3W → BK-26114692-PV3W
+    if(/^booking_[0-9a-f-]{20,}$/i.test(s)) return '';               // internal id: nothing a person can read
+    return s;
+  }
   function bookingToast(change){
     if(!change || change.kind !== 'booking' || mine(change)) return;
-    var action = change.action || 'updated';
-    var title = action === 'created' ? 'New booking' : action === 'deleted' ? 'Booking deleted' : 'Booking updated';
-    var sub = change.entity_id || '';
-    if(change.changed_by) sub += (sub ? ' · ' : '') + 'by ' + change.changed_by;
-    O.toast({ kind: action === 'deleted' ? 'error' : action === 'created' ? 'success' : 'neutral',
-      title: title, id: change.entity_id || '', status: action.toUpperCase(), sub: sub, dur: 7000 });
+    pendingNotes.push({ action: change.action === 'created' || change.action === 'deleted' ? change.action : 'updated',
+      by: change.changed_by ? String(change.changed_by) : '', id: String(change.entity_id || '') });
+    if(!notesQueued){ notesQueued = true; Promise.resolve().then(flushNotes); }   // after the whole page of changes is applied
+  }
+  var NOTE_WORD = { created: 'Booking ใหม่', updated: 'อัปเดต booking', deleted: 'ลบ booking' };
+  function noteEsc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }); }
+  function flushNotes(){
+    notesQueued = false;
+    var notes = pendingNotes; pendingNotes = [];
+    var groups = [], byKey = {};
+    notes.forEach(function(n){
+      var k = n.action + '|' + n.by, g = byKey[k];
+      if(!g){ g = byKey[k] = { action: n.action, by: n.by, ids: [] }; groups.push(g); }
+      if(g.ids.indexOf(n.id) < 0) g.ids.push(n.id);
+    });
+    groups.forEach(showNote);
+  }
+  function liveWrap(){
+    var w = document.getElementById('la-live-wrap');
+    if(!w && document.body){ w = document.createElement('div'); w.id = 'la-live-wrap'; w.setAttribute('role', 'status'); w.setAttribute('aria-live', 'polite'); document.body.appendChild(w); }
+    return w;
+  }
+  function showNote(g){
+    try{
+      var w = liveWrap(); if(!w) return;
+      var labels = g.ids.map(bookingLabel).filter(Boolean), n = g.ids.length;
+      var title = NOTE_WORD[g.action] + (n > 1 ? ' ' + n + ' ใบ' : '');
+      var codes = labels.slice(0, 3).map(function(c){ return '<span>' + noteEsc(c) + '</span>'; }).join(' ') + (labels.length > 3 ? ' <span>+' + (labels.length - 3) + '</span>' : '');
+      var el = document.createElement('div');
+      el.className = 'la-live la-live-' + g.action;
+      el.innerHTML = '<span class="la-live-dot"></span><span class="la-live-tx"><b>' + noteEsc(title) + '</b>'
+        + (codes ? '<code>' + codes + '</code>' : '')
+        + (g.by ? '<i>โดย ' + noteEsc(g.by) + '</i>' : '') + '</span>'
+        + '<button type="button" aria-label="ปิด">×</button>';
+      w.appendChild(el);
+      while(w.children.length > LIVE_MAX) w.removeChild(w.firstChild);
+      var t = null;
+      var gone = function(){ clearTimeout(t); el.classList.add('la-live-out'); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 200); };
+      el.querySelector('button').addEventListener('click', gone);
+      el.addEventListener('mouseenter', function(){ clearTimeout(t); });
+      el.addEventListener('mouseleave', function(){ t = setTimeout(gone, 1500); });
+      t = setTimeout(gone, LIVE_MS);
+    }catch(_){}
   }
   /* §opsHandoff (2026-10-12) · a van or pickup change redraws the screen that shows it, but only while
      that screen is open. Goes through _laRerender so scroll and focus survive. van_bill is not listed:
@@ -131,5 +186,5 @@
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
   // Boot completes asynchronously after this classic script is evaluated.
   (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
-  O.changes = { pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
+  O.changes = { notes: flushNotes, label: bookingLabel, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
 })();
