@@ -176,22 +176,17 @@
     }).catch(function(e){ O.fail('Pickup profile not deleted', e); });
   }
 
-  var CLOCK = '(\\d{2}:\\d{2})';
-  var ONE = new RegExp('^' + CLOCK + '$');
-  var WIN = new RegExp('^' + CLOCK + '-' + CLOCK + '$');
-  var PIER = new RegExp('^Before ' + CLOCK + ' at pier$', 'i');
-  function clock(text){
-    var parts = String(text || '').split(':');
-    return Number(parts[0]) <= 23 && Number(parts[1]) <= 59 ? text : null;
-  }
+  /* §typedCell (2026-11-28) · legacy's cell is a free-text box (psuSetTimeCell keeps any text), so a cell is read with the
+     one pickup reader (laOps.pickupWindow: '7:30', '07.30', '8.00 a.m.', '07:30 - 07:45', 'Before 8:30 at pier'), not a
+     stricter HH:MM-only copy of it. {} clears the cell; null is text none of legacy's shapes read. */
   function parseCell(value){
-    var text = String(value == null ? '' : value).trim(), m, start, end;
-    if(!text) return {};
-    m = PIER.exec(text); if(m){ end = clock(m[1]); return end ? { pickup_time_end:end, pickup_at_pier:true } : null; }
-    m = WIN.exec(text);
-    if(m){ start = clock(m[1]); end = clock(m[2]); return start && end && end > start ? { pickup_time:start, pickup_time_end:end } : null; }
-    m = ONE.exec(text); if(m){ start = clock(m[1]); return start ? { pickup_time:start } : null; }
-    return null;
+    var w = O.pickupWindow(value);
+    if(!w) return null;
+    var out = {};
+    if(w.pickupTime) out.pickup_time = w.pickupTime;
+    if(w.pickupTimeEnd) out.pickup_time_end = w.pickupTimeEnd;
+    if(w.pickupAtPier) out.pickup_at_pier = true;
+    return out;
   }
   function applyCell(profileId, routeId, target, value){
     var p = (profiles() || []).find(function(x){ return x && x.id === profileId; });

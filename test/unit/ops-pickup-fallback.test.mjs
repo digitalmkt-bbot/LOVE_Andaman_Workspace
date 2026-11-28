@@ -73,3 +73,23 @@ test('psuResolveProfile still falls back to the dateless server profile', async 
   assert.equal(fb.id, 'prof-legacy-flat');
   assert.equal(fb.times.r1.g2, '08:00');
 });
+
+// §typedCell · legacy's pickup-area cell is free text: a typed time goes to the server as HH:MM fields, never refused here.
+test('a typed cell (7.30, 8.00 a.m., 07:30 - 07:45) is sent as HH:MM fields', async () => {
+  const ctx = load();
+  vm.runInContext(fs.readFileSync('allotment_v2/js/ops/00-ops-pickup.js', 'utf8'), ctx);
+  ctx.laOps.pickupWindow = ctx.laOpsPickup.pickupWindow;
+  await ctx.laOps.pickup.load();
+  ctx._psuActiveProfileId = DATED.id;
+  const sent = [], failed = [];
+  ctx.laOps.call = (method, path, body) => { sent.push(body); return Promise.resolve(body); };
+  ctx.laOps.fail = (msg, e) => failed.push(e.message);
+  for (const typed of ['7.30', '8.00 a.m.', '07:30 - 07:45', 'Before 8:30 at pier']) await ctx.window.psuSetTimeCell('r1', 'g1', typed);
+  assert.deepEqual(failed, []);
+  assert.deepEqual(JSON.parse(JSON.stringify(sent)), [
+    { pickup_time: '07:30' }, { pickup_time: '08:00' }, { pickup_time: '07:30', pickup_time_end: '07:45' },
+    { pickup_time_end: '08:30', pickup_at_pier: true },
+  ]);
+  await ctx.window.psuSetTimeCell('r1', 'g1', 'early');
+  assert.equal(failed.length, 1, 'text none of legacy\'s shapes read is still refused with the message');
+});
