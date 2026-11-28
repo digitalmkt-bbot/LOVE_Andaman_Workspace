@@ -72,8 +72,20 @@
     };
     f.__opsW5c = true; window.laOpsFetch = f;
   }
-  O.onWrite(function(kind){ if(!/^(trip-checkin|booking-meals|booking-insurance)/.test(String(kind || ''))) stamp++; });
-  O.onChange(function(){ stamp++; });
+  /* §vanRefetchCalm (2026-11-28) · someone else's save counts once (onChange), and only when it can change a held day
+     (O.touches): before, every save anywhere bumped the stamp twice (onChange, then its 'remote:…' echo on onWrite) and
+     each open tab read /operations/van-jobs and /operations/van-days again. */
+  O.onWrite(function(kind){ if(O.ownWrite(kind) && !/^(trip-checkin|booking-meals|booking-insurance)/.test(String(kind || ''))) stamp++; });
+  O.onChange(function(change){
+    if(!O.touches(change, O.VAN_DAY_KINDS)) return;
+    var days = Array.isArray(change.route_days) ? change.route_days : [];
+    if(!days.length) { stamp++; return; }
+    var held = days.some(function(d){
+      var day = d && d.service_date; if(!day) return false;
+      return !!JB[day] || !!(VD && VD.from <= day && day <= VD.to);
+    });
+    if(held) stamp++;
+  });
 
   /* a stop was written: the day is read again (groups: stop_seats; stops: the server's order) */
   function reloadStopDays(scope){
