@@ -69,8 +69,13 @@
       if(bks.length) try{ window._laB2CAlertBookings(bks); }catch(_){}
     });
   }
+  /* §b2cOnly (2026-11-28) · owner: "เราหมายถึงเฉพาะข้อมูลที่ Sync B2C เท่านั้นนะ ของ B2B ไม่ต้อง". A booking change by staff no
+     longer draws the bottom-left card; only a new B2C booking pops up (top-right, b2cCreated). The card code stays for
+     O.changes.notes (tests) and in case it is wanted back: flip NOTES_ON. */
+  var NOTES_ON = false;
   function bookingToast(change){
     b2cCreated(change);
+    if(!NOTES_ON) return;
     if(!change || change.kind !== 'booking' || mine(change) || systemActor(change.changed_by)) return;
     pendingNotes.push({ action: change.action === 'created' || change.action === 'deleted' ? change.action : 'updated',
       by: change.changed_by ? String(change.changed_by) : '', id: String(change.entity_id || '') });
