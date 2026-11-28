@@ -1113,18 +1113,22 @@
       if(b.status&&_B2C_CXL.indexOf(b.status)>=0) continue;   /* ยกเลิกแล้วไม่นับ */
       seen[b.id]=1;
       if(first || _laB2CSeen[b.id]) continue;
-      var t=(b.trips&&b.trips[0])||{}, pax=0;
-      (b.trips||[]).forEach(function(tp){ var p=tp.pax||{};
-        for(var k in p){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax+=(+p[k]||0); } });
-      var r=rm[t.routeId]||{}, ps=b.paymentSnapshot||{};
-      out.push({ id:b.id, ref:_laB2CRef(b), route:(r.n||t.routeId||'-'), port:(r.p||''),
-                 date:(t.date||''), pax:pax,
-                 total:(b.priceBreakdown&&b.priceBreakdown.total)||0,
-                 lead:(b.leadPax||''), paid:(ps.paidStatus||''),
-                 trips:(b.trips||[]).length });
+      out.push(_laB2CItem(b, rm));
     }
     _laB2CSeen=seen;
     return first?[]:out;
+  }
+  /* หนึ่งใบ → หนึ่งแถวของการ์ด · rm = routeId → {n: ชื่อเส้นทาง, p: ท่า} */
+  function _laB2CItem(b, rm){
+    var t=(b.trips&&b.trips[0])||{}, pax=0;
+    (b.trips||[]).forEach(function(tp){ var p=tp.pax||{};
+      for(var k in p){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax+=(+p[k]||0); } });
+    var r=(rm&&rm[t.routeId])||{}, ps=b.paymentSnapshot||{};
+    return { id:b.id, ref:_laB2CRef(b), route:(r.n||t.routeId||'-'), port:(r.p||''),
+             date:(t.date||''), pax:pax,
+             total:(b.priceBreakdown&&b.priceBreakdown.total)||b.total||0,
+             lead:(b.leadPax||''), paid:(ps.paidStatus||''),
+             trips:(b.trips||[]).length };
   }
   /* เลขที่ที่ลูกค้าถือมาคือ voucherRef · id จริงเป็น b2c_BK-001_1
      ตัดทั้งหัว b2c_ และหาง _1 ที่เป็นลำดับทริป ไม่ใช่ส่วนหนึ่งของเลขที่ */
@@ -1310,6 +1314,18 @@
       d.onmouseleave=function(){ if(!tm) arm(); };
       arm();
     }); _laBeep(); }
+  /* §b2cPopOps (2026-11-28) · owner picked "Bring back legacy top-right card" for a new B2C booking.
+     With operation-backend there is no legacy blob to scan, so 70-ops-changes.js hands over the bookings the change
+     feed announced as created (already in the local shape, 40-ops-bookings.js fromServer) and this draws the same card. */
+  window._laB2CAlertBookings=function(bks){
+    var rm={};
+    try{ if(typeof ROUTES!=='undefined' && Array.isArray(ROUTES)) ROUTES.forEach(function(r){
+      if(r&&r.id) rm[r.id]={n:(r.name||r.id), p:(_B2C_PIER[r.pier]||r.pier||'')}; }); }catch(e){}
+    var list=(bks||[]).filter(function(b){ return b && !(b.status && _B2C_CXL.indexOf(b.status)>=0); })
+      .map(function(b){ return _laB2CItem(b, rm); });
+    _laB2CAlert(list);
+    return list.length;
+  };
   // Prime/resume the AudioContext on the first user gesture so the alert beep can actually play
   // (browsers keep a freshly-created AudioContext 'suspended' until a gesture unlocks audio).
   (function(){ function _laPrimeAudio(){ try{ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; if(!window.__laAC) window.__laAC=new AC(); if(window.__laAC.state==='suspended') window.__laAC.resume(); }catch(e){} } ['pointerdown','keydown','touchstart'].forEach(function(ev){ try{ document.addEventListener(ev,_laPrimeAudio,{passive:true,capture:true}); }catch(e){} }); })();
