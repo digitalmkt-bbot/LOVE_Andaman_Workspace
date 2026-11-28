@@ -16,9 +16,27 @@ function bookingV2RenderTab2(){
   // By-trip owns exactly one operational date; it must not trigger a broad
   // booking-window preload merely to populate this manifest.
   const dayLoad=typeof bookingV2OpsEnsureDay==='function' ? bookingV2OpsEnsureDay(date) : null;
+  /* §btLoadJump · one redraw per burst of answers, after the person stops scrolling, scroll kept (bookingV2RenderKeep.js) */
+  /* §btLoadJump · the day's bookings are still on their way: say so, instead of an empty day the person starts scrolling */
+  const _dayLoading = !!dayLoad && typeof bookingV2OpsDayStatus==='function' && bookingV2OpsDayStatus(date)==='loading';
   if(dayLoad) dayLoad.then(function(j){
-    if(j && _bkV2.tab==='bytrip' && _bkV2.filterDate===date && !_bkV2.newBooking) bookingV2Render();
+    if(!j) return;
+    const still=()=>_bkV2.tab==='bytrip' && bookingV2Tab2ActiveDate()===date && !_bkV2.newBooking && !_bkV2.detailId;
+    if(typeof bookingV2RedrawAfterLoad==='function') bookingV2RedrawAfterLoad(still); else if(still()) bookingV2Render();
   });
+  /* §btLoadJump · once the day is in, the days either side are read quietly, so ‹ › opens them at once (since §calDayOnly nothing
+     else loads a whole month for this page any more). Nothing is drawn for them: the answers wait in the caches. */
+  if(!dayLoad && typeof bookingV2OpsEnsureDay==='function'){
+    const _pf=window._bkV2DayPrefetched=window._bkV2DayPrefetched||{};
+    if(!_pf[date]){ _pf[date]=1;
+      setTimeout(function(){ try{
+        if(_bkV2.tab!=='bytrip' || bookingV2Tab2ActiveDate()!==date) return;
+        [1,-1].forEach(function(n){ const d=new Date(date+'T00:00'); d.setDate(d.getDate()+n); const y=bookingV2LocalYMD(d);
+          bookingV2OpsEnsureDay(y);
+          if(typeof window.laOpsByTripFor==='function') window.laOpsByTripFor(y, !!_bkV2CityTourOnly); });
+      }catch(_){} }, 1200);
+    }
+  }
   if(typeof bookingV2CharterBoatHeal==='function') bookingV2CharterBoatHeal(date);   // charter booking → ops.boatId = charterBoatId (assigned to its own boat · §59/§50)
   if(typeof bookingV2HealAltSplits==='function') bookingV2HealAltSplits(date);   // §altPickups · ALWAYS ensure auto van-splits exist for รับหลายจุด bookings (so they render as separate rows here too, not only in Van Assign)
   if(typeof bookingV2HealSelfArrivePickup==='function') bookingV2HealSelfArrivePickup(date);   // §self-arrive · ล้างเวลารับรถที่ค้างเมื่อสลับเป็น No-Transfer (เหลือ default "…at pier")
@@ -805,6 +823,7 @@ function bookingV2RenderTab2(){
             <input type="date" value="${date}" onclick="event.stopPropagation();try{this.showPicker()}catch(e){}" onchange="if(this.value)bookingV2Tab2PickDay(this.value)"></label></span>
         ${_isToday?'<span class="bt-today">TODAY</span>':`<button class="bt-today gh" onclick="bookingV2Tab2Today()">Go to today</button>`}
         <button class="bt-arw" onclick="bookingV2Tab2DateShift(1)" title="Next day">&rsaquo;</button>
+        ${_dayLoading?'<span class="bt-dayload" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#1683C7;background:#E6F1FB;border-radius:10px;padding:3px 10px">กำลังโหลดข้อมูลวันนี้…</span>':''}
         ${(typeof bookingV2B2CHeadChip==='function')?bookingV2B2CHeadChip():''}
         <span class="bt-brand">${_btSelFam?esc(_btSelFam.name):'LOVE ANDAMAN'}</span>
       </div>
@@ -837,7 +856,7 @@ function bookingV2RenderTab2(){
     return '<div class="t2-nobk t2-dep" data-dep="'+esc(rid)+'" style="--c:'+col+'">'
       +'<span class="t2-depnm">'+esc(rt.name||rid)+'</span>'
       +'<span class="t2-depmt">'+esc((rt.times&&rt.times[0])||'')+(pr?' · '+esc(pr):'')+'</span>'
-      +bts+'<span class="t2-depno">'+(bts?'วางเรือไว้แล้ว · ':'')+'ยังไม่มี booking</span></div>';
+      +bts+'<span class="t2-depno">'+(bts?'วางเรือไว้แล้ว · ':'')+(_dayLoading?'กำลังโหลด booking…':'ยังไม่มี booking')+'</span></div>';
   };
   const trips = routeIds.map(rid=>{
     const grp = groups[rid] || [];

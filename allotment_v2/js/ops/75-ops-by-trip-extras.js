@@ -22,14 +22,21 @@
   var FAIL_MS = 15000;
 
   function enabled(){ return !!(O.enabled && O.enabled()); }
+  /* §btLoadJump · an answer is drawn through bookingV2RedrawAfterLoad: answers landing together draw once, not while the person
+     is scrolling, and the scroll stays where it is (before: bookingV2Render() at once, the table went back to the top) */
+  function showing(date){
+    var st = window._bkV2;
+    if(!st || st.tab !== 'bytrip' || st.newBooking || st.detailId) return false;
+    if(typeof window.bookingV2Tab2ActiveDate === 'function' && window.bookingV2Tab2ActiveDate() !== date) return false;
+    var a = document.activeElement;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'bt-q') return false;     // not under somebody typing
+    return true;
+  }
   function redraw(date){
     try{
-      var st = window._bkV2;
-      if(!st || st.tab !== 'bytrip' || st.newBooking) return;
-      if(typeof window.bookingV2Tab2ActiveDate === 'function' && window.bookingV2Tab2ActiveDate() !== date) return;
-      var a = document.activeElement;
-      if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'bt-q') return;
-      if(typeof window.bookingV2Render === 'function') window.bookingV2Render();
+      if(!showing(date)) return;
+      if(typeof window.bookingV2RedrawAfterLoad === 'function') window.bookingV2RedrawAfterLoad(function(){ return showing(date); });
+      else if(typeof window.bookingV2Render === 'function') window.bookingV2Render();
     }catch(e){ console.warn('[ops] By-trip redraw failed', e); }
   }
 
