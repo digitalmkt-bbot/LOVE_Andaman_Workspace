@@ -199,36 +199,16 @@
   function reloadSoon(){ clearTimeout(soon); soon = setTimeout(function(){ if(O.enabled() && ready) reload(true); }, 400); }
   // a booking saved or cancelled in this tab (a draw or a return) → the numbers moved: reload and redraw at once
   O.onWrite(function(kind){ if(kind === 'booking') reloadSoon(); });
-  /* §clickRefresh (2026-11-28) · another desk's change no longer reloads and redraws the booking screen on its own. Owner: "the redraw
-     should only refresh if the user click the notification". Before, every change from anyone (each doc-check tick, ~200 in 30 min)
-     re-read the seat locks and called bookingV2Render, and that redraw re-read the open tab's day (by-trip, after-trip, van-jobs,
-     availability, …): the screen redrew under the user and froze ~10 s while the office's tabs all did it together (Railway,
-     2026-11-28). Now such a change shows legacy's card (#la-refresh, css/01-base.css §laRfLeft) once; the booking data itself is
-     still merged quietly (bookingV2LoadFromOpsBackend.js §remoteBooking) and shows on the click, which reloads and redraws once.
-     Legacy's card also redrew by itself when idle ("จะรีเฟรชอัตโนมัติเมื่อว่าง"); here only the click does. */
+  /* §clickRefresh (2026-11-28) · another desk's change does not reload and redraw the booking screen on its own. Owner: "the redraw
+     should only refresh if the user click the notification". While the booking screen is open the change feed holds the changes and
+     shows the "โหลดเลย" card (70-ops-changes.js §holdOnBooking); its click hands them over and calls the hook below, which re-reads the
+     locks and redraws once (scroll kept). Any other screen reloads the lock numbers on another desk's change, as before. */
   var REFRESH_KINDS = { booking:1, seat_lock:1, deployment:1, route:1, boat:1, weather_closure:1 };
-  function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; }); }
   function mineChange(change){ var me = window.LA_ME && window.LA_ME.username; return !!(me && change.changed_by && String(change.changed_by) === String(me)); }
-  function refreshCard(by){
-    if(!document.body) return;
-    var d = document.getElementById('la-refresh');
-    if(!d){
-      d = document.createElement('div'); d.id = 'la-refresh';
-      d.innerHTML = '<span class="la-rf-dot"></span><span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b><i></i></span><button type="button">โหลดเลย</button>';
-      d.querySelector('button').addEventListener('click', function(){
-        if(d.parentNode) d.parentNode.removeChild(d);
-        if(O.enabled() && ready) reload(true); else render();
-      });
-      document.body.appendChild(d);
-    }
-    var i = d.querySelector('.la-rf-tx i');
-    if(i) i.innerHTML = (by ? 'โดย ' + esc(by) + ' · ' : '') + 'กดโหลดเพื่อดูข้อมูลล่าสุด';
-  }
+  (O.refreshHooks = O.refreshHooks || []).push(function(){ if(O.enabled() && ready) reload(true); else render(); });
   if(O.onChange) O.onChange(function(change){
     if(!change || !REFRESH_KINDS[change.kind] || mineChange(change)) return;
-    // only the booking screen waits for the click; any other screen reloads the lock numbers as before
-    if(O.activeView() !== 'booking'){ reloadSoon(); return; }
-    refreshCard(change.changed_by ? String(change.changed_by) : '');
+    if(O.activeView() !== 'booking') reloadSoon();
   });
 
   /* ── helpers for a write ──────────────────────────────────────────────── */

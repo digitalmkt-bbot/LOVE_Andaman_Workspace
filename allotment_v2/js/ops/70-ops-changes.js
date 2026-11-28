@@ -147,17 +147,59 @@
     if(view === 'vancheckin' && O.vanJobs && O.vanJobs.dropDay) queueDraw('van:' + day, function(){ O.vanJobs.dropDay(day); });
     else queueDraw();
   }
-  function apply(change){
-    if(!change || !Number.isInteger(+change.version)) return;
-    cursor = +change.version;
+  /* §holdOnBooking (2026-11-28) · owner: "the redraw should only refresh if the user click the notification"; the network panel still
+     showed, after each /v1/changes, the whole booking screen read again (van-days, van-jobs, by-trip, after-trip, van-board,
+     availability, boat-operation, …): a dozen modules each react to a change on their own and some of them redraw. So while the
+     booking screen is open the changes are HELD here, not handed to any module: another person's change shows the "โหลดเลย" card
+     (#la-refresh); the click hands every held change over at once and redraws once (O.refreshHooks, 30-ops-locks.js). Leaving the
+     booking screen hands them over quietly. The live notes (bookingToast) still show at once. */
+  var held = [];
+  function holding(){ return activeView() === 'booking'; }
+  function deliver(change){
     // All listeners refresh only what they already display/cache. Keep remote changes
     // separate from a local write so this tab can suppress its own notification only.
     if(O.changed) O.changed(change);
     repaintFor(change);
     if(O.wrote) O.wrote('remote:' + (change.kind || 'change'));
     repaintCheckin(change);
-    bookingToast(change);
   }
+  function release(){ var h = held; held = []; h.forEach(deliver); }
+  var CARD_KINDS = { booking:1, seat_lock:1, deployment:1, route:1, boat:1, weather_closure:1 };
+  function refreshCard(by){
+    if(!document.body) return;
+    var d = document.getElementById('la-refresh');
+    if(!d){
+      d = document.createElement('div'); d.id = 'la-refresh';
+      d.innerHTML = '<span class="la-rf-dot"></span><span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b><i></i></span><button type="button">โหลดเลย</button>';
+      d.querySelector('button').addEventListener('click', function(){
+        if(d.parentNode) d.parentNode.removeChild(d);
+        release();
+        // the changed bookings are merged first (bookingV2LoadFromOpsBackend.js), so the one redraw shows them
+        var merged; try{ merged = typeof window._opsRemoteBookingsFlush === 'function' ? window._opsRemoteBookingsFlush() : null; }catch(_){ merged = null; }
+        Promise.resolve(merged).catch(function(){}).then(function(){
+          var hooks = O.refreshHooks || [];
+          if(hooks.length) hooks.forEach(function(fn){ try{ fn(); }catch(_){} });
+          else if(typeof window.bookingV2RenderKeep === 'function') window.bookingV2RenderKeep();
+        });
+      });
+      document.body.appendChild(d);
+    }
+    var i = d.querySelector('.la-rf-tx i');
+    if(i) i.innerHTML = (by ? 'โดย ' + noteEsc(by) + ' · ' : '') + 'กดโหลดเพื่อดูข้อมูลล่าสุด';
+  }
+  function apply(change){
+    if(!change || !Number.isInteger(+change.version)) return;
+    cursor = +change.version;
+    bookingToast(change);
+    if(!holding()){ release(); deliver(change); return; }
+    held.push(change);
+    if(CARD_KINDS[change.kind] && !mine(change)) refreshCard(change.changed_by ? String(change.changed_by) : '');
+  }
+  // off the booking screen: what was held goes to the modules (their caches go stale; the next screen reads fresh)
+  try{ document.addEventListener('click', function(ev){
+    var a = ev.target && ev.target.closest && ev.target.closest('.nav-item'); if(!a) return;
+    setTimeout(function(){ if(held.length && !holding()){ var c = document.getElementById('la-refresh'); if(c && c.parentNode) c.parentNode.removeChild(c); release(); } }, 0);
+  }, true); }catch(_){}
   function baseline(){
     return O.get('/v1/changes').then(function(j){
       if(j && Number.isInteger(+j.version)) cursor = +j.version;
@@ -166,6 +208,7 @@
     });
   }
   function pull(){
+    if(held.length && !holding()) release();   // §holdOnBooking · the screen changed without a nav click
     if(loading || !O.enabled() || !O.state.loaded || document.hidden) return;
     loading = true;
     var first = cursor === null ? baseline() : O.get('/v1/changes', { since: cursor, limit: PAGE }).then(function(j){
