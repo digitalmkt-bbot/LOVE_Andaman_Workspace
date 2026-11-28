@@ -257,7 +257,9 @@
           put(d.route_id, d.service_date, d);
         });
         windows[w] = Date.now();
-        if(moved) redraw();
+        // §clickRefresh (2026-11-28) · on the booking screen another desk's change waits for the "โหลดเลย" card (30-ops-locks.js);
+        // the new seats are cached here and show on that redraw. Other screens redraw as before.
+        if(moved && O.activeView() !== 'booking') redraw();
       }).catch(function(){});
     });
   }
