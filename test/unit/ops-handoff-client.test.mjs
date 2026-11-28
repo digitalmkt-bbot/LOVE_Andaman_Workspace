@@ -15,7 +15,7 @@ test('partial cancel sends the typed refund box with the count, as legacy (the s
 });
 
 // Runs the change-feed module against a stub and returns the screens it asked to redraw.
-async function runFeed({ active, changes, win = {}, timers = [], gets = [] }) {
+async function runFeed({ active, changes, win = {}, timers = [], gets = [], ops = {}, bars = [] }) {
   const repaints = [];
   let calls = 0;
   const window = {
@@ -36,12 +36,17 @@ async function runFeed({ active, changes, win = {}, timers = [], gets = [] }) {
     wrote: () => {},
     toast: () => {},
     onChange: () => {},
+    ...ops,
   };
   window.laOps = laOps;
+  const els = {};
   const document = {
     hidden: false,
     addEventListener: () => {},
     querySelector: (sel) => (sel === '.nav-item.active' && active ? { dataset: { view: active } } : null),
+    getElementById: (id) => els[id] || null,
+    createElement: () => ({ querySelector: () => ({}), parentNode: null }),
+    body: { appendChild: (el) => { els[el.id] = el; el.parentNode = { removeChild: () => { delete els[el.id]; } }; bars.push(el.id); } },
   };
   const ctx = {
     window, document, console, Promise, Number, Array, String, Object, JSON, Math, Date,
@@ -58,7 +63,32 @@ async function runFeed({ active, changes, win = {}, timers = [], gets = [] }) {
 
 test('a van change redraws the van screen only while it is open', async () => {
   assert.deepEqual(await runFeed({ active: 'vanjobs', changes: [{ kind: 'van_group', version: 9 }] }), ['vanjobs']);
-  assert.deepEqual(await runFeed({ active: 'booking', changes: [{ kind: 'van_group', version: 9 }] }), []);
+  // on another screen it is the idle refresh (below) that draws that screen, once
+  assert.deepEqual(await runFeed({ active: 'booking', changes: [{ kind: 'van_group', version: 9 }] }), ['booking']);
+});
+
+// §opsIdleRefresh (2026-11-28) · legacy idle refresh: another person's change redraws the open screen once this person is free.
+test('another person\'s change redraws the open screen once, when free', async () => {
+  const ch = [{ kind: 'booking', version: 7, changed_by: 'pat' }, { kind: 'deployment', version: 8, changed_by: 'pat' }];
+  assert.deepEqual(await runFeed({ active: 'dashboard', changes: ch }), ['dashboard']);
+});
+
+test('my own change does not redraw (this tab drew it already)', async () => {
+  const ch = [{ kind: 'booking', version: 7, changed_by: 'me' }];
+  assert.deepEqual(await runFeed({ active: 'dashboard', changes: ch, win: { LA_ME: { username: 'me' } } }), []);
+});
+
+test('while busy (a write still saving, a field being typed in, a booking form) it waits and shows the bar', async () => {
+  const ch = [{ kind: 'booking', version: 7, changed_by: 'pat' }];
+  for (const opts of [{ ops: { pending: () => 1 } }, { ops: { busy: () => true } }, { win: { _bkV2: { editingId: 'BK-1' } } }]) {
+    const bars = [];
+    assert.deepEqual(await runFeed({ active: 'dashboard', changes: ch, bars, ...opts }), []);
+    assert.deepEqual(bars, ['la-refresh']);
+  }
+});
+
+test('Van bills are not idle-redrawn (nav would close its open sections)', async () => {
+  assert.deepEqual(await runFeed({ active: 'vanbill', changes: [{ kind: 'booking', version: 7, changed_by: 'pat' }] }), []);
 });
 
 test('a pickup change redraws pickup setup only while it is open', async () => {
