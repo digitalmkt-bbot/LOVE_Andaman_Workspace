@@ -29,7 +29,9 @@
   function mapArea(s){
     return { id:s.id, name:s.name || '', zone:s.zone || '', region:s.region || '', timeGroup:s.time_group || '', active:s.active !== false };
   }
+  /* §freeText (2026-11-28) · a cell typed as free text shows as typed (pickup_text, operation-backend migration 746). */
   function cellText(c){
+    if(c && c.pickup_text) return c.pickup_text;
     if(c && c.pickup_at_pier && c.pickup_time_end) return 'Before ' + c.pickup_time_end + ' at pier';
     if(c && c.pickup_time && c.pickup_time_end) return c.pickup_time + '-' + c.pickup_time_end;
     return (c && c.pickup_time) || '';
@@ -176,18 +178,6 @@
     }).catch(function(e){ O.fail('Pickup profile not deleted', e); });
   }
 
-  /* §typedCell (2026-11-28) · legacy's cell is a free-text box (psuSetTimeCell keeps any text), so a cell is read with the
-     one pickup reader (laOps.pickupWindow: '7:30', '07.30', '8.00 a.m.', '07:30 - 07:45', 'Before 8:30 at pier'), not a
-     stricter HH:MM-only copy of it. {} clears the cell; null is text none of legacy's shapes read. */
-  function parseCell(value){
-    var w = O.pickupWindow(value);
-    if(!w) return null;
-    var out = {};
-    if(w.pickupTime) out.pickup_time = w.pickupTime;
-    if(w.pickupTimeEnd) out.pickup_time_end = w.pickupTimeEnd;
-    if(w.pickupAtPier) out.pickup_at_pier = true;
-    return out;
-  }
   function applyCell(profileId, routeId, target, value){
     var p = (profiles() || []).find(function(x){ return x && x.id === profileId; });
     if(!p) return;
@@ -199,14 +189,15 @@
   function setTimeCell(orig, routeId, target, value){
     if(!enabled()) return orig.apply(this, [].slice.call(arguments, 1));
     var pid = (typeof _psuActiveProfileId !== 'undefined') ? _psuActiveProfileId : null;
-    var parsed = parseCell(value);
+    /* §freeText · legacy's cell is a free-text box (psuSetTimeCell keeps any text): the text goes as typed and the server
+       keeps it; the pickup window is the server's reading of it. An empty cell clears it. */
+    var typed = String(value == null ? '' : value).trim();
     if(!pid){ O.fail('Pickup time not saved', new Error('No active pickup profile')); return; }
-    if(parsed === null){ O.fail('Pickup time not saved', new Error('Use HH:MM, HH:MM-HH:MM, or Before HH:MM at pier')); return; }
     var path = '/v1/pickup-time-profiles/' + encodeURIComponent(pid) + '/times/' + encodeURIComponent(routeId) + '/' + encodeURIComponent(target);
     return O.queue(function(){
-      return Object.keys(parsed).length ? O.call('PUT', path, parsed) : O.del(path);
+      return typed ? O.call('PUT', path, { pickup_text: typed }) : O.del(path);
     }).then(function(result){
-      applyCell(pid, routeId, target, Object.keys(parsed).length ? cellText(result || parsed) : '');
+      applyCell(pid, routeId, target, typed ? cellText(result || { pickup_text: typed }) : '');
       O.wrote('pickup');
     }).catch(function(e){ O.fail('Pickup time not saved', e); });
   }
