@@ -52808,6 +52808,12 @@ function laSaveToast(o){
       wrap.style.cssText='position:fixed;top:16px;right:16px;z-index:100001;display:flex;flex-direction:column;gap:10px;pointer-events:none';
       document.body.appendChild(wrap);
     }
+    /* §toastOne (2026-11-28) · one card per booking at a time · saving an edit used to stack up to four cards for the
+       same booking ("อัปเดต booking แล้ว", "Saved as …", the duplicate warning, the price warning). A newer toast for
+       the same id now takes the place of the one showing, so the last word (the server's answer) is what stays.
+       Toasts with no id stack as before. */
+    const tid = o.id == null || o.id === '' ? '' : String(o.id);
+    if(tid) Array.prototype.slice.call(wrap.children).forEach(c=>{ if(c.getAttribute && c.getAttribute('data-toast-id')===tid) c.remove(); });
     if(!document.getElementById('la-savetoast-css')){
       const st=document.createElement('style'); st.id='la-savetoast-css';
       st.textContent='@keyframes laStIn{from{opacity:0;transform:translateX(26px) scale(.96)}to{opacity:1;transform:none}}@keyframes laStBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}.la-st{pointer-events:auto;animation:laStIn .28s cubic-bezier(.2,.9,.3,1)}';
@@ -52815,6 +52821,7 @@ function laSaveToast(o){
     }
     const dur = o.dur || 4000;
     const el = document.createElement('div'); el.className='la-st';
+    if(tid) el.setAttribute('data-toast-id', tid);
     el.style.cssText='position:relative;overflow:hidden;min-width:272px;max-width:344px;background:#fff;border:1px solid rgba(0,0,0,.06);border-left:5px solid '+C.ac+';border-radius:14px;box-shadow:0 14px 34px rgba(16,40,32,.18);padding:13px 14px 15px;font-family:"DM Sans",system-ui,sans-serif';
     const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     el.innerHTML =
