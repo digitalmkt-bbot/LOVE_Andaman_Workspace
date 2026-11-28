@@ -321,7 +321,10 @@ function _opsRefreshRemoteBookings(){
     };
     work=page(null).then(function(){ _opsBookingMerge(all.map(bookingV2FromOpsBooking)); }).catch(function(e){ console.warn('[opsSync] could not refresh changed bookings: '+((e&&e.message)||e)); });
   }else work=Promise.all(ids.map(one));
+  return work;
 }
+/* §holdOnBooking (2026-11-28) · the "โหลดเลย" click (ops/70-ops-changes.js) merges the changed bookings now, then redraws */
+window._opsRemoteBookingsFlush=function(){ if(_opsRemoteBookingTimer){ clearTimeout(_opsRemoteBookingTimer); } return _opsRefreshRemoteBookings()||Promise.resolve(); };
 function bookingV2OpsAttachWriteInvalidation(){
   if(_opsBookingWriteHook || !window.laOps || !window.laOps.onWrite) return;
   _opsBookingWriteHook=true;
