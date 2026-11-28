@@ -164,6 +164,9 @@ test('re-confirm: the demo vans go before the first draw and the catalogue fills
   rt.ctx.renderReconfirm();
   assert.equal(rt.legacy[0], 'renderReconfirm:', 'first draw: no demo plate');
   await settle();
+  // the second draw goes through O.redrawLater, a 40 ms timer (00-ops-core.js). settle() lasts ~35 ms on Linux (Windows rounds each
+  // 0 ms timer up, which hid this), so wait out the code's own timer instead of counting ticks
+  await new Promise((r) => setTimeout(r, 40)); await settle();
   assert.deepEqual(rt.ctx.SB_VEHICLES.map((v) => [v.id, v.plate]), [['veh03', '31-6675']]);
   assert.equal(rt.legacy[rt.legacy.length - 1], 'renderReconfirm:31-6675', 'drawn again with the real plates');
 });
