@@ -268,6 +268,28 @@ console.log('\n== ' + curItem);
   await sleep(2500); await idle(); await sleep(500);
   const cal = await api('/v1/bookings/calendar?month=' + CM + '&kind=marine');
   ok('asked the server: GET /v1/bookings/calendar?month=&kind=marine', callsSince(n0).some((c) => c.startsWith('GET /v1/bookings/calendar 200')), callsSince(n0).filter((c) => /calendar/.test(c)));
+  // §calDayOnly · the calendar draws from that answer and never pages the month's whole bookings
+  const monthPages = (from) => urls.slice(from).filter((u) => /^GET \/v1\/bookings\?/.test(u) && u.includes('from=' + CM + '-01&') && !/to=\d{4}-\d{2}-01&/.test(u));
+  ok('§calDayOnly: the calendar did not page the month\'s bookings (GET /v1/bookings?from=<month>)', monthPages(n0).length === 0, monthPages(n0));
+  {
+    const n1 = urls.length;
+    await ev((d) => bookingV2SelectDay(d), DAYS[0]);
+    await sleep(1500); await idle(); await sleep(300);
+    const dayReads = urls.slice(n1).filter((u) => /^GET \/v1\/bookings\?/.test(u));
+    ok('§calDayOnly: selecting a day reads only that day (from=to=the day)', dayReads.length >= 1 && dayReads.every((u) => u.includes('from=' + DAYS[0] + '&to=' + DAYS[0] + '&')), dayReads);
+    const panel = await ev(() => { const p = document.querySelector('.bkv2-selday'); return p ? p.innerText.replace(/\s+/g, ' ').trim() : ''; });
+    const d0 = (await api('/v1/bookings/calendar?month=' + CM + '&kind=marine')).days.find((d) => d.date === DAYS[0]);
+    ok('§calDayOnly: the Selected Day panel shows the day\'s bookings, not "No bookings"', panel && !/No bookings/i.test(panel) && panel.includes('Similan') && panel.includes(String(d0.total)), [panel.slice(0, 300), d0.total]);
+    // the week line adds up the other days of the week too (not loaded as bookings): it must equal the server's day totals
+    const wk = await ev((d) => { const dt = new Date(d + 'T00:00'), s = new Date(dt); s.setDate(dt.getDate() - dt.getDay()); const out = []; for(let i = 0; i < 7; i++){ const x = new Date(s); x.setDate(s.getDate() + i); out.push(bookingV2DateKey(x)); } return out; }, DAYS[0]);
+    const calBy = {};
+    for (const ym of [...new Set(wk.map((k) => k.slice(0, 7)))]) for (const d of (await api('/v1/bookings/calendar?month=' + ym + '&kind=marine')).days) calBy[d.date] = d;
+    const wPax = wk.reduce((s, k) => s + ((calBy[k] || {}).total || 0), 0);
+    const wTxt = await ev(() => { const p = document.querySelector('.bkv2-selday'); return p ? p.innerText.replace(/\s+/g, ' ') : ''; });
+    ok('§calDayOnly: the week line = the server\'s day totals for that week (Avg pax/day)', wTxt.includes('Avg ' + Math.round(wPax / 7) + ' pax/day'), [wTxt.slice(0, 200), wPax]);
+    ok('§calDayOnly: still no month page after selecting a day', monthPages(n0).length === 0, monthPages(n0));
+    await ev(() => { _bkV2.selected = null; bookingV2Render(); });
+  }
   // the browser's own month sum has nothing to add up: no booking in memory, the screen is still the server's
   await ev(() => { SB_BOOKINGS.length = 0; bookingV2Render(); });
   await sleep(800);

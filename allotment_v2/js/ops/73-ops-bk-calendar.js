@@ -58,6 +58,23 @@
     return st === 'loading' && month(ym) ? 'srv' : st;
   });
 
+  /* §calDayOnly (2026-11-28) · every figure the calendar draws is in the server's month answer, so the calendar no longer
+     pages the month's whole bookings (~4,500 rows, 5 requests, ~2.2 MB for November): it asks only for the day the
+     Selected Day panel shows. 'ready' = the answer is here; 'loading'; 'failed' = the read failed, so the calendar falls
+     back to loading the month and summing it itself (legacy's way). null = ops mode is off. */
+  window.bookingV2CalSrv = function(ym){
+    if(!on()) return null;
+    if(month(ym)) return 'ready';
+    return O.srv.status('cal|' + ym + '|' + kind()) === 'failed' ? 'failed' : 'loading';
+  };
+  /* one day's pax and trips from the server's answer (the Selected Day panel's week line), null while there is none */
+  window.bookingV2CalDay = function(date){
+    if(!on()) return null;
+    var j = month(String(date || '').slice(0, 7)); if(!j) return null;
+    var d = j.__byDate[date];
+    return d ? { total: n(d.total), trips: n(d.trips) } : { total: 0, trips: 0 };
+  };
+
   /* ── the calendar chips and the Selected Day panel ──────────────────────── */
   wrap('bookingV2FamilyAggregate', function(orig, familyId, dateStr){
     var j = month(String(dateStr || '').slice(0, 7)), d = j && j.__byDate[dateStr];

@@ -107,6 +107,12 @@ function bookingV2OpsMonthStatus(month){
   if(_opsBookingRangeLoads[key] && !_opsBookingSeen[key]) return 'loading';
   return _opsBookingFailed[key] ? 'failed' : '';
 }
+/* §calDayOnly (2026-11-28) · the same status for one day (the calendar's Selected Day panel loads only its day) */
+function bookingV2OpsDayStatus(date){
+  var key=_opsBookingRangeKey({from:date,to:date});
+  if(_opsBookingRangeLoads[key] && !_opsBookingSeen[key]) return 'loading';
+  return _opsBookingFailed[key] ? 'failed' : '';
+}
 function bookingV2OpsRetryMonth(month){
   var r=_opsBookingMonthRange(month);
   delete _opsBookingFailed[_opsBookingRangeKey({from:r.from,to:r.to})];
