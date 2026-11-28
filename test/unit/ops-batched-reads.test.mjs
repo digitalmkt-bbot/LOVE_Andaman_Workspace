@@ -38,6 +38,9 @@ test('§capAllOne: the boats one draw asks about are read in ONE request for the
   assert.equal(rt.calls.length, 1);
   assert.match(rt.calls[0], /^\/v1\/capacity-overrides\?from=\d{4}-\d\d-\d\d&to=\d{4}-\d\d-\d\d&all=true&boat_ids=b1,b2,b3$/);
   assert.deepEqual(['b1', 'b2', 'b3'].map((b) => rt.w.boatCapInfo(b, '2026-11-20').cap), [10, 11, 12], 'each boat gets its own days (boat_id of each row)');
+  // the redraw waits 60 ms after the answer (redrawT in 93-ops-w6c-boats.js). flush() lasts ~55 ms on Linux (Windows rounds each
+  // 5 ms timer up to ~15 ms, which hid this), so wait out the code's own timer instead of counting ticks
+  await new Promise((r) => setTimeout(r, 60)); await flush();
   assert.deepEqual(rt.draws, ['renderOp']);
   rt.w.boatCapInfo('b1', '2026-11-21'); await flush();
   assert.equal(rt.calls.length, 1, 'the window is read once');
