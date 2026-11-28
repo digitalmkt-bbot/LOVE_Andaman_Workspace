@@ -199,5 +199,23 @@
     return emptyMatch();      // until the server answers; never the browser's partial calculation
   };
 
+  /* §pcPrintWait (2026-11-28) · the claim prints read the refund status from pcRefundMatch, which answers empty until the
+     server's /refund-match is back, and every cash save empties it. Printing right after saving a refund row printed
+     "ยังไม่ได้รับคืน" and no refunded amount. Until the answer is in, the print is not made: the read is started and
+     the user is asked to press print again (printing later from a promise would be stopped by the popup blocker). */
+  function matchReady(pier){
+    var k = pier + '|';
+    if(st.refund[k]) return true;
+    delete st.failR[k];                 // a failed read is asked again here
+    window.pcRefundMatch(pier);
+    O.toast({ kind: 'neutral', title: 'กำลังโหลดสถานะเงินคืน', status: 'PRINT', sub: 'กดพิมพ์อีกครั้งในอีกสักครู่', dur: 4000 });
+    return false;
+  }
+  L.pcPrintClaim = window.pcPrintClaim;
+  if(typeof L.pcPrintClaim === 'function') window.pcPrintClaim = function(){
+    if(on() && !matchReady(window._pcPier)) return;
+    return L.pcPrintClaim.apply(this, arguments);
+  };
+
   O.pierCashClaims = { state: st };
 })();
