@@ -102,7 +102,7 @@ test('the 10 s check asks the server only while Pier or Van check-in is open', a
 
 test('the 10 s check stops while the tab is hidden or behind other windows', () => {
   const src = fs.readFileSync('allotment_v2/js/ops/70-ops-changes.js', 'utf8');
-  assert.match(src, /setInterval\(function\(\)\{ if\(!document\.hidden && focused\(\) && LIVE_VIEWS\[activeView\(\)\]\) pull\(\); \}, LIVE_MS\)/);
+  assert.match(src, /setInterval\(function\(\)\{ if\(!streamLive\(\) && !document\.hidden && focused\(\) && LIVE_VIEWS\[activeView\(\)\]\) pull\(\); \}, LIVE_MS\)/);
   assert.match(src, /LIVE_MS = 10000/);
   assert.match(src, /BG_DRAW_GAP_MS = 30000/);
 });

@@ -172,6 +172,9 @@
      Windows PCs. The front window keeps DRAW_GAP_MS; a hidden tab does not ask at all (pull). */
   var BG_DRAW_GAP_MS = 30000;
   function focused(){ try{ return typeof document.hasFocus !== 'function' || document.hasFocus(); }catch(_){ return true; } }
+  /* §ckSse (2026-11-28) · while the push stream is up the front window redraws at most every LIVE_DRAW_GAP_MS (a change
+     that comes alone draws at once); a window behind others keeps BG_DRAW_GAP_MS and draws at once when it is clicked. */
+  var LIVE_DRAW_GAP_MS = 2000;
   var DRAW_GAP_MS = 5000, lastDraw = 0, drawTimer = null, drawWanted = false, drawPreps = {}, busyTries = 0;
   function draw(){
     drawTimer = null;
@@ -188,7 +191,7 @@
   function queueDraw(key, prep){ drawWanted = true; if(key && prep) drawPreps[key] = prep; }
   function flushDraw(){
     if(!drawWanted || drawTimer) return;
-    var wait = lastDraw + (focused() ? DRAW_GAP_MS : BG_DRAW_GAP_MS) - Date.now();
+    var wait = lastDraw + (focused() ? (streamLive() ? LIVE_DRAW_GAP_MS : DRAW_GAP_MS) : BG_DRAW_GAP_MS) - Date.now();
     if(wait <= 0) draw(); else drawTimer = setTimeout(draw, wait);
   }
   function repaintCheckin(change){
@@ -244,6 +247,7 @@
   }
   function apply(change){
     if(!change || !Number.isInteger(+change.version)) return;
+    if(cursor !== null && +change.version <= cursor) return;   // §ckSse · the stream and a poll can both bring the same row
     cursor = +change.version;
     bookingToast(change);
     if(!holding()){ release(); deliver(change); return; }
@@ -259,6 +263,7 @@
     return O.get('/v1/changes').then(function(j){
       if(j && Number.isInteger(+j.version)) cursor = +j.version;
       started = cursor !== null;
+      if(started) setTimeout(openStream, 0);   // §ckSse · the stream starts where the feed starts: at the current version
       return j;
     });
   }
@@ -280,17 +285,90 @@
       if(!warned){ warned = true; try{ console.warn('[ops] change feed unavailable · ' + ((e && e.message) || e)); }catch(_){} }
     }).then(function(){ loading = false; });
   }
-  setInterval(pull, POLL_MS);
+  setInterval(function(){ if(!streamLive()) pull(); }, POLL_MS);
   /* §ckLiveOps (2026-11-28) · legacy §ckLive2: while Pier or Van check-in is open (legacy _laLiveView), ask every 2 s,
      so a check-in on one device shows on another within about 2 s, not 20. Stops when the tab is hidden or the screen
      changes; the 20 s poll above stays for every other screen. pull() never overlaps itself (loading). */
   /* §ckLiveBg (2026-11-28) · every 10 s, not 2 s, and only in the window that has focus (a window behind others keeps the
      20 s poll). Coming back to the window asks at once, so what the person looks at is fresh. */
   var LIVE_VIEWS = { piercheckin:1, vancheckin:1 }, LIVE_MS = 10000;
-  setInterval(function(){ if(!document.hidden && focused() && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
-  try{ if(typeof window.addEventListener === 'function') window.addEventListener('focus', function(){ pull(); flushDraw(); }); }catch(_){}
+  setInterval(function(){ if(!streamLive() && !document.hidden && focused() && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
+
+  /* §ckSse (2026-11-28) · owner: check-in on machine A must show on machine B "เกือบเรียลไทม์". operation-backend pushes every
+     change row on GET /v1/changes/stream (text/event-stream: `id: <version>` `event: change` `data: <the /v1/changes row>`,
+     `event: hb` every 25 s, Postgres NOTIFY on commit, so tens of ms). EventSource cannot send the Bearer header, so the
+     stream is read with fetch (laOpsFetch adds it). Rows go through apply() exactly as a polled page does; the polls above
+     stop while the stream is up and come back when it drops. A hidden tab closes its stream (no open connection per
+     forgotten tab) and reopens it from the cursor when shown, so nothing is missed. */
+  var STREAM_STALE_MS = 60000, stream = null, streamBeat = 0, streamWait = 0, streamRetry = null;
+  function streamLive(){ return !!(stream && stream.live && Date.now() - streamBeat < STREAM_STALE_MS); }
+  function canStream(){
+    return typeof window.laOpsFetch === 'function' && typeof TextDecoder !== 'undefined' && typeof AbortController !== 'undefined';
+  }
+  function streamEvent(block){
+    var ev = 'message', data = [];
+    block.split('\n').forEach(function(line){
+      if(line.indexOf('event:') === 0) ev = line.slice(6).trim();
+      else if(line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''));
+    });
+    if(!data.length) return;
+    var j = null; try{ j = JSON.parse(data.join('\n')); }catch(_){ return; }
+    if(ev === 'change'){ apply(j); return true; }
+    if(ev === 'hb' && j && Number.isInteger(+j.version) && cursor !== null && +j.version > cursor) pull();   // a row the stream missed
+  }
+  function closeStream(){
+    var s0 = stream; stream = null;
+    if(s0){ s0.live = false; try{ s0.ctl.abort(); }catch(_){} }
+  }
+  function retryStream(){
+    if(streamRetry) return;
+    streamWait = Math.min(60000, streamWait ? streamWait * 2 : 5000);
+    streamRetry = setTimeout(function(){ streamRetry = null; openStream(); }, streamWait);
+  }
+  function openStream(){
+    if(stream || !canStream() || document.hidden || cursor === null || !O.enabled()) return;
+    var me = { ctl: new AbortController(), live: false };
+    stream = me;
+    window.laOpsFetch('/v1/changes/stream?since=' + cursor, { headers: { Accept: 'text/event-stream' }, signal: me.ctl.signal }).then(function(r){
+      if(stream !== me) return;
+      if(!r || !r.ok || !r.body || typeof r.body.getReader !== 'function') throw new Error('stream HTTP ' + (r && r.status));
+      me.live = true; streamBeat = Date.now(); streamWait = 0;
+      var rd = r.body.getReader(), dec = new TextDecoder(), buf = '';
+      function step(){
+        return rd.read().then(function(x){
+          if(stream !== me) return;
+          if(x.done) throw new Error('stream ended');
+          streamBeat = Date.now();
+          buf += dec.decode(x.value, { stream: true }).replace(/\r\n?/g, '\n');
+          var any = false, cut;
+          while((cut = buf.indexOf('\n\n')) >= 0){ if(streamEvent(buf.slice(0, cut))) any = true; buf = buf.slice(cut + 2); }
+          if(any) flushDraw();
+          return step();
+        });
+      }
+      return step();
+    }).then(null, function(e){
+      if(stream !== me) return;            // closed on purpose (hidden tab)
+      closeStream();
+      if(!warned){ try{ console.warn('[ops] change stream down, polling · ' + ((e && e.message) || e)); }catch(_){} }
+      pull(); retryStream();
+    });
+  }
+  // a stream that went quiet (no heartbeat for a minute: a proxy cut it without closing) is replaced
+  setInterval(function(){ if(stream && stream.live && !streamLive()){ closeStream(); pull(); openStream(); } }, 15000);
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){ closeStream(); return; }
+    if(cursor !== null && canStream()) openStream(); else pull();
+  });
+  try{ if(typeof window.addEventListener === 'function') window.addEventListener('focus', function(){
+    if(drawTimer && drawWanted){ clearTimeout(drawTimer); drawTimer = null; }   // a window behind others draws the moment it is clicked
+    if(!streamLive()) pull();
+    flushDraw();
+  }); }catch(_){}
   // Boot completes asynchronously after this classic script is evaluated.
-  (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
-  O.changes = { notes: flushNotes, label: bookingLabel, b2c: flushB2C, isB2C: isB2C, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
+  (function wait(){
+    if(O.enabled() && O.state.loaded){ pull(); return; }
+    setTimeout(wait, 500);
+  })();
+  O.changes = { stream: function(){ return { live: streamLive(), open: !!stream }; }, openStream: openStream, closeStream: closeStream, notes: flushNotes, label: bookingLabel, b2c: flushB2C, isB2C: isB2C, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
 })();
