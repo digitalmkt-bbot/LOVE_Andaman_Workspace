@@ -354,8 +354,23 @@
     L.forEach(function(x){ if(x.who && w.indexOf(x.who) < 0) w.push(x.who); });
     return w.length ? esc(w.join(' · ')) : '<span style="color:var(--zn400)">&mdash;</span>';
   }
-  function rowChips(row, L, date){
-    var out = '';
+  /* §tsUpChip (2026-11-28) · an upgrade ticked collected at check-in is money the pier took (the server counts it in
+     collect_rows[].received), but it is neither a pier payment nor an on-tour sale, so section 03 showed "ยังไม่เก็บ" for a booking
+     whose only money was that upgrade. One chip per method, as the sales'; an upgrade the pier payments already cover
+     (covered_upgrade_ids, §exDupPier) is in the payment chips and is skipped; a COT one is not money taken yet. */
+  function upChips(row, b){
+    var cov = (row && row.covered_upgrade_ids) || [], by = {}, out = '';
+    ((b && b.upgrades) || []).forEach(function(u){
+      if(!u || !u.collected || !(n(u.sell_price) > 0) || cov.indexOf(u.id) >= 0) return;
+      var m = u.method || 'cash'; if(m === 'cot') return;
+      by[m] = (by[m] || 0) + n(u.sell_price);
+    });
+    Object.keys(by).forEach(function(k){ var x = PM[k] || ['อื่นๆ', 'n'];
+      out += '<span class="ts-chip ' + x[1] + '" title="อัปเกรดที่เก็บเงินแล้วหน้างาน">' + x[0] + ' ' + money(by[k]) + ' <i style="font-style:normal;opacity:.7">อัปเกรด</i></span>'; });
+    return out;
+  }
+  function rowChips(row, L, date, b){
+    var out = upChips(row, b);
     ((row && row.payments) || []).filter(function(p){ return !p.deleted_at && (!p.service_date || p.service_date === date); }).forEach(function(p){
       var x = PM[p.method || 'cash'] || ['อื่นๆ', 'n'];
       out += '<span class="ts-chip ' + x[1] + '">' + x[0] + ' ' + money(p.amount) + (n(p.fee) > 0 ? ' <i style="font-style:normal;opacity:.7">+fee ' + money(p.fee) + '</i>' : '') + '</span>';
@@ -560,7 +575,7 @@
       var noColAmt = noCol ? Math.max(0, n(c.cot) - Math.min(n(c.cot), n(dec.deduct))) : 0;   /* §cotPart */
       if(noCol && noColAmt > 0) cotNoList.push({ code: r.voucher, amt: noColAmt, why: dec.ref || '' });
       var mrow = moneyRowOf(r, S.date), items = saleItems(mrow);   // §tsSaleItems
-      var chips = (mrow ? rowChips(mrow, items, S.date) : payChips(c)) || (n(c.billed) > 0 ? '<span class="ts-chip g">&#10003; จ่ายผ่านบิล</span>' : '<span class="ts-chip n">ยังไม่เก็บ</span>');
+      var chips = (mrow ? rowChips(mrow, items, S.date, b) : payChips(c)) || (n(c.billed) > 0 ? '<span class="ts-chip g">&#10003; จ่ายผ่านบิล</span>' : '<span class="ts-chip n">ยังไม่เก็บ</span>');
       if(n(c.no_slip) > 0) chips += '<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป ' + n(c.no_slip) + '</span>';
       var parts = []; if(n(c.cot) > 0) parts.push('COT ' + money(c.cot)); if(n(c.b2c_balance) > 0) parts.push('ค้าง ' + money(c.b2c_balance)); if(n(c.upgrades_due) > 0) parts.push('upgrade ' + money(c.upgrades_due));
       var sl = c.sales || {}, sale = items.length ? saleCellHtml(items) : n(sl.total) > 0 ? '<span class="ts-ao ao-ex">ขายเพิ่ม ' + n(sl.count) + ' รายการ <b>+' + money(sl.total) + '</b></span>' + (n(sl.due) > 0 ? '<div class="ts-tel">รอเก็บ ' + money(sl.due) + '</div>' : '') : '<span style="color:var(--zn400)">&mdash;</span>';
