@@ -389,8 +389,12 @@ section('10', async () => {
   const foc = await ev(() => { const b = SB_BOOKINGS.find((x) => x.leadPax === 'W6 FOC LEAD'); return b ? { flag: laOpsRowPendingFoc(b.id) } : null; });
   ok('and true for the real pending-FOC quote', foc && foc.flag === true, foc);
   // the server's set of Pending-FOC bookings is asked first; until it answers (here: not at all) the row's own flag decides in place of the browser's focCount test
-  const pill = await ev((x) => { const keep = window.laOpsListSet; window.laOpsListSet = () => null; _bkV2.statusFilter = 'pending_foc'; bookingV2Render(); const t = document.body.innerText; _bkV2.statusFilter = 'all'; window.laOpsListSet = keep; return { charlie: t.includes(x.charlie), foc: t.includes('zz-w6a-foc'), alpha: t.includes(x.alpha), rows: [...document.querySelectorAll('.bkv2-tbl tr.bkr')].map((r) => r.innerText.replace(/\s+/g, ' ').slice(0, 90)), st: { tab: _bkV2.tab, month: _bkV2.month, f: _bkV2.statusFilter }, nb: SB_BOOKINGS.length, view: (document.querySelector('.nav-item.active[data-view]') || {}).dataset && document.querySelector('.nav-item.active[data-view]').dataset.view }; }, { charlie: bC.external_id, alpha: bA.external_id });
-  ok('the Pending-FOC pill (set not in yet) lists the flagged row and the real pending quote, not an unflagged booking', pill.charlie && pill.foc && !pill.alpha, pill);
+  /* §bkListPage (2026-11-28) · the pill's page IS the server's answer (GET /v1/bookings?pending_foc=true): who is on it is the
+     server's rule, not the browser's or the row flag's. The real pending-FOC quote is listed, a confirmed booking is not. */
+  await ev(() => { _bkV2.statusFilter = 'pending_foc'; _bkV2.page = 1; bookingV2Render(); });
+  await waitFor(() => [...document.querySelectorAll('.bkv2-tbl tr.bkr')].some((r) => r.innerText.includes('zz-w6a-foc') || r.innerText.includes('W6 FOC LEAD')), null, 15000); await settle(600);
+  const pill = await ev((x) => { const t = [...document.querySelectorAll('.bkv2-tbl tr.bkr')].map((r) => r.innerText).join('\n'); const out = { foc: t.includes('zz-w6a-foc') || t.includes('W6 FOC LEAD'), alpha: t.includes(x.alpha), rows: [...document.querySelectorAll('.bkv2-tbl tr.bkr')].map((r) => r.innerText.replace(/\s+/g, ' ').slice(0, 90)) }; _bkV2.statusFilter = 'all'; bookingV2Render(); return out; }, { alpha: bA.external_id });
+  ok('§bkListPage: the Pending-FOC pill lists the server\'s pending_foc=true page: the real pending quote, not a confirmed booking', pill.foc && !pill.alpha, pill);
   pfFlag.id = null;
 });
 
