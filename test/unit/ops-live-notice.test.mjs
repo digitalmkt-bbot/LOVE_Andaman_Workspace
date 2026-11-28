@@ -82,3 +82,51 @@ test('legacy "new data" banner stays away for sync accounts, and hides the live 
   const auth = fs.readFileSync('allotment_v2/js/01-auth-sync.js', 'utf8');
   assert.match(auth, /if\(info && _laSysActor\(info\.updated_by\)\) return;/);
 });
+
+// §b2cPopOps (2026-11-28) · owner chose "Bring back legacy top-right card" for a new B2C booking.
+async function b2cFeed(changes, books) {
+  const body = fakeEl('body');
+  const document = { hidden: false, body, addEventListener() {}, querySelector: () => null, createElement: fakeEl,
+    getElementById: (id) => body.children.find((c) => c.id === id) || null };
+  let calls = 0; const shown = []; const asked = [];
+  const laOps = {
+    enabled: () => true, state: { loaded: true }, changed() {}, wrote() {}, toast() {},
+    bookings: { fromServer: (ob) => ({ id: ob.external_id || ob.id, opsId: ob.id, agentId: ob.agent_id || null, status: ob.status }) },
+    get: async (path) => {
+      if (/^\/v1\/bookings\//.test(path)) { asked.push(path); const id = decodeURIComponent(path.split('/').pop()); return books[id]; }
+      return ++calls === 1 ? { version: 1, changes: [] } : { version: 99, changes };
+    },
+  };
+  const window = { LA_LEGACY_UNAVAILABLE: true, LA_ME: { username: 'me' }, laOps, _laB2CAlertBookings: (bks) => shown.push(bks) };
+  const ctx = { window, document, console, Promise, Number, Array, String, Object, JSON, Math, Date,
+    setInterval: () => 0, setTimeout: () => 0, clearTimeout() {}, encodeURIComponent, decodeURIComponent };
+  vm.runInNewContext(fs.readFileSync('allotment_v2/js/ops/70-ops-changes.js', 'utf8'), ctx);
+  for (let i = 0; i < 2; i++) { await laOps.changes.pull(); for (let k = 0; k < 5; k++) await new Promise((r) => setImmediate(r)); }
+  return { shown, asked, live: body.children.find((c) => c.id === 'la-live-wrap') };
+}
+
+test('a new B2C booking from lk_service draws the legacy top-right card once, not the bottom-left one', async () => {
+  const r = await b2cFeed([bk('created', 'booking_a', 'lk_service', 2), bk('created', 'booking_b', 'lk_service', 3)],
+    { booking_a: { id: 'booking_a', external_id: 'b2c_LOV-1_1' }, booking_b: { id: 'booking_b', external_id: 'b2c_LOV-2_1' } });
+  assert.equal(r.shown.length, 1);
+  assert.deepEqual(r.shown[0].map((b) => b.id), ['b2c_LOV-1_1', 'b2c_LOV-2_1']);
+  assert.equal(r.live, undefined);
+});
+
+test('updates, my own bookings and non-B2C bookings draw no B2C card', async () => {
+  const books = { booking_a: { id: 'booking_a', external_id: 'b2c_LOV-1_1' }, booking_c: { id: 'booking_c', external_id: 'BK-9' } };
+  const upd = await b2cFeed([bk('updated', 'booking_a', 'lk_service', 2)], books);
+  assert.equal(upd.shown.length, 0); assert.equal(upd.asked.length, 0);
+  const own = await b2cFeed([bk('created', 'booking_a', 'me', 2)], books);
+  assert.equal(own.shown.length, 0);
+  const staff = await b2cFeed([bk('created', 'booking_c', 'RSVN05', 2)], books);
+  assert.equal(staff.shown.length, 0);
+  const agent = await b2cFeed([bk('created', 'booking_d', 'RSVN05', 2)], { booking_d: { id: 'booking_d', external_id: 'LOV-77', agent_id: 'a_b2c' } });
+  assert.equal(agent.shown.length, 1);
+});
+
+test('01-auth-sync.js exposes the legacy card for ops mode', () => {
+  const src = fs.readFileSync('allotment_v2/js/01-auth-sync.js', 'utf8');
+  assert.match(src, /window\._laB2CAlertBookings=function/);
+  assert.match(src, /out\.push\(_laB2CItem\(b, rm\)\)/);
+});

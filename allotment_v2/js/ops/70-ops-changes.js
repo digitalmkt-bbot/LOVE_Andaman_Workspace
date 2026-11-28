@@ -38,7 +38,39 @@
     if(/^booking_[0-9a-f-]{20,}$/i.test(s)) return '';               // internal id: nothing a person can read
     return s;
   }
+  /* §b2cPopOps (2026-11-28) · a new B2C booking gets legacy's top-right card again (01-auth-sync.js _laB2CAlertBookings:
+     route, date, pax, THB, paid, "Open booking"). Love Kingdom's orders arrive through a sync account (lk_service), which
+     the bottom-left card skips, so this path does not go through it. The feed row carries no booking, so each one is read
+     once (GET /v1/bookings/{id}); one page of changes makes one card. Only "created": an update or a resync stays silent. */
+  var B2C_MAX = 10, b2cQueue = [], b2cQueued = false;
+  function isB2C(bk, by){
+    if(!bk) return false;
+    var f = bk.srvFlags || {};
+    return /^b2c_/i.test(String(bk.id || '')) || bk.agentId === 'a_b2c' || !!f.isB2C || !!f.b2cChannel || /^lk_/i.test(String(by || ''));
+  }
+  function b2cCreated(change){
+    if(!change || change.kind !== 'booking' || change.action !== 'created' || mine(change) || !change.entity_id) return;
+    if(typeof window._laB2CAlertBookings !== 'function') return;
+    b2cQueue.push(change);
+    if(!b2cQueued){ b2cQueued = true; Promise.resolve().then(flushB2C); }
+  }
+  function flushB2C(){
+    b2cQueued = false;
+    var rows = b2cQueue.splice(0, B2C_MAX); b2cQueue = [];
+    if(!rows.length) return;
+    Promise.all(rows.map(function(c){
+      return O.get('/v1/bookings/' + encodeURIComponent(String(c.entity_id))).then(function(ob){
+        if(!ob || !O.bookings || typeof O.bookings.fromServer !== 'function') return null;
+        var bk = O.bookings.fromServer(ob);
+        return isB2C(bk, c.changed_by) ? bk : null;
+      }, function(){ return null; });
+    })).then(function(bks){
+      bks = bks.filter(Boolean);
+      if(bks.length) try{ window._laB2CAlertBookings(bks); }catch(_){}
+    });
+  }
   function bookingToast(change){
+    b2cCreated(change);
     if(!change || change.kind !== 'booking' || mine(change) || systemActor(change.changed_by)) return;
     pendingNotes.push({ action: change.action === 'created' || change.action === 'deleted' ? change.action : 'updated',
       by: change.changed_by ? String(change.changed_by) : '', id: String(change.entity_id || '') });
@@ -260,5 +292,5 @@
   try{ if(typeof window.addEventListener === 'function') window.addEventListener('focus', function(){ pull(); flushDraw(); }); }catch(_){}
   // Boot completes asynchronously after this classic script is evaluated.
   (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
-  O.changes = { notes: flushNotes, label: bookingLabel, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
+  O.changes = { notes: flushNotes, label: bookingLabel, b2c: flushB2C, isB2C: isB2C, pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
 })();
