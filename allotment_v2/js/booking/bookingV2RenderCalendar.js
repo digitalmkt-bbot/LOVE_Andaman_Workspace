@@ -9,11 +9,23 @@ function bookingV2RenderCalendar(){
      SB_BOOKINGS only holds what other pages happened to load. A failed month stops auto-retrying
      (every redraw would refetch) and shows a Retry bar over whatever is cached. */
   const monthStatus = typeof bookingV2OpsMonthStatus==='function' ? bookingV2OpsMonthStatus : function(){ return ''; };
-  const monthFailed = monthStatus(monthKey)==='failed';
-  const monthLoad=(!monthFailed && typeof bookingV2OpsEnsureMonth==='function') ? bookingV2OpsEnsureMonth(monthKey) : null;
-  const skel = !!monthLoad && monthStatus(monthKey)==='loading';
+  /* §calDayOnly (2026-11-28) · with the server's month answer (73-ops-bk-calendar.js) the calendar loads only the selected
+     day's bookings (the Selected Day panel's list), not the whole month. Without it (ops off, or the read failed) the month
+     loads as before and the browser sums it. */
+  const calSrv = typeof window.bookingV2CalSrv==='function' ? window.bookingV2CalSrv(monthKey) : null;
+  const srvCal = calSrv==='ready' || calSrv==='loading';
+  const monthFailed = !srvCal && monthStatus(monthKey)==='failed';
+  const monthLoad=(!srvCal && !monthFailed && typeof bookingV2OpsEnsureMonth==='function') ? bookingV2OpsEnsureMonth(monthKey) : null;
+  const selDate = _bkV2.selected && _bkV2.selected.date;
+  const dayStatus = typeof bookingV2OpsDayStatus==='function' ? bookingV2OpsDayStatus : function(){ return ''; };
+  const dayLoad = (srvCal && selDate && dayStatus(selDate)!=='failed' && typeof bookingV2OpsEnsureDay==='function') ? bookingV2OpsEnsureDay(selDate) : null;
+  const skel = srvCal ? calSrv==='loading' : (!!monthLoad && monthStatus(monthKey)==='loading');
+  const daySkel = srvCal ? (!!dayLoad && dayStatus(selDate)==='loading') : skel;
   if(monthLoad) monthLoad.then(function(j){
     if((j || skel) && _bkV2.tab==='cal' && !_bkV2.newBooking) bookingV2Render();
+  });
+  if(dayLoad) dayLoad.then(function(j){
+    if((j || daySkel) && _bkV2.tab==='cal' && !_bkV2.newBooking && _bkV2.selected && _bkV2.selected.date===selDate) bookingV2Render();
   });
   const sk = (w, h, more) => `<span class="la-skel" style="width:${w};height:${h}px${more?';'+more:''}"></span>`;
   const agg = bookingV2Aggregate();
@@ -137,7 +149,7 @@ function bookingV2RenderCalendar(){
         </div>
         <div class="bkv2-cal-grid">${cells.join('')}</div>
       </div>
-      ${skel && _bkV2.selected ? skSelDay() : bookingV2RenderSelDay()}
+      ${daySkel && _bkV2.selected ? skSelDay() : bookingV2RenderSelDay()}
     </div>
     ${bookingV2RenderFooterHints('cal')}
   `;

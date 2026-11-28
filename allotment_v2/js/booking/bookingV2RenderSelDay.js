@@ -54,7 +54,11 @@ function bookingV2RenderSelDay(){
   for(let i=0; i<7; i++){
     const dd = new Date(weekStart); dd.setDate(weekStart.getDate() + i);
     const k = bookingV2DateKey(dd);
-    if(agg.byDate[k]){ weekPax += agg.byDate[k].total; weekTrips += Object.keys(agg.byDate[k].routes).length; }
+    /* §calDayOnly · only the selected day's bookings are loaded now: the other days of the week come from the server's
+       calendar answer (its day total and trips), which is legacy's same sum; without that answer, the browser's own sum */
+    const srvDay = typeof window.bookingV2CalDay==='function' ? window.bookingV2CalDay(k) : null;
+    if(srvDay){ weekPax += srvDay.total; weekTrips += srvDay.trips; }
+    else if(agg.byDate[k]){ weekPax += agg.byDate[k].total; weekTrips += Object.keys(agg.byDate[k].routes).length; }
   }
   const weekStartLbl = weekStart.toLocaleDateString('en-US', { day:'numeric', month:'short' });
   const weekEndLbl = weekEnd.toLocaleDateString('en-US', { day:'numeric', month:'short' });
