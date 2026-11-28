@@ -73,6 +73,60 @@
     if(O.wrote) O.wrote('remote:' + (change.kind || 'change'));
     repaintCheckin(change);
     bookingToast(change);
+    markIdle(change);
+  }
+  /* §opsIdleRefresh (2026-11-28) · legacy's idle refresh (01-auth-sync.js: "seamlessly refresh the moment the user goes
+     idle"): when someone else saved, the open screen is drawn again as soon as this person is free, and while they are
+     busy a bar says new data is waiting, with a "load now" button. Here the data is already fresh (O.changed/O.wrote
+     dropped the caches the change touched), so the refresh is one _laRerender of the open screen, which keeps scroll and
+     focus. Not for the screens that redraw themselves above (Van jobs, Pickup setup, the check-in screens), nor for Van
+     bills (nav() would close its open sections, see §opsHandoff). Own changes are skipped: this tab drew them already. */
+  var SELF_DRAWN = { vanjobs:1, 'pickup-setup':1, vancheckin:1, piercheckin:1, landcheckin:1, vanbill:1 };
+  var idle = null, lastInput = 0, IDLE_MS = 300;
+  ['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(function(ev){
+    try{ document.addEventListener(ev, function(){ lastInput = Date.now(); }, { capture: true, passive: true }); }catch(_){}
+  });
+  function markIdle(change){
+    if(!change || mine(change)) return;
+    var view = activeView();
+    if(!view || SELF_DRAWN[view]) return;
+    idle = { view: view, by: change.changed_by || (idle && idle.by) || '' };
+  }
+  /* legacy _laBusy: what counts as "in the middle of something" (an unsaved write, a form, a dialog, a drawer, a field
+     being typed in, or a click in the last 300 ms). force (the bar's button) skips only the 300 ms. */
+  function busyNow(force){
+    try{
+      if(O.pending && O.pending() > 0) return true;
+      if(O.busy && O.busy()) return true;
+      if(window._flpUploading) return true;
+      var bk = window._bkV2; if(bk && (bk.newBooking || bk.editingId)) return true;
+      if(window._vb && window._vb.edit) return true;
+      if(document.querySelector('.la-modal') || document.getElementById('la-uwin') || document.getElementById('la-pmask')
+         || document.getElementById('dc-panel-docs')) return true;
+      if(typeof _agSelected !== 'undefined' && _agSelected) return true;   // eslint-disable-line no-undef
+    }catch(_){}
+    return !force && Date.now() - lastInput < IDLE_MS;
+  }
+  function bar(show){
+    try{
+      var el = document.getElementById('la-refresh');
+      if(!show){ if(el && el.parentNode) el.parentNode.removeChild(el); return; }
+      if(el || !document.body) return;
+      el = document.createElement('div'); el.id = 'la-refresh';
+      var by = idle && idle.by ? ('โดย ' + String(idle.by).replace(/[<>&"]/g, '') + ' · ') : '';
+      el.innerHTML = '<span class="la-rf-dot"></span><span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b><i>' + by
+        + 'จะรีเฟรชอัตโนมัติเมื่อว่าง</i></span><button type="button">โหลดเลย</button>';
+      el.querySelector('button').onclick = function(){ idleTry(true); };
+      document.body.appendChild(el);
+    }catch(_){}
+  }
+  function idleTry(force){
+    if(!idle) return;
+    if(activeView() !== idle.view){ idle = null; bar(false); return; }   // a new screen draws from the fresh data itself
+    if(document.hidden) return;
+    if(busyNow(force)){ bar(true); return; }
+    idle = null; bar(false);
+    if(typeof window._laRerender === 'function') window._laRerender();
   }
   function baseline(){
     return O.get('/v1/changes').then(function(j){
@@ -87,6 +141,7 @@
     var first = cursor === null ? baseline() : O.get('/v1/changes', { since: cursor, limit: PAGE }).then(function(j){
       var changes = (j && Array.isArray(j.changes)) ? j.changes : [];
       changes.forEach(apply);
+      idleTry();
       // Empty means the response version is our durable cursor. Do not jump past a
       // non-empty page: a full page may have more rows still waiting after it.
       if(!changes.length && j && Number.isInteger(+j.version)) cursor = +j.version;
@@ -103,8 +158,12 @@
      changes; the 20 s poll above stays for every other screen. pull() never overlaps itself (loading). */
   var LIVE_VIEWS = { piercheckin:1, vancheckin:1 }, LIVE_MS = 2000;
   setInterval(function(){ if(!document.hidden && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
+  /* §opsIdleRefresh · legacy checks for "free now" every 3 s; also when a field loses focus */
+  setInterval(function(){ idleTry(); }, 3000);
+  try{ document.addEventListener('focusout', function(){ setTimeout(function(){ idleTry(); }, 0); }, true); }catch(_){}
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
   // Boot completes asynchronously after this classic script is evaluated.
   (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
-  O.changes = { pull: pull, version: function(){ return cursor; }, started: function(){ return started; } };
+  O.changes = { pull: pull, version: function(){ return cursor; }, started: function(){ return started; },
+    idlePending: function(){ return !!idle; }, idleTry: idleTry };
 })();
