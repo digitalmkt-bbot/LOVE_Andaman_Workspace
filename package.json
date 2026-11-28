@@ -15,6 +15,7 @@
     "test:ui": "node test/ui/t_smoke.mjs && node test/ui/t_mobile.mjs",
     "test:b2c": "node --test test/unit/b2c-map.test.mjs",
     "test:ops": "node test/ui/t_ops.mjs",
+    "test:backup": "node test/ui/t_backup.mjs",
     "test:router": "node test/ui/t_router.mjs",
     "test:v1avail": "node --test test/unit/b2c-v1-availability.test.mjs",
     "test:b2cchglog": "node --test test/unit/b2c-changelog.test.mjs",
