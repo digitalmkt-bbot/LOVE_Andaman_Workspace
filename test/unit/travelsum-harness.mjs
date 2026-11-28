@@ -33,7 +33,7 @@ export function load(extra = {}, data = {}) {
   const host = { innerHTML: '' };
   const PIER = { r_pw: 'panwa', r_pw2: 'panwa', r_tl: 'tublamu' };
   const ctx = {
-    console: { log() {}, warn() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, RegExp, encodeURIComponent, parseFloat, setTimeout,
+    console: { log() {}, warn() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, RegExp, encodeURIComponent, parseFloat, setTimeout, clearTimeout,
     document: { getElementById: (id) => (id === 'travelsum-host' ? host : null) },
     _tsDate: DATE, _tsPier: '', _tsRoute: '', _tsVatF: '', _tsOnlyIssue: false,
     renderTravelSum() { ctx.legacyCalled = true; }, renderAccounting() {}, acctDashboardHtml() { return ''; }, acctStatementOpen() {}, renderDailyReport() {}, drCfgSet() {},

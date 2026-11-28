@@ -884,9 +884,14 @@
     if(!host) return;
     if(last[date]){ paint(host, last[date]); return Promise.resolve(); }
     host.innerHTML = O.loadingHtml('Loading Travel Summary…');
-    return load(date).then(function(d){ if(dateOf() === date) paint(host, d); }, function(e){
+    // §tsWait (2026-11-28) · a failed or timed-out read, or a paint that throws, ends on a message with "Try again",
+    // never on the spinner (a throw inside the success handler used to skip the error handler and leave "Loading…").
+    return load(date).then(function(d){ if(dateOf() === date) paint(host, d); }).then(null, function(e){
       O.fail('Travel Summary did not load', e);
-      host.innerHTML = '<div style="padding:32px;text-align:center;color:#A32D2D">Travel Summary did not load from operation-backend.</div>';
+      if(dateOf() !== date) return;
+      var why = e && e.timeout ? 'operation-backend did not answer in time (the server is busy).' : 'Travel Summary did not load from operation-backend.';
+      host.innerHTML = '<div data-ops-ts-error="1" style="padding:32px;text-align:center;color:#A32D2D">' + esc(why)
+        + '<div style="margin-top:12px"><button type="button" onclick="renderTravelSum()" style="padding:6px 14px;border-radius:8px;border:0.5px solid #e6c9c3;background:#fff;color:#A32D2D;cursor:pointer">Try again</button></div></div>';
     });
   });
   // parity X (2026-11-28) · the document and slip packs print behind the sheet, as legacy's (57-ops-travelsum-rows refPackList / slipPackList).

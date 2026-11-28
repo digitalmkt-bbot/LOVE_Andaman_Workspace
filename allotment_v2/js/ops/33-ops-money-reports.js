@@ -142,7 +142,18 @@
     var TR=window.laOps&&window.laOps.travelRows;
     // The roster is an extra read for the scope chips; the summary still shows without it.
     var roster=TR?TR.load(date).catch(function(e){ reports.errors['Travel Summary scope']=e; return null; }):Promise.resolve(null);
-    return setLoading(key,Promise.all([O.get('/v1/reports/travel-summary',{date:date}),roster]).then(function(x){ var d=x[0]; if(!d || d.date!==date) throw new Error('invalid travel summary response'); d._roster=x[1]; reports.travel[date]=d; return d; }));
+    return setLoading(key,timeLimit(Promise.all([O.get('/v1/reports/travel-summary',{date:date}),roster]),TRAVEL_WAIT_MS,'Travel Summary').then(function(x){ var d=x[0]; if(!d || d.date!==date) throw new Error('invalid travel summary response'); d._roster=x[1]; reports.travel[date]=d; return d; }));
+  }
+  /* §tsWait (2026-11-28) · the travel summary read gives up after TRAVEL_WAIT_MS instead of waiting for good: on
+     2026-11-28 a request flood kept the server from answering for 120 s and the screen showed "Loading…" with no way
+     out. The give-up frees reports.loading, so the screen's "Try again" asks the server afresh. */
+  var TRAVEL_WAIT_MS=45000;
+  function timeLimit(p,ms,label){
+    if(typeof setTimeout!=='function' || typeof clearTimeout!=='function') return p;
+    return new Promise(function(resolve,reject){
+      var t=setTimeout(function(){ var e=new Error(label+' took longer than '+Math.round(ms/1000)+' s'); e.timeout=true; reject(e); },ms);
+      p.then(function(v){ clearTimeout(t); resolve(v); },function(e){ clearTimeout(t); reject(e); });
+    });
   }
 
   function dailyHtml(d){

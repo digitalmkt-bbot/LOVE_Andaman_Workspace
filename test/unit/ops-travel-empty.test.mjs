@@ -11,7 +11,7 @@ const SOURCE = fs.readFileSync('allotment_v2/js/ops/33-ops-money-reports.js', 'u
 function load(payloadFor) {
   const host = { innerHTML: '' };
   const ctx = {
-    console: { log() {}, warn() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, encodeURIComponent, parseFloat, setTimeout,
+    console: { log() {}, warn() {} }, Promise, Date, Object, Array, Math, String, Number, JSON, encodeURIComponent, parseFloat, setTimeout, clearTimeout,
     document: { getElementById: (id) => (id === 'travelsum-host' ? host : null) },
     _tsDate: '2026-10-14',
     renderTravelSum() { ctx.legacyCalled = true; },
