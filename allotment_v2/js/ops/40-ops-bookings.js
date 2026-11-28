@@ -1118,20 +1118,21 @@
 
   // A remote booking write needs an immediate refresh only when it touches the open
   // booking/day. Other pages simply have their query caches invalidated by O.wrote().
+  /* §clickRefresh (2026-11-28) · owner: "every time the booking update the booking panel keep repaint/redraw and being pull up".
+     The feed's echo of this user's own save is skipped: the save already redraws the panel and re-reads it when it is done
+     (free → detailAt 0 → the next render's refreshDetail), so the echo was a third redraw. Another person's change only marks the
+     open booking and the By-trip day stale; they are read again on the redraw the "โหลดเลย" card asks for (30-ops-locks.js). */
+  function mineChange(change){ var me = window.LA_ME && window.LA_ME.username; return !!(me && change.changed_by && String(change.changed_by) === String(me)); }
   if(O.onChange) O.onChange(function(change){
-    if(!change || change.kind !== 'booking' || !O.state.loaded) return;
+    if(!change || change.kind !== 'booking' || !O.state.loaded || mineChange(change)) return;
     var st = (typeof _bkV2 !== 'undefined') ? _bkV2 : {};
     if(st.detailId){
       var open = find(st.detailId);
-      if(open && open.opsId === change.entity_id){
-        if(!busyIds[open.id]) refreshDetail(open);
-        else detailAt[open.id] = 0;      // §detailAfterWrite · a write is in flight: the render after it asks again
-      }
+      if(open && open.opsId === change.entity_id) detailAt[open.id] = 0;
     }
     if(st.tab === 'bytrip' && st.filterDate && Array.isArray(change.route_days)
        && change.route_days.some(function(day){ return day && day.service_date === st.filterDate; })){
       manifestAt[st.filterDate] = 0;
-      refreshDay(st.filterDate);
     }
   });
 

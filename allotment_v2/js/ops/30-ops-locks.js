@@ -29,7 +29,8 @@
 
   function locks(){ return (typeof SB_SEAT_LOCKS !== 'undefined') ? SB_SEAT_LOCKS : null; }
   function agents(){ return (typeof SB_AGENTS !== 'undefined') ? SB_AGENTS : []; }
-  function render(){ if(O.busy()) return; try{ if(typeof bookingV2Render === 'function') bookingV2Render(); }catch(_){} }
+  // §clickRefresh (2026-11-28) · keeps the scroll: a bare bookingV2Render after each booking save pulled the screen back to the top
+  function render(){ if(O.busy()) return; try{ if(typeof bookingV2RenderKeep === 'function') bookingV2RenderKeep(); else if(typeof bookingV2Render === 'function') bookingV2Render(); }catch(_){} }
   function sortBy(a, k){ return a.slice().sort(function(x, y){ return String(x[k]).localeCompare(String(y[k])); }); }
 
   /* ── server → legacy shape ─────────────────────────────────────────────── */

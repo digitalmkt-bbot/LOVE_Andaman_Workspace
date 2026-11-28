@@ -14,6 +14,21 @@ function bookingV2KeepScroll(fn){
   const _IN=['.bt-pgbody','.bt-blist'];
   const _inner=()=>{ const h=document.getElementById('bkv2-host'); return h?_IN.map(sel=>[...h.querySelectorAll(sel)]):[]; };
   const _inS=_inner().map(a=>a.map(e=>e.scrollTop));
+  /* §clickRefresh (2026-11-28) · "the booking panel keep repaint/redraw and being pull up": the open booking's own scroll boxes
+     (its side card .bkv2-review-sticky, any scrolled box in the panel) and the mobile page box (.main) were not remembered,
+     so every redraw put them back at the top. Every box that is scrolled is kept now, matched after the redraw by its class
+     and its place among boxes with that class. */
+  const _boxKey=e=>(e.id?'#'+e.id:'')+'.'+String(e.className||'');
+  const _kept=[];
+  (()=>{ const h=document.getElementById('bkv2-host'), m=document.querySelector('.main'), cnt={};
+    const see=e=>{ const k=_boxKey(e), n=cnt[k]=(cnt[k]||0)+1; if(e.scrollTop||e.scrollLeft) _kept.push({ k, n, t:e.scrollTop, l:e.scrollLeft }); };
+    if(m) see(m); if(h) h.querySelectorAll('*').forEach(see); })();
+  const _putBoxes=()=>{ if(!_kept.length) return;
+    const h=document.getElementById('bkv2-host'), m=document.querySelector('.main'), at={}, cnt={};
+    if(m){ const k=_boxKey(m); cnt[k]=1; at[k+'|1']=m; }
+    if(h) h.querySelectorAll('*').forEach(e=>{ const k=_boxKey(e), n=cnt[k]=(cnt[k]||0)+1; at[k+'|'+n]=e; });
+    _kept.forEach(s=>{ const e=at[s.k+'|'+s.n]; if(!e) return;
+      if(s.t && e.scrollTop!==s.t) e.scrollTop=s.t; if(s.l && e.scrollLeft!==s.l) e.scrollLeft=s.l; }); };
   const w=_wrap();
   const t=w?w.scrollTop:0, l=w?w.scrollLeft:0, y=window.scrollY||0;
   fn();
@@ -21,6 +36,7 @@ function bookingV2KeepScroll(fn){
     const w2=_wrap();
     if(w2){ if(t) w2.scrollTop=t; if(l) w2.scrollLeft=l; }
     _inner().forEach((a,i)=>a.forEach((e,j)=>{ const v=(_inS[i]||[])[j]; if(v && e.scrollTop!==v) e.scrollTop=v; }));
+    _putBoxes();
     if(y) window.scrollTo(0,y);
   }catch(_){} };
   put();
