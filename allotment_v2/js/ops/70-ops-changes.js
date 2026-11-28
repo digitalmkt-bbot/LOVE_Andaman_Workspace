@@ -44,15 +44,23 @@
      position and puts the cursor back in the field being typed in; while someone is typing in a field the redraw waits
      (retry every 1.5 s, up to 8 times), so a note is never cut off. */
   var CHECKIN_KINDS = { booking:1, van:1, van_day:1, van_stop:1, van_group:1, deployment:1 };
+  /* §ckLiveOps (2026-11-28) · Pier and Land check-in redraw too, as legacy's idle refresh redraws whatever screen is
+     open. Each screen's day: Van check-in keeps _vanCkDate; Pier and Land share _pckDate (08-app.js). */
+  var CHECKIN_DAY = { vancheckin:'_vanCkDate', piercheckin:'_pckDate', landcheckin:'_pckDate' };
+  function activeView(){
+    var act = document.querySelector('.nav-item.active');
+    return (act && act.dataset && act.dataset.view) || '';
+  }
   function repaintCheckin(change, tries){
     if(!change || !CHECKIN_KINDS[change.kind]) return;
-    var act = document.querySelector('.nav-item.active');
-    if(!act || !act.dataset || act.dataset.view !== 'vancheckin') return;
-    var day = (typeof window._vanCkDate === 'string') ? window._vanCkDate : '';
+    var view = activeView();
+    if(!CHECKIN_DAY[view]) return;
+    var dv = window[CHECKIN_DAY[view]];
+    var day = (typeof dv === 'string') ? dv : '';
     if(day && Array.isArray(change.route_days) && change.route_days.length &&
        !change.route_days.some(function(d){ return d && d.service_date === day; })) return;
     if(O.busy && O.busy()){ if((tries || 0) < 8) setTimeout(function(){ repaintCheckin(change, (tries || 0) + 1); }, 1500); return; }
-    if(O.vanJobs && O.vanJobs.dropDay) O.vanJobs.dropDay(day);
+    if(view === 'vancheckin' && O.vanJobs && O.vanJobs.dropDay) O.vanJobs.dropDay(day);
     if(typeof window._laRerender === 'function') window._laRerender();
   }
   function apply(change){
@@ -90,6 +98,11 @@
     }).then(function(){ loading = false; });
   }
   setInterval(pull, POLL_MS);
+  /* §ckLiveOps (2026-11-28) · legacy §ckLive2: while Pier or Van check-in is open (legacy _laLiveView), ask every 2 s,
+     so a check-in on one device shows on another within about 2 s, not 20. Stops when the tab is hidden or the screen
+     changes; the 20 s poll above stays for every other screen. pull() never overlaps itself (loading). */
+  var LIVE_VIEWS = { piercheckin:1, vancheckin:1 }, LIVE_MS = 2000;
+  setInterval(function(){ if(!document.hidden && LIVE_VIEWS[activeView()]) pull(); }, LIVE_MS);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
   // Boot completes asynchronously after this classic script is evaluated.
   (function wait(){ if(O.enabled() && O.state.loaded){ pull(); return; } setTimeout(wait, 500); })();
